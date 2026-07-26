@@ -15,8 +15,13 @@ import {
   Building2,
   Clock,
   ChevronRight,
-  Camera
+  Camera,
+  Package,
+  AlertTriangle,
+  Check,
+  X
 } from 'lucide-react';
+import { respondToRequisition, resolveConcern } from '../lib/storage';
 
 interface DashboardOverviewProps {
   jobCards: JobCard[];
@@ -120,6 +125,43 @@ export function DashboardOverview({
     .filter(j => j.isCars24)
     .reduce((acc, card) => acc + card.tasks.reduce((tAcc, t) => tAcc + (t.customerPrice || 0), 0), 0);
 
+  // Requisition Approval Prices state for Manager Action Desk
+  const [approvalPrices, setApprovalPrices] = useState<Record<string, number>>({});
+
+  const handlePriceChange = (reqId: string, value: number) => {
+    setApprovalPrices(prev => ({ ...prev, [reqId]: value }));
+  };
+
+  const handleDashboardApproveReq = (cardId: string, taskId: string, reqId: string) => {
+    const price = approvalPrices[reqId] || 0;
+    respondToRequisition(cardId, taskId, reqId, true, price, 'Approved via Manager Dashboard');
+  };
+
+  const handleDashboardRejectReq = (cardId: string, taskId: string, reqId: string) => {
+    respondToRequisition(cardId, taskId, reqId, false, 0, 'Rejected via Manager Dashboard');
+  };
+
+  const handleDashboardResolveConcern = (cardId: string, taskId: string, concernId: string) => {
+    resolveConcern(cardId, taskId, concernId, 'RESOLVED', 'Resolved via Manager Dashboard');
+  };
+
+  // Requisitions & Concerns across all job cards
+  const pendingRequisitions = jobCards.flatMap(card =>
+    card.tasks.flatMap(task =>
+      (task.requisitions || [])
+        .filter(r => r.status === 'PENDING_APPROVAL')
+        .map(r => ({ requisition: r, card, task }))
+    )
+  );
+
+  const openConcerns = jobCards.flatMap(card =>
+    card.tasks.flatMap(task =>
+      (task.concerns || [])
+        .filter(c => c.status !== 'RESOLVED')
+        .map(c => ({ concern: c, card, task }))
+    )
+  );
+
   return (
     <div className="space-y-6">
 
@@ -161,6 +203,160 @@ export function DashboardOverview({
           <span className="text-[10px] text-slate-500 font-semibold">Cars24 B2B Invoices Total</span>
         </div>
       </div>
+
+      {/* WORKSHOP MANAGER ACTION DESK: PENDING REQUISITIONS & CONCERNS */}
+      {(pendingRequisitions.length > 0 || openConcerns.length > 0) && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/40 dark:border-amber-500/30 p-5 rounded-3xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
+              <h2 className="text-sm font-black text-amber-950 dark:text-amber-200 uppercase tracking-wider flex items-center gap-2">
+                ⚡ Manager Action Desk: Pending Part Requisitions & Floor Concerns
+              </h2>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
+              <span className="px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[11px]">
+                {pendingRequisitions.length} Pending Requisitions
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-[11px]">
+                {openConcerns.length} Reported Concerns
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* PENDING REQUISITIONS LIST */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+                <Package className="w-4 h-4 text-orange-500" />
+                Pending Part & Consumable Requisitions ({pendingRequisitions.length})
+              </h3>
+
+              {pendingRequisitions.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No pending part requisitions from mechanics.</p>
+              ) : (
+                <div className="space-y-3 text-xs max-h-72 overflow-y-auto pr-1">
+                  {pendingRequisitions.map(({ requisition: req, card, task }) => (
+                    <div key={req.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 dark:text-slate-100">{req.title}</span>
+                            <span className="px-2 py-0.2 rounded font-mono font-bold text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                              Qty: {req.quantity}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded font-bold text-[9px] bg-orange-500/10 text-orange-600 uppercase">
+                              {req.itemType}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Job: <strong className="text-slate-800 dark:text-slate-200">{card.vehicle.registrationNumber} ({card.id})</strong> • Task: {task.title}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Requested by: {req.requestedByEmployeeName || 'Mechanic Staff'} {req.reason ? `• "${req.reason}"` : ''}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => onSelectJobCard(card.id)}
+                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                        >
+                          View Job Card
+                        </button>
+                      </div>
+
+                      {/* Approval Controls */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500">Approve Price (₹):</span>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Price ₹"
+                            value={approvalPrices[req.id] || ''}
+                            onChange={(e) => handlePriceChange(req.id, Number(e.target.value))}
+                            className="w-24 px-2 py-1 text-xs font-mono font-bold rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleDashboardApproveReq(card.id, task.id, req.id)}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs"
+                          >
+                            <Check className="w-3 h-3" /> Approve & Add
+                          </button>
+                          <button
+                            onClick={() => handleDashboardRejectReq(card.id, task.id, req.id)}
+                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* OPEN TECHNICAL CONCERNS LIST */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-500" />
+                Reported Mechanics Difficulties & Concerns ({openConcerns.length})
+              </h3>
+
+              {openConcerns.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No open concerns reported by mechanics.</p>
+              ) : (
+                <div className="space-y-3 text-xs max-h-72 overflow-y-auto pr-1">
+                  {openConcerns.map(({ concern: c, card, task }) => (
+                    <div key={c.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 dark:text-slate-100">{c.issueDescription}</span>
+                            <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${
+                              c.urgency === 'CRITICAL' ? 'bg-rose-600 text-white' :
+                              c.urgency === 'HIGH' ? 'bg-rose-500/20 text-rose-600' :
+                              'bg-amber-500/20 text-amber-600'
+                            }`}>
+                              {c.urgency}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Job: <strong className="text-slate-800 dark:text-slate-200">{card.vehicle.registrationNumber} ({card.id})</strong> • Task: {task.title}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Reported by: {c.raisedByEmployeeName || 'Staff'} • {c.createdAt}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => onSelectJobCard(card.id)}
+                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                        >
+                          View Job Card
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                        <button
+                          onClick={() => handleDashboardResolveConcern(card.id, task.id, c.id)}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs"
+                        >
+                          <Check className="w-3 h-3" /> Mark Resolved
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
