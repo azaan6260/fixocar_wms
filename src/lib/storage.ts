@@ -1,6 +1,46 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
+
+export const INITIAL_CITIES: City[] = [
+  { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2026-01-01' },
+  { id: 'city-delhi', name: 'Delhi NCR', state: 'Delhi', createdAt: '2026-01-01' },
+  { id: 'city-bangalore', name: 'Bengaluru', state: 'Karnataka', createdAt: '2026-01-01' },
+  { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2026-01-01' },
+];
+
+export const INITIAL_WORKSHOPS: Workshop[] = [
+  {
+    id: 'ws-mumbai-central',
+    name: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
+    address: 'Bay 12, Marol Industrial Area, Andheri East, Mumbai',
+    phone: '+91 98200 11223',
+    isCars24Partner: true, // Marked as Cars24 Partner Workshop
+    managerName: 'Marcus Vance'
+  },
+  {
+    id: 'ws-delhi-south',
+    name: 'FixoCar Fleet Bay - Okhla',
+    cityId: 'city-delhi',
+    cityName: 'Delhi NCR',
+    address: 'Phase III, Okhla Industrial Estate, New Delhi',
+    phone: '+91 98110 33445',
+    isCars24Partner: true, // Marked as Cars24 Partner Workshop
+    managerName: 'Vikram Mehta'
+  },
+  {
+    id: 'ws-bangalore-east',
+    name: 'FixoCar Express - Whitefield',
+    cityId: 'city-bangalore',
+    cityName: 'Bengaluru',
+    address: 'ITPL Main Rd, Hoodi, Bengaluru',
+    phone: '+91 98450 55667',
+    isCars24Partner: false,
+    managerName: 'Anil Kumar'
+  }
+];
 
 const STORAGE_KEYS = {
   JOB_CARDS: 'autocraft_job_cards_v1',
@@ -10,6 +50,8 @@ const STORAGE_KEYS = {
   PURCHASE_ORDERS: 'autocraft_purchase_orders_v1',
   CITY_SERVICES: 'fixocar_city_services_v1',
   SERVICE_BOOKINGS: 'fixocar_service_bookings_v1',
+  CITIES: 'fixocar_cities_v1',
+  WORKSHOPS: 'fixocar_workshops_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -528,5 +570,104 @@ export function resetToDefaultMockData() {
   localStorage.removeItem(STORAGE_KEYS.PURCHASE_ORDERS);
   localStorage.removeItem(STORAGE_KEYS.CITY_SERVICES);
   localStorage.removeItem(STORAGE_KEYS.SERVICE_BOOKINGS);
+  localStorage.removeItem(STORAGE_KEYS.CITIES);
+  localStorage.removeItem(STORAGE_KEYS.WORKSHOPS);
   notifyStoreChange();
+}
+
+// Clear all demo data completely for fresh Admin setup (Cities -> Workshops -> Employees -> Cards)
+export function clearAllDemoData() {
+  localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.SERVICE_BOOKINGS, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify([]));
+  notifyStoreChange();
+}
+
+// 8. CITIES STORAGE
+export function getCities(): City[] {
+  const local = localStorage.getItem(STORAGE_KEYS.CITIES);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(INITIAL_CITIES));
+    return INITIAL_CITIES;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_CITIES;
+  }
+}
+
+export function saveCities(cities: City[]) {
+  localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
+  notifyStoreChange();
+}
+
+export function addCity(cityName: string, stateName?: string): City {
+  const cities = getCities();
+  const id = `city-${Date.now()}`;
+  const newCity: City = {
+    id,
+    name: cityName,
+    state: stateName || '',
+    createdAt: new Date().toISOString().split('T')[0]
+  };
+  const updated = [newCity, ...cities];
+  saveCities(updated);
+  return newCity;
+}
+
+export function deleteCity(id: string) {
+  const cities = getCities().filter(c => c.id !== id);
+  saveCities(cities);
+}
+
+// 9. WORKSHOPS STORAGE
+export function getWorkshops(): Workshop[] {
+  const local = localStorage.getItem(STORAGE_KEYS.WORKSHOPS);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(INITIAL_WORKSHOPS));
+    return INITIAL_WORKSHOPS;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_WORKSHOPS;
+  }
+}
+
+export function saveWorkshops(workshops: Workshop[]) {
+  localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(workshops));
+  notifyStoreChange();
+}
+
+export function addWorkshop(wsData: Omit<Workshop, 'id'>): Workshop {
+  const workshops = getWorkshops();
+  const id = `ws-${Date.now()}`;
+  const newWs: Workshop = {
+    ...wsData,
+    id,
+    createdAt: new Date().toISOString().split('T')[0]
+  };
+  const updated = [newWs, ...workshops];
+  saveWorkshops(updated);
+  return newWs;
+}
+
+export function updateWorkshop(id: string, updates: Partial<Workshop>) {
+  const workshops = getWorkshops();
+  const idx = workshops.findIndex(w => w.id === id);
+  if (idx !== -1) {
+    workshops[idx] = { ...workshops[idx], ...updates };
+    saveWorkshops(workshops);
+  }
+}
+
+export function deleteWorkshop(id: string) {
+  const workshops = getWorkshops().filter(w => w.id !== id);
+  saveWorkshops(workshops);
 }

@@ -21,6 +21,7 @@ import { VendorManagementView } from './components/VendorManagementView';
 import { RoleWorkspaceView } from './components/RoleWorkspaceView';
 import { SupabaseSettingsModal } from './components/SupabaseSettingsModal';
 import { EmployeeManagementView } from './components/EmployeeManagementView';
+import { CityWorkshopManagementView } from './components/CityWorkshopManagementView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -175,6 +176,13 @@ export default function App() {
 
         {activeTab === 'vendors' && (
           <VendorManagementView />
+        )}
+
+        {activeTab === 'workshops' && (
+          <CityWorkshopManagementView 
+            currentRole={currentRole} 
+            onNavigateEmployees={() => setActiveTab('employees')}
+          />
         )}
 
         {activeTab === 'employees' && (

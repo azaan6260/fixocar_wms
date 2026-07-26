@@ -18,7 +18,8 @@ import {
   Search,
   Zap,
   Phone,
-  Users
+  Users,
+  MapPin
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -51,6 +52,7 @@ export function HeaderNav({
 
   const navItems = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },

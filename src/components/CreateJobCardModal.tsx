@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor } from '../types';
+import React, { useState, useEffect } from 'react';
+import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
-import { createJobCard } from '../lib/storage';
+import { createJobCard, getCities, getWorkshops } from '../lib/storage';
 import { 
   X, 
   Car, 
@@ -15,7 +15,9 @@ import {
   Gauge, 
   Building2,
   Hammer,
-  Palette
+  Palette,
+  Building,
+  MapPin
 } from 'lucide-react';
 
 interface CreateJobCardModalProps {
@@ -39,6 +41,14 @@ export function CreateJobCardModal({
 
   const [step, setStep] = useState<1 | 2>(1);
 
+  // Cities & Workshops
+  const [cities, setCities] = useState<City[]>([]);
+  const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [selectedCityId, setSelectedCityId] = useState<string>('');
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
+  const [isCars24, setIsCars24] = useState<boolean>(false);
+  const [cars24RefNo, setCars24RefNo] = useState<string>('');
+
   // Form State
   const [regNo, setRegNo] = useState(prefilledRegNum || '');
   const [make, setMake] = useState('Toyota');
@@ -53,6 +63,52 @@ export function CreateJobCardModal({
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+
+  // Load cities & workshops on open
+  useEffect(() => {
+    if (isOpen) {
+      const loadedCities = getCities();
+      const loadedWorkshops = getWorkshops();
+      setCities(loadedCities);
+      setWorkshops(loadedWorkshops);
+
+      if (loadedCities.length > 0) {
+        setSelectedCityId(loadedCities[0].id);
+        const cityWorkshops = loadedWorkshops.filter(w => w.cityId === loadedCities[0].id);
+        if (cityWorkshops.length > 0) {
+          setSelectedWorkshopId(cityWorkshops[0].id);
+          setIsCars24(!!cityWorkshops[0].isCars24Partner);
+          if (cityWorkshops[0].isCars24Partner && !customerName) {
+            setCustomerName('Cars24 Fleet Manager');
+            setCustomerPhone('+91 9876543210');
+          }
+        }
+      }
+    }
+  }, [isOpen]);
+
+  const handleCityChange = (cityId: string) => {
+    setSelectedCityId(cityId);
+    const cityWorkshops = workshops.filter(w => w.cityId === cityId);
+    if (cityWorkshops.length > 0) {
+      setSelectedWorkshopId(cityWorkshops[0].id);
+      setIsCars24(!!cityWorkshops[0].isCars24Partner);
+    } else {
+      setSelectedWorkshopId('');
+    }
+  };
+
+  const handleWorkshopChange = (workshopId: string) => {
+    setSelectedWorkshopId(workshopId);
+    const ws = workshops.find(w => w.id === workshopId);
+    if (ws) {
+      setIsCars24(!!ws.isCars24Partner);
+      if (ws.isCars24Partner && (!customerName || customerName === 'Cars24 Fleet Manager')) {
+        setCustomerName('Cars24 Fleet Manager');
+        setCustomerPhone('+91 9876543210');
+      }
+    }
+  };
 
   const [pickupRequested, setPickupRequested] = useState(false);
   const [deliveryRequested, setDeliveryRequested] = useState(true);
@@ -187,7 +243,16 @@ export function CreateJobCardModal({
       return;
     }
 
+    const selectedCity = cities.find(c => c.id === selectedCityId);
+    const selectedWorkshop = workshops.find(w => w.id === selectedWorkshopId);
+
     const newJobCard = createJobCard({
+      cityId: selectedCityId,
+      cityName: selectedCity?.name,
+      workshopId: selectedWorkshopId,
+      workshopName: selectedWorkshop?.name,
+      isCars24,
+      cars24RefNo: isCars24 ? (cars24RefNo || `C24-${Date.now().toString().slice(-6)}`) : undefined,
       estimatedCompletionDate: new Date(Date.now() + 86400000 * 2).toLocaleDateString(),
       vehicle: {
         registrationNumber: regNo.toUpperCase(),
@@ -272,6 +337,94 @@ export function CreateJobCardModal({
           
           {step === 1 && (
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+
+              {/* City & Workshop Selection + Cars24 Tag */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-blue-600" />
+                  Workshop Location & Fleet Channel
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      City / Region
+                    </label>
+                    <select
+                      value={selectedCityId}
+                      onChange={(e) => handleCityChange(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold"
+                    >
+                      {cities.length === 0 ? (
+                        <option value="">No cities configured</option>
+                      ) : (
+                        cities.map(c => <option key={c.id} value={c.id}>{c.name} ({c.state})</option>)
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Assigned Workshop Branch
+                    </label>
+                    <select
+                      value={selectedWorkshopId}
+                      onChange={(e) => handleWorkshopChange(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold"
+                    >
+                      {workshops.filter(w => !selectedCityId || w.cityId === selectedCityId).length === 0 ? (
+                        <option value="">No workshops in city</option>
+                      ) : (
+                        workshops
+                          .filter(w => !selectedCityId || w.cityId === selectedCityId)
+                          .map(w => (
+                            <option key={w.id} value={w.id}>
+                              {w.name} {w.isCars24Partner ? '⚡ (Cars24 Partner)' : ''}
+                            </option>
+                          ))
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Fleet / B2B Category
+                    </label>
+                    <div className="flex items-center gap-3 pt-1">
+                      <label className="flex items-center gap-2 text-xs font-bold text-orange-600 dark:text-orange-400 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isCars24}
+                          onChange={(e) => setIsCars24(e.target.checked)}
+                          className="rounded accent-orange-500 w-4 h-4"
+                        />
+                        Cars24 Vendor Fleet
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {isCars24 && (
+                  <div className="p-3 bg-orange-500/10 rounded-xl border border-orange-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-black text-orange-700 dark:text-orange-400 uppercase tracking-wide">
+                        ⚡ CARS24 FLEET VEHICLE CHECK-IN
+                      </span>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                        This job card will be managed in Cars24 vendor pipeline with segregated invoicing & separate fleet counters.
+                      </p>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Cars24 Ref / Order ID (e.g. C24-99812)"
+                      value={cars24RefNo}
+                      onChange={(e) => setCars24RefNo(e.target.value)}
+                      className="px-3 py-1.5 text-xs font-mono font-bold rounded-lg bg-white dark:bg-slate-900 border border-orange-300 dark:border-orange-800 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+              </div>
               
               {/* Vehicle Section */}
               <div>

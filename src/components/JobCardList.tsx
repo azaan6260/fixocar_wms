@@ -47,7 +47,7 @@ export function JobCardList({
   onOpenQCModal,
 }: JobCardListProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'APPROVAL' | 'QC' | 'DELIVERY'>('ALL');
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'APPROVAL' | 'QC' | 'DELIVERY' | 'CARS24'>('ALL');
 
   const filteredCards = jobCards.filter((card) => {
     const matchesSearch = 
@@ -56,14 +56,17 @@ export function JobCardList({
       card.vehicle.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
       card.vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       card.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.customer.phone.includes(searchTerm);
+      card.customer.phone.includes(searchTerm) ||
+      (card.cityName && card.cityName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (card.workshopName && card.workshopName.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (!matchesSearch) return false;
 
     if (activeFilter === 'ACTIVE') return card.status !== 'DELIVERED' && card.status !== 'CLOSED';
-    if (activeFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING';
+    if (activeFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
     if (activeFilter === 'QC') return card.status === 'QC_PENDING';
     if (activeFilter === 'DELIVERY') return card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY';
+    if (activeFilter === 'CARS24') return card.isCars24;
 
     return true;
   });
@@ -115,7 +118,8 @@ export function JobCardList({
             {[
               { id: 'ALL', label: `All (${jobCards.length})` },
               { id: 'ACTIVE', label: `Active (${jobCards.filter(c => c.status !== 'DELIVERED').length})` },
-              { id: 'APPROVAL', label: `Needs Approval (${jobCards.filter(c => c.status === 'ESTIMATE_PENDING').length})` },
+              { id: 'CARS24', label: `Cars24 Partner (${jobCards.filter(c => c.isCars24).length})` },
+              { id: 'APPROVAL', label: `Needs Approval (${jobCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
               { id: 'QC', label: `QC Audit (${jobCards.filter(c => c.status === 'QC_PENDING').length})` },
               { id: 'DELIVERY', label: `Ready/Delivery (${jobCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
             ].map((f) => (
@@ -124,7 +128,7 @@ export function JobCardList({
                 onClick={() => setActiveFilter(f.id as any)}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
                   activeFilter === f.id
-                    ? 'bg-blue-600 text-white'
+                    ? f.id === 'CARS24' ? 'bg-orange-600 text-white' : 'bg-blue-600 text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
@@ -164,10 +168,17 @@ export function JobCardList({
                 
                 {/* Card Top Header */}
                 <div className="p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
-                      {card.id}
-                    </span>
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                        {card.id}
+                      </span>
+                      {card.isCars24 && (
+                        <span className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Cars24
+                        </span>
+                      )}
+                    </div>
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
                       {statusStyle.label}
                     </span>

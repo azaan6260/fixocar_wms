@@ -24,6 +24,25 @@ export type SpecializedTeam =
 
 export type EmployeeStatus = 'AVAILABLE' | 'BUSY' | 'OFF_DUTY';
 
+export interface City {
+  id: string;
+  name: string;
+  state?: string;
+  createdAt?: string;
+}
+
+export interface Workshop {
+  id: string;
+  name: string;
+  cityId: string;
+  cityName: string;
+  address: string;
+  phone: string;
+  isCars24Partner: boolean; // Flag to activate workshop as Cars24 vendor partner
+  managerName?: string;
+  createdAt?: string;
+}
+
 export interface Employee {
   id: string;
   name: string;
@@ -37,6 +56,10 @@ export interface Employee {
   loginId?: string;
   password?: string;
   baseSalary?: number;
+  cityId?: string;
+  cityName?: string;
+  workshopId?: string;
+  workshopName?: string;
 }
 
 export interface AttendanceRecord {
@@ -122,6 +145,10 @@ export interface JobTask {
   rejectionReason?: string;
   notes?: string;
   completedAt?: string;
+  isAdditionalWork?: boolean; // Flagged when extra work is raised during repair
+  additionalWorkRequestedBy?: string;
+  additionalWorkRequestedAt?: string;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface QCCheckitem {
@@ -276,6 +303,12 @@ export interface JobCard {
   packageName?: string;
   floorManagerId?: string;
   floorManagerName?: string;
+  cityId?: string;
+  cityName?: string;
+  workshopId?: string;
+  workshopName?: string;
+  isCars24?: boolean; // Flag if this is a Cars24 fleet car
+  cars24RefNo?: string;
   tasks: JobTask[];
   qcChecklist: QCCheckitem[];
   qcPassed: boolean;

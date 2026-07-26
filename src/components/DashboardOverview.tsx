@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { JobCard, UserRole } from '../types';
 import { 
   Car, 
@@ -93,10 +93,22 @@ export function DashboardOverview({
 
   // Metrics
   const activeCars = jobCards.filter(j => j.status !== 'DELIVERED' && j.status !== 'CLOSED');
+  const retailCars = activeCars.filter(j => !j.isCars24);
+  const cars24Cars = activeCars.filter(j => j.isCars24);
+
   const inProgress = jobCards.filter(j => j.status === 'IN_PROGRESS');
   const estimatePending = jobCards.filter(j => j.status === 'ESTIMATE_PENDING');
   const qcPending = jobCards.filter(j => j.status === 'QC_PENDING');
   const outForDelivery = jobCards.filter(j => j.status === 'OUT_FOR_DELIVERY');
+
+  // Vehicle Type filter state for Live Job Cards table
+  const [vehicleFilter, setVehicleFilter] = useState<'ALL' | 'RETAIL' | 'CARS24'>('ALL');
+
+  const filteredActiveCars = activeCars.filter(j => {
+    if (vehicleFilter === 'RETAIL') return !j.isCars24;
+    if (vehicleFilter === 'CARS24') return j.isCars24;
+    return true;
+  });
 
   // Revenue
   const totalRevenue = jobCards.reduce((acc, card) => {
@@ -104,8 +116,51 @@ export function DashboardOverview({
     return acc + taskSum;
   }, 0);
 
+  const cars24Revenue = jobCards
+    .filter(j => j.isCars24)
+    .reduce((acc, card) => acc + card.tasks.reduce((tAcc, t) => tAcc + (t.customerPrice || 0), 0), 0);
+
   return (
     <div className="space-y-6">
+
+      {/* CARS24 & WORKSHOP VEHICLE BREAKDOWN METRICS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Total Cars In Workshop</span>
+            <Car className="w-4 h-4 text-blue-600" />
+          </div>
+          <p className="text-2xl font-black text-slate-900 dark:text-white">{activeCars.length}</p>
+          <span className="text-[10px] text-slate-500 font-semibold">Active in all workshop bays</span>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
+          <div className="flex items-center justify-between text-blue-600 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Retail Customer Cars</span>
+            <Car className="w-4 h-4 text-blue-500" />
+          </div>
+          <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{retailCars.length}</p>
+          <span className="text-[10px] text-slate-500 font-semibold">Regular retail repairs</span>
+        </div>
+
+        <div className="bg-orange-50/60 dark:bg-orange-950/30 p-4 rounded-2xl border border-orange-200 dark:border-orange-900/60 shadow-xs">
+          <div className="flex items-center justify-between text-orange-600 dark:text-orange-400 mb-1">
+            <span className="text-[11px] font-black uppercase tracking-wider">Cars24 Partner Fleet</span>
+            <Car className="w-4 h-4 text-orange-600" />
+          </div>
+          <p className="text-2xl font-black text-orange-600 dark:text-orange-400">{cars24Cars.length}</p>
+          <span className="text-[10px] text-orange-700 dark:text-orange-300 font-semibold">Cars24 Vendor Jobs</span>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider">Cars24 Billing Volume</span>
+            <DollarSign className="w-4 h-4 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">₹{cars24Revenue.toLocaleString('en-IN')}</p>
+          <span className="text-[10px] text-slate-500 font-semibold">Cars24 B2B Invoices Total</span>
+        </div>
+      </div>
 
       {/* Main Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -113,7 +168,7 @@ export function DashboardOverview({
         {/* 1. Live Job Cards (Main Large Bento Card) */}
         <section className="col-span-12 lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl shadow-xs border border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between">
           <div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="font-extrabold text-lg text-slate-800 dark:text-slate-100 uppercase tracking-tight">
                   Live Job Cards
@@ -153,6 +208,40 @@ export function DashboardOverview({
               </div>
             </div>
 
+            {/* Filter Pills for All / Retail / Cars24 */}
+            <div className="flex items-center gap-1.5 mb-4 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl w-fit">
+              <button
+                onClick={() => setVehicleFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  vehicleFilter === 'ALL'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                All Cars ({activeCars.length})
+              </button>
+              <button
+                onClick={() => setVehicleFilter('RETAIL')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  vehicleFilter === 'RETAIL'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Retail Cars ({retailCars.length})
+              </button>
+              <button
+                onClick={() => setVehicleFilter('CARS24')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                  vehicleFilter === 'CARS24'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Cars24 Fleet ({cars24Cars.length})
+              </button>
+            </div>
+
             {/* Job Cards Table */}
             <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
               <table className="w-full text-left">
@@ -167,27 +256,41 @@ export function DashboardOverview({
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-100 dark:divide-slate-800">
-                  {activeCars.slice(0, 5).map((card) => {
-                    const primaryTask = card.tasks[0]?.title || 'General Inspection';
-                    const hasPendingApproval = card.status === 'ESTIMATE_PENDING';
+                  {filteredActiveCars.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        No active vehicles in this category.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredActiveCars.slice(0, 5).map((card) => {
+                      const primaryTask = card.tasks[0]?.title || 'General Inspection';
+                      const hasPendingApproval = card.status === 'ESTIMATE_PENDING';
 
-                    return (
-                      <tr
-                        key={card.id}
-                        onClick={() => onSelectJobCard(card.id)}
-                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                      >
-                        <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {card.id}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <p className="font-bold text-slate-900 dark:text-slate-100">
-                            {card.vehicle.make} {card.vehicle.model}
-                          </p>
-                          <p className="text-[11px] text-slate-500 font-mono">
-                            {card.vehicle.registrationNumber} • {card.vehicle.color}
-                          </p>
-                        </td>
+                      return (
+                        <tr
+                          key={card.id}
+                          onClick={() => onSelectJobCard(card.id)}
+                          className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                        >
+                          <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              {card.id}
+                              {card.isCars24 && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-orange-500 text-white uppercase">
+                                  Cars24
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">
+                              {card.vehicle.make} {card.vehicle.model}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono">
+                              {card.vehicle.registrationNumber} • {card.vehicle.color}
+                            </p>
+                          </td>
                         <td className="px-4 py-3.5">
                           <span className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
                             hasPendingApproval
@@ -218,7 +321,8 @@ export function DashboardOverview({
                         </td>
                       </tr>
                     );
-                  })}
+                  })
+                )}
                 </tbody>
               </table>
             </div>

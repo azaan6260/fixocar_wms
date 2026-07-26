@@ -6,7 +6,7 @@ const STORAGE_KEY_ANON = 'autocraft_supabase_anon_key';
 export function getStoredSupabaseConfig() {
   const metaEnv = (import.meta as any).env || {};
   const envUrl = metaEnv.VITE_SUPABASE_URL || '';
-  const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+  const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '';
   
   const savedUrl = localStorage.getItem(STORAGE_KEY_URL) || envUrl;
   const savedAnon = localStorage.getItem(STORAGE_KEY_ANON) || envAnon;
