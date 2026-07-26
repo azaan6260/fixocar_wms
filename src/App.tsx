@@ -26,6 +26,8 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
   // Reactive store state
   const [jobCards, setJobCards] = useState<JobCard[]>(() => getJobCards());
   const [employees, setEmployees] = useState<Employee[]>(() => getEmployees());
@@ -40,18 +42,71 @@ export default function App() {
 
   // Subscribe to storage updates
   useEffect(() => {
+    const handlePopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    
     const unsubscribe = subscribeToStore(() => {
       setJobCards(getJobCards());
       setEmployees(getEmployees());
       setVendors(getVendors());
     });
-    return unsubscribe;
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      unsubscribe();
+    };
   }, []);
 
   const activeCardForDetail = selectedJobCardId ? getJobCardById(selectedJobCardId) : null;
   const activeCardForCustomerPortal = customerPortalCardId ? getJobCardById(customerPortalCardId) : null;
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
 
+  // CUSTOMER FACING ROUTE
+  if (currentPath === '/' || currentPath === '/index.html') {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
+        <header className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800">
+          <div className="max-w-7xl mx-auto w-full flex justify-between items-center px-4">
+            <h1 className="font-black text-2xl tracking-tight text-white flex items-center gap-2">
+              <span className="text-amber-500">Fixo</span>Car
+            </h1>
+            <a 
+              href="/wms" 
+              className="text-xs font-bold bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-700 transition-colors"
+            >
+              Workshop Login
+            </a>
+          </div>
+        </header>
+
+        <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <CustomerPortal
+            currentRole={'CUSTOMER' as any}
+            onOpenApprovalModal={(id) => setCustomerPortalCardId(id)}
+          />
+        </main>
+
+        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 text-center text-xs text-slate-500">
+          <div className="max-w-7xl mx-auto px-4">
+            <p className="font-semibold text-slate-700 dark:text-slate-300">
+              FixoCar • Worry-Free Car Repair
+            </p>
+            <p className="mt-1">Helpline: 8819915656</p>
+          </div>
+        </footer>
+
+        {/* Render Customer Approval Modal if needed in customer portal */}
+        {activeCardForCustomerPortal && (
+          <CustomerApprovalPortalModal
+            card={activeCardForCustomerPortal}
+            onClose={() => setCustomerPortalCardId(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // WMS ROUTE (/wms)
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
       
