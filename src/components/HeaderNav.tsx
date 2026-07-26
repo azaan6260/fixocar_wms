@@ -128,16 +128,16 @@ export function HeaderNav({
               <span>8819915656</span>
             </a>
 
-            {/* QR Scanner & Live Tracking Button */}
+            {/* QR Scanner & Number Plate ANPR Scanner Button */}
             {onOpenQRScanner && (
               <button
                 type="button"
                 onClick={onOpenQRScanner}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-xs active:scale-95"
-                title="Scan or View Job Card QR Code"
+                title="Scan QR Code or Vehicle Number Plate"
               >
                 <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden md:inline">Scan QR</span>
+                <span className="hidden md:inline">Scan QR / Plate</span>
               </button>
             )}
 

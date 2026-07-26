@@ -22,7 +22,10 @@ import {
   DollarSign, 
   ArrowRight,
   Zap,
-  Check
+  Check,
+  Scan,
+  CheckCircle,
+  Maximize2
 } from 'lucide-react';
 
 interface LiveJobCardTrackerModalProps {
@@ -42,10 +45,18 @@ export function LiveJobCardTrackerModal({
 }: LiveJobCardTrackerModalProps) {
   const jobCards = propsJobCards || getJobCards();
 
+  // Mode: QR code scan vs Number Plate ANPR scan
+  const [scanMode, setScanMode] = useState<'qr' | 'plate'>('plate');
+
   // Scanner state
   const [isScanning, setIsScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Custom plate input for OCR simulation
+  const [plateInput, setPlateInput] = useState('MH 12 AB 1234');
+  const [ocrResult, setOcrResult] = useState<{ plate: string; confidence: number; matchedCardId?: string } | null>(null);
+
   // Active selected Job Card
   const [selectedCardId, setSelectedCardId] = useState<string>(() => {
     if (initialJobCardId && jobCards.some(c => c.id === initialJobCardId)) {
@@ -77,12 +88,50 @@ export function LiveJobCardTrackerModal({
     c.vehicle.model.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSimulateScan = (cardId: string) => {
+  // QR Code Camera Scan Simulation
+  const handleSimulateQRScan = (cardId: string) => {
     setIsScanning(true);
+    setScanMessage('Optical QR Code Decoding in Progress...');
     setTimeout(() => {
       setSelectedCardId(cardId);
       setIsScanning(false);
-    }, 900);
+      setScanMessage('');
+    }, 800);
+  };
+
+  // Automatic Number Plate Recognition (ANPR / OCR) Simulation
+  const handleSimulatePlateScan = (rawPlateText?: string) => {
+    const queryPlate = (rawPlateText || plateInput).replace(/\s+/g, '').toUpperCase();
+    if (!queryPlate) return;
+
+    setIsScanning(true);
+    setScanMessage(`Scanning Number Plate [ ${queryPlate} ] via ANPR Vision Engine...`);
+
+    setTimeout(() => {
+      // Find matching job card by vehicle registration number (partial or exact)
+      const matched = jobCards.find(c => {
+        const reg = c.vehicle.registrationNumber.replace(/\s+/g, '').toUpperCase();
+        return reg === queryPlate || reg.includes(queryPlate) || queryPlate.includes(reg);
+      });
+
+      if (matched) {
+        setSelectedCardId(matched.id);
+        setOcrResult({
+          plate: matched.vehicle.registrationNumber,
+          confidence: 99.4,
+          matchedCardId: matched.id
+        });
+      } else {
+        setOcrResult({
+          plate: queryPlate,
+          confidence: 92.1,
+          matchedCardId: undefined
+        });
+      }
+
+      setIsScanning(false);
+      setScanMessage('');
+    }, 1000);
   };
 
   const handlePostComment = (e: React.FormEvent) => {
@@ -139,19 +188,19 @@ export function LiveJobCardTrackerModal({
         <div className="bg-slate-900 text-white p-5 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
-              <QrCode className="w-6 h-6" />
+              <Scan className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-extrabold text-lg tracking-tight text-white">
-                  Live QR Tracking & Comments
+                  Live Scanner & Floor Feed
                 </h2>
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  REAL-TIME
+                  QR + ANPR OCR
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Scan job card QR code or select ticket to track stage, GPS & live floor comments
+                Scan vehicle number plates or job card QR tags to pull status, ETA & add comments
               </p>
             </div>
           </div>
@@ -167,36 +216,171 @@ export function LiveJobCardTrackerModal({
         {/* Content Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
           
-          {/* QR Scanner / Selector Bar */}
-          <div className="bg-slate-900/90 text-white p-4 rounded-2xl border border-slate-800 space-y-3">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              
-              {/* Search / Select Dropdown */}
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search Job Card #, Vehicle Reg, Customer Name..."
-                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
+          {/* Scanner Mode Tabs & Controls Bar */}
+          <div className="bg-slate-900/95 text-white p-4 rounded-2xl border border-slate-800 space-y-4">
+            
+            {/* Mode Selector */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setScanMode('plate')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                    scanMode === 'plate'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Scan className="w-4 h-4" />
+                  🚘 Number Plate Scan (ANPR)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setScanMode('qr')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                    scanMode === 'qr'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" />
+                  📱 QR Code Tag Scan
+                </button>
               </div>
 
-              {/* QR Scanner Simulator Trigger */}
-              <button
-                type="button"
-                onClick={() => handleSimulateScan(filteredCards[0]?.id || selectedCardId)}
-                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shrink-0"
-              >
-                <Camera className="w-4 h-4" />
-                {isScanning ? 'Scanning QR...' : 'Simulate Camera Scan'}
-              </button>
+              <span className="text-[11px] text-amber-400 font-mono hidden md:inline-flex items-center gap-1 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                <Sparkles className="w-3 h-3" /> FixoCar AI Optical Scanner v2.4
+              </span>
             </div>
 
-            {/* Quick Cards Pill Selector */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none">
-              <span className="text-[11px] text-slate-400 font-medium shrink-0">Available Job Cards:</span>
+            {/* SCANNER VIEW: NUMBER PLATE ANPR OCR */}
+            {scanMode === 'plate' && (
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  
+                  {/* Camera Reticle Visualization */}
+                  <div className="w-full md:w-64 h-24 bg-slate-900 rounded-xl border-2 border-dashed border-amber-500/60 relative flex flex-col items-center justify-center overflow-hidden shrink-0">
+                    <div className="absolute top-2 left-2 border-t-2 border-l-2 border-amber-400 w-3 h-3" />
+                    <div className="absolute top-2 right-2 border-t-2 border-r-2 border-amber-400 w-3 h-3" />
+                    <div className="absolute bottom-2 left-2 border-b-2 border-l-2 border-amber-400 w-3 h-3" />
+                    <div className="absolute bottom-2 right-2 border-b-2 border-r-2 border-amber-400 w-3 h-3" />
+
+                    {/* License Plate Graphic */}
+                    <div className="bg-amber-400 text-slate-950 px-4 py-1 rounded-md border-2 border-slate-950 font-mono font-black text-sm tracking-widest shadow-md flex items-center gap-2">
+                      <span className="bg-blue-800 text-white text-[8px] px-1 rounded font-sans">IND</span>
+                      {plateInput.toUpperCase() || 'MH 12 AB 1234'}
+                    </div>
+
+                    <span className="text-[10px] text-amber-400/80 font-mono mt-1.5 flex items-center gap-1">
+                      <Camera className="w-3 h-3 animate-pulse" /> ANPR Reticle Alignment
+                    </span>
+                  </div>
+
+                  {/* Input & Action */}
+                  <div className="flex-1 space-y-2.5 w-full">
+                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      Enter or Select License Plate Number to Scan:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={plateInput}
+                        onChange={(e) => setPlateInput(e.target.value.toUpperCase())}
+                        placeholder="e.g. MH12AB1234, KA01MJ9081..."
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 font-mono text-sm font-bold text-amber-400 tracking-wider placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSimulatePlateScan()}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition-all shadow-md shrink-0"
+                      >
+                        <Scan className="w-4 h-4" />
+                        Scan Plate (ANPR)
+                      </button>
+                    </div>
+
+                    {/* Quick registered plate chips */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pt-1 scrollbar-none">
+                      <span className="text-[11px] text-slate-400 font-medium shrink-0">Tap Plate:</span>
+                      {jobCards.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setPlateInput(c.vehicle.registrationNumber);
+                            handleSimulatePlateScan(c.vehicle.registrationNumber);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold shrink-0 transition-all border ${
+                            activeCard?.vehicle.registrationNumber === c.vehicle.registrationNumber
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                              : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                          }`}
+                        >
+                          {c.vehicle.registrationNumber}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* OCR Result Badge */}
+                {ocrResult && (
+                  <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                    ocrResult.matchedCardId 
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {ocrResult.matchedCardId ? (
+                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-400" />
+                      )}
+                      <div>
+                        <span className="font-mono font-bold">{ocrResult.plate}</span> matched with {ocrResult.confidence}% ANPR confidence.
+                        {!ocrResult.matchedCardId && ' (No active workshop job card found for this plate).' }
+                      </div>
+                    </div>
+                    {ocrResult.matchedCardId && (
+                      <span className="font-mono font-bold text-amber-400 text-[11px]">
+                        Job Card #{ocrResult.matchedCardId} Loaded
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SCANNER VIEW: QR CODE TAG */}
+            {scanMode === 'qr' && (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search Job Card #, Vehicle Reg, Customer Name..."
+                    className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSimulateQRScan(filteredCards[0]?.id || selectedCardId)}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shrink-0"
+                >
+                  <Camera className="w-4 h-4" />
+                  Simulate QR Camera Scan
+                </button>
+              </div>
+            )}
+
+            {/* Quick Cards Selector */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none border-t border-slate-800/80 pt-2">
+              <span className="text-[11px] text-slate-400 font-medium shrink-0">Select Job Ticket:</span>
               {filteredCards.map((c) => (
                 <button
                   key={c.id}
@@ -219,10 +403,12 @@ export function LiveJobCardTrackerModal({
             <div className="bg-slate-950 p-6 rounded-2xl border border-amber-500/40 text-center space-y-3 relative overflow-hidden animate-pulse">
               <div className="absolute inset-0 bg-amber-500/5 pointer-events-none" />
               <div className="w-16 h-16 mx-auto bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center border border-amber-500/40">
-                <QrCode className="w-8 h-8 animate-spin" />
+                <Scan className="w-8 h-8 animate-spin" />
               </div>
-              <h4 className="text-amber-400 font-bold text-sm">Decoding Optical QR Tag...</h4>
-              <p className="text-xs text-slate-400">Verifying Job Card signature & fetching live floor comments</p>
+              <h4 className="text-amber-400 font-bold text-sm">
+                {scanMessage || 'Decoding Optical Data...'}
+              </h4>
+              <p className="text-xs text-slate-400">Verifying signature & fetching live floor comments</p>
             </div>
           )}
 
@@ -426,7 +612,7 @@ export function LiveJobCardTrackerModal({
         {/* Footer */}
         <div className="p-4 bg-slate-100 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
           <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
-            <QrCode className="w-3.5 h-3.5 text-amber-500" /> Live QR Scanner Active • Auto Sync
+            <Scan className="w-3.5 h-3.5 text-amber-500" /> Optical Camera Scanner Ready (QR + ANPR)
           </span>
           <button
             onClick={onClose}
@@ -440,3 +626,4 @@ export function LiveJobCardTrackerModal({
     </div>
   );
 }
+
