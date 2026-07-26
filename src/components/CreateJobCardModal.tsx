@@ -24,6 +24,7 @@ interface CreateJobCardModalProps {
   employees: Employee[];
   vendors: Vendor[];
   onCardCreated: (newCard: JobCard) => void;
+  prefilledRegNum?: string;
 }
 
 export function CreateJobCardModal({
@@ -32,13 +33,14 @@ export function CreateJobCardModal({
   employees,
   vendors,
   onCardCreated,
+  prefilledRegNum,
 }: CreateJobCardModalProps) {
   if (!isOpen) return null;
 
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form State
-  const [regNo, setRegNo] = useState('');
+  const [regNo, setRegNo] = useState(prefilledRegNum || '');
   const [make, setMake] = useState('Toyota');
   const [model, setModel] = useState('Corolla Altis');
   const [year, setYear] = useState(2022);
@@ -98,6 +100,13 @@ export function CreateJobCardModal({
     });
     setTasks(mappedTasks);
   };
+
+  // Reset form when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setRegNo(prefilledRegNum || '');
+    }
+  }, [isOpen, prefilledRegNum]);
 
   // Initial load of default package tasks
   React.useEffect(() => {

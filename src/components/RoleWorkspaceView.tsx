@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserRole, JobCard } from '../types';
 import { updateTaskStatus, respondToCustomerApproval } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
+import { useI18n } from '../lib/i18n';
 import { 
   Wrench, 
   Hammer, 
@@ -33,8 +34,8 @@ export function RoleWorkspaceView({
   // Select active panel for body/paint tasks
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null);
   
-  // Language toggle for mechanics
-  const [language, setLanguage] = useState<'EN' | 'HI'>('EN');
+  // Use global i18n
+  const { language, setLanguage, t } = useI18n();
 
   // Filter tasks tailored to current role
   const getTasksForRole = () => {
@@ -61,6 +62,59 @@ export function RoleWorkspaceView({
 
   const roleTasks = getTasksForRole();
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleScanLicensePlate = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        alert("Scanning License Plate...");
+        
+        const response = await fetch('/api/scan-plate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          const regNum = data.plateNumber;
+          if (regNum === 'UNKNOWN') {
+            alert("Could not detect license plate. Please try again.");
+            return;
+          }
+
+          // Search active job cards
+          const activeCard = jobCards.find(
+            j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
+                 j.status !== 'CLOSED' && j.status !== 'DELIVERED'
+          );
+
+          if (activeCard) {
+            alert(`Found active job card for ${regNum}. Opening it...`);
+            onOpenJobCard(activeCard.id);
+          } else {
+            alert(`No active job card found for ${regNum}. Please create one from Dashboard.`);
+          }
+        } else {
+          alert('Failed to scan license plate: ' + data.error);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      alert('Error processing image');
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -72,36 +126,35 @@ export function RoleWorkspaceView({
             <span className="text-xs text-slate-400">Tailored Specialized View</span>
           </div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            {currentRole === 'MECHANIC' && (language === 'HI' ? 'मेकेनिकल तकनीशियन कार्यक्षेत्र (Mechanical Technician Workspace)' : 'Mechanical Technician Workspace')}
-            {currentRole === 'DENTER' && 'Denting & Body Metalwork Station'}
-            {currentRole === 'PAINTER' && 'Spray Booth & Paint Restoration Studio'}
-            {currentRole === 'DELIVERY_BOY' && 'Logistics Driver Taskboard'}
+            {currentRole === 'MECHANIC' && t('role.mechanicWorkspace')}
+            {currentRole === 'DENTER' && t('role.denterWorkspace')}
+            {currentRole === 'PAINTER' && t('role.painterWorkspace')}
+            {currentRole === 'DELIVERY_BOY' && t('role.deliveryWorkspace')}
             {currentRole === 'CUSTOMER' && 'Vehicle Owner Personal Tracker'}
-            {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER') && 'Floor Management Oversight Board'}
+            {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER') && t('role.managementWorkspace')}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {currentRole === 'MECHANIC' && language === 'HI' 
-              ? 'केवल अपने टीम रोल के कार्यों पर ध्यान केंद्रित करें। (Focus purely on the tasks allotted to your team role.)'
-              : 'Focus purely on the tasks allotted to your team role with direct status toggles and inspection logging.'}
+            {t('role.focus')}
           </p>
         </div>
-        
-        {currentRole === 'MECHANIC' && (
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button 
-              onClick={() => setLanguage('EN')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${language === 'EN' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-            >
-              English
-            </button>
-            <button 
-              onClick={() => setLanguage('HI')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${language === 'HI' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-            >
-              हिंदी (Hindi)
-            </button>
-          </div>
-        )}
+
+        <div className="flex items-center gap-2">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            hidden 
+            accept="image/*" 
+            capture="environment" 
+            onChange={handleScanLicensePlate} 
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-3.5 py-2 rounded-full font-bold transition-all flex items-center gap-1.5"
+          >
+            <Car className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            Scan Plate
+          </button>
+        </div>
       </div>
 
       {/* DENTER / PAINTER INTERACTIVE BODY PANEL DIAGRAM */}
@@ -152,16 +205,12 @@ export function RoleWorkspaceView({
       {/* Role Tasks List */}
       <div className="space-y-3">
         <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">
-          {currentRole === 'MECHANIC' && language === 'HI' 
-            ? `आपकी टीम को सौंपे गए कार्य आदेश (${roleTasks.length})` 
-            : `Work Orders Assigned to Your Team (${roleTasks.length})`}
+          {t('role.tasksAssigned')} ({roleTasks.length})
         </h3>
 
         {roleTasks.length === 0 ? (
           <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-            {currentRole === 'MECHANIC' && language === 'HI'
-              ? 'इस भूमिका के लिए कोई सक्रिय कार्य लंबित नहीं है।'
-              : 'No active tasks pending for this role.'}
+            {t('role.noTasks')}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -178,17 +227,15 @@ export function RoleWorkspaceView({
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'
                     }`}>
-                      {language === 'HI' && task.status === 'COMPLETED' ? 'पूरा हो गया (COMPLETED)' :
-                       language === 'HI' && task.status === 'IN_PROGRESS' ? 'प्रगति पर (IN_PROGRESS)' :
-                       language === 'HI' && task.status === 'PENDING' ? 'लंबित (PENDING)' :
-                       task.status}
+                      {task.status === 'COMPLETED' ? t('status.completed') :
+                       task.status === 'IN_PROGRESS' ? t('status.inProgress') :
+                       t('status.pending')}
                     </span>
                   </div>
 
                   <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{task.title}</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {language === 'HI' ? 'वाहन (Vehicle): ' : 'Vehicle: '}
-                    {card.vehicle.make} {card.vehicle.model}
+                    {t('common.vehicle')} {card.vehicle.make} {card.vehicle.model}
                   </p>
                 </div>
 
@@ -200,13 +247,13 @@ export function RoleWorkspaceView({
                       onClick={() => updateTaskStatus(card.id, task.id, 'IN_PROGRESS')}
                       className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
                     >
-                      {language === 'HI' ? 'काम शुरू करें' : 'Start Work'}
+                      {t('action.startWork')}
                     </button>
                     <button
                       onClick={() => updateTaskStatus(card.id, task.id, 'COMPLETED')}
                       className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
                     >
-                      {language === 'HI' ? 'पूरा हुआ' : 'Mark Complete'}
+                      {t('action.markComplete')}
                     </button>
                   </div>
                 </div>

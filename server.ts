@@ -7,11 +7,53 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
   // API Endpoints
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', service: 'AutoCraft Workshop Backend', timestamp: new Date().toISOString() });
+  });
+
+  // AI-Powered License Plate Scanner using Gemini Vision
+  app.post('/api/scan-plate', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ error: 'GEMINI_API_KEY not configured.' });
+      }
+
+      const { imageBase64 } = req.body;
+      if (!imageBase64) {
+        return res.status(400).json({ error: 'imageBase64 is required' });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Extract the vehicle registration number (license plate) from this image. 
+      Return ONLY the alphanumeric characters of the license plate without spaces or hyphens. 
+      If you cannot detect a license plate, return "UNKNOWN".`;
+
+      const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          prompt,
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: 'image/jpeg'
+            }
+          }
+        ]
+      });
+
+      const plateNumber = aiResponse.text?.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'UNKNOWN';
+
+      res.json({ success: true, plateNumber });
+    } catch (err: any) {
+      console.error('Gemini AI License Plate Scan Error:', err);
+      res.status(500).json({ error: 'Failed to scan license plate', details: err.message });
+    }
   });
 
   // AI-Powered Diagnostics & Estimate Generator using Gemini

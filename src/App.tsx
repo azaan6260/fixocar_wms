@@ -36,6 +36,7 @@ export default function App() {
   // Modals state
   const [selectedJobCardId, setSelectedJobCardId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalPrefill, setCreateModalPrefill] = useState<string | undefined>();
   const [customerPortalCardId, setCustomerPortalCardId] = useState<string | null>(null);
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
@@ -132,7 +133,10 @@ export default function App() {
           <DashboardOverview
             jobCards={jobCards}
             currentRole={currentRole}
-            onOpenNewJobCard={() => setIsCreateModalOpen(true)}
+            onOpenNewJobCard={(regNum) => {
+              setCreateModalPrefill(regNum);
+              setIsCreateModalOpen(true);
+            }}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenAIDiagnostics={() => setIsCreateModalOpen(true)}
             onNavigateTab={setActiveTab}
@@ -205,7 +209,11 @@ export default function App() {
       {/* Create New Job Card Modal */}
       <CreateJobCardModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setCreateModalPrefill(undefined);
+        }}
+        prefilledRegNum={createModalPrefill}
         employees={employees}
         vendors={vendors}
         onCardCreated={(newCard) => {

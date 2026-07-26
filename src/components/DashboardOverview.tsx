@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { JobCard, UserRole } from '../types';
 import { 
   Car, 
@@ -14,13 +14,14 @@ import {
   UserCheck,
   Building2,
   Clock,
-  ChevronRight
+  ChevronRight,
+  Camera
 } from 'lucide-react';
 
 interface DashboardOverviewProps {
   jobCards: JobCard[];
   currentRole: UserRole;
-  onOpenNewJobCard: () => void;
+  onOpenNewJobCard: (prefilledRegNum?: string) => void;
   onSelectJobCard: (cardId: string) => void;
   onOpenAIDiagnostics: () => void;
   onNavigateTab: (tab: string) => void;
@@ -34,6 +35,62 @@ export function DashboardOverview({
   onOpenAIDiagnostics,
   onNavigateTab,
 }: DashboardOverviewProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScanLicensePlate = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        // Show some loading state or alert
+        alert("Scanning License Plate...");
+        
+        const response = await fetch('/api/scan-plate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          const regNum = data.plateNumber;
+          if (regNum === 'UNKNOWN') {
+            alert("Could not detect license plate. Please try again.");
+            return;
+          }
+
+          // Search active job cards
+          const activeCard = jobCards.find(
+            j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
+                 j.status !== 'CLOSED' && j.status !== 'DELIVERED'
+          );
+
+          if (activeCard) {
+            alert(`Found active job card for ${regNum}. Opening it...`);
+            onSelectJobCard(activeCard.id);
+          } else {
+            if (confirm(`No active job card found for ${regNum}. Create a new one?`)) {
+              onOpenNewJobCard(regNum);
+            }
+          }
+        } else {
+          alert('Failed to scan license plate: ' + data.error);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      alert('Error processing image');
+    }
+  };
+
   // Metrics
   const activeCars = jobCards.filter(j => j.status !== 'DELIVERED' && j.status !== 'CLOSED');
   const inProgress = jobCards.filter(j => j.status === 'IN_PROGRESS');
@@ -65,6 +122,21 @@ export function DashboardOverview({
               </div>
 
               <div className="flex items-center gap-2">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  hidden 
+                  accept="image/*" 
+                  capture="environment" 
+                  onChange={handleScanLicensePlate} 
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-3.5 py-2 rounded-full font-bold transition-all flex items-center gap-1.5"
+                >
+                  <Camera className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  Scan Plate
+                </button>
                 <button
                   onClick={onOpenAIDiagnostics}
                   className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-3.5 py-2 rounded-full font-bold transition-all flex items-center gap-1.5"
@@ -73,7 +145,7 @@ export function DashboardOverview({
                   AI Diagnosis
                 </button>
                 <button
-                  onClick={onOpenNewJobCard}
+                  onClick={() => onOpenNewJobCard()}
                   className="bg-blue-600 text-white text-xs px-4 py-2 rounded-full font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 active:scale-95"
                 >
                   + CREATE JOB CARD
