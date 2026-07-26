@@ -129,6 +129,49 @@ export type TaskCategory =
 
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD';
 
+export interface TaskPartItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice?: number;
+  totalPrice?: number;
+  partNumber?: string;
+  type: 'PART' | 'CONSUMABLE' | 'LABOR';
+  isApproved: boolean;
+  addedAt: string;
+}
+
+export interface TaskRequisition {
+  id: string;
+  taskId: string;
+  jobCardId: string;
+  requestedByEmployeeId: string;
+  requestedByEmployeeName: string;
+  title: string;
+  itemType: 'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK';
+  quantity: number;
+  reason?: string;
+  suggestedPrice?: number;
+  approvedPrice?: number;
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  managerNotes?: string;
+  createdAt: string;
+  approvedAt?: string;
+}
+
+export interface TaskConcern {
+  id: string;
+  taskId: string;
+  jobCardId: string;
+  raisedByEmployeeId: string;
+  raisedByEmployeeName: string;
+  issueDescription: string;
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  resolutionNotes?: string;
+  createdAt: string;
+}
+
 export interface JobTask {
   id: string;
   jobCardId: string;
@@ -149,6 +192,9 @@ export interface JobTask {
   additionalWorkRequestedBy?: string;
   additionalWorkRequestedAt?: string;
   approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  partsList?: TaskPartItem[];
+  requisitions?: TaskRequisition[];
+  concerns?: TaskConcern[];
 }
 
 export interface QCCheckitem {

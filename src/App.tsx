@@ -233,6 +233,7 @@ export default function App() {
       {activeCardForDetail && (
         <JobCardDetailView
           card={activeCardForDetail}
+          currentRole={currentRole}
           onClose={() => setSelectedJobCardId(null)}
           employees={employees}
           vendors={vendors}

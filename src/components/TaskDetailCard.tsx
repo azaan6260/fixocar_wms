@@ -1,0 +1,681 @@
+import React, { useState } from 'react';
+import { JobCard, JobTask, Employee, Vendor, UserRole, TaskStatus } from '../types';
+import { 
+  reallotTask, 
+  addRequisitionToTask, 
+  respondToRequisition, 
+  addConcernToTask, 
+  resolveConcern, 
+  addPartToTask 
+} from '../lib/storage';
+import { 
+  User, 
+  UserCheck, 
+  Wrench, 
+  AlertTriangle, 
+  Plus, 
+  CheckCircle2, 
+  X, 
+  Package, 
+  AlertCircle, 
+  MessageSquare, 
+  ChevronDown, 
+  Tag, 
+  ShieldAlert,
+  ArrowRight
+} from 'lucide-react';
+
+interface TaskDetailCardProps {
+  key?: string;
+  card: JobCard;
+  task: JobTask;
+  employees: Employee[];
+  vendors: Vendor[];
+  currentRole: UserRole;
+  onTaskStatusChange?: (taskId: string, status: TaskStatus) => void;
+}
+
+export function TaskDetailCard({
+  card,
+  task,
+  employees,
+  vendors,
+  currentRole,
+  onTaskStatusChange
+}: TaskDetailCardProps) {
+  const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
+
+  // Re-allot state
+  const [isReallotting, setIsReallotting] = useState(false);
+  const [selectedAssignee, setSelectedAssignee] = useState(task.assignedToId || '');
+
+  // Requisition form state
+  const [showReqForm, setShowReqForm] = useState(false);
+  const [reqTitle, setReqTitle] = useState('');
+  const [reqType, setReqType] = useState<'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK'>('PART');
+  const [reqQty, setReqQty] = useState(1);
+  const [reqReason, setReqReason] = useState('');
+
+  // Manager Requisition approval state
+  const [approvingReqId, setApprovingReqId] = useState<string | null>(null);
+  const [reqApprovedPrice, setReqApprovedPrice] = useState<number>(0);
+  const [managerNotes, setManagerNotes] = useState('');
+
+  // Concern form state
+  const [showConcernForm, setShowConcernForm] = useState(false);
+  const [concernIssue, setConcernIssue] = useState('');
+  const [concernUrgency, setConcernUrgency] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
+
+  // Direct Part form state
+  const [showDirectPartForm, setShowDirectPartForm] = useState(false);
+  const [partName, setPartName] = useState('');
+  const [partQty, setPartQty] = useState(1);
+  const [partUnitPrice, setPartUnitPrice] = useState(0);
+  const [partType, setPartType] = useState<'PART' | 'CONSUMABLE' | 'LABOR'>('PART');
+
+  // Handlers
+  const handleReallotSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssignee) return;
+
+    const matchedEmp = employees.find(e => e.id === selectedAssignee);
+    const matchedVendor = vendors.find(v => v.id === selectedAssignee);
+
+    const name = matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : 'Staff Member';
+    const type = matchedVendor ? 'VENDOR' : 'EMPLOYEE';
+
+    reallotTask(card.id, task.id, selectedAssignee, name, type);
+    setIsReallotting(false);
+  };
+
+  const handleCreateRequisition = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqTitle.trim()) return;
+
+    addRequisitionToTask(card.id, task.id, {
+      requestedByEmployeeId: currentRole,
+      requestedByEmployeeName: `${currentRole} Staff`,
+      title: reqTitle.trim(),
+      itemType: reqType,
+      quantity: Number(reqQty) || 1,
+      reason: reqReason.trim()
+    });
+
+    setReqTitle('');
+    setReqReason('');
+    setReqQty(1);
+    setShowReqForm(false);
+  };
+
+  const handleApproveRequisitionSubmit = (reqId: string) => {
+    respondToRequisition(card.id, task.id, reqId, true, Number(reqApprovedPrice) || 0, managerNotes);
+    setApprovingReqId(null);
+    setReqApprovedPrice(0);
+    setManagerNotes('');
+  };
+
+  const handleRejectRequisition = (reqId: string) => {
+    respondToRequisition(card.id, task.id, reqId, false, 0, 'Rejected by manager');
+  };
+
+  const handleCreateConcern = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!concernIssue.trim()) return;
+
+    addConcernToTask(card.id, task.id, {
+      raisedByEmployeeId: currentRole,
+      requestedByEmployeeName: `${currentRole} Staff`,
+      issueDescription: concernIssue.trim(),
+      urgency: concernUrgency
+    } as any);
+
+    setConcernIssue('');
+    setShowConcernForm(false);
+  };
+
+  const handleResolveConcern = (concernId: string, status: 'ACKNOWLEDGED' | 'RESOLVED') => {
+    resolveConcern(card.id, task.id, concernId, status, `Updated by ${currentRole}`);
+  };
+
+  const handleAddDirectPart = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!partName.trim()) return;
+
+    addPartToTask(card.id, task.id, {
+      name: partName.trim(),
+      quantity: Number(partQty) || 1,
+      unitPrice: Number(partUnitPrice) || 0,
+      type: partType
+    });
+
+    setPartName('');
+    setPartQty(1);
+    setPartUnitPrice(0);
+    setShowDirectPartForm(false);
+  };
+
+  const openReqs = (task.requisitions || []).filter(r => r.status === 'PENDING_APPROVAL');
+  const openConcerns = (task.concerns || []).filter(c => c.status !== 'RESOLVED');
+
+  return (
+    <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-4 transition-all">
+      
+      {/* Top Main Task Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{task.title}</h3>
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+              {task.category}
+            </span>
+            {task.isAdditionalWork && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
+                Add-on Work
+              </span>
+            )}
+          </div>
+
+          {/* Current Assignee Info & Re-allotment */}
+          <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap pt-0.5">
+            <div className="flex items-center gap-1.5 font-medium">
+              <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+              <span>Assigned To:</span>
+              <strong className="text-slate-900 dark:text-slate-100 font-bold">{task.assignedToName || 'Unassigned'}</strong>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase">
+                {task.assignedType || 'EMPLOYEE'}
+              </span>
+            </div>
+
+            {/* Re-allot Button for Managers/Admin */}
+            {isManager && (
+              <button
+                onClick={() => setIsReallotting(!isReallotting)}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                <User className="w-3 h-3" />
+                {isReallotting ? 'Cancel Re-allotment' : 'Re-allot / Reassign'}
+              </button>
+            )}
+
+            <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+              Billing: ₹{(task.customerPrice || 0).toLocaleString('en-IN')}
+            </div>
+          </div>
+        </div>
+
+        {/* Status Toggles */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {(['PENDING', 'IN_PROGRESS', 'COMPLETED'] as TaskStatus[]).map((st) => (
+            <button
+              key={st}
+              onClick={() => onTaskStatusChange && onTaskStatusChange(task.id, st)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                task.status === st
+                  ? st === 'COMPLETED' ? 'bg-emerald-600 text-white shadow-xs' :
+                    st === 'IN_PROGRESS' ? 'bg-blue-600 text-white shadow-xs' :
+                    'bg-slate-800 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {st === 'IN_PROGRESS' ? 'In Progress' : st === 'COMPLETED' ? 'Completed' : 'Pending'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* RE-ALLOTMENT SELECTION PANEL */}
+      {isReallotting && (
+        <form onSubmit={handleReallotSubmit} className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="grow space-y-1">
+            <label className="block text-xs font-bold text-blue-900 dark:text-blue-200">
+              Re-allot / Reassign Task to Employee or Sublet Vendor:
+            </label>
+            <select
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+              className="w-full px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-800 text-slate-900 dark:text-slate-100"
+            >
+              <optgroup label="Workshop Employees & Mechanics">
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} — {e.specializedTeam} ({e.activeJobsCount || 0} active jobs)
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Outsourced Sublet Vendors">
+                {vendors.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} — {v.category}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-xs"
+            >
+              Confirm Re-allotment
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsReallotting(false)}
+              className="px-3 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* PARTS & CONSUMABLES LISTED UNDER THIS JOB */}
+      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+            <Package className="w-3.5 h-3.5 text-amber-500" />
+            Parts & Consumables Listed ({task.partsList?.length || 0})
+          </span>
+
+          <button
+            onClick={() => setShowDirectPartForm(!showDirectPartForm)}
+            className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Add Part / Consumable
+          </button>
+        </div>
+
+        {/* Direct Part Form */}
+        {showDirectPartForm && (
+          <form onSubmit={handleAddDirectPart} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-900/60 space-y-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <div className="sm:col-span-2">
+                <input
+                  type="text"
+                  required
+                  placeholder="Part / Consumable Name (e.g. Synthetic Oil 5W30)"
+                  value={partName}
+                  onChange={(e) => setPartName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium"
+                />
+              </div>
+              <div>
+                <select
+                  value={partType}
+                  onChange={(e) => setPartType(e.target.value as any)}
+                  className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                >
+                  <option value="PART">SPARES PART</option>
+                  <option value="CONSUMABLE">CONSUMABLE</option>
+                  <option value="LABOR">LABOR / EXTRA</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="Qty"
+                  value={partQty}
+                  onChange={(e) => setPartQty(Number(e.target.value))}
+                  className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold text-center"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  placeholder="Unit ₹"
+                  value={partUnitPrice}
+                  onChange={(e) => setPartUnitPrice(Number(e.target.value))}
+                  className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowDirectPartForm(false)}
+                className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[11px] font-bold"
+              >
+                Save Part
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Parts Table/List */}
+        {(!task.partsList || task.partsList.length === 0) ? (
+          <p className="text-[11px] text-slate-400 italic">No parts or consumables listed under this job task yet.</p>
+        ) : (
+          <div className="space-y-1 text-xs">
+            {task.partsList.map((part) => (
+              <div key={part.id} className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                    part.type === 'CONSUMABLE' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                  }`}>
+                    {part.type}
+                  </span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{part.name}</span>
+                  <span className="text-slate-400 font-mono text-[11px]">x{part.quantity}</span>
+                </div>
+                <div className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                  ₹{(part.totalPrice || 0).toLocaleString('en-IN')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* EMPLOYEE REQUISITIONS & CONCERNS ACTION BAR */}
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-2">
+          {/* Button: Raise Requisition */}
+          <button
+            onClick={() => { setShowReqForm(!showReqForm); setShowConcernForm(false); }}
+            className="px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <Package className="w-3.5 h-3.5" />
+            + Raise Part/Consumable Requisition
+            {openReqs.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-orange-500 text-white text-[10px] font-black">
+                {openReqs.length}
+              </span>
+            )}
+          </button>
+
+          {/* Button: Report Difficulty / Concern */}
+          <button
+            onClick={() => { setShowConcernForm(!showConcernForm); setShowReqForm(false); }}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            ⚠️ Report Issue / Concern
+            {openConcerns.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                {openConcerns.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* REQUISITION FORM (EMPLOYEE CAN SUBMIT REQUISITION WITHOUT PRICE) */}
+      {showReqForm && (
+        <form onSubmit={handleCreateRequisition} className="p-4 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/60 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-orange-700 dark:text-orange-400 uppercase tracking-wide flex items-center gap-1.5">
+              <Package className="w-4 h-4" />
+              Employee Requisition Form (Parts / Consumables / Add-on Work)
+            </span>
+            <button type="button" onClick={() => setShowReqForm(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-600 dark:text-slate-300">
+            Working employees can request required spare parts or consumables. Prices are not required from staff — the workshop manager will approve and price the item upon review.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Item / Work Title *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Brake Caliper Pin, 1L Brake Fluid DOT4, Steering Boot"
+                value={reqTitle}
+                onChange={(e) => setReqTitle(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Category Type</label>
+              <select
+                value={reqType}
+                onChange={(e) => setReqType(e.target.value as any)}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-bold"
+              >
+                <option value="PART">SPARE PART</option>
+                <option value="CONSUMABLE">CONSUMABLE / OIL</option>
+                <option value="ADDITIONAL_WORK">ADDITIONAL REPAIR WORK</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Quantity Required</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={reqQty}
+                onChange={(e) => setReqQty(Number(e.target.value))}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-bold"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Reason / Difficulty Notes</label>
+              <input
+                type="text"
+                placeholder="e.g. Existing bolt thread worn out during removal"
+                value={reqReason}
+                onChange={(e) => setReqReason(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-extrabold shadow-xs"
+            >
+              Submit Requisition to Manager
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* CONCERN / ISSUE REPORT FORM */}
+      {showConcernForm && (
+        <form onSubmit={handleCreateConcern} className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-rose-700 dark:text-rose-400 uppercase tracking-wide flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" />
+              Raise Work Difficulty or Concern
+            </span>
+            <button type="button" onClick={() => setShowConcernForm(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-600 dark:text-slate-300">
+            Report any roadblock (e.g. seized bolt, unexpected leak, missing tool, or safety concern) to floor management.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Issue Description *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Engine block bolt sheared off; requires lathe extractor"
+                value={concernIssue}
+                onChange={(e) => setConcernIssue(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-900 font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Urgency Level</label>
+              <select
+                value={concernUrgency}
+                onChange={(e) => setConcernUrgency(e.target.value as any)}
+                className="w-full px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-900 font-bold"
+              >
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+                <option value="CRITICAL">CRITICAL</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-extrabold shadow-xs"
+            >
+              Report Concern to Floor Manager
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* DISPLAY EXISTING REQUISITIONS */}
+      {task.requisitions && task.requisitions.length > 0 && (
+        <div className="p-3.5 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-2">
+          <span className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Package className="w-3 h-3" />
+            Submitted Requisitions ({task.requisitions.length})
+          </span>
+
+          <div className="space-y-2 text-xs">
+            {task.requisitions.map((req) => (
+              <div key={req.id} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-orange-100 dark:border-orange-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{req.title}</span>
+                    <span className="px-2 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600">
+                      Qty: {req.quantity}
+                    </span>
+                    <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${
+                      req.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600' :
+                      req.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-600' :
+                      'bg-amber-500/10 text-amber-600'
+                    }`}>
+                      {req.status === 'PENDING_APPROVAL' ? 'Awaiting Approval' : req.status}
+                    </span>
+                  </div>
+                  {req.reason && <p className="text-[11px] text-slate-500">Note: {req.reason}</p>}
+                  {req.approvedPrice ? (
+                    <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                      Approved Price: ₹{req.approvedPrice.toLocaleString('en-IN')}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Manager Review Controls */}
+                {isManager && req.status === 'PENDING_APPROVAL' && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {approvingReqId === req.id ? (
+                      <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <input
+                          type="number"
+                          placeholder="Approved Price ₹"
+                          value={reqApprovedPrice}
+                          onChange={(e) => setReqApprovedPrice(Number(e.target.value))}
+                          className="w-28 px-2 py-1 text-xs font-bold rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
+                        />
+                        <button
+                          onClick={() => handleApproveRequisitionSubmit(req.id)}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setApprovingReqId(null)}
+                          className="px-2 py-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-bold"
+                        >
+                          X
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setApprovingReqId(req.id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs"
+                        >
+                          Approve Requisition
+                        </button>
+                        <button
+                          onClick={() => handleRejectRequisition(req.id)}
+                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* DISPLAY EXISTING CONCERNS */}
+      {task.concerns && task.concerns.length > 0 && (
+        <div className="p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/20 space-y-2">
+          <span className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+            <AlertTriangle className="w-3 h-3" />
+            Reported Concerns & Difficulties ({task.concerns.length})
+          </span>
+
+          <div className="space-y-2 text-xs">
+            {task.concerns.map((con) => (
+              <div key={con.id} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-100 dark:border-rose-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{con.issueDescription}</span>
+                    <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${
+                      con.urgency === 'CRITICAL' ? 'bg-rose-600 text-white' :
+                      con.urgency === 'HIGH' ? 'bg-rose-500/20 text-rose-600' :
+                      'bg-amber-500/20 text-amber-600'
+                    }`}>
+                      {con.urgency} URGENCY
+                    </span>
+                    <span className="text-[10px] text-slate-400">({con.status})</span>
+                  </div>
+                  {con.resolutionNotes && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                      Resolution: {con.resolutionNotes}
+                    </p>
+                  )}
+                </div>
+
+                {isManager && con.status !== 'RESOLVED' && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleResolveConcern(con.id, 'ACKNOWLEDGED')}
+                      className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 rounded text-xs font-bold"
+                    >
+                      Acknowledge
+                    </button>
+                    <button
+                      onClick={() => handleResolveConcern(con.id, 'RESOLVED')}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold"
+                    >
+                      Mark Resolved
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

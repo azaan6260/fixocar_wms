@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -217,6 +217,259 @@ export function updateQCChecklist(jobCardId: string, checklist: QCCheckitem[], n
       status: allPassed ? 'READY_FOR_DELIVERY' : 'QC_PENDING'
     };
   });
+}
+
+// Re-allot / reassign a task to another employee or sublet vendor
+export function reallotTask(
+  jobCardId: string, 
+  taskId: string, 
+  newAssigneeId: string, 
+  newAssigneeName: string, 
+  newAssigneeType: 'EMPLOYEE' | 'VENDOR'
+) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          assignedToId: newAssigneeId,
+          assignedToName: newAssigneeName,
+          assignedType: newAssigneeType,
+          notes: (t.notes ? `${t.notes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
+        };
+      }
+      return t;
+    })
+  }));
+}
+
+// Add a requisition for spare part, consumable, or additional work (raised by employee)
+export function addRequisitionToTask(
+  jobCardId: string,
+  taskId: string,
+  reqData: {
+    requestedByEmployeeId: string;
+    requestedByEmployeeName: string;
+    title: string;
+    itemType: 'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK';
+    quantity: number;
+    reason?: string;
+    suggestedPrice?: number;
+  }
+) {
+  const newReq: TaskRequisition = {
+    id: `REQ-${Date.now().toString().slice(-6)}`,
+    taskId,
+    jobCardId,
+    ...reqData,
+    status: 'PENDING_APPROVAL',
+    createdAt: new Date().toLocaleString(),
+  };
+
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        const existingReqs = t.requisitions || [];
+        return {
+          ...t,
+          requisitions: [newReq, ...existingReqs]
+        };
+      }
+      return t;
+    })
+  }));
+
+  return newReq;
+}
+
+// Approve or reject a requisition by Manager/Admin
+export function respondToRequisition(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  approved: boolean,
+  approvedPrice: number = 0,
+  managerNotes?: string
+) {
+  updateJobCard(jobCardId, (card) => {
+    let reqItemToConvert: TaskRequisition | null = null;
+
+    const updatedTasks = card.tasks.map(t => {
+      if (t.id === taskId) {
+        const updatedReqs = (t.requisitions || []).map(r => {
+          if (r.id === requisitionId) {
+            reqItemToConvert = {
+              ...r,
+              status: approved ? ('APPROVED' as const) : ('REJECTED' as const),
+              approvedPrice,
+              managerNotes,
+              approvedAt: new Date().toLocaleString()
+            };
+            return reqItemToConvert;
+          }
+          return r;
+        });
+
+        // If approved, automatically add to task's parts list
+        let updatedParts = t.partsList || [];
+        if (approved && reqItemToConvert) {
+          const req = reqItemToConvert as TaskRequisition;
+          const newPart: TaskPartItem = {
+            id: `PRT-${Date.now().toString().slice(-6)}`,
+            name: req.title,
+            quantity: req.quantity,
+            unitPrice: approvedPrice > 0 ? approvedPrice / req.quantity : 0,
+            totalPrice: approvedPrice,
+            type: req.itemType === 'CONSUMABLE' ? 'CONSUMABLE' : req.itemType === 'PART' ? 'PART' : 'LABOR',
+            isApproved: true,
+            addedAt: new Date().toLocaleString()
+          };
+          updatedParts = [...updatedParts, newPart];
+        }
+
+        return {
+          ...t,
+          requisitions: updatedReqs,
+          partsList: updatedParts
+        };
+      }
+      return t;
+    });
+
+    // If approved and is ADDITIONAL_WORK, also create a sub-task or update job card customer price
+    if (approved && reqItemToConvert && (reqItemToConvert as TaskRequisition).itemType === 'ADDITIONAL_WORK' && approvedPrice > 0) {
+      const req = reqItemToConvert as TaskRequisition;
+      const additionalTask: JobTask = {
+        id: `TSK-${Date.now().toString().slice(-6)}`,
+        jobCardId,
+        title: `[Add-on] ${req.title}`,
+        category: 'MECHANICAL',
+        assignedToId: req.requestedByEmployeeId,
+        assignedToName: req.requestedByEmployeeName,
+        assignedType: 'EMPLOYEE',
+        estimatedCost: approvedPrice * 0.7,
+        customerPrice: approvedPrice,
+        status: 'IN_PROGRESS',
+        requiresCustomerApproval: false,
+        isCustomerApproved: true,
+        isAdditionalWork: true,
+        approvalStatus: 'APPROVED'
+      };
+      return {
+        ...card,
+        tasks: [...updatedTasks, additionalTask]
+      };
+    }
+
+    return {
+      ...card,
+      tasks: updatedTasks
+    };
+  });
+}
+
+// Raise a concern / difficulty on a task by employee
+export function addConcernToTask(
+  jobCardId: string,
+  taskId: string,
+  concernData: {
+    raisedByEmployeeId: string;
+    raisedByEmployeeName: string;
+    issueDescription: string;
+    urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  }
+) {
+  const newConcern: TaskConcern = {
+    id: `CON-${Date.now().toString().slice(-6)}`,
+    taskId,
+    jobCardId,
+    ...concernData,
+    status: 'OPEN',
+    createdAt: new Date().toLocaleString()
+  };
+
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          concerns: [newConcern, ...(t.concerns || [])]
+        };
+      }
+      return t;
+    })
+  }));
+
+  return newConcern;
+}
+
+// Resolve or acknowledge a concern by manager
+export function resolveConcern(
+  jobCardId: string,
+  taskId: string,
+  concernId: string,
+  status: 'ACKNOWLEDGED' | 'RESOLVED',
+  resolutionNotes?: string
+) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          concerns: (t.concerns || []).map(c => {
+            if (c.id === concernId) {
+              return {
+                ...c,
+                status,
+                resolutionNotes
+              };
+            }
+            return c;
+          })
+        };
+      }
+      return t;
+    })
+  }));
+}
+
+// Add parts or consumables directly to task
+export function addPartToTask(
+  jobCardId: string,
+  taskId: string,
+  partData: {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    partNumber?: string;
+    type: 'PART' | 'CONSUMABLE' | 'LABOR';
+  }
+) {
+  const totalPrice = partData.quantity * partData.unitPrice;
+  const newPart: TaskPartItem = {
+    id: `PRT-${Date.now().toString().slice(-6)}`,
+    ...partData,
+    totalPrice,
+    isApproved: true,
+    addedAt: new Date().toLocaleString()
+  };
+
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          partsList: [...(t.partsList || []), newPart]
+        };
+      }
+      return t;
+    })
+  }));
 }
 
 // 2. EMPLOYEES STORAGE

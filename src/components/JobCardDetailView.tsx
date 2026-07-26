@@ -26,8 +26,12 @@ import {
   Share2
 } from 'lucide-react';
 
+import { TaskDetailCard } from './TaskDetailCard';
+import { UserRole } from '../types';
+
 interface JobCardDetailViewProps {
   card: JobCard;
+  currentRole?: UserRole;
   onClose: () => void;
   employees: Employee[];
   vendors: Vendor[];
@@ -37,6 +41,7 @@ interface JobCardDetailViewProps {
 
 export function JobCardDetailView({
   card,
+  currentRole = 'FLOOR_MANAGER',
   onClose,
   employees,
   vendors,
@@ -363,76 +368,17 @@ export function JobCardDetailView({
               )}
 
               {/* Tasks List */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {card.tasks.map((task) => (
-                  <div
+                  <TaskDetailCard
                     key={task.id}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs"
-                  >
-                    <div className="space-y-1 max-w-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900 dark:text-slate-100">{task.title}</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase">
-                          {task.category}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
-                        <span>Assigned: <strong className="text-slate-800 dark:text-slate-200">{task.assignedToName}</strong> ({task.assignedType})</span>
-                        <span>Billing: <strong className="text-emerald-600 dark:text-emerald-400">₹{task.customerPrice.toLocaleString('en-IN')}</strong></span>
-                      </div>
-
-                      {task.requiresCustomerApproval && (
-                        <div className="pt-1">
-                          {task.isCustomerApproved === true && (
-                            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Customer Approved
-                            </span>
-                          )}
-                          {task.isCustomerApproved === false && (
-                            <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                              <X className="w-3.5 h-3.5" /> Rejected by Customer
-                            </span>
-                          )}
-                          {task.isCustomerApproved === null && (
-                            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5" /> Awaiting Customer Approval
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Status Toggles */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateTaskStatus(card.id, task.id, 'PENDING')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                          task.status === 'PENDING' ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        Pending
-                      </button>
-
-                      <button
-                        onClick={() => updateTaskStatus(card.id, task.id, 'IN_PROGRESS')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                          task.status === 'IN_PROGRESS' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        In Progress
-                      </button>
-
-                      <button
-                        onClick={() => updateTaskStatus(card.id, task.id, 'COMPLETED')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                          task.status === 'COMPLETED' ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        Completed
-                      </button>
-                    </div>
-                  </div>
+                    card={card}
+                    task={task}
+                    employees={employees}
+                    vendors={vendors}
+                    currentRole={currentRole}
+                    onTaskStatusChange={(taskId, status) => updateTaskStatus(card.id, taskId, status)}
+                  />
                 ))}
               </div>
             </div>

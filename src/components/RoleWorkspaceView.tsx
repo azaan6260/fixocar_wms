@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { UserRole, JobCard } from '../types';
-import { updateTaskStatus, respondToCustomerApproval } from '../lib/storage';
+import { updateTaskStatus, respondToCustomerApproval, getEmployees, getVendors } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
+import { TaskDetailCard } from './TaskDetailCard';
 import { useI18n } from '../lib/i18n';
 import { 
   Wrench, 
@@ -203,7 +204,7 @@ export function RoleWorkspaceView({
       )}
 
       {/* Role Tasks List */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">
           {t('role.tasksAssigned')} ({roleTasks.length})
         </h3>
@@ -213,50 +214,29 @@ export function RoleWorkspaceView({
             {t('role.noTasks')}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             {roleTasks.map(({ card, task }) => (
-              <div
-                key={task.id}
-                className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-3 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
-                      {card.vehicle.registrationNumber} ({card.id})
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'
-                    }`}>
-                      {task.status === 'COMPLETED' ? t('status.completed') :
-                       task.status === 'IN_PROGRESS' ? t('status.inProgress') :
-                       t('status.pending')}
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{task.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {t('common.vehicle')} {card.vehicle.make} {card.vehicle.model}
-                  </p>
+              <div key={`${card.id}-${task.id}`} className="space-y-2">
+                <div className="flex items-center justify-between px-2 text-xs">
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                    🚘 {card.vehicle.registrationNumber} — {card.vehicle.make} {card.vehicle.model} ({card.id})
+                  </span>
+                  <button
+                    onClick={() => onOpenJobCard(card.id)}
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-bold text-[11px] flex items-center gap-1"
+                  >
+                    View Full Job Card <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{task.customerPrice}</span>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateTaskStatus(card.id, task.id, 'IN_PROGRESS')}
-                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
-                    >
-                      {t('action.startWork')}
-                    </button>
-                    <button
-                      onClick={() => updateTaskStatus(card.id, task.id, 'COMPLETED')}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
-                    >
-                      {t('action.markComplete')}
-                    </button>
-                  </div>
-                </div>
+                <TaskDetailCard
+                  card={card}
+                  task={task}
+                  employees={getEmployees()}
+                  vendors={getVendors()}
+                  currentRole={currentRole}
+                  onTaskStatusChange={(taskId, status) => updateTaskStatus(card.id, taskId, status)}
+                />
               </div>
             ))}
           </div>
