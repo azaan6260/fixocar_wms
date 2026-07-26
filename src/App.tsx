@@ -30,7 +30,14 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [isCustomerView, setIsCustomerView] = useState<boolean>(() => {
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    if (path.includes('wms') || search.includes('wms') || search.includes('workshop')) {
+      return false;
+    }
+    return true;
+  });
 
   // Reactive store state
   const [jobCards, setJobCards] = useState<JobCard[]>(() => getJobCards());
@@ -45,9 +52,13 @@ export default function App() {
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
-  // Subscribe to storage updates
+  // Subscribe to storage updates & popstate
   useEffect(() => {
-    const handlePopState = () => setCurrentPath(window.location.pathname);
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      setIsCustomerView(!path.includes('wms') && !search.includes('wms') && !search.includes('workshop'));
+    };
     window.addEventListener('popstate', handlePopState);
     
     const unsubscribe = subscribeToStore(() => {
@@ -62,30 +73,38 @@ export default function App() {
     };
   }, []);
 
+  const toggleViewMode = (toCustomer: boolean) => {
+    setIsCustomerView(toCustomer);
+    try {
+      const targetPath = toCustomer ? '/' : '/wms';
+      window.history.pushState({}, '', targetPath);
+    } catch (e) {
+      // ignore state push restrictions if any
+    }
+  };
+
   const activeCardForDetail = selectedJobCardId ? getJobCardById(selectedJobCardId) : null;
   const activeCardForCustomerPortal = customerPortalCardId ? getJobCardById(customerPortalCardId) : null;
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
 
   // CUSTOMER FACING ROUTE
-  if (currentPath === '/' || currentPath === '/index.html') {
+  if (isCustomerView) {
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
         <header className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800">
           <div className="max-w-7xl mx-auto w-full flex justify-between items-center px-4">
             <h1 className="font-black text-2xl tracking-tight text-white flex items-center gap-2">
               <span className="text-amber-500">Fixo</span>Car
+              <span className="text-xs font-normal text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">Customer Portal</span>
             </h1>
-            <a 
-              href="/wms" 
-              onClick={(e) => {
-                e.preventDefault();
-                window.history.pushState({}, '', '/wms');
-                window.dispatchEvent(new Event('popstate'));
-              }}
-              className="text-xs font-bold bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-700 transition-colors"
+
+            <button 
+              type="button"
+              onClick={() => toggleViewMode(false)}
+              className="text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
             >
-              Workshop Login
-            </a>
+              <span>⚙️ Workshop Management (WMS)</span>
+            </button>
           </div>
         </header>
 
