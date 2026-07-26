@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -55,6 +55,8 @@ const STORAGE_KEYS = {
   INVENTORY: 'fixocar_inventory_v1',
   INVENTORY_CONSUMPTION: 'fixocar_inventory_consumption_v1',
   STANDARD_JOBS: 'fixocar_standard_jobs_v1',
+  CUSTOMER_SESSION: 'fixocar_customer_session_v1',
+  CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -1101,7 +1103,7 @@ export function getStandardJobs(): StandardJob[] {
 
 export function saveStandardJobs(jobs: StandardJob[]): void {
   localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
-  notifyStorageChange();
+  notifyStoreChange();
 }
 
 export function addStandardJob(job: Omit<StandardJob, 'id'>): StandardJob {
@@ -1228,10 +1230,10 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
 
         records.push({
           jobCardId: card.id,
-          jobCardNumber: card.cardNumber,
+          jobCardNumber: card.id,
           vehicleReg: card.vehicle.registrationNumber,
           vehicleModel: `${card.vehicle.make} ${card.vehicle.model}`,
-          isCars24: card.isCars24,
+          isCars24: card.isCars24 || false,
           taskId: task.id,
           taskTitle: task.title,
           category: task.category,
@@ -1244,12 +1246,156 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
           workshopMargin: task.customerPrice - payout,
           taskStatus: task.status,
           jobCardStatus: card.status,
-          billFinalizedAt: card.closedAt || card.createdAt
+          billFinalizedAt: card.createdAt
         });
       }
     });
   });
 
   return records;
+}
+
+// -------------------------------------------------------------
+// CUSTOMER SESSION & GARAGE VEHICLE MANAGEMENT STORAGE
+// -------------------------------------------------------------
+
+export const DEFAULT_CUSTOMER_SESSION: CustomerUser = {
+  id: 'cust-demo-8819915656',
+  name: 'Vikramaditya Singh',
+  phone: '8819915656',
+  email: 'vikram.singh@example.com',
+  address: 'B-402, Seawoods Grand Central, Nerul, Navi Mumbai',
+  city: 'Mumbai',
+  isLoggedIn: true,
+  loggedInAt: new Date().toISOString()
+};
+
+export const INITIAL_CUSTOMER_VEHICLES: CustomerVehicleRecord[] = [
+  {
+    id: 'veh-8819915656-1',
+    customerPhone: '8819915656',
+    registrationNumber: 'MH-02-DN-4521',
+    make: 'Honda',
+    model: 'City 1.5 i-VTEC',
+    year: 2021,
+    color: 'Taffeta White',
+    fuelType: 'Petrol',
+    mileage: 42000,
+    vin: 'MA3E12345678901',
+    notes: 'Primary personal sedan. Regular servicing done at FixoCar Andheri Hub.',
+    addedAt: '2026-01-10'
+  },
+  {
+    id: 'veh-8819915656-2',
+    customerPhone: '8819915656',
+    registrationNumber: 'DL-01-AB-1234',
+    make: 'Maruti Suzuki',
+    model: 'Swift ZXi',
+    year: 2020,
+    color: 'Solid Fire Red',
+    fuelType: 'Petrol',
+    mileage: 35500,
+    vin: 'MA3F98765432109',
+    notes: 'Family hatchback used for city commuting.',
+    addedAt: '2026-02-01'
+  },
+  {
+    id: 'veh-8819915656-3',
+    customerPhone: '8819915656',
+    registrationNumber: 'KA-05-MC-8899',
+    make: 'Hyundai',
+    model: 'Creta 1.5 SX',
+    year: 2022,
+    color: 'Sleek Silver',
+    fuelType: 'Diesel',
+    mileage: 28000,
+    vin: 'MALC34567812345',
+    notes: 'Outstation SUV.',
+    addedAt: '2026-03-15'
+  }
+];
+
+export function getCustomerSession(): CustomerUser {
+  const local = localStorage.getItem(STORAGE_KEYS.CUSTOMER_SESSION);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMER_SESSION, JSON.stringify(DEFAULT_CUSTOMER_SESSION));
+    return DEFAULT_CUSTOMER_SESSION;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return DEFAULT_CUSTOMER_SESSION;
+  }
+}
+
+export function saveCustomerSession(user: CustomerUser): void {
+  localStorage.setItem(STORAGE_KEYS.CUSTOMER_SESSION, JSON.stringify(user));
+  notifyStoreChange();
+}
+
+export function logoutCustomerSession(): void {
+  const loggedOut: CustomerUser = {
+    id: '',
+    name: '',
+    phone: '',
+    email: '',
+    isLoggedIn: false
+  };
+  localStorage.setItem(STORAGE_KEYS.CUSTOMER_SESSION, JSON.stringify(loggedOut));
+  notifyStoreChange();
+}
+
+export function getCustomerVehicles(customerPhone?: string): CustomerVehicleRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.CUSTOMER_VEHICLES);
+  let vehicles: CustomerVehicleRecord[] = [];
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMER_VEHICLES, JSON.stringify(INITIAL_CUSTOMER_VEHICLES));
+    vehicles = INITIAL_CUSTOMER_VEHICLES;
+  } else {
+    try {
+      vehicles = JSON.parse(local);
+    } catch {
+      vehicles = INITIAL_CUSTOMER_VEHICLES;
+    }
+  }
+
+  if (customerPhone && customerPhone.trim()) {
+    const query = customerPhone.replace(/\D/g, '');
+    return vehicles.filter(v => v.customerPhone.replace(/\D/g, '').includes(query) || v.customerPhone === customerPhone);
+  }
+
+  return vehicles;
+}
+
+export function saveCustomerVehicles(vehicles: CustomerVehicleRecord[]): void {
+  localStorage.setItem(STORAGE_KEYS.CUSTOMER_VEHICLES, JSON.stringify(vehicles));
+  notifyStoreChange();
+}
+
+export function addCustomerVehicle(veh: Omit<CustomerVehicleRecord, 'id' | 'addedAt'>): CustomerVehicleRecord {
+  const vehicles = getCustomerVehicles();
+  const newVehRecord: CustomerVehicleRecord = {
+    ...veh,
+    id: `veh-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    addedAt: new Date().toISOString().split('T')[0]
+  };
+  vehicles.unshift(newVehRecord);
+  saveCustomerVehicles(vehicles);
+  return newVehRecord;
+}
+
+export function updateCustomerVehicle(id: string, updated: Partial<CustomerVehicleRecord>): CustomerVehicleRecord | null {
+  const vehicles = getCustomerVehicles();
+  const idx = vehicles.findIndex(v => v.id === id);
+  if (idx === -1) return null;
+  vehicles[idx] = { ...vehicles[idx], ...updated };
+  saveCustomerVehicles(vehicles);
+  return vehicles[idx];
+}
+
+export function deleteCustomerVehicle(id: string): void {
+  const vehicles = getCustomerVehicles();
+  const filtered = vehicles.filter(v => v.id !== id);
+  saveCustomerVehicles(filtered);
 }
 

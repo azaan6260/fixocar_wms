@@ -272,6 +272,32 @@ export interface Customer {
   address: string;
 }
 
+export interface CustomerUser {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address?: string;
+  city?: string;
+  isLoggedIn: boolean;
+  loggedInAt?: string;
+}
+
+export interface CustomerVehicleRecord {
+  id: string;
+  customerPhone: string;
+  registrationNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  color: string;
+  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'EV' | 'Hybrid';
+  mileage: number;
+  vin?: string;
+  notes?: string;
+  addedAt: string;
+}
+
 export type DeliveryStatus = 
   | 'ASSIGNED'
   | 'EN_ROUTE_PICKUP'
