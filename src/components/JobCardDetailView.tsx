@@ -23,10 +23,12 @@ import {
   Palette,
   Phone,
   Calendar,
-  Share2
+  Share2,
+  Zap
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
+import { StandardJobsCatalogModal } from './StandardJobsCatalogModal';
 import { UserRole } from '../types';
 
 interface JobCardDetailViewProps {
@@ -51,6 +53,7 @@ export function JobCardDetailView({
   const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'qc' | 'delivery' | 'invoice'>('tasks');
   
   // New additional work item state
+  const [isStandardCatalogOpen, setIsStandardCatalogOpen] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState<TaskCategory>('MECHANICAL');
@@ -262,13 +265,23 @@ export function JobCardDetailView({
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setShowAddTask(!showAddTask)}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                  Add Discovered Repair Task
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsStandardCatalogOpen(true)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition-all hover:scale-[1.02]"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                    1-Click Standard Jobs
+                  </button>
+
+                  <button
+                    onClick={() => setShowAddTask(!showAddTask)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Custom Task
+                  </button>
+                </div>
               </div>
 
               {/* Add New Discovered Task Form */}
@@ -587,6 +600,13 @@ export function JobCardDetailView({
         </div>
 
       </div>
+
+      {/* 1-Click Standard Jobs Catalog Modal */}
+      <StandardJobsCatalogModal
+        card={card}
+        isOpen={isStandardCatalogOpen}
+        onClose={() => setIsStandardCatalogOpen(false)}
+      />
     </div>
   );
 }

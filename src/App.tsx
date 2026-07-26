@@ -23,6 +23,8 @@ import { SupabaseSettingsModal } from './components/SupabaseSettingsModal';
 import { EmployeeManagementView } from './components/EmployeeManagementView';
 import { CityWorkshopManagementView } from './components/CityWorkshopManagementView';
 import { InventoryView } from './components/InventoryView';
+import { StandardJobsManagementView } from './components/StandardJobsManagementView';
+import { ContractorPayoutsView } from './components/ContractorPayoutsView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -164,6 +166,14 @@ export default function App() {
 
         {activeTab === 'inventory' && (
           <InventoryView currentRole={currentRole} vendors={vendors} />
+        )}
+
+        {activeTab === 'standard-jobs' && (
+          <StandardJobsManagementView currentRole={currentRole} />
+        )}
+
+        {activeTab === 'contractor-payouts' && (
+          <ContractorPayoutsView currentRole={currentRole} />
         )}
 
         {activeTab === 'role-workspace' && (

@@ -1,5 +1,5 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS } from './mockData';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob } from '../types';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
 export const INITIAL_CITIES: City[] = [
@@ -54,6 +54,7 @@ const STORAGE_KEYS = {
   WORKSHOPS: 'fixocar_workshops_v1',
   INVENTORY: 'fixocar_inventory_v1',
   INVENTORY_CONSUMPTION: 'fixocar_inventory_consumption_v1',
+  STANDARD_JOBS: 'fixocar_standard_jobs_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -1079,5 +1080,167 @@ export function consumeInventoryItemForTask(
     success: true,
     message: `Successfully issued ${quantityToConsume} ${item.unit} of "${item.name}" directly from stock!`
   };
+}
+
+// ==========================================
+// STANDARD JOBS & CONTRACTOR PAYOUTS MODULE
+// ==========================================
+
+export function getStandardJobs(): StandardJob[] {
+  const data = localStorage.getItem(STORAGE_KEYS.STANDARD_JOBS);
+  if (!data) {
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
+    return INITIAL_STANDARD_JOBS;
+  }
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    return INITIAL_STANDARD_JOBS;
+  }
+}
+
+export function saveStandardJobs(jobs: StandardJob[]): void {
+  localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
+  notifyStorageChange();
+}
+
+export function addStandardJob(job: Omit<StandardJob, 'id'>): StandardJob {
+  const jobs = getStandardJobs();
+  const newJob: StandardJob = {
+    ...job,
+    id: `std-job-${Date.now()}`
+  };
+  saveStandardJobs([newJob, ...jobs]);
+  return newJob;
+}
+
+export function updateStandardJob(id: string, updates: Partial<StandardJob>): StandardJob | null {
+  const jobs = getStandardJobs();
+  const idx = jobs.findIndex(j => j.id === id);
+  if (idx === -1) return null;
+  jobs[idx] = { ...jobs[idx], ...updates };
+  saveStandardJobs(jobs);
+  return jobs[idx];
+}
+
+export function deleteStandardJob(id: string): void {
+  const jobs = getStandardJobs();
+  const filtered = jobs.filter(j => j.id !== id);
+  saveStandardJobs(filtered);
+}
+
+export function addStandardJobToJobCard(
+  jobCardId: string, 
+  standardJobId: string, 
+  customAssignedId?: string
+): JobTask | null {
+  const cards = getJobCards();
+  const cardIndex = cards.findIndex(c => c.id === jobCardId);
+  if (cardIndex === -1) return null;
+
+  const card = cards[cardIndex];
+  const stdJobs = getStandardJobs();
+  const stdJob = stdJobs.find(j => j.id === standardJobId);
+  if (!stdJob) return null;
+
+  // Dual pricing check: Cars24 B2B vs Retail
+  const customerPrice = card.isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
+  
+  let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
+  let assignedName: string | undefined = undefined;
+
+  if (customAssignedId) {
+    const employees = getEmployees();
+    const vendorList = getVendors();
+    const emp = employees.find(e => e.id === customAssignedId);
+    if (emp) {
+      assignedType = 'EMPLOYEE';
+      assignedName = emp.name;
+    } else {
+      const ven = vendorList.find(v => v.id === customAssignedId);
+      if (ven) {
+        assignedType = 'VENDOR';
+        assignedName = ven.name;
+      }
+    }
+  } else if (stdJob.category === 'SUBLET_VENDOR') {
+    assignedType = 'VENDOR';
+  }
+
+  const newTask: JobTask = {
+    id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    jobCardId,
+    title: stdJob.title,
+    category: stdJob.category,
+    assignedToId: customAssignedId,
+    assignedToName: assignedName,
+    assignedType,
+    estimatedCost: stdJob.isContractBasis ? stdJob.contractorPayout : Math.round(customerPrice * 0.5),
+    customerPrice,
+    status: 'PENDING',
+    requiresCustomerApproval: false,
+    isContractBasis: stdJob.isContractBasis,
+    contractorPayout: stdJob.isContractBasis ? stdJob.contractorPayout : 0,
+    standardJobId: stdJob.id,
+    notes: `${card.isCars24 ? '⚡ Cars24 Fleet Standard Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
+  };
+
+  card.tasks = [...(card.tasks || []), newTask];
+  cards[cardIndex] = card;
+  saveJobCards(cards);
+  return newTask;
+}
+
+export interface ContractorPayoutRecord {
+  jobCardId: string;
+  jobCardNumber: string;
+  vehicleReg: string;
+  vehicleModel: string;
+  isCars24: boolean;
+  taskId: string;
+  taskTitle: string;
+  category: string;
+  assignedToName?: string;
+  assignedToId?: string;
+  customerPrice: number;
+  contractorPayout: number;
+  workshopMargin: number;
+  taskStatus: string;
+  jobCardStatus: string;
+  billFinalizedAt?: string;
+}
+
+export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
+  const cards = getJobCards();
+  const records: ContractorPayoutRecord[] = [];
+
+  cards.forEach(card => {
+    card.tasks.forEach(task => {
+      // Contract basis tasks (Denting, Paint, Sublet or marked isContractBasis)
+      if (task.isContractBasis || task.category === 'DENTING' || task.category === 'PAINT' || (task.contractorPayout && task.contractorPayout > 0)) {
+        const payout = task.contractorPayout || (task.category === 'PAINT' ? Math.round(task.customerPrice * 0.45) : Math.round(task.customerPrice * 0.40));
+        records.push({
+          jobCardId: card.id,
+          jobCardNumber: card.cardNumber,
+          vehicleReg: card.vehicle.registrationNumber,
+          vehicleModel: `${card.vehicle.make} ${card.vehicle.model}`,
+          isCars24: card.isCars24,
+          taskId: task.id,
+          taskTitle: task.title,
+          category: task.category,
+          assignedToName: task.assignedToName || 'Unassigned Contractor',
+          assignedToId: task.assignedToId,
+          customerPrice: task.customerPrice,
+          contractorPayout: payout,
+          workshopMargin: task.customerPrice - payout,
+          taskStatus: task.status,
+          jobCardStatus: card.status,
+          billFinalizedAt: card.closedAt || card.createdAt
+        });
+      }
+    });
+  });
+
+  return records;
 }
 

@@ -20,7 +20,9 @@ import {
   Phone,
   Users,
   MapPin,
-  Boxes
+  Boxes,
+  DollarSign,
+  Palette
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -54,10 +56,12 @@ export function HeaderNav({
   const navItems = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
-    { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
+    { id: 'standard-jobs', label: 'Standard Jobs Library', icon: Zap },
+    { id: 'contractor-payouts', label: 'Contractor Payouts', icon: DollarSign },
     { id: 'inventory', label: 'Parts & Inventory', icon: Boxes },
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },
+    { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'deliveries', label: t('nav.delivery'), icon: Truck },
     { id: 'vendors', label: t('nav.vendors'), icon: Building2 },
     { id: 'employees', label: t('nav.employees'), icon: Users },

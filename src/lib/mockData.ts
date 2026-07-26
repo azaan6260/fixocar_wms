@@ -1,4 +1,4 @@
-import { Employee, Vendor, JobCard, StandardServicePackage, PurchaseOrder, DeliveryRecord, CityServiceOffering, ServiceBookingRequest, InventoryItem } from '../types';
+import { Employee, Vendor, JobCard, StandardServicePackage, PurchaseOrder, DeliveryRecord, CityServiceOffering, ServiceBookingRequest, InventoryItem, StandardJob } from '../types';
 
 export const INITIAL_CITY_SERVICES: CityServiceOffering[] = [
   {
@@ -931,6 +931,119 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
     supplierVendorName: 'Bosch Genuine Auto Spares Ltd',
     shelfLocation: 'Rack F-1',
     lastRestockedAt: '2026-07-21',
+  }
+];
+
+export const INITIAL_STANDARD_JOBS: StandardJob[] = [
+  {
+    id: 'std-job-1',
+    title: 'Full Body Panel Painting (Per Panel)',
+    category: 'PAINT',
+    retailPrice: 2800,
+    cars24Price: 1950,
+    isContractBasis: true,
+    contractorPayout: 1100,
+    estimatedHours: 4,
+    description: 'Sanding, primer coat, computerized color match paint & high-gloss lacquer finish.'
+  },
+  {
+    id: 'std-job-2',
+    title: 'Denting & Panel Alignment (Per Panel)',
+    category: 'DENTING',
+    retailPrice: 1500,
+    cars24Price: 950,
+    isContractBasis: true,
+    contractorPayout: 550,
+    estimatedHours: 2.5,
+    description: 'Hydraulic & lever dent removal, panel seam alignment and surface levelling.'
+  },
+  {
+    id: 'std-job-3',
+    title: 'Bumper Repair & Painting (Front/Rear)',
+    category: 'PAINT',
+    retailPrice: 2200,
+    cars24Price: 1450,
+    isContractBasis: true,
+    contractorPayout: 850,
+    estimatedHours: 3,
+    description: 'Plastic welding, scratch filling, flexibility primer and matching shade coat.'
+  },
+  {
+    id: 'std-job-4',
+    title: 'Full Car Body Overhaul Painting (Baked Booth)',
+    category: 'PAINT',
+    retailPrice: 32000,
+    cars24Price: 24000,
+    isContractBasis: true,
+    contractorPayout: 14000,
+    estimatedHours: 24,
+    description: 'Complete strip-down exterior paint overhaul with heated booth curing.'
+  },
+  {
+    id: 'std-job-5',
+    title: 'Basic Periodic Engine Service (Oil + Filter)',
+    category: 'MECHANICAL',
+    retailPrice: 3499,
+    cars24Price: 2699,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 2,
+    description: '5W30 Synthetic oil replacement, oil filter, air filter cleanup & 30-pt safety audit.'
+  },
+  {
+    id: 'std-job-6',
+    title: 'Front Brake Pads Replacement & Rotor Skimming',
+    category: 'MECHANICAL',
+    retailPrice: 2200,
+    cars24Price: 1650,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 1.5,
+    description: 'OEM brake pad installation, brake caliper pin lubrication & rotor disc face lathe skimming.'
+  },
+  {
+    id: 'std-job-7',
+    title: 'R134a AC Gas Charging & Leak Check',
+    category: 'MECHANICAL',
+    retailPrice: 1850,
+    cars24Price: 1350,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 1.5,
+    description: 'Automated machine vacuuming, leak pressure test, Pag oil refill & R134a charging.'
+  },
+  {
+    id: 'std-job-8',
+    title: 'Clutch Assembly Overhaul & Gear Oil Flush',
+    category: 'MECHANICAL',
+    retailPrice: 7800,
+    cars24Price: 5800,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 4.5,
+    description: 'Clutch plate, pressure plate, release bearing renewal and fresh transmission fluid.'
+  },
+  {
+    id: 'std-job-9',
+    title: 'Full Foam Wash & Interior Vacuuming',
+    category: 'WASHING',
+    retailPrice: 650,
+    cars24Price: 400,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 1,
+    description: 'High pressure underbody wash, neutral pH foam body shampoo, dry wipe & vacuuming.'
+  },
+  {
+    id: 'std-job-10',
+    title: 'Headlight Restoration & Lens Buffing (Pair)',
+    category: 'SUBLET_VENDOR',
+    retailPrice: 950,
+    cars24Price: 650,
+    isContractBasis: true,
+    contractorPayout: 350,
+    estimatedHours: 1,
+    description: 'Oxidation removal, multi-stage wet sanding and UV sealant coating.'
   }
 ];
 

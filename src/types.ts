@@ -237,6 +237,9 @@ export interface JobTask {
   partsList?: TaskPartItem[];
   requisitions?: TaskRequisition[];
   concerns?: TaskConcern[];
+  isContractBasis?: boolean;
+  contractorPayout?: number;
+  standardJobId?: string;
 }
 
 export interface QCCheckitem {
@@ -302,6 +305,18 @@ export interface DeliveryRecord {
   destinationLng: number;
   etaMinutes: number;
   notes?: string;
+}
+
+export interface StandardJob {
+  id: string;
+  title: string;
+  category: TaskCategory;
+  retailPrice: number;    // Customer price for Retail vehicles
+  cars24Price: number;    // B2B Customer price for Cars24 fleet
+  isContractBasis: boolean; // True for Denting, Painting, Sublet
+  contractorPayout: number; // Direct payout reserved for contractor/painter/denter
+  estimatedHours: number;
+  description?: string;
 }
 
 export interface StandardServicePackage {
