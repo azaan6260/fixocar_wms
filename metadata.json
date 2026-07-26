@@ -1,0 +1,6 @@
+{
+  "name": "FixoCar - Worry-Free Car Repair",
+  "description": "FixoCar workshop management platform featuring job card lifecycle, team job allotment, customer estimates & approvals, floor manager QC inspection, and live delivery status tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

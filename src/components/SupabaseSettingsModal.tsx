@@ -1,0 +1,174 @@
+import React, { useState } from 'react';
+import { getStoredSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabaseClient';
+import { SUPABASE_SQL_SCHEMA } from '../lib/supabaseSchema';
+import { 
+  Database, 
+  X, 
+  CheckCircle2, 
+  Copy, 
+  Check, 
+  Trash2, 
+  ExternalLink,
+  Code2
+} from 'lucide-react';
+
+interface SupabaseSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModalProps) {
+  if (!isOpen) return null;
+
+  const config = getStoredSupabaseConfig();
+  const [url, setUrl] = useState(config.supabaseUrl);
+  const [anonKey, setAnonKey] = useState(config.supabaseAnonKey);
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'config' | 'schema'>('config');
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSupabaseConfig(url, anonKey);
+    alert('Supabase credentials saved! Connecting to live Supabase database.');
+    onClose();
+  };
+
+  const handleClear = () => {
+    if (confirm('Disconnect Supabase and revert to local storage engine?')) {
+      clearSupabaseConfig();
+      setUrl('');
+      setAnonKey('');
+      onClose();
+    }
+  };
+
+  const handleCopySchema = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl shadow-2xl overflow-hidden my-8">
+        
+        {/* Header */}
+        <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <Database className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Supabase Database Integration</h2>
+              <p className="text-xs text-slate-400">Connect live Supabase database & export SQL schema</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`pb-2.5 border-b-2 ${activeTab === 'config' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400'}`}
+          >
+            Connection Settings
+          </button>
+          <button
+            onClick={() => setActiveTab('schema')}
+            className={`pb-2.5 border-b-2 ${activeTab === 'schema' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400'}`}
+          >
+            SQL Migration Schema Script
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {activeTab === 'config' ? (
+            <form onSubmit={handleSave} className="space-y-4 text-xs">
+              
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-slate-100">Status: {config.isConfigured ? 'Supabase Live Connected' : 'Local Storage Fallback Mode'}</p>
+                  <p className="text-slate-500 mt-0.5">
+                    {config.isConfigured ? 'Job Card modifications sync live with your Supabase database.' : 'Operating on local browser state engine. Paste Supabase URL below to connect.'}
+                  </p>
+                </div>
+                {config.isConfigured && (
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 text-[11px]">
+                    ● Active
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Supabase Project URL (VITE_SUPABASE_URL)
+                </label>
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://xyzxyz.supabase.co"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Supabase Anon Key (VITE_SUPABASE_ANON_KEY)
+                </label>
+                <input
+                  type="password"
+                  value={anonKey}
+                  onChange={(e) => setAnonKey(e.target.value)}
+                  placeholder="eyJhY2... (Anon public key)"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                {config.isConfigured ? (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="px-3 py-2 rounded-xl text-rose-500 hover:bg-rose-500/10 font-semibold flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-4 h-4" /> Disconnect
+                  </button>
+                ) : <div />}
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md transition-colors"
+                >
+                  Save & Connect Supabase
+                </button>
+              </div>
+
+            </form>
+          ) : (
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <p className="text-slate-500">Copy this SQL script and paste it into the Supabase SQL Editor to create tables and RLS rules:</p>
+                <button
+                  onClick={handleCopySchema}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold flex items-center gap-1.5"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied to Clipboard!' : 'Copy SQL Schema'}
+                </button>
+              </div>
+
+              <pre className="p-4 rounded-xl bg-slate-950 text-slate-200 font-mono text-[11px] max-h-72 overflow-y-auto border border-slate-800">
+                {SUPABASE_SQL_SCHEMA}
+              </pre>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
