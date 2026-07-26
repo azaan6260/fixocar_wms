@@ -247,7 +247,7 @@ export function JobCardList({
                 <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Est. Bill</p>
-                    <p className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">${totalBill}</p>
+                    <p className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">₹{totalBill.toLocaleString('en-IN')}</p>
                   </div>
 
                   <div className="flex items-center gap-1.5">

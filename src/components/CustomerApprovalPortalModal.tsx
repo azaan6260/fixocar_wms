@@ -104,7 +104,7 @@ export function CustomerApprovalPortalModal({
                       <p className="text-xs text-slate-500 mt-0.5">{item.notes || 'Inspection finding by master mechanic'}</p>
                     </div>
                     <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 font-mono">
-                      +${item.customerPrice}
+                      +₹{item.customerPrice.toLocaleString('en-IN')}
                     </span>
                   </div>
 
@@ -146,7 +146,7 @@ export function CustomerApprovalPortalModal({
           <div className="p-4 rounded-xl bg-slate-900 text-white flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-400">Recalculated Estimate Total</p>
-              <p className="text-xl font-extrabold text-emerald-400">${totalApprovedPrice}</p>
+              <p className="text-xl font-extrabold text-emerald-400">₹{totalApprovedPrice.toLocaleString('en-IN')}</p>
             </div>
 
             <button

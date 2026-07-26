@@ -13,6 +13,7 @@ import { DashboardOverview } from './components/DashboardOverview';
 import { JobCardList } from './components/JobCardList';
 import { JobCardDetailView } from './components/JobCardDetailView';
 import { CreateJobCardModal } from './components/CreateJobCardModal';
+import { CustomerPortal } from './components/CustomerPortal';
 import { CustomerApprovalPortalModal } from './components/CustomerApprovalPortalModal';
 import { FloorManagerQCModal } from './components/FloorManagerQCModal';
 import { DeliveryTrackingView } from './components/DeliveryTrackingView';
@@ -74,6 +75,13 @@ export default function App() {
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenAIDiagnostics={() => setIsCreateModalOpen(true)}
             onNavigateTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'customer-portal' && (
+          <CustomerPortal
+            currentRole={currentRole}
+            onOpenApprovalModal={(id) => setCustomerPortalCardId(id)}
           />
         )}
 

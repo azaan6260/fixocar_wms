@@ -190,6 +190,54 @@ export interface PurchaseOrder {
   createdAt: string;
 }
 
+export interface CityServiceOffering {
+  id: string;
+  title: string;
+  category: TaskCategory;
+  description: string;
+  tagline: string;
+  estimatedHours: number;
+  cityPrices: Record<string, number>; // City Name -> Price in INR
+  includedFeatures: string[];
+  isPopular?: boolean;
+}
+
+export interface ServiceBookingRequest {
+  id: string;
+  city: string;
+  serviceId: string;
+  serviceTitle: string;
+  price: number;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  vehicleNumber: string;
+  vehicleMakeModel: string;
+  preferredDate: string;
+  preferredTimeSlot: string;
+  address: string;
+  pickupNeeded: boolean;
+  notes?: string;
+  createdAt: string;
+  status: 'BOOKED' | 'CONFIRMED' | 'IN_REPAIR' | 'COMPLETED' | 'CANCELLED';
+  createdJobCardId?: string;
+}
+
+export const INDIAN_CITIES = [
+  'Mumbai',
+  'Delhi NCR',
+  'Bengaluru',
+  'Hyderabad',
+  'Pune',
+  'Chennai',
+  'Jaipur',
+  'Ahmedabad',
+  'Chandigarh',
+  'Kolkata'
+] as const;
+
+export type IndianCity = typeof INDIAN_CITIES[number];
+
 export interface JobCard {
   id: string; // e.g. "JC-2026-104"
   createdAt: string;

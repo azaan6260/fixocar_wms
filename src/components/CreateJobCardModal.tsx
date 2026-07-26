@@ -524,7 +524,7 @@ export function CreateJobCardModal({
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-bold text-xs">{pkg.name}</span>
-                            <span className="text-amber-400 font-extrabold text-xs">${pkg.basePrice}</span>
+                            <span className="text-amber-400 font-extrabold text-xs">₹{pkg.basePrice.toLocaleString('en-IN')}</span>
                           </div>
                           <p className="text-[11px] text-slate-400">{pkg.tagline}</p>
                         </div>
@@ -632,7 +632,7 @@ export function CreateJobCardModal({
                         </select>
 
                         <div className="flex items-center gap-1">
-                          <span className="text-slate-400">$</span>
+                          <span className="text-slate-400">₹</span>
                           <input
                             type="number"
                             value={task.customerPrice}

@@ -128,7 +128,7 @@ export function DeliveryTrackingView({ currentRole }: DeliveryTrackingViewProps)
                     <span className="flex items-center gap-1 opacity-80">
                       <User className="w-3 h-3" /> Driver: {del.deliveryBoyName}
                     </span>
-                    <span className="font-bold font-mono text-emerald-400">${del.totalAmountDue}</span>
+                    <span className="font-bold font-mono text-emerald-400">₹{del.totalAmountDue.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               );
@@ -165,7 +165,7 @@ export function DeliveryTrackingView({ currentRole }: DeliveryTrackingViewProps)
                     </button>
                   ) : (
                     <span className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 text-xs font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Delivered & Paid (${selectedDelivery.totalAmountDue})
+                      <CheckCircle2 className="w-4 h-4" /> Delivered & Paid (₹{selectedDelivery.totalAmountDue.toLocaleString('en-IN')})
                     </span>
                   )}
                 </div>
@@ -300,7 +300,7 @@ export function DeliveryTrackingView({ currentRole }: DeliveryTrackingViewProps)
 
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 text-center space-y-1">
               <span className="text-xs text-slate-500 font-mono">Job Card {selectedDelivery.jobCardId}</span>
-              <p className="text-2xl font-extrabold text-emerald-500 font-mono">${selectedDelivery.totalAmountDue}</p>
+              <p className="text-2xl font-extrabold text-emerald-500 font-mono">₹{selectedDelivery.totalAmountDue.toLocaleString('en-IN')}</p>
               <p className="text-xs text-slate-600 dark:text-slate-300">Customer: {selectedDelivery.customerName}</p>
             </div>
 

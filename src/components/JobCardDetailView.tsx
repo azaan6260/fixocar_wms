@@ -192,8 +192,8 @@ export function JobCardDetailView({
           </div>
           <div>
             <span className="text-slate-400 font-medium">Est. Total Bill:</span>
-            <p className="font-extrabold text-sm text-emerald-400">${grandTotal}</p>
-            <p className="text-[11px] text-slate-400">Advance Paid: ${card.advancePaid || 0}</p>
+            <p className="font-extrabold text-sm text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
+            <p className="text-[11px] text-slate-400">Advance Paid: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
           </div>
         </div>
 
@@ -305,7 +305,7 @@ export function JobCardDetailView({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">Cost Price ($)</label>
+                      <label className="block text-[11px] text-slate-400 mb-1">Cost Price (₹)</label>
                       <input
                         type="number"
                         value={newTaskCost}
@@ -315,7 +315,7 @@ export function JobCardDetailView({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">Customer Billing Price ($)</label>
+                      <label className="block text-[11px] text-slate-400 mb-1">Customer Billing Price (₹)</label>
                       <input
                         type="number"
                         value={newTaskPrice}
@@ -363,7 +363,7 @@ export function JobCardDetailView({
 
                       <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
                         <span>Assigned: <strong className="text-slate-800 dark:text-slate-200">{task.assignedToName}</strong> ({task.assignedType})</span>
-                        <span>Billing: <strong className="text-emerald-600 dark:text-emerald-400">${task.customerPrice}</strong></span>
+                        <span>Billing: <strong className="text-emerald-600 dark:text-emerald-400">₹{task.customerPrice.toLocaleString('en-IN')}</strong></span>
                       </div>
 
                       {task.requiresCustomerApproval && (
@@ -448,7 +448,7 @@ export function JobCardDetailView({
                     <div key={task.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
                       <div>
                         <p className="font-bold text-sm text-slate-900 dark:text-slate-100">{task.title}</p>
-                        <p className="text-xs text-slate-500">Estimate Price: ${task.customerPrice}</p>
+                        <p className="text-xs text-slate-500">Estimate Price: ₹{task.customerPrice.toLocaleString('en-IN')}</p>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -546,17 +546,17 @@ export function JobCardDetailView({
                   {card.tasks.map(t => (
                     <div key={t.id} className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1">
                       <span className="text-slate-800 dark:text-slate-200">{t.title}</span>
-                      <span className="font-mono font-bold">${t.customerPrice}</span>
+                      <span className="font-mono font-bold">₹{t.customerPrice.toLocaleString('en-IN')}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-1 text-xs text-right font-medium">
-                  <p>Subtotal: ${totalTaskPrice}</p>
-                  <p>Tax (18%): ${taxVal}</p>
-                  <p className="text-base font-extrabold text-slate-900 dark:text-slate-100 mt-2">Grand Total: ${grandTotal}</p>
-                  <p className="text-emerald-500 font-bold">Advance Paid: ${card.advancePaid || 0}</p>
-                  <p className="text-amber-500 font-extrabold text-sm">Balance Due: ${balanceDue}</p>
+                  <p>Subtotal: ₹{totalTaskPrice.toLocaleString('en-IN')}</p>
+                  <p>Tax (18%): ₹{taxVal.toLocaleString('en-IN')}</p>
+                  <p className="text-base font-extrabold text-slate-900 dark:text-slate-100 mt-2">Grand Total: ₹{grandTotal.toLocaleString('en-IN')}</p>
+                  <p className="text-emerald-500 font-bold">Advance Paid: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-amber-500 font-extrabold text-sm">Balance Due: ₹{balanceDue.toLocaleString('en-IN')}</p>
                 </div>
               </div>
             </div>

@@ -141,7 +141,7 @@ export function VendorManagementView() {
 
         <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
           <span className="text-xs text-slate-500">Total Vendor Outstanding Payable</span>
-          <p className="text-2xl font-extrabold text-rose-500 mt-1">${totalOutstanding}</p>
+          <p className="text-2xl font-extrabold text-rose-500 mt-1">₹{totalOutstanding.toLocaleString('en-IN')}</p>
         </div>
       </div>
 
@@ -173,7 +173,7 @@ export function VendorManagementView() {
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-[10px] text-slate-400">Balance Payable:</span>
-                  <p className="font-bold text-rose-500 font-mono">${v.outstandingBalance}</p>
+                  <p className="font-bold text-rose-500 font-mono">₹{v.outstandingBalance.toLocaleString('en-IN')}</p>
                 </div>
 
                 {v.outstandingBalance > 0 && (
@@ -213,7 +213,7 @@ export function VendorManagementView() {
                   <td className="p-3">{po.jobCardId} ({po.vehicleReg})</td>
                   <td className="p-3 font-semibold">{po.vendorName}</td>
                   <td className="p-3">{po.itemDescription}</td>
-                  <td className="p-3 font-mono font-bold text-emerald-500">${po.amount}</td>
+                  <td className="p-3 font-mono font-bold text-emerald-500">₹{po.amount.toLocaleString('en-IN')}</td>
                   <td className="p-3">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500">
                       {po.status}
@@ -322,7 +322,7 @@ export function VendorManagementView() {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Amount ($)</label>
+                <label className="block font-semibold mb-1">Amount (₹)</label>
                 <input
                   type="number"
                   value={poAmount}

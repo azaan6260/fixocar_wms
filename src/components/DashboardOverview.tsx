@@ -209,7 +209,7 @@ export function DashboardOverview({
           </div>
 
           <div className="pt-6 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Gross Revenue: <strong className="text-emerald-400 font-mono">${totalRevenue}</strong></span>
+            <span>Gross Revenue: <strong className="text-emerald-400 font-mono">₹{totalRevenue.toLocaleString('en-IN')}</strong></span>
             <button
               onClick={() => onNavigateTab('role-workspace')}
               className="text-blue-400 font-bold hover:underline"
@@ -252,7 +252,7 @@ export function DashboardOverview({
                           {card.id} • {card.vehicle.registrationNumber}
                         </p>
                         <p className="text-[10px] text-slate-500 uppercase font-mono mt-0.5">
-                          ${estPrice} Estimated
+                          ₹{estPrice.toLocaleString('en-IN')} Estimated
                         </p>
                       </div>
                       <button

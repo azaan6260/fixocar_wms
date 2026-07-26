@@ -1,5 +1,5 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS } from './mockData';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest } from '../types';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
 const STORAGE_KEYS = {
@@ -8,6 +8,8 @@ const STORAGE_KEYS = {
   VENDORS: 'autocraft_vendors_v1',
   DELIVERIES: 'autocraft_deliveries_v1',
   PURCHASE_ORDERS: 'autocraft_purchase_orders_v1',
+  CITY_SERVICES: 'fixocar_city_services_v1',
+  SERVICE_BOOKINGS: 'fixocar_service_bookings_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -307,11 +309,143 @@ export function createPurchaseOrder(po: Omit<PurchaseOrder, 'id' | 'createdAt'>)
   return newPO;
 }
 
+// 6. CITY SERVICES STORAGE (Admin pricing per city)
+export function getCityServices(): CityServiceOffering[] {
+  const local = localStorage.getItem(STORAGE_KEYS.CITY_SERVICES);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.CITY_SERVICES, JSON.stringify(INITIAL_CITY_SERVICES));
+    return INITIAL_CITY_SERVICES;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_CITY_SERVICES;
+  }
+}
+
+export function saveCityServices(services: CityServiceOffering[]) {
+  localStorage.setItem(STORAGE_KEYS.CITY_SERVICES, JSON.stringify(services));
+  notifyStoreChange();
+}
+
+export function updateCityServicePrice(serviceId: string, city: string, newPrice: number) {
+  const services = getCityServices();
+  const index = services.findIndex(s => s.id === serviceId);
+  if (index !== -1) {
+    services[index].cityPrices[city] = newPrice;
+    saveCityServices(services);
+  }
+}
+
+export function addCityService(service: Omit<CityServiceOffering, 'id'>): CityServiceOffering {
+  const services = getCityServices();
+  const newService: CityServiceOffering = {
+    ...service,
+    id: `srv-custom-${Date.now()}`
+  };
+  services.push(newService);
+  saveCityServices(services);
+  return newService;
+}
+
+// 7. SERVICE BOOKINGS & CUSTOMER ORDER TRACKING
+export function getServiceBookings(): ServiceBookingRequest[] {
+  const local = localStorage.getItem(STORAGE_KEYS.SERVICE_BOOKINGS);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.SERVICE_BOOKINGS, JSON.stringify(INITIAL_SERVICE_BOOKINGS));
+    return INITIAL_SERVICE_BOOKINGS;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_SERVICE_BOOKINGS;
+  }
+}
+
+export function saveServiceBookings(bookings: ServiceBookingRequest[]) {
+  localStorage.setItem(STORAGE_KEYS.SERVICE_BOOKINGS, JSON.stringify(bookings));
+  notifyStoreChange();
+}
+
+export function createCustomerBooking(bookingData: Omit<ServiceBookingRequest, 'id' | 'createdAt' | 'status'>): { booking: ServiceBookingRequest; jobCard: JobCard } {
+  const bookings = getServiceBookings();
+  const now = new Date();
+  const bookingId = `BOOK-${Math.floor(100 + Math.random() * 900)}`;
+  const jobCardId = `JC-${now.getFullYear()}-${Math.floor(200 + Math.random() * 800)}`;
+
+  // Automatically create a corresponding JobCard for the workshop floor
+  const newJobCard: JobCard = {
+    id: jobCardId,
+    createdAt: `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+    estimatedCompletionDate: `${bookingData.preferredDate} 06:00 PM`,
+    vehicle: {
+      registrationNumber: bookingData.vehicleNumber,
+      make: bookingData.vehicleMakeModel.split(' ')[0] || 'Car',
+      model: bookingData.vehicleMakeModel,
+      year: new Date().getFullYear(),
+      color: 'Standard',
+      fuelLevel: 50,
+      mileage: 25000,
+    },
+    customer: {
+      id: `cust-${Date.now()}`,
+      name: bookingData.customerName,
+      phone: bookingData.customerPhone,
+      email: bookingData.customerEmail,
+      address: `${bookingData.address}, ${bookingData.city}`,
+    },
+    status: 'ESTIMATE_PENDING',
+    serviceType: 'STANDARD_PACKAGE',
+    packageName: bookingData.serviceTitle,
+    floorManagerId: 'emp-101',
+    floorManagerName: 'Marcus Vance',
+    pickupRequested: bookingData.pickupNeeded,
+    deliveryRequested: bookingData.pickupNeeded,
+    discount: 0,
+    taxRate: 18,
+    advancePaid: 0,
+    tasks: [
+      {
+        id: `task-${jobCardId}-1`,
+        jobCardId: jobCardId,
+        title: `${bookingData.serviceTitle} (${bookingData.city} Booking)`,
+        category: 'MECHANICAL',
+        assignedToId: 'emp-102',
+        assignedToName: 'Rajesh Sharma',
+        assignedType: 'EMPLOYEE',
+        estimatedCost: Math.round(bookingData.price * 0.5),
+        customerPrice: bookingData.price,
+        status: 'PENDING',
+        requiresCustomerApproval: false,
+        isCustomerApproved: true,
+        notes: `Customer booking notes: ${bookingData.notes || 'None'}. Preferred slot: ${bookingData.preferredTimeSlot}`,
+      }
+    ],
+    qcChecklist: [],
+    qcPassed: false
+  };
+
+  const newBooking: ServiceBookingRequest = {
+    ...bookingData,
+    id: bookingId,
+    createdAt: `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+    status: 'BOOKED',
+    createdJobCardId: jobCardId
+  };
+
+  saveJobCards([newJobCard, ...getJobCards()]);
+  saveServiceBookings([newBooking, ...bookings]);
+
+  return { booking: newBooking, jobCard: newJobCard };
+}
+
 export function resetToDefaultMockData() {
   localStorage.removeItem(STORAGE_KEYS.JOB_CARDS);
   localStorage.removeItem(STORAGE_KEYS.EMPLOYEES);
   localStorage.removeItem(STORAGE_KEYS.VENDORS);
   localStorage.removeItem(STORAGE_KEYS.DELIVERIES);
   localStorage.removeItem(STORAGE_KEYS.PURCHASE_ORDERS);
+  localStorage.removeItem(STORAGE_KEYS.CITY_SERVICES);
+  localStorage.removeItem(STORAGE_KEYS.SERVICE_BOOKINGS);
   notifyStoreChange();
 }

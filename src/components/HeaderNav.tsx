@@ -48,6 +48,7 @@ export function HeaderNav({
 
   const navItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+    { id: 'customer-portal', label: 'Customer Portal & Rates', icon: Sparkles },
     { id: 'job-cards', label: 'Job Cards', icon: FileText },
     { id: 'role-workspace', label: 'My Role Tasks', icon: UserCheck },
     { id: 'deliveries', label: 'Delivery Tracker', icon: Truck },
