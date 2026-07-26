@@ -16,7 +16,8 @@ import {
   UserCheck,
   Search,
   Zap,
-  Phone
+  Phone,
+  Users
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -53,6 +54,7 @@ export function HeaderNav({
     { id: 'role-workspace', label: 'My Role Tasks', icon: UserCheck },
     { id: 'deliveries', label: 'Delivery Tracker', icon: Truck },
     { id: 'vendors', label: 'Vendors & POs', icon: Building2 },
+    { id: 'employees', label: 'Employee Management', icon: Users },
   ];
 
   return (

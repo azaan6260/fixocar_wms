@@ -34,6 +34,33 @@ export interface Employee {
   status: EmployeeStatus;
   avatarUrl?: string;
   activeJobsCount: number;
+  loginId?: string;
+  password?: string;
+  baseSalary?: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  date: string;
+  clockInTime?: string;
+  clockOutTime?: string;
+  status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'ON_LEAVE';
+  clockInLocation?: string;
+  clockOutLocation?: string;
+  photoUrl?: string;
+}
+
+export interface SalaryRecord {
+  id: string;
+  employeeId: string;
+  month: string; // YYYY-MM
+  baseSalary: number;
+  deductions: number;
+  bonuses: number;
+  netPay: number;
+  status: 'PENDING' | 'TRANSFERRED';
+  transferDate?: string;
 }
 
 export type VendorCategory = 

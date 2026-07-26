@@ -20,6 +20,7 @@ import { DeliveryTrackingView } from './components/DeliveryTrackingView';
 import { VendorManagementView } from './components/VendorManagementView';
 import { RoleWorkspaceView } from './components/RoleWorkspaceView';
 import { SupabaseSettingsModal } from './components/SupabaseSettingsModal';
+import { EmployeeManagementView } from './components/EmployeeManagementView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -110,6 +111,10 @@ export default function App() {
 
         {activeTab === 'vendors' && (
           <VendorManagementView />
+        )}
+
+        {activeTab === 'employees' && (
+          <EmployeeManagementView currentRole={currentRole} />
         )}
 
       </main>

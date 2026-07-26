@@ -192,6 +192,87 @@ export function saveEmployees(employees: Employee[]) {
   notifyStoreChange();
 }
 
+export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
+  const employees = getEmployees();
+  const newEmp: Employee = {
+    ...employee,
+    id: `emp-${Date.now().toString().slice(-4)}`
+  };
+  employees.push(newEmp);
+  saveEmployees(employees);
+  return newEmp;
+}
+
+export function updateEmployee(id: string, updates: Partial<Employee>) {
+  const employees = getEmployees();
+  const index = employees.findIndex(e => e.id === id);
+  if (index !== -1) {
+    employees[index] = { ...employees[index], ...updates };
+    saveEmployees(employees);
+  }
+}
+
+export function deleteEmployee(id: string) {
+  const employees = getEmployees();
+  saveEmployees(employees.filter(e => e.id !== id));
+}
+
+// 2b. ATTENDANCE STORAGE
+export function getAttendances(): import('../types').AttendanceRecord[] {
+  const local = localStorage.getItem('autocraft_attendance_v1');
+  if (!local) return [];
+  try { return JSON.parse(local); } catch { return []; }
+}
+
+export function saveAttendances(records: import('../types').AttendanceRecord[]) {
+  localStorage.setItem('autocraft_attendance_v1', JSON.stringify(records));
+  notifyStoreChange();
+}
+
+export function createAttendance(record: Omit<import('../types').AttendanceRecord, 'id'>) {
+  const records = getAttendances();
+  const newRecord: import('../types').AttendanceRecord = {
+    ...record,
+    id: `att-${Date.now()}`
+  };
+  records.unshift(newRecord);
+  saveAttendances(records);
+  return newRecord;
+}
+
+// 2c. SALARY STORAGE
+export function getSalaries(): import('../types').SalaryRecord[] {
+  const local = localStorage.getItem('autocraft_salaries_v1');
+  if (!local) return [];
+  try { return JSON.parse(local); } catch { return []; }
+}
+
+export function saveSalaries(records: import('../types').SalaryRecord[]) {
+  localStorage.setItem('autocraft_salaries_v1', JSON.stringify(records));
+  notifyStoreChange();
+}
+
+export function createSalaryRecord(record: Omit<import('../types').SalaryRecord, 'id'>) {
+  const records = getSalaries();
+  const newRecord: import('../types').SalaryRecord = {
+    ...record,
+    id: `sal-${Date.now()}`
+  };
+  records.unshift(newRecord);
+  saveSalaries(records);
+  return newRecord;
+}
+
+export function updateSalaryStatus(id: string, status: 'PENDING' | 'TRANSFERRED') {
+  const records = getSalaries();
+  const index = records.findIndex(r => r.id === id);
+  if (index !== -1) {
+    records[index].status = status;
+    if (status === 'TRANSFERRED') records[index].transferDate = new Date().toISOString();
+    saveSalaries(records);
+  }
+}
+
 // 3. VENDORS STORAGE
 export function getVendors(): Vendor[] {
   const local = localStorage.getItem(STORAGE_KEYS.VENDORS);
