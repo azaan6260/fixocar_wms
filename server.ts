@@ -111,6 +111,22 @@ Return valid JSON ONLY without markdown backticks.`;
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // Serve index.html for all non-API GET requests in development mode (SPA fallback)
+    app.get('*', async (req, res, next) => {
+      if (req.originalUrl.startsWith('/api')) {
+        return next();
+      }
+      try {
+        const fs = await import('fs');
+        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(req.originalUrl, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));

@@ -53,13 +53,16 @@ export function HeaderNav({
     }
   };
 
-  const navItems = [
+  const row1Items = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
     { id: 'standard-jobs', label: 'Standard Jobs Library', icon: Zap },
     { id: 'contractor-payouts', label: 'Contractor Payouts', icon: DollarSign },
     { id: 'inventory', label: 'Parts & Inventory', icon: Boxes },
+  ];
+
+  const row2Items = [
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },
     { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'deliveries', label: t('nav.delivery'), icon: Truck },
@@ -68,17 +71,18 @@ export function HeaderNav({
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        {/* Top Header Bar: Logo & Actions */}
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-3">
           
           {/* Brand Logo & Title */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-md shadow-blue-600/20 flex items-center justify-center">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md shadow-blue-600/20 flex items-center justify-center">
               <Wrench className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1">
                 Fixo<span className="text-blue-600 dark:text-blue-400">Car</span>
               </h1>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider hidden sm:block">
@@ -87,30 +91,8 @@ export function HeaderNav({
             </div>
           </div>
 
-          {/* Navigation Tabs (Desktop Bento Style) */}
-          <nav className="hidden lg:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-full border border-slate-200/60 dark:border-slate-700/60">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right Controls: Role Switcher, Quick Actions & Search */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Right Controls: Role Switcher, Quick Actions & Call */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
 
             <a 
               href="/" 
@@ -127,17 +109,17 @@ export function HeaderNav({
             {/* Direct Hotline Call Button */}
             <a
               href="tel:8819915656"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800 text-xs font-black tracking-wide hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800 text-xs font-black tracking-wide hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs"
               title="Call FixoCar Workshop Hotline"
             >
-              <Phone className="w-3.5 h-3.5 fill-current" />
+              <Phone className="w-3.5 h-3.5 fill-current text-emerald-600 dark:text-emerald-400" />
               <span>8819915656</span>
             </a>
 
             {/* Quick Create Job Card Pill */}
             <button
               onClick={onOpenNewJobCardModal}
-              className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>+ Create Card</span>
@@ -158,16 +140,16 @@ export function HeaderNav({
             </button>
 
             {/* Language Toggle */}
-            <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+            <div className="hidden md:flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-full border border-slate-200 dark:border-slate-700">
               <button 
                 onClick={() => setLanguage('en')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'en' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${language === 'en' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
               >
                 EN
               </button>
               <button 
                 onClick={() => setLanguage('hi')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'hi' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${language === 'hi' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
               >
                 हि
               </button>
@@ -231,24 +213,51 @@ export function HeaderNav({
           </div>
         </div>
 
-        {/* Mobile Navigation Bar */}
-        <div className="flex lg:hidden items-center justify-around py-2 border-t border-slate-200 dark:border-slate-800 text-xs">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onTabChange(item.id)}
-                className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg ${
-                  isActive ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+        {/* Navigation Tabs - Structured 2-Row Sub-Bar */}
+        <div className="py-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5">
+          {/* Row 1: Core Operations */}
+          <nav className="flex items-center flex-wrap gap-1.5">
+            {row1Items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onTabChange(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Row 2: Management & Workflows */}
+          <nav className="flex items-center flex-wrap gap-1.5">
+            {row2Items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onTabChange(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
       </div>
