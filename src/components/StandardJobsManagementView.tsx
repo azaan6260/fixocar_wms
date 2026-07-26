@@ -21,7 +21,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [formRetailPrice, setFormRetailPrice] = useState<number>(2500);
   const [formCars24Price, setFormCars24Price] = useState<number>(1800);
   const [formIsContract, setFormIsContract] = useState<boolean>(true);
-  const [formContractorPayout, setFormContractorPayout] = useState<number>(1000);
+  const [formContractorPayout, setFormContractorPayout] = useState<number>(950);
+  const [formPainterPayout, setFormPainterPayout] = useState<number>(800);
+  const [formDenterPayout, setFormDenterPayout] = useState<number>(150);
   const [formHours, setFormHours] = useState<number>(2);
   const [formDesc, setFormDesc] = useState('');
 
@@ -33,10 +35,12 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setEditingJobId(null);
     setFormTitle('');
     setFormCat('PAINT');
-    setFormRetailPrice(2800);
-    setFormCars24Price(1950);
+    setFormRetailPrice(1350);
+    setFormCars24Price(1350);
     setFormIsContract(true);
-    setFormContractorPayout(1100);
+    setFormPainterPayout(800);
+    setFormDenterPayout(150);
+    setFormContractorPayout(950);
     setFormHours(3);
     setFormDesc('');
     setIsModalOpen(true);
@@ -49,7 +53,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormRetailPrice(job.retailPrice);
     setFormCars24Price(job.cars24Price);
     setFormIsContract(job.isContractBasis);
-    setFormContractorPayout(job.contractorPayout);
+    setFormPainterPayout(job.painterPayout || 0);
+    setFormDenterPayout(job.denterPayout || 0);
+    setFormContractorPayout(job.contractorPayout || ((job.painterPayout || 0) + (job.denterPayout || 0)));
     setFormHours(job.estimatedHours);
     setFormDesc(job.description || '');
     setIsModalOpen(true);
@@ -66,6 +72,10 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     e.preventDefault();
     if (!formTitle.trim()) return;
 
+    const painter = formIsContract ? (Number(formPainterPayout) || 0) : 0;
+    const denter = formIsContract ? (Number(formDenterPayout) || 0) : 0;
+    const totalPayout = formIsContract ? (Number(formContractorPayout) || (painter + denter)) : 0;
+
     if (editingJobId) {
       updateStandardJob(editingJobId, {
         title: formTitle.trim(),
@@ -73,7 +83,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
         retailPrice: Number(formRetailPrice) || 0,
         cars24Price: Number(formCars24Price) || 0,
         isContractBasis: formIsContract,
-        contractorPayout: formIsContract ? (Number(formContractorPayout) || 0) : 0,
+        painterPayout: painter,
+        denterPayout: denter,
+        contractorPayout: totalPayout,
         estimatedHours: Number(formHours) || 1,
         description: formDesc.trim()
       });
@@ -84,7 +96,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
         retailPrice: Number(formRetailPrice) || 0,
         cars24Price: Number(formCars24Price) || 0,
         isContractBasis: formIsContract,
-        contractorPayout: formIsContract ? (Number(formContractorPayout) || 0) : 0,
+        painterPayout: painter,
+        denterPayout: denter,
+        contractorPayout: totalPayout,
         estimatedHours: Number(formHours) || 1,
         description: formDesc.trim()
       });
@@ -362,18 +376,56 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 </div>
 
                 {formIsContract && (
-                  <div>
-                    <label className="block font-bold text-amber-800 dark:text-amber-300 mb-1">
-                      Contractor / Vendor Payout Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={formContractorPayout}
-                      onChange={(e) => setFormContractorPayout(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-black text-amber-600 dark:text-amber-400 text-sm"
-                    />
+                  <div className="space-y-3 pt-2 border-t border-amber-500/20">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-purple-700 dark:text-purple-300 mb-1">
+                          Painter Payout (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formPainterPayout}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 0;
+                            setFormPainterPayout(val);
+                            setFormContractorPayout(val + formDenterPayout);
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-orange-700 dark:text-orange-300 mb-1">
+                          Denter Payout (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formDenterPayout}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 0;
+                            setFormDenterPayout(val);
+                            setFormContractorPayout(formPainterPayout + val);
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-amber-800 dark:text-amber-300 mb-1">
+                        Total Combined Contractor Payout (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formContractorPayout}
+                        onChange={(e) => setFormContractorPayout(Number(e.target.value))}
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-black text-amber-600 dark:text-amber-400 text-sm"
+                      />
+                    </div>
                   </div>
                 )}
               </div>

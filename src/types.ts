@@ -239,6 +239,8 @@ export interface JobTask {
   concerns?: TaskConcern[];
   isContractBasis?: boolean;
   contractorPayout?: number;
+  painterPayout?: number;
+  denterPayout?: number;
   standardJobId?: string;
 }
 
@@ -314,7 +316,9 @@ export interface StandardJob {
   retailPrice: number;    // Customer price for Retail vehicles
   cars24Price: number;    // B2B Customer price for Cars24 fleet
   isContractBasis: boolean; // True for Denting, Painting, Sublet
-  contractorPayout: number; // Direct payout reserved for contractor/painter/denter
+  contractorPayout: number; // Total direct payout reserved for painter + denter
+  painterPayout?: number;   // Specific payout to Painter
+  denterPayout?: number;    // Specific payout to Denter
   estimatedHours: number;
   description?: string;
 }

@@ -165,13 +165,21 @@ export function StandardJobsCatalogModal({
 
                     {/* Contractor Payout Badge */}
                     {job.isContractBasis && (
-                      <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="w-3.5 h-3.5" /> Contractor Payout Rate:
-                        </span>
-                        <span className="font-black text-amber-600 dark:text-amber-400">
-                          ₹{job.contractorPayout.toLocaleString()}
-                        </span>
+                      <div className="mt-2.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-1 text-xs">
+                        <div className="flex items-center justify-between font-bold text-amber-800 dark:text-amber-200">
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Total Contract Payout:
+                          </span>
+                          <span className="font-black text-amber-600 dark:text-amber-400">
+                            ₹{job.contractorPayout.toLocaleString()}
+                          </span>
+                        </div>
+                        {(job.painterPayout !== undefined || job.denterPayout !== undefined) && (
+                          <div className="flex items-center justify-between text-[11px] text-amber-700/90 dark:text-amber-300/90 font-semibold border-t border-amber-500/20 pt-1">
+                            <span>Painter: <strong className="text-purple-600 dark:text-purple-300">₹{job.painterPayout || 0}</strong></span>
+                            <span>Denter: <strong className="text-orange-600 dark:text-orange-300">₹{job.denterPayout || 0}</strong></span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

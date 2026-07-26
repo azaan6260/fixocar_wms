@@ -1181,6 +1181,8 @@ export function addStandardJobToJobCard(
     requiresCustomerApproval: false,
     isContractBasis: stdJob.isContractBasis,
     contractorPayout: stdJob.isContractBasis ? stdJob.contractorPayout : 0,
+    painterPayout: stdJob.painterPayout || 0,
+    denterPayout: stdJob.denterPayout || 0,
     standardJobId: stdJob.id,
     notes: `${card.isCars24 ? '⚡ Cars24 Fleet Standard Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
   };
@@ -1204,6 +1206,8 @@ export interface ContractorPayoutRecord {
   assignedToId?: string;
   customerPrice: number;
   contractorPayout: number;
+  painterPayout: number;
+  denterPayout: number;
   workshopMargin: number;
   taskStatus: string;
   jobCardStatus: string;
@@ -1218,7 +1222,10 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
     card.tasks.forEach(task => {
       // Contract basis tasks (Denting, Paint, Sublet or marked isContractBasis)
       if (task.isContractBasis || task.category === 'DENTING' || task.category === 'PAINT' || (task.contractorPayout && task.contractorPayout > 0)) {
-        const payout = task.contractorPayout || (task.category === 'PAINT' ? Math.round(task.customerPrice * 0.45) : Math.round(task.customerPrice * 0.40));
+        const painter = task.painterPayout ?? (task.category === 'PAINT' ? Math.round(task.customerPrice * 0.45) : 0);
+        const denter = task.denterPayout ?? (task.category === 'DENTING' ? Math.round(task.customerPrice * 0.35) : (task.category === 'PAINT' ? 150 : 0));
+        const payout = task.contractorPayout || (painter + denter) || Math.round(task.customerPrice * 0.5);
+
         records.push({
           jobCardId: card.id,
           jobCardNumber: card.cardNumber,
@@ -1232,6 +1239,8 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
           assignedToId: task.assignedToId,
           customerPrice: task.customerPrice,
           contractorPayout: payout,
+          painterPayout: painter,
+          denterPayout: denter,
           workshopMargin: task.customerPrice - payout,
           taskStatus: task.status,
           jobCardStatus: card.status,

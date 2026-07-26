@@ -935,49 +935,201 @@ export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
 ];
 
 export const INITIAL_STANDARD_JOBS: StandardJob[] = [
+  // Standard Exterior Paint Panels with Painter & Denter Payout Rules
   {
-    id: 'std-job-1',
-    title: 'Full Body Panel Painting (Per Panel)',
+    id: 'std-paint-1',
+    title: 'Door LHS Front - Paint & Dent Repair',
     category: 'PAINT',
-    retailPrice: 2800,
-    cars24Price: 1950,
+    retailPrice: 1350,
+    cars24Price: 1350,
     isContractBasis: true,
-    contractorPayout: 1100,
-    estimatedHours: 4,
-    description: 'Sanding, primer coat, computerized color match paint & high-gloss lacquer finish.'
-  },
-  {
-    id: 'std-job-2',
-    title: 'Denting & Panel Alignment (Per Panel)',
-    category: 'DENTING',
-    retailPrice: 1500,
-    cars24Price: 950,
-    isContractBasis: true,
-    contractorPayout: 550,
-    estimatedHours: 2.5,
-    description: 'Hydraulic & lever dent removal, panel seam alignment and surface levelling.'
-  },
-  {
-    id: 'std-job-3',
-    title: 'Bumper Repair & Painting (Front/Rear)',
-    category: 'PAINT',
-    retailPrice: 2200,
-    cars24Price: 1450,
-    isContractBasis: true,
-    contractorPayout: 850,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950, // 800 Painter + 150 Denter
     estimatedHours: 3,
-    description: 'Plastic welding, scratch filling, flexibility primer and matching shade coat.'
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
   },
   {
-    id: 'std-job-4',
-    title: 'Full Car Body Overhaul Painting (Baked Booth)',
+    id: 'std-paint-2',
+    title: 'Door LHS Rear - Paint & Dent Repair',
     category: 'PAINT',
-    retailPrice: 32000,
-    cars24Price: 24000,
+    retailPrice: 1350,
+    cars24Price: 1350,
     isContractBasis: true,
-    contractorPayout: 14000,
-    estimatedHours: 24,
-    description: 'Complete strip-down exterior paint overhaul with heated booth curing.'
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-3',
+    title: 'Fender LHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 750,
+    cars24Price: 750,
+    isContractBasis: true,
+    painterPayout: 550,
+    denterPayout: 150,
+    contractorPayout: 700,
+    estimatedHours: 2,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹750, Painter: ₹550, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-4',
+    title: 'Quarter Panel LHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-5',
+    title: 'Quarter Panel RHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-6',
+    title: 'Running Board LHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 750,
+    cars24Price: 750,
+    isContractBasis: true,
+    painterPayout: 400,
+    denterPayout: 150,
+    contractorPayout: 550,
+    estimatedHours: 2,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹750, Painter: ₹400, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-7',
+    title: 'Running Board RHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 750,
+    cars24Price: 750,
+    isContractBasis: true,
+    painterPayout: 400,
+    denterPayout: 150,
+    contractorPayout: 550,
+    estimatedHours: 2,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹750, Painter: ₹400, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-8',
+    title: 'Fender RHS - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 750,
+    cars24Price: 750,
+    isContractBasis: true,
+    painterPayout: 550,
+    denterPayout: 150,
+    contractorPayout: 700,
+    estimatedHours: 2,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹750, Painter: ₹550, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-9',
+    title: 'Door RHS Front - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-10',
+    title: 'Door RHS Rear - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Exterior panel sanding, primer & paint refinish (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-11',
+    title: 'Bumper Rear - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Rear bumper scratch refinish & surface repair (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-12',
+    title: 'Bumper Front - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 1350,
+    cars24Price: 1350,
+    isContractBasis: true,
+    painterPayout: 800,
+    denterPayout: 150,
+    contractorPayout: 950,
+    estimatedHours: 3,
+    description: 'Front bumper scratch refinish & surface repair (Billed: ₹1350, Painter: ₹800, Denter: ₹150)'
+  },
+  {
+    id: 'std-paint-13',
+    title: 'Roof - Paint & Major Panel Alignment',
+    category: 'PAINT',
+    retailPrice: 2600,
+    cars24Price: 2600,
+    isContractBasis: true,
+    painterPayout: 1600,
+    denterPayout: 300, // Double for roof per rules
+    contractorPayout: 1900,
+    estimatedHours: 5,
+    description: 'Full roof paint refinish (Billed: ₹2600, Painter: ₹1600, Denter: ₹300 [Double Roof Rate])'
+  },
+  {
+    id: 'std-paint-14',
+    title: 'Boot Floor - Paint & Underbody Protection',
+    category: 'PAINT',
+    retailPrice: 300,
+    cars24Price: 300,
+    isContractBasis: true,
+    painterPayout: 200,
+    denterPayout: 100,
+    contractorPayout: 300,
+    estimatedHours: 1,
+    description: 'Trunk floor inner panel paint seal (Billed: ₹300, Painter: ₹200, Denter: ₹100)'
+  },
+  {
+    id: 'std-dent-15',
+    title: 'Bumper Crack Plastic Welding & Extra Dent Repair',
+    category: 'DENTING',
+    retailPrice: 650,
+    cars24Price: 500,
+    isContractBasis: true,
+    painterPayout: 0,
+    denterPayout: 350,
+    contractorPayout: 350,
+    estimatedHours: 1.5,
+    description: 'Additional denter repair for plastic bumper crack welding and structural brackets reinforcement.'
   },
   {
     id: 'std-job-5',
@@ -991,39 +1143,6 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     description: '5W30 Synthetic oil replacement, oil filter, air filter cleanup & 30-pt safety audit.'
   },
   {
-    id: 'std-job-6',
-    title: 'Front Brake Pads Replacement & Rotor Skimming',
-    category: 'MECHANICAL',
-    retailPrice: 2200,
-    cars24Price: 1650,
-    isContractBasis: false,
-    contractorPayout: 0,
-    estimatedHours: 1.5,
-    description: 'OEM brake pad installation, brake caliper pin lubrication & rotor disc face lathe skimming.'
-  },
-  {
-    id: 'std-job-7',
-    title: 'R134a AC Gas Charging & Leak Check',
-    category: 'MECHANICAL',
-    retailPrice: 1850,
-    cars24Price: 1350,
-    isContractBasis: false,
-    contractorPayout: 0,
-    estimatedHours: 1.5,
-    description: 'Automated machine vacuuming, leak pressure test, Pag oil refill & R134a charging.'
-  },
-  {
-    id: 'std-job-8',
-    title: 'Clutch Assembly Overhaul & Gear Oil Flush',
-    category: 'MECHANICAL',
-    retailPrice: 7800,
-    cars24Price: 5800,
-    isContractBasis: false,
-    contractorPayout: 0,
-    estimatedHours: 4.5,
-    description: 'Clutch plate, pressure plate, release bearing renewal and fresh transmission fluid.'
-  },
-  {
     id: 'std-job-9',
     title: 'Full Foam Wash & Interior Vacuuming',
     category: 'WASHING',
@@ -1033,17 +1152,6 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     contractorPayout: 0,
     estimatedHours: 1,
     description: 'High pressure underbody wash, neutral pH foam body shampoo, dry wipe & vacuuming.'
-  },
-  {
-    id: 'std-job-10',
-    title: 'Headlight Restoration & Lens Buffing (Pair)',
-    category: 'SUBLET_VENDOR',
-    retailPrice: 950,
-    cars24Price: 650,
-    isContractBasis: true,
-    contractorPayout: 350,
-    estimatedHours: 1,
-    description: 'Oxidation removal, multi-stage wet sanding and UV sealant coating.'
   }
 ];
 

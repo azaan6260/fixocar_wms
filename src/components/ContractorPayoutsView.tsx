@@ -167,7 +167,8 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                 <th className="px-4 py-3.5">Task / Contract Job</th>
                 <th className="px-4 py-3.5">Allotted Contractor</th>
                 <th className="px-4 py-3.5 text-right">Customer Price</th>
-                <th className="px-4 py-3.5 text-right">Contractor Payout</th>
+                <th className="px-4 py-3.5 text-right">Painter / Denter Share</th>
+                <th className="px-4 py-3.5 text-right">Total Payout</th>
                 <th className="px-4 py-3.5 text-right">Workshop Margin</th>
                 <th className="px-4 py-3.5 text-center">Status</th>
               </tr>
@@ -224,6 +225,16 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                     {/* Customer Price */}
                     <td className="px-4 py-3.5 text-right font-bold text-slate-900 dark:text-white">
                       ₹{record.customerPrice.toLocaleString()}
+                    </td>
+
+                    {/* Painter / Denter Share */}
+                    <td className="px-4 py-3.5 text-right font-semibold text-slate-700 dark:text-slate-300">
+                      <div className="text-[11px]">
+                        Painter: <strong className="text-purple-600 dark:text-purple-300">₹{record.painterPayout}</strong>
+                      </div>
+                      <div className="text-[11px]">
+                        Denter: <strong className="text-orange-600 dark:text-orange-300">₹{record.denterPayout}</strong>
+                      </div>
                     </td>
 
                     {/* Contractor Payout */}
