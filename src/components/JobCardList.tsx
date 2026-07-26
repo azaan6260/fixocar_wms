@@ -15,7 +15,8 @@ import {
   Sparkles,
   Phone,
   ShieldCheck,
-  Building2
+  Building2,
+  QrCode
 } from 'lucide-react';
 
 interface JobCardListProps {
@@ -24,6 +25,7 @@ interface JobCardListProps {
   onOpenNewJobCardModal: () => void;
   onOpenCustomerApprovalPortal: (cardId: string) => void;
   onOpenQCModal: (cardId: string) => void;
+  onOpenQRModal?: (cardId: string) => void;
 }
 
 const STATUS_BADGES: Record<JobCardStatus, { label: string; bg: string; text: string; border: string }> = {
@@ -45,6 +47,7 @@ export function JobCardList({
   onOpenNewJobCardModal,
   onOpenCustomerApprovalPortal,
   onOpenQCModal,
+  onOpenQRModal,
 }: JobCardListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'APPROVAL' | 'QC' | 'DELIVERY' | 'CARS24'>('ALL');
@@ -262,6 +265,17 @@ export function JobCardList({
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {onOpenQRModal && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenQRModal(card.id)}
+                        className="p-1.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-amber-500 hover:text-slate-950 transition-colors"
+                        title="View Job Card QR Code"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                    )}
+
                     {needsApproval && (
                       <button
                         onClick={() => onOpenCustomerApprovalPortal(card.id)}

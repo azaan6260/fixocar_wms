@@ -22,7 +22,8 @@ import {
   MapPin,
   Boxes,
   DollarSign,
-  Palette
+  Palette,
+  QrCode
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -33,6 +34,7 @@ interface HeaderNavProps {
   onOpenSupabaseModal: () => void;
   onOpenNewJobCardModal: () => void;
   onSwitchToCustomerPortal?: () => void;
+  onOpenQRScanner?: () => void;
 }
 
 export function HeaderNav({
@@ -43,6 +45,7 @@ export function HeaderNav({
   onOpenSupabaseModal,
   onOpenNewJobCardModal,
   onSwitchToCustomerPortal,
+  onOpenQRScanner,
 }: HeaderNavProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
@@ -124,6 +127,19 @@ export function HeaderNav({
               <Phone className="w-3.5 h-3.5 fill-current text-emerald-600 dark:text-emerald-400" />
               <span>8819915656</span>
             </a>
+
+            {/* QR Scanner & Live Tracking Button */}
+            {onOpenQRScanner && (
+              <button
+                type="button"
+                onClick={onOpenQRScanner}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-xs active:scale-95"
+                title="Scan or View Job Card QR Code"
+              >
+                <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden md:inline">Scan QR</span>
+              </button>
+            )}
 
             {/* Quick Create Job Card Pill */}
             <button

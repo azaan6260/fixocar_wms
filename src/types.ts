@@ -425,6 +425,15 @@ export const INDIAN_CITIES = [
 
 export type IndianCity = typeof INDIAN_CITIES[number];
 
+export interface JobCardComment {
+  id: string;
+  jobCardId: string;
+  authorName: string;
+  authorRole: string;
+  text: string;
+  timestamp: string;
+}
+
 export interface JobCard {
   id: string; // e.g. "JC-2026-104"
   createdAt: string;
@@ -454,4 +463,5 @@ export interface JobCard {
   taxRate: number; // percentage e.g. 18
   advancePaid: number;
   notes?: string;
+  comments?: JobCardComment[];
 }

@@ -24,7 +24,8 @@ import {
   Phone,
   Calendar,
   Share2,
-  Zap
+  Zap,
+  QrCode
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
@@ -39,6 +40,7 @@ interface JobCardDetailViewProps {
   vendors: Vendor[];
   onOpenCustomerApprovalPortal: (cardId: string) => void;
   onOpenQCModal: (cardId: string) => void;
+  onOpenQRModal?: (cardId: string) => void;
 }
 
 export function JobCardDetailView({
@@ -49,6 +51,7 @@ export function JobCardDetailView({
   vendors,
   onOpenCustomerApprovalPortal,
   onOpenQCModal,
+  onOpenQRModal,
 }: JobCardDetailViewProps) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'qc' | 'delivery' | 'invoice'>('tasks');
   
@@ -179,6 +182,17 @@ export function JobCardDetailView({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {onOpenQRModal && (
+              <button
+                type="button"
+                onClick={() => onOpenQRModal(card.id)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 text-amber-400 border border-amber-500/40 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-1.5"
+                title="Generate & View QR Code"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                QR Pass
+              </button>
+            )}
             <button
               onClick={() => onOpenCustomerApprovalPortal(card.id)}
               className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-950 font-semibold text-xs transition-colors flex items-center gap-1.5"

@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -154,6 +154,24 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
     cards[index] = updater(cards[index]);
     saveJobCards(cards);
   }
+}
+
+export function addJobCardComment(jobCardId: string, comment: Omit<JobCardComment, 'id' | 'timestamp'>): JobCardComment {
+  let createdComment: JobCardComment | null = null;
+  updateJobCard(jobCardId, (card) => {
+    const newComment: JobCardComment = {
+      ...comment,
+      id: `cmt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      jobCardId,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString()
+    };
+    createdComment = newComment;
+    return {
+      ...card,
+      comments: [newComment, ...(card.comments || [])]
+    };
+  });
+  return createdComment!;
 }
 
 export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: JobTask['status']) {

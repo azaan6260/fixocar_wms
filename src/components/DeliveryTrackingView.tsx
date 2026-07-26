@@ -21,9 +21,10 @@ import {
 
 interface DeliveryTrackingViewProps {
   currentRole: UserRole;
+  onOpenQRModal?: (jobCardId: string) => void;
 }
 
-export function DeliveryTrackingView({ currentRole }: DeliveryTrackingViewProps) {
+export function DeliveryTrackingView({ currentRole, onOpenQRModal }: DeliveryTrackingViewProps) {
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>(() => getDeliveries());
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryRecord | null>(deliveries[0] || null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -156,6 +157,18 @@ export function DeliveryTrackingView({ currentRole }: DeliveryTrackingViewProps)
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {onOpenQRModal && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenQRModal(selectedDelivery.jobCardId)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 text-amber-400 border border-amber-500/40 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                      title="View Job Card QR Code"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      QR Tracking
+                    </button>
+                  )}
+
                   {selectedDelivery.status !== 'DELIVERED' ? (
                     <button
                       onClick={() => setShowPaymentModal(true)}

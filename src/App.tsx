@@ -25,6 +25,8 @@ import { CityWorkshopManagementView } from './components/CityWorkshopManagementV
 import { InventoryView } from './components/InventoryView';
 import { StandardJobsManagementView } from './components/StandardJobsManagementView';
 import { ContractorPayoutsView } from './components/ContractorPayoutsView';
+import { JobCardQRModal } from './components/JobCardQRModal';
+import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -51,6 +53,11 @@ export default function App() {
   const [customerPortalCardId, setCustomerPortalCardId] = useState<string | null>(null);
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+
+  // QR Code Modals State
+  const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);
+  const [isLiveQRScannerOpen, setIsLiveQRScannerOpen] = useState<boolean>(false);
+  const [liveTrackerInitialCardId, setLiveTrackerInitialCardId] = useState<string | null>(null);
 
   // Subscribe to storage updates & popstate
   useEffect(() => {
@@ -86,6 +93,7 @@ export default function App() {
   const activeCardForDetail = selectedJobCardId ? getJobCardById(selectedJobCardId) : null;
   const activeCardForCustomerPortal = customerPortalCardId ? getJobCardById(customerPortalCardId) : null;
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
+  const activeCardForQR = qrModalCardId ? getJobCardById(qrModalCardId) : null;
 
   // CUSTOMER FACING ROUTE
   if (isCustomerView) {
@@ -147,6 +155,10 @@ export default function App() {
         onTabChange={setActiveTab}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
+        onOpenQRScanner={() => {
+          setLiveTrackerInitialCardId(null);
+          setIsLiveQRScannerOpen(true);
+        }}
       />
 
       {/* Main Viewport Content */}
@@ -180,6 +192,7 @@ export default function App() {
             onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
+            onOpenQRModal={(id) => setQrModalCardId(id)}
           />
         )}
 
@@ -205,7 +218,10 @@ export default function App() {
         )}
 
         {activeTab === 'deliveries' && (
-          <DeliveryTrackingView currentRole={currentRole} />
+          <DeliveryTrackingView 
+            currentRole={currentRole} 
+            onOpenQRModal={(id) => setQrModalCardId(id)}
+          />
         )}
 
         {activeTab === 'vendors' && (
@@ -273,6 +289,7 @@ export default function App() {
           vendors={vendors}
           onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
           onOpenQCModal={(id) => setQcModalCardId(id)}
+          onOpenQRModal={(id) => setQrModalCardId(id)}
         />
       )}
 
@@ -289,6 +306,26 @@ export default function App() {
         <FloorManagerQCModal
           card={activeCardForQC}
           onClose={() => setQcModalCardId(null)}
+        />
+      )}
+
+      {/* High-Resolution Printable Job Card QR Code Modal */}
+      {activeCardForQR && (
+        <JobCardQRModal
+          card={activeCardForQR}
+          onClose={() => setQrModalCardId(null)}
+        />
+      )}
+
+      {/* Live QR Scanner & Interactive Delivery Tracker Modal */}
+      {isLiveQRScannerOpen && (
+        <LiveJobCardTrackerModal
+          isOpen={isLiveQRScannerOpen}
+          onClose={() => {
+            setIsLiveQRScannerOpen(false);
+            setLiveTrackerInitialCardId(null);
+          }}
+          initialJobCardId={liveTrackerInitialCardId || undefined}
         />
       )}
 
