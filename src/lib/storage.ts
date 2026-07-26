@@ -1,5 +1,5 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS } from './mockData';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord } from '../types';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
 export const INITIAL_CITIES: City[] = [
@@ -52,6 +52,8 @@ const STORAGE_KEYS = {
   SERVICE_BOOKINGS: 'fixocar_service_bookings_v1',
   CITIES: 'fixocar_cities_v1',
   WORKSHOPS: 'fixocar_workshops_v1',
+  INVENTORY: 'fixocar_inventory_v1',
+  INVENTORY_CONSUMPTION: 'fixocar_inventory_consumption_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -254,6 +256,7 @@ export function addRequisitionToTask(
     title: string;
     itemType: 'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK';
     quantity: number;
+    urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     reason?: string;
     suggestedPrice?: number;
   }
@@ -924,3 +927,157 @@ export function deleteWorkshop(id: string) {
   const workshops = getWorkshops().filter(w => w.id !== id);
   saveWorkshops(workshops);
 }
+
+// 10. INVENTORY STORAGE & CONSUMPTION MANAGEMENT
+export function getInventoryItems(): InventoryItem[] {
+  const local = localStorage.getItem(STORAGE_KEYS.INVENTORY);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(INITIAL_INVENTORY_ITEMS));
+    return INITIAL_INVENTORY_ITEMS;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_INVENTORY_ITEMS;
+  }
+}
+
+export function saveInventoryItems(items: InventoryItem[]) {
+  localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(items));
+  notifyStoreChange();
+}
+
+export function addInventoryItem(itemData: Omit<InventoryItem, 'id'>): InventoryItem {
+  const items = getInventoryItems();
+  const id = `inv-${Date.now()}`;
+  const newItem: InventoryItem = {
+    ...itemData,
+    id,
+    lastRestockedAt: new Date().toISOString().split('T')[0]
+  };
+  const updated = [newItem, ...items];
+  saveInventoryItems(updated);
+  return newItem;
+}
+
+export function updateInventoryItem(id: string, updates: Partial<InventoryItem>) {
+  const items = getInventoryItems();
+  const idx = items.findIndex(i => i.id === id);
+  if (idx !== -1) {
+    items[idx] = { ...items[idx], ...updates };
+    saveInventoryItems(items);
+  }
+}
+
+export function restockInventoryItem(id: string, qtyToAdd: number) {
+  const items = getInventoryItems();
+  const idx = items.findIndex(i => i.id === id);
+  if (idx !== -1 && qtyToAdd > 0) {
+    items[idx].stockQuantity = Number(items[idx].stockQuantity || 0) + qtyToAdd;
+    items[idx].lastRestockedAt = new Date().toISOString().split('T')[0];
+    saveInventoryItems(items);
+  }
+}
+
+export function deleteInventoryItem(id: string) {
+  const items = getInventoryItems().filter(i => i.id !== id);
+  saveInventoryItems(items);
+}
+
+// Inventory Consumption Logs
+export function getInventoryConsumptionRecords(): InventoryConsumptionRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.INVENTORY_CONSUMPTION);
+  if (!local) return [];
+  try {
+    return JSON.parse(local);
+  } catch {
+    return [];
+  }
+}
+
+export function saveInventoryConsumptionRecords(records: InventoryConsumptionRecord[]) {
+  localStorage.setItem(STORAGE_KEYS.INVENTORY_CONSUMPTION, JSON.stringify(records));
+  notifyStoreChange();
+}
+
+// Direct Consumption of In-Stock Inventory from Job Card Task
+export function consumeInventoryItemForTask(
+  jobCardId: string,
+  taskId: string,
+  inventoryItemId: string,
+  quantityToConsume: number,
+  employeeId?: string,
+  employeeName?: string
+): { success: boolean; message: string } {
+  const items = getInventoryItems();
+  const itemIdx = items.findIndex(i => i.id === inventoryItemId);
+
+  if (itemIdx === -1) {
+    return { success: false, message: 'Selected item not found in workshop inventory.' };
+  }
+
+  const item = items[itemIdx];
+  if (item.stockQuantity < quantityToConsume) {
+    return { 
+      success: false, 
+      message: `Insufficient stock! Requested ${quantityToConsume} ${item.unit}, but only ${item.stockQuantity} ${item.unit} available in stock.` 
+    };
+  }
+
+  // 1. Deduct stock from inventory
+  item.stockQuantity -= quantityToConsume;
+  items[itemIdx] = item;
+  saveInventoryItems(items);
+
+  // 2. Add as part/consumable under task parts list
+  const cards = getJobCards();
+  const cardIdx = cards.findIndex(c => c.id === jobCardId);
+  if (cardIdx !== -1) {
+    const card = cards[cardIdx];
+    const taskIdx = card.tasks.findIndex(t => t.id === taskId);
+    if (taskIdx !== -1) {
+      const task = card.tasks[taskIdx];
+      const existingParts = task.partsList || [];
+
+      const newPart: TaskPartItem = {
+        id: `part-${Date.now()}`,
+        name: `${item.name} (${item.partNumber})`,
+        quantity: quantityToConsume,
+        unitPrice: item.sellingPrice,
+        totalPrice: item.sellingPrice * quantityToConsume,
+        partNumber: item.partNumber,
+        type: item.category === 'CONSUMABLES' || item.category === 'OILS_LUBRICANTS' ? 'CONSUMABLE' : 'PART',
+        isApproved: true,
+        addedAt: new Date().toLocaleString()
+      };
+
+      task.partsList = [...existingParts, newPart];
+      card.tasks[taskIdx] = task;
+      cards[cardIdx] = card;
+      saveJobCards(cards);
+    }
+  }
+
+  // 3. Log consumption record
+  const records = getInventoryConsumptionRecords();
+  const newRecord: InventoryConsumptionRecord = {
+    id: `cons-${Date.now()}`,
+    inventoryItemId: item.id,
+    itemName: item.name,
+    jobCardId,
+    taskId,
+    quantityConsumed: quantityToConsume,
+    unitPrice: item.sellingPrice,
+    totalCost: item.sellingPrice * quantityToConsume,
+    consumedByEmployeeId: employeeId,
+    consumedByEmployeeName: employeeName,
+    consumedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+  };
+  saveInventoryConsumptionRecords([newRecord, ...records]);
+
+  return {
+    success: true,
+    message: `Successfully issued ${quantityToConsume} ${item.unit} of "${item.name}" directly from stock!`
+  };
+}
+

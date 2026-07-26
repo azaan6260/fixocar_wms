@@ -86,6 +86,47 @@ export interface SalaryRecord {
   transferDate?: string;
 }
 
+export type InventoryCategory = 
+  | 'SPARES'
+  | 'CONSUMABLES'
+  | 'OILS_LUBRICANTS'
+  | 'TYRES_BATTERIES'
+  | 'ELECTRICAL'
+  | 'DETAILING_WASH'
+  | 'TOOLS_EQUIPMENT';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  partNumber: string;
+  category: InventoryCategory;
+  stockQuantity: number;
+  unit: 'Pcs' | 'Liters' | 'Kgs' | 'Sets' | 'Packs' | 'Bottles' | 'Cans';
+  minStockAlert: number;
+  unitCost: number;       // Purchase / cost price
+  sellingPrice: number;   // Customer billing price
+  supplierVendorId?: string;
+  supplierVendorName?: string;
+  shelfLocation?: string;
+  workshopId?: string;
+  workshopName?: string;
+  lastRestockedAt?: string;
+}
+
+export interface InventoryConsumptionRecord {
+  id: string;
+  inventoryItemId: string;
+  itemName: string;
+  jobCardId: string;
+  taskId: string;
+  quantityConsumed: number;
+  unitPrice: number;
+  totalCost: number;
+  consumedByEmployeeId?: string;
+  consumedByEmployeeName?: string;
+  consumedAt: string;
+}
+
 export type VendorCategory = 
   | 'PARTS_SUPPLIER'
   | 'WASHING'
@@ -150,6 +191,7 @@ export interface TaskRequisition {
   title: string;
   itemType: 'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK';
   quantity: number;
+  urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   reason?: string;
   suggestedPrice?: number;
   approvedPrice?: number;

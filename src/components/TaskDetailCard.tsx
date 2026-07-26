@@ -6,7 +6,9 @@ import {
   respondToRequisition, 
   addConcernToTask, 
   resolveConcern, 
-  addPartToTask 
+  addPartToTask,
+  getInventoryItems,
+  consumeInventoryItemForTask 
 } from '../lib/storage';
 import { 
   User, 
@@ -54,7 +56,16 @@ export function TaskDetailCard({
   const [reqTitle, setReqTitle] = useState('');
   const [reqType, setReqType] = useState<'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK'>('PART');
   const [reqQty, setReqQty] = useState(1);
+  const [reqUrgency, setReqUrgency] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
   const [reqReason, setReqReason] = useState('');
+
+  // Stock Inventory Consume state
+  const [showInventoryConsumeForm, setShowInventoryConsumeForm] = useState(false);
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
+  const [consumeQty, setConsumeQty] = useState(1);
+  const [consumeMsg, setConsumeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const inventoryItems = getInventoryItems();
 
   // Manager Requisition approval state
   const [approvingReqId, setApprovingReqId] = useState<string | null>(null);
@@ -98,13 +109,41 @@ export function TaskDetailCard({
       title: reqTitle.trim(),
       itemType: reqType,
       quantity: Number(reqQty) || 1,
+      urgency: reqUrgency,
       reason: reqReason.trim()
     });
 
     setReqTitle('');
     setReqReason('');
     setReqQty(1);
+    setReqUrgency('MEDIUM');
     setShowReqForm(false);
+  };
+
+  const handleConsumeInventoryItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedInventoryItemId) return;
+
+    const res = consumeInventoryItemForTask(
+      card.id,
+      task.id,
+      selectedInventoryItemId,
+      Number(consumeQty) || 1,
+      currentRole,
+      `${currentRole} Staff`
+    );
+
+    if (res.success) {
+      setConsumeMsg({ type: 'success', text: res.message });
+      setSelectedInventoryItemId('');
+      setConsumeQty(1);
+      setTimeout(() => {
+        setConsumeMsg(null);
+        setShowInventoryConsumeForm(false);
+      }, 2000);
+    } else {
+      setConsumeMsg({ type: 'error', text: res.message });
+    }
   };
 
   const handleApproveRequisitionSubmit = (reqId: string) => {
@@ -272,19 +311,123 @@ export function TaskDetailCard({
 
       {/* PARTS & CONSUMABLES LISTED UNDER THIS JOB */}
       <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5 text-amber-500" />
             Parts & Consumables Listed ({task.partsList?.length || 0})
           </span>
 
-          <button
-            onClick={() => setShowDirectPartForm(!showDirectPartForm)}
-            className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-          >
-            <Plus className="w-3 h-3" /> Add Part / Consumable
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowInventoryConsumeForm(!showInventoryConsumeForm); setShowDirectPartForm(false); }}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 shadow-xs transition-colors"
+            >
+              <Package className="w-3 h-3" /> Issue In-Stock Item
+            </button>
+
+            {isManager && (
+              <button
+                onClick={() => { setShowDirectPartForm(!showDirectPartForm); setShowInventoryConsumeForm(false); }}
+                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add Custom
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* INVENTORY CONSUMPTION FORM (ISSUE FROM STORE) */}
+        {showInventoryConsumeForm && (
+          <form onSubmit={handleConsumeInventoryItem} className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-900/60 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide flex items-center gap-1.5">
+                ⚡ Workshop Inventory Store Issue Desk
+              </span>
+              <button type="button" onClick={() => setShowInventoryConsumeForm(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {consumeMsg && (
+              <div className={`p-2 rounded-lg text-xs font-bold ${
+                consumeMsg.type === 'success' ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+              }`}>
+                {consumeMsg.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Select In-Stock Inventory Item *</label>
+                <select
+                  required
+                  value={selectedInventoryItemId}
+                  onChange={(e) => setSelectedInventoryItemId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-bold"
+                >
+                  <option value="">-- Choose item from store --</option>
+                  {inventoryItems.map(item => (
+                    <option key={item.id} value={item.id} disabled={item.stockQuantity === 0}>
+                      {item.name} ({item.partNumber}) — {item.stockQuantity > 0 ? `In Stock: ${item.stockQuantity} ${item.unit} @ ₹${item.sellingPrice}` : 'OUT OF STOCK (Raise Requisition)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Qty to Issue</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={consumeQty}
+                  onChange={(e) => setConsumeQty(Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-bold text-center"
+                />
+              </div>
+            </div>
+
+            {/* Check if chosen item is out of stock */}
+            {selectedInventoryItemId && inventoryItems.find(i => i.id === selectedInventoryItemId)?.stockQuantity === 0 && (
+              <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
+                <span>Selected item is OUT OF STOCK. Raise a Part Requisition instead.</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matched = inventoryItems.find(i => i.id === selectedInventoryItemId);
+                    if (matched) {
+                      setReqTitle(matched.name);
+                      setReqType(matched.category === 'CONSUMABLES' || matched.category === 'OILS_LUBRICANTS' ? 'CONSUMABLE' : 'PART');
+                      setReqQty(consumeQty);
+                    }
+                    setShowInventoryConsumeForm(false);
+                    setShowReqForm(true);
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-lg shadow-xs"
+                >
+                  + Raise Requisition
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowInventoryConsumeForm(false)}
+                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!selectedInventoryItemId}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg font-extrabold shadow-xs"
+              >
+                Confirm Stock Issue
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Direct Part Form */}
         {showDirectPartForm && (
@@ -380,7 +523,7 @@ export function TaskDetailCard({
         <div className="flex items-center gap-2">
           {/* Button: Raise Requisition */}
           <button
-            onClick={() => { setShowReqForm(!showReqForm); setShowConcernForm(false); }}
+            onClick={() => { setShowReqForm(!showReqForm); setShowConcernForm(false); setShowInventoryConsumeForm(false); }}
             className="px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <Package className="w-3.5 h-3.5" />
@@ -394,7 +537,7 @@ export function TaskDetailCard({
 
           {/* Button: Report Difficulty / Concern */}
           <button
-            onClick={() => { setShowConcernForm(!showConcernForm); setShowReqForm(false); }}
+            onClick={() => { setShowConcernForm(!showConcernForm); setShowReqForm(false); setShowInventoryConsumeForm(false); }}
             className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -422,10 +565,10 @@ export function TaskDetailCard({
           </div>
 
           <p className="text-[11px] text-slate-600 dark:text-slate-300">
-            Working employees can request required spare parts or consumables. Prices are not required from staff — the workshop manager will approve and price the item upon review.
+            Working mechanics can request out-of-stock parts or additional work. Requisitions will appear in the Manager Action Desk for review and approval.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
             <div className="sm:col-span-2">
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Item / Work Title *</label>
               <input
@@ -463,11 +606,25 @@ export function TaskDetailCard({
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Reason / Difficulty Notes</label>
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Urgency Level</label>
+              <select
+                value={reqUrgency}
+                onChange={(e) => setReqUrgency(e.target.value as any)}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-bold"
+              >
+                <option value="LOW">LOW — Standard Service</option>
+                <option value="MEDIUM">MEDIUM — Normal Priority</option>
+                <option value="HIGH">HIGH — Urgent Vehicle Blocking</option>
+                <option value="CRITICAL">CRITICAL — Emergency Delivery Stop</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Reason / Notes for Manager</label>
               <input
                 type="text"
-                placeholder="e.g. Existing bolt thread worn out during removal"
+                placeholder="e.g. Existing bolt thread worn out during removal, out of stock in bay"
                 value={reqReason}
                 onChange={(e) => setReqReason(e.target.value)}
                 className="w-full px-3 py-1.5 rounded-lg border border-orange-200 dark:border-orange-800 bg-white dark:bg-slate-900 font-medium"

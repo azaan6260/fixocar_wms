@@ -19,7 +19,8 @@ import {
   Zap,
   Phone,
   Users,
-  MapPin
+  MapPin,
+  Boxes
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -55,6 +56,7 @@ export function HeaderNav({
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
+    { id: 'inventory', label: 'Parts & Inventory', icon: Boxes },
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },
     { id: 'deliveries', label: t('nav.delivery'), icon: Truck },
     { id: 'vendors', label: t('nav.vendors'), icon: Building2 },

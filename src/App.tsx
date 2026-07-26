@@ -22,6 +22,7 @@ import { RoleWorkspaceView } from './components/RoleWorkspaceView';
 import { SupabaseSettingsModal } from './components/SupabaseSettingsModal';
 import { EmployeeManagementView } from './components/EmployeeManagementView';
 import { CityWorkshopManagementView } from './components/CityWorkshopManagementView';
+import { InventoryView } from './components/InventoryView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -159,6 +160,10 @@ export default function App() {
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
           />
+        )}
+
+        {activeTab === 'inventory' && (
+          <InventoryView currentRole={currentRole} vendors={vendors} />
         )}
 
         {activeTab === 'role-workspace' && (
