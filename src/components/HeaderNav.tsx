@@ -102,7 +102,15 @@ export function HeaderNav({
           {/* Right Controls: Role Switcher, Quick Actions & Search */}
           <div className="flex items-center gap-2 sm:gap-3">
 
-            <a href="/" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+            <a 
+              href="/" 
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
               Customer Portal
             </a>
 

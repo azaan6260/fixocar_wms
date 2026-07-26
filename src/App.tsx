@@ -72,6 +72,11 @@ export default function App() {
             </h1>
             <a 
               href="/wms" 
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/wms');
+                window.dispatchEvent(new Event('popstate'));
+              }}
               className="text-xs font-bold bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-700 transition-colors"
             >
               Workshop Login
