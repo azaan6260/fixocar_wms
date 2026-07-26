@@ -32,6 +32,9 @@ export function RoleWorkspaceView({
 }: RoleWorkspaceViewProps) {
   // Select active panel for body/paint tasks
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null);
+  
+  // Language toggle for mechanics
+  const [language, setLanguage] = useState<'EN' | 'HI'>('EN');
 
   // Filter tasks tailored to current role
   const getTasksForRole = () => {
@@ -69,7 +72,7 @@ export function RoleWorkspaceView({
             <span className="text-xs text-slate-400">Tailored Specialized View</span>
           </div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-            {currentRole === 'MECHANIC' && 'Mechanical Technician Workspace'}
+            {currentRole === 'MECHANIC' && (language === 'HI' ? 'मेकेनिकल तकनीशियन कार्यक्षेत्र (Mechanical Technician Workspace)' : 'Mechanical Technician Workspace')}
             {currentRole === 'DENTER' && 'Denting & Body Metalwork Station'}
             {currentRole === 'PAINTER' && 'Spray Booth & Paint Restoration Studio'}
             {currentRole === 'DELIVERY_BOY' && 'Logistics Driver Taskboard'}
@@ -77,9 +80,28 @@ export function RoleWorkspaceView({
             {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER') && 'Floor Management Oversight Board'}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Focus purely on the tasks allotted to your team role with direct status toggles and inspection logging.
+            {currentRole === 'MECHANIC' && language === 'HI' 
+              ? 'केवल अपने टीम रोल के कार्यों पर ध्यान केंद्रित करें। (Focus purely on the tasks allotted to your team role.)'
+              : 'Focus purely on the tasks allotted to your team role with direct status toggles and inspection logging.'}
           </p>
         </div>
+        
+        {currentRole === 'MECHANIC' && (
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button 
+              onClick={() => setLanguage('EN')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${language === 'EN' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            >
+              English
+            </button>
+            <button 
+              onClick={() => setLanguage('HI')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${language === 'HI' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            >
+              हिंदी (Hindi)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* DENTER / PAINTER INTERACTIVE BODY PANEL DIAGRAM */}
@@ -130,12 +152,16 @@ export function RoleWorkspaceView({
       {/* Role Tasks List */}
       <div className="space-y-3">
         <h3 className="font-bold text-xs uppercase text-slate-500 tracking-wider">
-          Work Orders Assigned to Your Team ({roleTasks.length})
+          {currentRole === 'MECHANIC' && language === 'HI' 
+            ? `आपकी टीम को सौंपे गए कार्य आदेश (${roleTasks.length})` 
+            : `Work Orders Assigned to Your Team (${roleTasks.length})`}
         </h3>
 
         {roleTasks.length === 0 ? (
           <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-            No active tasks pending for this role.
+            {currentRole === 'MECHANIC' && language === 'HI'
+              ? 'इस भूमिका के लिए कोई सक्रिय कार्य लंबित नहीं है।'
+              : 'No active tasks pending for this role.'}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -152,29 +178,35 @@ export function RoleWorkspaceView({
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'
                     }`}>
-                      {task.status}
+                      {language === 'HI' && task.status === 'COMPLETED' ? 'पूरा हो गया (COMPLETED)' :
+                       language === 'HI' && task.status === 'IN_PROGRESS' ? 'प्रगति पर (IN_PROGRESS)' :
+                       language === 'HI' && task.status === 'PENDING' ? 'लंबित (PENDING)' :
+                       task.status}
                     </span>
                   </div>
 
                   <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{task.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1">Vehicle: {card.vehicle.make} {card.vehicle.model}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {language === 'HI' ? 'वाहन (Vehicle): ' : 'Vehicle: '}
+                    {card.vehicle.make} {card.vehicle.model}
+                  </p>
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">${task.customerPrice}</span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{task.customerPrice}</span>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateTaskStatus(card.id, task.id, 'IN_PROGRESS')}
                       className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
                     >
-                      Start Work
+                      {language === 'HI' ? 'काम शुरू करें' : 'Start Work'}
                     </button>
                     <button
                       onClick={() => updateTaskStatus(card.id, task.id, 'COMPLETED')}
                       className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
                     >
-                      Mark Complete
+                      {language === 'HI' ? 'पूरा हुआ' : 'Mark Complete'}
                     </button>
                   </div>
                 </div>
