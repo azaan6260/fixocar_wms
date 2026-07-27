@@ -98,18 +98,18 @@ export default function App() {
   // CUSTOMER FACING ROUTE
   if (isCustomerView) {
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
-        <header className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col">
+        <header className="bg-slate-950 text-white p-4 border-b border-blue-900/40 shadow-lg relative">
           <div className="max-w-7xl mx-auto w-full flex justify-between items-center px-4">
             <h1 className="font-black text-2xl tracking-tight text-white flex items-center gap-2">
-              <span className="text-amber-500">Fixo</span>Car
-              <span className="text-xs font-normal text-slate-400 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700">Customer Portal</span>
+              <span className="text-blue-500">Fixo</span>Car
+              <span className="text-xs font-bold text-blue-300 bg-blue-950/80 px-3 py-1 rounded-full border border-blue-600/40 shadow-xs">Customer Portal</span>
             </h1>
 
             <button 
               type="button"
               onClick={() => toggleViewMode(false)}
-              className="text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+              className="text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-1.5"
             >
               <span>⚙️ Workshop Management (WMS)</span>
             </button>
@@ -123,12 +123,13 @@ export default function App() {
           />
         </main>
 
-        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 text-center text-xs text-slate-500">
-          <div className="max-w-7xl mx-auto px-4">
-            <p className="font-semibold text-slate-700 dark:text-slate-300">
-              FixoCar • Worry-Free Car Repair
-            </p>
-            <p className="mt-1">Helpline: 8819915656</p>
+        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-6 text-xs text-slate-500">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-slate-900 dark:text-white text-sm"><span className="text-blue-600">Fixo</span>Car</span>
+              <span className="text-slate-400">• Worry-Free Vehicle Care & Repair</span>
+            </div>
+            <p className="text-slate-400 font-mono">24x7 Customer Helpline: <strong className="text-blue-600 dark:text-blue-400 font-bold">8819915656</strong></p>
           </div>
         </footer>
 

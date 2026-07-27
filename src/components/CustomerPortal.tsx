@@ -74,8 +74,13 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
   const [bookings, setBookings] = useState<ServiceBookingRequest[]>(() => getServiceBookings());
 
   // Active Main Navigation Tab
-  // 'GARAGE' | 'JOB_CARDS' | 'APPROVALS' | 'SERVICES' | 'INVOICES'
-  const [activeTab, setActiveTab] = useState<'GARAGE' | 'JOB_CARDS' | 'APPROVALS' | 'SERVICES'>('GARAGE');
+  // 'OFFERINGS_RATES' | 'GARAGE' | 'JOB_CARDS' | 'APPROVALS' | 'SERVICES'
+  const [activeTab, setActiveTab] = useState<'OFFERINGS_RATES' | 'GARAGE' | 'JOB_CARDS' | 'APPROVALS' | 'SERVICES'>('OFFERINGS_RATES');
+
+  // Live Tracking Search & Offering Filters
+  const [trackerSearchQuery, setTrackerSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [showRateComparisonTable, setShowRateComparisonTable] = useState(false);
 
   // Selected City for Service Catalog
   const [selectedCity, setSelectedCity] = useState<IndianCity>('Mumbai');
@@ -364,11 +369,11 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
     <div className="space-y-6 pb-12">
       
       {/* Top Banner: Customer Profile & Authentication Bar */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white rounded-3xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-950 via-blue-950 to-slate-950 text-white rounded-3xl p-6 border border-blue-900/40 shadow-2xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20 shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-blue-600/30 shrink-0">
               {customerSession.isLoggedIn ? (
                 <span>{customerSession.name.charAt(0).toUpperCase()}</span>
               ) : (
@@ -410,7 +415,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
             {customerSession.isLoggedIn ? (
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold transition-all border border-slate-800 flex items-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 Logout / Switch
@@ -418,7 +423,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
             ) : (
               <button
                 onClick={() => setIsLoginModalOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5"
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-all shadow-lg shadow-blue-600/30 flex items-center gap-1.5"
               >
                 <LogIn className="w-4 h-4" />
                 Customer Login / Register
@@ -427,7 +432,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
             <a
               href="tel:8819915656"
-              className="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 text-xs font-bold transition-all border border-emerald-500/30 flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-600 hover:text-white text-xs font-bold transition-all border border-blue-500/30 flex items-center gap-1.5"
             >
               <Phone className="w-3.5 h-3.5 fill-current" />
               <span>Helpline: 8819915656</span>
@@ -439,56 +444,56 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
         {/* Navigation Tabs Bar inside Customer Portal */}
         <div className="relative z-10 flex items-center gap-2 mt-6 pt-5 border-t border-slate-800/80 overflow-x-auto">
           <button
+            onClick={() => setActiveTab('OFFERINGS_RATES')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'OFFERINGS_RATES'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-blue-400" />
+            Business Offerings & Rates
+          </button>
+
+          <button
             onClick={() => setActiveTab('GARAGE')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'GARAGE'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
             }`}
           >
             <Car className="w-4 h-4" />
-            My Garage ({vehicles.length} Vehicles)
+            My Garage ({vehicles.length})
           </button>
 
           <button
             onClick={() => setActiveTab('JOB_CARDS')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'JOB_CARDS'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
             }`}
           >
             <FileText className="w-4 h-4" />
-            Job Cards & History ({relevantJobCards.length})
+            Job Cards & Live Tracking ({relevantJobCards.length})
           </button>
 
           <button
             onClick={() => setActiveTab('APPROVALS')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap relative ${
               activeTab === 'APPROVALS'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
             }`}
           >
-            <AlertCircle className="w-4 h-4 text-amber-400" />
+            <AlertCircle className="w-4 h-4 text-blue-400" />
             Pending Approvals
             {allPendingApprovals.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-mono text-[10px] font-black animate-pulse">
                 {allPendingApprovals.length}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('SERVICES')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'SERVICES'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            Book Service Packages
           </button>
         </div>
 
@@ -498,16 +503,16 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* PENDING APPROVAL ALERT BANNER IF ANY */}
       {allPendingApprovals.length > 0 && activeTab !== 'APPROVALS' && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-800 dark:text-amber-300 text-xs">
+        <div className="p-4 rounded-2xl bg-blue-950/60 border-2 border-blue-500/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-blue-100 text-xs shadow-lg shadow-blue-500/10">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500 text-slate-950 font-bold shrink-0">
+            <div className="p-2 rounded-xl bg-blue-600 text-white font-bold shrink-0 shadow-md">
               <AlertCircle className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-extrabold text-sm">
+              <p className="font-extrabold text-sm text-white">
                 {allPendingApprovals.length} Repair Item{allPendingApprovals.length > 1 ? 's' : ''} Require Your Decision!
               </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-400">
+              <p className="text-[11px] text-blue-200">
                 Our workshop floor team found extra inspection items requiring your approval to continue work.
               </p>
             </div>
@@ -515,10 +520,576 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
           <button
             onClick={() => setActiveTab('APPROVALS')}
-            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-colors self-end sm:self-auto shrink-0 shadow-sm"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-colors self-end sm:self-auto shrink-0 shadow-md shadow-blue-600/20"
           >
             Review & Approve Now →
           </button>
+        </div>
+      )}
+
+      {/* TAB 0: HOME - BUSINESS OFFERINGS & RATES (DEFAULT TAB) */}
+      {activeTab === 'OFFERINGS_RATES' && (
+        <div className="space-y-8">
+          
+          {/* Main Hero Banner: Business Offering & Value Proposition */}
+          <div className="bg-slate-950 text-white rounded-3xl p-6 sm:p-8 border border-blue-900/50 shadow-2xl relative overflow-hidden space-y-6">
+            <div className="relative z-10 max-w-3xl space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-black uppercase tracking-wider border border-blue-500/30">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>India's Premier Tech-Enabled Multi-City Car Workshop Network</span>
+              </div>
+
+              <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+                Worry-Free Car Servicing, Upfront City Rates & 100% Genuine OEM Spares
+              </h1>
+
+              <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                FixoCar brings multi-city standardized car repair, transparent flat rates, and digital job card tracking. Enjoy doorstep pickup & drop, live video inspection updates from workshop floor managers, and a 6-month/10,000 KM warranty on every repair.
+              </p>
+
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('offerings-catalog-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-all shadow-lg shadow-blue-600/30 flex items-center gap-2"
+                >
+                  <Wrench className="w-4 h-4" />
+                  <span>Explore City Rates & Book</span>
+                </button>
+
+                <button
+                  onClick={() => setShowRateComparisonTable(!showRateComparisonTable)}
+                  className="px-5 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-bold text-xs transition-all border border-slate-800 flex items-center gap-2"
+                >
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  <span>{showRateComparisonTable ? 'Hide Rate Matrix' : 'Compare Rates Across 10 Cities'}</span>
+                </button>
+
+                <a
+                  href="tel:8819915656"
+                  className="px-4 py-3 rounded-2xl bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 font-extrabold text-xs transition-all border border-blue-500/30 flex items-center gap-2"
+                >
+                  <Phone className="w-4 h-4 text-blue-400 fill-current" />
+                  <span>24x7 Helpline: 8819915656</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Key Guarantee Badges Grid */}
+            <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-slate-800/80">
+              <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-3">
+                <ShieldCheck className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Protection</span>
+                  <span className="text-xs font-black text-white">6-Mo / 10k KM Warranty</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-3">
+                <Truck className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Doorstep</span>
+                  <span className="text-xs font-black text-white">Free Pick-up & Drop</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-3">
+                <CheckCircle2 className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Parts</span>
+                  <span className="text-xs font-black text-white">100% Genuine OEM</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-3">
+                <FileText className="w-6 h-6 text-blue-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Transparency</span>
+                  <span className="text-xs font-black text-white">Live Video Job Cards</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Background Glow */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+          </div>
+
+          {/* Quick Live Job Card / Vehicle Repair Tracker Search Bar */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Track Your Car Repair Status Live
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Enter your Vehicle Registration Number or Job Card ID to check live floor status & mechanic inspection updates.
+                </p>
+              </div>
+
+              <div className="text-xs text-slate-400 font-mono">
+                Try: <button onClick={() => setTrackerSearchQuery('MH-02-DN-4521')} className="text-blue-600 dark:text-blue-400 font-bold underline mr-2">MH-02-DN-4521</button>
+                or <button onClick={() => setTrackerSearchQuery('JC-2026-104')} className="text-blue-600 dark:text-blue-400 font-bold underline">JC-2026-104</button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={trackerSearchQuery}
+                onChange={(e) => setTrackerSearchQuery(e.target.value)}
+                placeholder="Type Vehicle Registration No. (e.g. MH-02-DN-4521) or Job Card ID..."
+                className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              {trackerSearchQuery && (
+                <button
+                  onClick={() => setTrackerSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Tracker Search Results Display */}
+            {trackerSearchQuery.trim() && (
+              <div className="pt-2">
+                {matchedTrackerCards.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+                    <Info className="w-4 h-4 shrink-0" />
+                    <span>No active job card found for "<strong>{trackerSearchQuery}</strong>". Please verify your registration number or contact helpline 8819915656.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Found {matchedTrackerCards.length} matching active job card(s):
+                    </span>
+
+                    {matchedTrackerCards.map(card => {
+                      const pendingApprovalTasks = card.tasks.filter(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
+
+                      return (
+                        <div
+                          key={card.id}
+                          className="p-4 rounded-2xl bg-slate-900 text-white border border-blue-500/40 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-black px-2.5 py-0.5 rounded bg-blue-600 text-white">
+                                {card.vehicle.registrationNumber}
+                              </span>
+                              <span className="text-xs font-bold text-slate-300">
+                                {card.vehicle.make} {card.vehicle.model}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                ({card.id})
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-300 flex items-center gap-3">
+                              <span>Service Package: <strong>{card.packageName || 'Custom Repair'}</strong></span>
+                              <span>Floor Mgr: <strong>{card.floorManagerName || 'Assigned Manager'}</strong></span>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono">
+                              Status: {card.status}
+                            </span>
+
+                            {pendingApprovalTasks.length > 0 && (
+                              <button
+                                onClick={() => setActiveTab('APPROVALS')}
+                                className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs hover:bg-amber-400 transition-colors flex items-center gap-1"
+                              >
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                Approve {pendingApprovalTasks.length} Item(s)
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => setActiveTab('JOB_CARDS')}
+                              className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-500 transition-colors"
+                            >
+                              View Full Job Card →
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Business Offerings & Rates Section Header with City Selector */}
+          <div id="offerings-catalog-section" className="space-y-4 pt-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div>
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest font-mono block">
+                  Official Transparent Pricing Catalog
+                </span>
+                <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 mt-0.5">
+                  Business Offerings & City Rate Cards
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Standardized flat rates across India. Select your operational city to view exact package prices.
+                </p>
+              </div>
+
+              {/* City Selector Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> City:
+                </span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+                  {INDIAN_CITIES.map((city) => (
+                    <button
+                      key={city}
+                      onClick={() => setSelectedCity(city)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                        selectedCity === city
+                          ? 'bg-blue-600 text-white font-black shadow-md shadow-blue-600/30'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {[
+                { id: 'ALL', label: 'All Business Offerings' },
+                { id: 'PERIODIC', label: '🛢️ Periodic Maintenance' },
+                { id: 'AC', label: '❄️ AC Repair & Cooling' },
+                { id: 'BRAKES', label: '🛑 Brakes & Suspension' },
+                { id: 'PAINT', label: '🎨 Denting & Painting' },
+                { id: 'DETAILING', label: '✨ Detailing & Spa' },
+                { id: 'MECHANICAL', label: '🔧 Clutch & Overhaul' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+                    categoryFilter === cat.id
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-extrabold shadow-sm'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Offering Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {cityServices
+                .filter((srv) => {
+                  if (categoryFilter === 'ALL') return true;
+                  if (categoryFilter === 'PERIODIC') return srv.id.includes('periodic') || srv.title.toLowerCase().includes('periodic');
+                  if (categoryFilter === 'AC') return srv.id.includes('ac') || srv.title.toLowerCase().includes('ac');
+                  if (categoryFilter === 'BRAKES') return srv.id.includes('brake') || srv.title.toLowerCase().includes('brake');
+                  if (categoryFilter === 'PAINT') return srv.id.includes('dent') || srv.category === 'PAINT' || srv.title.toLowerCase().includes('paint');
+                  if (categoryFilter === 'DETAILING') return srv.id.includes('interior') || srv.category === 'WASHING' || srv.title.toLowerCase().includes('detailing');
+                  if (categoryFilter === 'MECHANICAL') return srv.id.includes('clutch') || srv.category === 'MECHANICAL';
+                  return true;
+                })
+                .map((service) => {
+                  const price = service.cityPrices[selectedCity] || 3999;
+
+                  return (
+                    <div
+                      key={service.id}
+                      className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-4 hover:border-blue-500 transition-all group"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest font-mono">
+                            {service.category}
+                          </span>
+                          {service.isPopular && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-black border border-blue-500/20">
+                              ⚡ MOST POPULAR
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          {service.title}
+                        </h3>
+
+                        <p className="text-xs text-slate-500 line-clamp-2">{service.tagline}</p>
+
+                        <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">{selectedCity} Flat Rate</span>
+                            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
+                              ₹{price.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 block flex items-center gap-1 justify-end">
+                              <Clock className="w-3.5 h-3.5" /> {service.estimatedHours} Hours
+                            </span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block mt-0.5">
+                              ✓ Free Pickup & Drop
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-1">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">What's Included:</span>
+                          <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                            {service.includedFeatures.map((feat, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                <span className="leading-tight">{feat}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          onClick={() => {
+                            setBookingService(service);
+                            if (vehicles.length > 0) {
+                              setBookingVehicleReg(vehicles[0].registrationNumber);
+                              setBookingMakeModel(`${vehicles[0].make} ${vehicles[0].model}`);
+                            }
+                          }}
+                          className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5"
+                        >
+                          <Wrench className="w-4 h-4" />
+                          <span>Book for {selectedCity} (₹{price.toLocaleString('en-IN')})</span>
+                        </button>
+
+                        <button
+                          onClick={() => setShowRateComparisonTable(true)}
+                          className="w-full py-1.5 text-center text-[11px] font-bold text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        >
+                          View Rates in Other Cities →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* Multi-City Rate Comparison Matrix Section */}
+          {showRateComparisonTable && (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    Multi-City Transparent Price Matrix
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Compare official fixed rates for all business offerings across major Indian metropolitan cities.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowRateComparisonTable(false)}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300">
+                      <th className="p-3 font-extrabold">Service Offering</th>
+                      <th className="p-3 font-extrabold">Est. Time</th>
+                      {INDIAN_CITIES.map((c) => (
+                        <th key={c} className={`p-3 font-extrabold text-center font-mono ${selectedCity === c ? 'bg-blue-600 text-white' : ''}`}>
+                          {c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {cityServices.map((srv) => (
+                      <tr key={srv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-3 font-bold text-slate-900 dark:text-slate-100">
+                          {srv.title}
+                          <span className="block text-[10px] text-slate-400 font-normal">{srv.category}</span>
+                        </td>
+                        <td className="p-3 text-slate-500 font-mono">{srv.estimatedHours}h</td>
+                        {INDIAN_CITIES.map((c) => {
+                          const p = srv.cityPrices[c] || 3999;
+                          return (
+                            <td key={c} className={`p-3 text-center font-mono font-bold ${selectedCity === c ? 'bg-blue-50/50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                              ₹{p.toLocaleString('en-IN')}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Business Offering Value Pillars & Quality Guarantee Grid */}
+          <div className="space-y-4">
+            <div className="text-center max-w-xl mx-auto space-y-1">
+              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest font-mono">
+                Why Car Owners Trust FixoCar
+              </span>
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                The FixoCar Business Offering Standard
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                  1
+                </div>
+                <h3 className="font-extrabold text-sm text-white">Upfront Flat Pricing</h3>
+                <p className="text-xs text-slate-300">
+                  No surprise bills or inflated labor costs. Get pre-approved estimates before a single wrench touches your car.
+                </p>
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                  2
+                </div>
+                <h3 className="font-extrabold text-sm text-white">100% Genuine OEM Spares</h3>
+                <p className="text-xs text-slate-300">
+                  Directly sourced replacement parts with transparent part numbers and manufacturer barcodes uploaded to your job card.
+                </p>
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                  3
+                </div>
+                <h3 className="font-extrabold text-sm text-white">Live Video Job Cards</h3>
+                <p className="text-xs text-slate-300">
+                  Floor managers stream HD photos and videos of worn parts so you can approve or decline additional items with 1 click.
+                </p>
+              </div>
+
+              <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black">
+                  4
+                </div>
+                <h3 className="font-extrabold text-sm text-white">6-Mo Warranty Protection</h3>
+                <p className="text-xs text-slate-300">
+                  Comprehensive 6-month / 10,000 km warranty covering both parts and labor across all FixoCar workshop hubs in India.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* How FixoCar Works - 4 Step Process */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">
+                  How FixoCar Works in 4 Simple Steps
+                </h3>
+                <p className="text-xs text-slate-500">
+                  From online booking to doorstep delivery — hassle-free repair workflow.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 block uppercase">Step 1</span>
+                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">Select City & Book Package</h4>
+                <p className="text-[11px] text-slate-500">Choose your city, vehicle, and desired service package with instant price confirmation.</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 block uppercase">Step 2</span>
+                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">Free Doorstep Pickup</h4>
+                <p className="text-[11px] text-slate-500">A trained valet collects your vehicle at your preferred time slot and drives it to our hub.</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 block uppercase">Step 3</span>
+                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">Digital Job Card Approval</h4>
+                <p className="text-[11px] text-slate-500">Track progress live. Approve or reject any additional inspection findings directly on your phone.</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 block uppercase">Step 4</span>
+                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">Doorstep Drop & Warranty</h4>
+                <p className="text-[11px] text-slate-500">After multi-point QC inspection, your sanitized car is delivered back with a 6-month warranty.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Verified Customer Reviews Banner */}
+          <div className="bg-slate-950 text-white rounded-3xl p-6 sm:p-8 border border-blue-900/40 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest font-mono block">
+                  Verified Ratings & Customer Feedback
+                </span>
+                <h3 className="text-xl font-black text-white mt-0.5">
+                  ⭐ 4.9 / 5 Rating Across 50,000+ Completed Servicing Jobs
+                </h3>
+              </div>
+              <div className="text-xs text-blue-300 font-bold bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20">
+                100% Verified Reviews
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-amber-400">
+                  <span>★★★★★</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Mumbai • Honda City</span>
+                </div>
+                <p className="text-slate-300 italic">
+                  "FixoCar saved me over ₹12,000 compared to the authorized dealer. The live video job card showed exact brake pad wear."
+                </p>
+                <span className="text-white font-extrabold block text-[11px]">— Vikramaditya S., Bandra</span>
+              </div>
+
+              <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-amber-400">
+                  <span>★★★★★</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Delhi NCR • Creta</span>
+                </div>
+                <p className="text-slate-300 italic">
+                  "AC chilling package was done in 2 hours. Free doorstep pick and drop made it super effortless during work hours."
+                </p>
+                <span className="text-white font-extrabold block text-[11px]">— Ananya Gupta, Gurugram</span>
+              </div>
+
+              <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-amber-400">
+                  <span>★★★★★</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Bengaluru • Swift</span>
+                </div>
+                <p className="text-slate-300 italic">
+                  "Transparent rates in Whitefield. Got 6 months warranty document printed along with invoice."
+                </p>
+                <span className="text-white font-extrabold block text-[11px]">— Rajesh Nair, Indiranagar</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -605,7 +1176,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                         <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
                           <span className="text-[10px] text-slate-400 uppercase font-bold block">Fuel & Year</span>
                           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
-                            <Fuel className="w-3.5 h-3.5 text-amber-500" />
+                            <Fuel className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                             {v.fuelType} • {v.year}
                           </span>
                         </div>
@@ -626,12 +1197,12 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                       )}
 
                       {activeJobCard && (
-                        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+                        <div className="p-3 rounded-2xl bg-blue-950/40 border border-blue-500/40 text-blue-300 text-xs flex items-center justify-between">
                           <span className="font-bold flex items-center gap-1.5">
-                            <Clock className="w-4 h-4 text-amber-500" />
+                            <Clock className="w-4 h-4 text-blue-400" />
                             Active Repair: {activeJobCard.id}
                           </span>
-                          <span className="font-mono text-[10px] font-black px-2 py-0.5 rounded bg-amber-500/20">
+                          <span className="font-mono text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">
                             {activeJobCard.status}
                           </span>
                         </div>
@@ -640,7 +1211,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
                     <button
                       onClick={() => handleStartBookingForVehicle(v)}
-                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1.5"
                     >
                       <Wrench className="w-3.5 h-3.5" />
                       <span>Book Service for {v.registrationNumber}</span>
@@ -705,13 +1276,13 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                       </div>
 
                       <div className="flex items-center gap-2 self-start sm:self-auto">
-                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
                           {card.status}
                         </span>
 
                         <button
                           onClick={() => setInvoiceJobCard(card)}
-                          className="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold text-xs hover:bg-blue-600 transition-colors flex items-center gap-1.5"
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold text-xs hover:bg-blue-600 transition-colors flex items-center gap-1.5"
                         >
                           <Printer className="w-3.5 h-3.5" />
                           <span>View Invoice</span>
@@ -758,7 +1329,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                                 <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">
                                   {task.title}
                                   {task.isAdditionalWork && (
-                                    <span className="ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 font-bold">
+                                    <span className="ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold">
                                       Discovered
                                     </span>
                                   )}
@@ -773,7 +1344,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                                 </td>
                                 <td className="px-3.5 py-2.5 text-center">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                    task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
+                                    task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600'
                                   }`}>
                                     {task.status}
                                   </span>
@@ -820,7 +1391,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
         <div className="space-y-6">
           <div>
             <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <AlertCircle className="w-6 h-6 text-amber-500" />
+              <AlertCircle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               Pending Workshop Approvals
             </h2>
             <p className="text-xs text-slate-500">
@@ -841,11 +1412,11 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
               {allPendingApprovals.map(({ card, task }) => (
                 <div
                   key={task.id}
-                  className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-amber-500/40 p-6 shadow-md space-y-4"
+                  className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-blue-500/40 p-6 shadow-lg shadow-blue-500/5 space-y-4"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div>
-                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded">
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded">
                         DISCOVERED DURING INSPECTION
                       </span>
                       <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 mt-1">
@@ -858,7 +1429,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
                     <div className="text-right">
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">Additional Cost</span>
-                      <span className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                      <span className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono">
                         +₹{task.customerPrice.toLocaleString('en-IN')}
                       </span>
                     </div>
@@ -878,7 +1449,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
                     <button
                       onClick={() => handleApproveTask(card.id, task.id)}
-                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-colors shadow-md flex items-center gap-1.5"
+                      className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-colors shadow-md shadow-blue-600/30 flex items-center gap-1.5"
                     >
                       <Check className="w-4 h-4" />
                       Approve & Add (+₹{task.customerPrice.toLocaleString('en-IN')})
@@ -897,7 +1468,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Wrench className="w-6 h-6 text-amber-500" />
+                <Wrench className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 Standard Workshop Service Packages
               </h2>
               <p className="text-xs text-slate-500">
@@ -926,7 +1497,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
               return (
                 <div
                   key={service.id}
-                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-4 hover:border-amber-500 transition-all"
+                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex flex-col justify-between space-y-4 hover:border-blue-500 transition-all"
                 >
                   <div className="space-y-3">
                     <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest font-mono">
@@ -937,14 +1508,14 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                     </h3>
                     <p className="text-xs text-slate-500">{service.tagline}</p>
 
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 flex items-center justify-between">
                       <div>
                         <span className="text-[10px] text-slate-400 font-bold uppercase block">{selectedCity} Rate</span>
                         <span className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">
                           ₹{price.toLocaleString('en-IN')}
                         </span>
                       </div>
-                      <span className="text-xs font-bold text-amber-500 flex items-center gap-1">
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" /> {service.estimatedHours} Hours
                       </span>
                     </div>
@@ -967,7 +1538,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                         setBookingMakeModel(`${vehicles[0].make} ${vehicles[0].model}`);
                       }
                     }}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-colors shadow-sm flex items-center justify-center gap-1"
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-colors shadow-md shadow-blue-600/20 flex items-center justify-center gap-1"
                   >
                     <span>Book for ₹{price.toLocaleString('en-IN')}</span>
                     <ChevronRight className="w-4 h-4" />
@@ -998,16 +1569,16 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
             </div>
 
             {/* Quick Demo Login Option */}
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest block">
+            <div className="p-3.5 rounded-2xl bg-blue-950/50 border border-blue-500/40 text-blue-200 space-y-2">
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">
                 ⚡ Quick Demo Login
               </span>
-              <p className="text-xs text-slate-600 dark:text-slate-300">
+              <p className="text-xs text-slate-300">
                 Click below to instantly log in as <strong>Vikramaditya Singh (+91 88199 15656)</strong> with pre-populated garage vehicles and active job cards.
               </p>
               <button
                 onClick={handleDemoLogin}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-colors shadow-xs"
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-colors shadow-md shadow-blue-600/20"
               >
                 One-Click Demo Login →
               </button>
@@ -1388,7 +1959,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                       <span>-₹{invoiceJobCard.discount.toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-base font-extrabold border-t border-slate-700 pt-2 text-amber-400">
+                  <div className="flex justify-between text-base font-extrabold border-t border-slate-700 pt-2 text-blue-400 font-mono">
                     <span>Grand Total:</span>
                     <span>₹{grandTotal.toLocaleString('en-IN')}</span>
                   </div>
@@ -1414,7 +1985,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl p-6 sm:p-8 space-y-5 shadow-2xl my-8">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest font-mono">
+                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest font-mono">
                   FixoCar Service Booking • {selectedCity}
                 </span>
                 <h3 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -1426,16 +1997,16 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+            <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs">
               <div>
-                <span className="text-slate-500 font-bold block">Selected City Package Price</span>
-                <p className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+                <span className="text-slate-400 font-bold block">Selected City Package Price</span>
+                <p className="text-2xl font-black text-blue-400 font-mono mt-0.5">
                   ₹{(bookingService.cityPrices[selectedCity] || 3999).toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-slate-500 font-bold block">Service Duration</span>
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{bookingService.estimatedHours} Hours</p>
+                <span className="text-slate-400 font-bold block">Service Duration</span>
+                <p className="text-xs font-bold text-slate-200">{bookingService.estimatedHours} Hours</p>
               </div>
             </div>
 
@@ -1501,21 +2072,21 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                 />
               </div>
 
-              <label className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60 cursor-pointer">
+              <label className="flex items-center gap-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/60 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={pickupNeeded}
                   onChange={(e) => setPickupNeeded(e.target.checked)}
-                  className="rounded accent-emerald-500 w-4 h-4"
+                  className="rounded accent-blue-600 w-4 h-4"
                 />
-                <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                <span className="font-bold text-blue-900 dark:text-blue-300">
                   Request Free Doorstep Pick & Drop Service
                 </span>
               </label>
 
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition-all shadow-lg shadow-amber-500/20"
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm transition-all shadow-lg shadow-blue-600/30"
               >
                 Confirm Booking for ₹{(bookingService.cityPrices[selectedCity] || 3999).toLocaleString('en-IN')}
               </button>
@@ -1552,7 +2123,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
               <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
                 <span className="text-slate-500">Workshop Job Card ID:</span>
-                <span className="font-mono font-bold text-amber-500">{confirmedBooking.jobCard.id}</span>
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{confirmedBooking.jobCard.id}</span>
               </div>
 
               <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
