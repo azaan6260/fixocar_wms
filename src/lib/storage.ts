@@ -1170,8 +1170,9 @@ export function deleteStandardJob(id: string): void {
 export function addStandardJobToJobCard(
   jobCardId: string, 
   standardJobId: string, 
-  customAssignedId?: string
-): JobTask | null {
+  customAssignedId?: string,
+  customDenterId?: string
+): JobTask[] | null {
   const cards = getJobCards();
   const cardIndex = cards.findIndex(c => c.id === jobCardId);
   if (cardIndex === -1) return null;
@@ -1183,52 +1184,116 @@ export function addStandardJobToJobCard(
 
   // Dual pricing check: Cars24 B2B vs Retail
   const customerPrice = card.isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
-  
-  let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
-  let assignedName: string | undefined = undefined;
+  const employees = getEmployees();
+  const vendorList = getVendors();
 
-  if (customAssignedId) {
-    const employees = getEmployees();
-    const vendorList = getVendors();
-    const emp = employees.find(e => e.id === customAssignedId);
-    if (emp) {
-      assignedType = 'EMPLOYEE';
-      assignedName = emp.name;
-    } else {
-      const ven = vendorList.find(v => v.id === customAssignedId);
+  // If this is a panel paint job with denterPayout > 0 (or category === 'PAINT'), we create BOTH Painter and Denter tasks!
+  const hasDenterPairing = stdJob.category === 'PAINT' && (stdJob.denterPayout || 0) > 0;
+  const createdTasks: JobTask[] = [];
+
+  if (hasDenterPairing) {
+    // 1. Paint Task assigned to Painter
+    const painterEmp = customAssignedId 
+      ? employees.find(e => e.id === customAssignedId) 
+      : employees.find(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
+    
+    const paintTask: JobTask = {
+      id: `task-paint-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      jobCardId,
+      title: stdJob.title.includes('Paint') ? stdJob.title : `${stdJob.title} - Paint Refinish`,
+      category: 'PAINT',
+      assignedToId: painterEmp?.id || customAssignedId,
+      assignedToName: painterEmp?.name || (customAssignedId ? 'Assigned Painter' : 'Unassigned Painter'),
+      assignedType: 'EMPLOYEE',
+      estimatedCost: stdJob.painterPayout || Math.round(customerPrice * 0.6),
+      customerPrice: customerPrice, // Main customer panel charge
+      status: 'PENDING',
+      requiresCustomerApproval: false,
+      isContractBasis: true,
+      contractorPayout: stdJob.painterPayout || 800,
+      painterPayout: stdJob.painterPayout || 800,
+      denterPayout: 0,
+      standardJobId: stdJob.id,
+      notes: `${card.isCars24 ? '⚡ Cars24 Panel Paint Rate' : '🛒 Retail Panel Paint Rate'}. ${stdJob.description || ''}`
+    };
+    createdTasks.push(paintTask);
+
+    // 2. Pre-Paint Denting Task assigned to Denter
+    const denterEmp = customDenterId 
+      ? employees.find(e => e.id === customDenterId) 
+      : employees.find(e => e.role === 'DENTER' || e.specializedTeam === 'Denting');
+
+    const dentTask: JobTask = {
+      id: `task-dent-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      jobCardId,
+      title: `${stdJob.title.replace(' - Paint & Dent Repair', '')} - Pre-Paint Denting`,
+      category: 'DENTING',
+      assignedToId: denterEmp?.id || customDenterId,
+      assignedToName: denterEmp?.name || (customDenterId ? 'Assigned Denter' : 'Unassigned Denter'),
+      assignedType: 'EMPLOYEE',
+      estimatedCost: stdJob.denterPayout || 150,
+      customerPrice: 0, // Included in main panel billing
+      status: 'PENDING',
+      requiresCustomerApproval: false,
+      isContractBasis: true,
+      contractorPayout: stdJob.denterPayout || 150,
+      painterPayout: 0,
+      denterPayout: stdJob.denterPayout || 150,
+      standardJobId: stdJob.id,
+      notes: `Pre-paint panel denting & surface flattening for ${stdJob.title}`
+    };
+    createdTasks.push(dentTask);
+  } else {
+    // Single task creation
+    let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
+    let assignedName: string | undefined = undefined;
+
+    if (customAssignedId) {
+      const emp = employees.find(e => e.id === customAssignedId);
+      if (emp) {
+        assignedType = 'EMPLOYEE';
+        assignedName = emp.name;
+      } else {
+        const ven = vendorList.find(v => v.id === customAssignedId);
+        if (ven) {
+          assignedType = 'VENDOR';
+          assignedName = ven.name;
+        }
+      }
+    } else if (stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK') {
+      assignedType = 'VENDOR';
+      const ven = vendorList[0];
       if (ven) {
-        assignedType = 'VENDOR';
         assignedName = ven.name;
       }
     }
-  } else if (stdJob.category === 'SUBLET_VENDOR') {
-    assignedType = 'VENDOR';
+
+    const newTask: JobTask = {
+      id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      jobCardId,
+      title: stdJob.title,
+      category: stdJob.category,
+      assignedToId: customAssignedId,
+      assignedToName: assignedName,
+      assignedType,
+      estimatedCost: stdJob.isContractBasis ? stdJob.contractorPayout : Math.round(customerPrice * 0.5),
+      customerPrice,
+      status: 'PENDING',
+      requiresCustomerApproval: false,
+      isContractBasis: stdJob.isContractBasis,
+      contractorPayout: stdJob.isContractBasis ? stdJob.contractorPayout : 0,
+      painterPayout: stdJob.painterPayout || 0,
+      denterPayout: stdJob.denterPayout || 0,
+      standardJobId: stdJob.id,
+      notes: `${card.isCars24 ? '⚡ Cars24 Fleet Standard Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
+    };
+    createdTasks.push(newTask);
   }
 
-  const newTask: JobTask = {
-    id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    jobCardId,
-    title: stdJob.title,
-    category: stdJob.category,
-    assignedToId: customAssignedId,
-    assignedToName: assignedName,
-    assignedType,
-    estimatedCost: stdJob.isContractBasis ? stdJob.contractorPayout : Math.round(customerPrice * 0.5),
-    customerPrice,
-    status: 'PENDING',
-    requiresCustomerApproval: false,
-    isContractBasis: stdJob.isContractBasis,
-    contractorPayout: stdJob.isContractBasis ? stdJob.contractorPayout : 0,
-    painterPayout: stdJob.painterPayout || 0,
-    denterPayout: stdJob.denterPayout || 0,
-    standardJobId: stdJob.id,
-    notes: `${card.isCars24 ? '⚡ Cars24 Fleet Standard Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
-  };
-
-  card.tasks = [...(card.tasks || []), newTask];
+  card.tasks = [...(card.tasks || []), ...createdTasks];
   cards[cardIndex] = card;
   saveJobCards(cards);
-  return newTask;
+  return createdTasks;
 }
 
 export interface ContractorPayoutRecord {

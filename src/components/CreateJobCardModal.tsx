@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
 import { createJobCard, getCities, getWorkshops } from '../lib/storage';
+import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { 
   X, 
   Car, 
@@ -17,7 +18,8 @@ import {
   Hammer,
   Palette,
   Building,
-  MapPin
+  MapPin,
+  Layers
 } from 'lucide-react';
 
 interface CreateJobCardModalProps {
@@ -623,13 +625,52 @@ export function CreateJobCardModal({
           )}
 
           {step === 2 && (
-            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 space-y-6 max-h-[72vh] overflow-y-auto">
               
-              {/* Service Selection */}
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">Select Service Type</h3>
+              {/* Job Allotment Mode Selector */}
+              <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Standard Job Allotment Pipeline
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      {isCars24 
+                        ? '⚡ Cars24 Fleet Mode: Selecting paint panels automatically allots Painter for paint work AND Denter for pre-paint denting.'
+                        : 'Select standard jobs from 8 categorized sections or run AI diagnostics below.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-400">Total Allotted:</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black text-xs font-mono">
+                      {tasks.length} {tasks.length === 1 ? 'Job' : 'Jobs'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Categorized Job Allotment Pipeline Component */}
+                <div className="pt-2">
+                  <JobAllotmentPipeline
+                    isCars24={isCars24}
+                    cars24RefNo={cars24RefNo}
+                    employees={employees}
+                    vendors={vendors}
+                    selectedTasks={tasks as AllocatedTaskItem[]}
+                    onTasksChange={(updated) => setTasks(updated as any)}
+                  />
+                </div>
+              </div>
+
+              {/* Service Type & AI Diagnosis Assistant Accordion/Section */}
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-5 space-y-4">
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-amber-500" />
+                  Additional Preset Packages & AI Diagnosis
+                </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => setServiceType('STANDARD_PACKAGE')}
@@ -694,43 +735,43 @@ export function CreateJobCardModal({
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* AI Diagnostic Assistant Box */}
-              <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-                    <Sparkles className="w-4 h-4" />
-                    Gemini AI Diagnostic Assistant
+                {/* AI Diagnostic Assistant Box */}
+                <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                      <Sparkles className="w-4 h-4" />
+                      Gemini AI Diagnostic Assistant
+                    </div>
+                    <span className="text-[10px] text-slate-400">Auto-suggest repair tasks based on vehicle symptoms</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">Auto-suggest repair tasks based on vehicle symptoms</span>
-                </div>
 
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={symptomsInput}
-                    onChange={(e) => setSymptomsInput(e.target.value)}
-                    placeholder="Enter symptoms e.g. 'Engine knocking sound when accelerating, brake squeal'"
-                    className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleRunAiDiagnosis}
-                    disabled={isAiDiagnosing || !symptomsInput.trim()}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors disabled:opacity-50"
-                  >
-                    {isAiDiagnosing ? 'Analyzing...' : 'Generate Tasks'}
-                  </button>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={symptomsInput}
+                      onChange={(e) => setSymptomsInput(e.target.value)}
+                      placeholder="Enter symptoms e.g. 'Engine knocking sound when accelerating, brake squeal'"
+                      className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRunAiDiagnosis}
+                      disabled={isAiDiagnosing || !symptomsInput.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors disabled:opacity-50"
+                    >
+                      {isAiDiagnosing ? 'Analyzing...' : 'Generate Tasks'}
+                    </button>
+                  </div>
+                  {aiError && <p className="text-[11px] text-rose-400">{aiError}</p>}
                 </div>
-                {aiError && <p className="text-[11px] text-rose-400">{aiError}</p>}
               </div>
 
-              {/* Itemized Tasks Allotment Table */}
-              <div>
+              {/* Itemized Allotted Tasks Table */}
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Job Card Tasks & Team Allotments ({tasks.length})
+                    Alloted Job Card Tasks List ({tasks.length})
                   </h3>
                   <button
                     type="button"
@@ -738,84 +779,95 @@ export function CreateJobCardModal({
                     className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add Task
+                    Add Custom Task
                   </button>
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {tasks.map((task, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex-1 w-full space-y-1">
-                        <input
-                          type="text"
-                          value={task.title}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setTasks(prev => prev.map((t, i) => i === idx ? { ...t, title: val } : t));
-                          }}
-                          className="w-full font-semibold text-slate-900 dark:text-slate-100 bg-transparent border-b border-slate-200 dark:border-slate-700 focus:outline-none focus:border-amber-500"
-                        />
-
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
-                          <span>Team: <strong>{task.team}</strong></span>
-                          <span>Category: <strong>{task.category}</strong></span>
-                        </div>
-                      </div>
-
-                      {/* Team Assignment Dropdown */}
-                      <div className="flex items-center gap-2 w-full md:w-auto">
-                        <select
-                          value={task.assignedToId}
-                          onChange={(e) => {
-                            const emp = employees.find(emp => emp.id === e.target.value);
-                            const ven = vendors.find(v => v.id === e.target.value);
-                            setTasks(prev => prev.map((t, i) => i === idx ? {
-                              ...t,
-                              assignedToId: e.target.value,
-                              assignedToName: emp?.name || ven?.name || 'Assigned Staff',
-                              assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
-                            } : t));
-                          }}
-                          className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
-                        >
-                          <optgroup label="Workshop Staff Teams">
-                            {employees.map(e => (
-                              <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam})</option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="Sublet Vendors">
-                            {vendors.map(v => (
-                              <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
-                            ))}
-                          </optgroup>
-                        </select>
-
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400">₹</span>
-                          <input
-                            type="number"
-                            value={task.customerPrice}
-                            onChange={(e) => {
-                              const price = Number(e.target.value);
-                              setTasks(prev => prev.map((t, i) => i === idx ? { ...t, customerPrice: price } : t));
-                            }}
-                            className="w-16 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono font-bold"
-                          />
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTask(idx)}
-                          className="p-1 text-rose-500 hover:bg-rose-500/10 rounded-md"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                  {tasks.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs font-medium border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl">
+                      No jobs allotted yet. Use the Job Allotment Pipeline tabs above to select panels, mechanical, or service jobs!
                     </div>
-                  ))}
+                  ) : (
+                    tasks.map((task, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex-1 w-full space-y-1">
+                          <input
+                            type="text"
+                            value={task.title}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setTasks(prev => prev.map((t, i) => i === idx ? { ...t, title: val } : t));
+                            }}
+                            className="w-full font-semibold text-slate-900 dark:text-slate-100 bg-transparent border-b border-slate-200 dark:border-slate-700 focus:outline-none focus:border-amber-500"
+                          />
+
+                          <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+                            <span>Team: <strong>{task.team || 'General'}</strong></span>
+                            <span>Category: <strong>{task.category}</strong></span>
+                            {task.isContractBasis && (
+                              <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                Contract Payout: ₹{task.estimatedCost}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Team Assignment Dropdown */}
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                          <select
+                            value={task.assignedToId || ''}
+                            onChange={(e) => {
+                              const emp = employees.find(emp => emp.id === e.target.value);
+                              const ven = vendors.find(v => v.id === e.target.value);
+                              setTasks(prev => prev.map((t, i) => i === idx ? {
+                                ...t,
+                                assignedToId: e.target.value,
+                                assignedToName: emp?.name || ven?.name || 'Assigned Staff',
+                                assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                              } : t));
+                            }}
+                            className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
+                          >
+                            <optgroup label="Workshop Staff">
+                              {employees.map(e => (
+                                <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Sublet Vendors">
+                              {vendors.map(v => (
+                                <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                              ))}
+                            </optgroup>
+                          </select>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400">₹</span>
+                            <input
+                              type="number"
+                              value={task.customerPrice}
+                              onChange={(e) => {
+                                const price = Number(e.target.value);
+                                setTasks(prev => prev.map((t, i) => i === idx ? { ...t, customerPrice: price } : t));
+                              }}
+                              className="w-16 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono font-bold"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTask(idx)}
+                            className="p-1 text-rose-500 hover:bg-rose-500/10 rounded-md"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

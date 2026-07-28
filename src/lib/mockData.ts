@@ -1154,6 +1154,19 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     description: 'Trunk floor inner panel paint seal (Billed: ₹300, Painter: ₹200, Denter: ₹100)'
   },
   {
+    id: 'std-paint-15',
+    title: 'Hood / Bonnet - Paint & Dent Repair',
+    category: 'PAINT',
+    retailPrice: 2200,
+    cars24Price: 2200,
+    isContractBasis: true,
+    painterPayout: 1300,
+    denterPayout: 300,
+    contractorPayout: 1600,
+    estimatedHours: 4,
+    description: 'Front hood/bonnet surface sanding, primer & paint refinish (Billed: ₹2200, Painter: ₹1300, Denter: ₹300)'
+  },
+  {
     id: 'std-dent-15',
     title: 'Bumper Crack Plastic Welding & Extra Dent Repair',
     category: 'DENTING',
@@ -1167,6 +1180,19 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     description: 'Additional denter repair for plastic bumper crack welding and structural brackets reinforcement.'
   },
   {
+    id: 'std-dent-16',
+    title: 'Running Board / Sill Heavy Pulling & Realignment',
+    category: 'DENTING',
+    retailPrice: 850,
+    cars24Price: 650,
+    isContractBasis: true,
+    painterPayout: 0,
+    denterPayout: 450,
+    contractorPayout: 450,
+    estimatedHours: 2,
+    description: 'Hydraulic pin pulling and structural straightening for crushed underbody sill panel.'
+  },
+  {
     id: 'std-job-5',
     title: 'Basic Periodic Engine Service (Oil + Filter)',
     category: 'MECHANICAL',
@@ -1178,6 +1204,39 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     description: '5W30 Synthetic oil replacement, oil filter, air filter cleanup & 30-pt safety audit.'
   },
   {
+    id: 'std-job-6',
+    title: 'Front Brake Pads Replacement (Pair)',
+    category: 'MECHANICAL',
+    retailPrice: 1850,
+    cars24Price: 1450,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 1,
+    description: 'Ceramic brake pad replacement and disc caliper lubrication.'
+  },
+  {
+    id: 'std-job-7',
+    title: 'Complete Clutch Plate & Release Bearing Overhaul',
+    category: 'MECHANICAL',
+    retailPrice: 6800,
+    cars24Price: 5200,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 5,
+    description: 'Transmission removal, flywheel inspection, new pressure plate & clutch friction disc installation.'
+  },
+  {
+    id: 'std-job-8',
+    title: 'AC Gas Top-Up & Condenser Chemical Flush',
+    category: 'MECHANICAL',
+    retailPrice: 2200,
+    cars24Price: 1750,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 2,
+    description: 'R134a refrigerant recharge, leak testing, and condenser coil pressure washing.'
+  },
+  {
     id: 'std-job-9',
     title: 'Full Foam Wash & Interior Vacuuming',
     category: 'WASHING',
@@ -1187,6 +1246,127 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     contractorPayout: 0,
     estimatedHours: 1,
     description: 'High pressure underbody wash, neutral pH foam body shampoo, dry wipe & vacuuming.'
+  },
+  {
+    id: 'std-job-10',
+    title: 'Complete Interior Deep Dry Cleaning & Sanitization',
+    category: 'WASHING',
+    retailPrice: 2400,
+    cars24Price: 1800,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 3,
+    description: 'Foam extraction on seats, roof liner stain removal, dashboard dressing & ozone sanitization.'
+  },
+  {
+    id: 'std-job-11',
+    title: 'Teflon Body Polish & Gloss Masking',
+    category: 'WASHING',
+    retailPrice: 1900,
+    cars24Price: 1400,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 2,
+    description: 'Dual-action machine buffing, minor swirl mark removal & PTFE protective sealant coating.'
+  },
+  {
+    id: 'std-acc-1',
+    title: 'Custom Leatherette Bucket Seat Covers Fitting',
+    category: 'ACCESSORIES',
+    retailPrice: 6500,
+    cars24Price: 5200,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 3,
+    description: 'High-density foam padded leatherette seat covers custom stitched and snug bucket fitted.'
+  },
+  {
+    id: 'std-acc-2',
+    title: '7D All-Weather Heavy Duty Floor Mats Installation',
+    category: 'ACCESSORIES',
+    retailPrice: 2800,
+    cars24Price: 2200,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 0.5,
+    description: 'Waterproof 7D carpet mats fitted with heel pad & anti-skid locking pins.'
+  },
+  {
+    id: 'std-acc-3',
+    title: '9-inch HD Android Touchscreen System & Rear Cam',
+    category: 'ACCESSORIES',
+    retailPrice: 9500,
+    cars24Price: 7800,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 2,
+    description: 'IPS display touchscreen infotainment with Wireless Apple CarPlay, Android Auto & night-vision camera.'
+  },
+  {
+    id: 'std-lathe-1',
+    title: 'Front Brake Disc Resurfacing / Skim Turning (Pair)',
+    category: 'LATHE_WORK',
+    retailPrice: 850,
+    cars24Price: 650,
+    isContractBasis: true,
+    contractorPayout: 400,
+    estimatedHours: 1.5,
+    description: 'Precision lathe turning to eliminate brake pedal pulsation and disc scoring.'
+  },
+  {
+    id: 'std-lathe-2',
+    title: 'Engine Flywheel Facing & Surface Skimming',
+    category: 'LATHE_WORK',
+    retailPrice: 1100,
+    cars24Price: 850,
+    isContractBasis: true,
+    contractorPayout: 500,
+    estimatedHours: 1.5,
+    description: 'Flywheel friction surface truing on precision lathe machine for smooth clutch engagement.'
+  },
+  {
+    id: 'std-align-1',
+    title: '3D Computerized Wheel Alignment & Steering Center',
+    category: 'ALIGNMENT_BALANCING',
+    retailPrice: 550,
+    cars24Price: 400,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 0.5,
+    description: 'High-precision 3D laser alignment sensor check, camber/caster/toe correction & steering recalibration.'
+  },
+  {
+    id: 'std-align-2',
+    title: '4-Wheel Dynamic Precision Balancing & Weights',
+    category: 'ALIGNMENT_BALANCING',
+    retailPrice: 650,
+    cars24Price: 480,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 0.5,
+    description: 'Dynamic wheel balancer spin testing and lead counter-weight placement for all 4 wheels.'
+  },
+  {
+    id: 'std-tyre-1',
+    title: 'Tubeless Tyre Mounting, Valve & Balancing (Single)',
+    category: 'TYRE_WORK',
+    retailPrice: 350,
+    cars24Price: 250,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 0.5,
+    description: 'Pneumatic tyre changer dismounting/mounting, new brass valve stem & wheel balancing.'
+  },
+  {
+    id: 'std-tyre-2',
+    title: 'Heavy Duty Tubeless Puncture Vulcanization Repair',
+    category: 'TYRE_WORK',
+    retailPrice: 250,
+    cars24Price: 180,
+    isContractBasis: false,
+    contractorPayout: 0,
+    estimatedHours: 0.3,
+    description: 'Internal mushroom patch vulcanization repair for sidewall or tread punctures.'
   }
 ];
 

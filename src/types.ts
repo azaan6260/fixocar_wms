@@ -167,7 +167,11 @@ export type TaskCategory =
   | 'SUBLET_VENDOR'
   | 'WASHING'
   | 'INSPECTION'
-  | 'PARTS';
+  | 'PARTS'
+  | 'ACCESSORIES'
+  | 'LATHE_WORK'
+  | 'ALIGNMENT_BALANCING'
+  | 'TYRE_WORK';
 
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD';
 
