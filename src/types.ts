@@ -246,6 +246,8 @@ export interface JobTask {
   contractorPayout?: number;
   painterPayout?: number;
   denterPayout?: number;
+  pairedDenterId?: string;
+  pairedDenterName?: string;
   standardJobId?: string;
 }
 

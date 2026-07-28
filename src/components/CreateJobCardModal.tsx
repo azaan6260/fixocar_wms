@@ -298,6 +298,13 @@ export function CreateJobCardModal({
         status: 'PENDING',
         requiresCustomerApproval: t.requiresCustomerApproval,
         isCustomerApproved: t.requiresCustomerApproval ? null : true,
+        isContractBasis: t.isContractBasis,
+        contractorPayout: (t as any).contractorPayout || t.estimatedCost,
+        painterPayout: t.painterPayout,
+        denterPayout: t.denterPayout,
+        pairedDenterId: t.pairedDenterId,
+        pairedDenterName: t.pairedDenterName,
+        standardJobId: t.standardJobId,
       }))
     });
 

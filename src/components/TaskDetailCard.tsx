@@ -30,7 +30,9 @@ import {
   Edit,
   Trash2,
   Save,
-  DollarSign
+  DollarSign,
+  Hammer,
+  Paintbrush
 } from 'lucide-react';
 
 interface TaskDetailCardProps {
@@ -99,6 +101,7 @@ export function TaskDetailCard({
   const [editPainterPayout, setEditPainterPayout] = useState(task.painterPayout || 0);
   const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout || 0);
   const [editAssignedId, setEditAssignedId] = useState(task.assignedToId || '');
+  const [editPairedDenterId, setEditPairedDenterId] = useState(task.pairedDenterId || '');
 
   // Handlers
   const handleSaveTaskEdits = (e: React.FormEvent) => {
@@ -107,6 +110,7 @@ export function TaskDetailCard({
 
     const matchedEmp = employees.find(e => e.id === editAssignedId);
     const matchedVendor = vendors.find(v => v.id === editAssignedId);
+    const matchedDenter = employees.find(e => e.id === editPairedDenterId);
 
     const painter = Number(editPainterPayout) || 0;
     const denter = Number(editDenterPayout) || 0;
@@ -122,7 +126,9 @@ export function TaskDetailCard({
       denterPayout: denter,
       assignedToId: editAssignedId,
       assignedToName: matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : (editAssignedId ? 'Assigned Staff' : 'Unassigned'),
-      assignedType: matchedVendor ? 'VENDOR' : 'EMPLOYEE'
+      assignedType: matchedVendor ? 'VENDOR' : 'EMPLOYEE',
+      pairedDenterId: editPairedDenterId || undefined,
+      pairedDenterName: matchedDenter ? matchedDenter.name : undefined
     });
 
     setIsEditingTask(false);
@@ -273,6 +279,14 @@ export function TaskDetailCard({
               </span>
             </div>
 
+            {task.pairedDenterName && (
+              <div className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                <Hammer className="w-3.5 h-3.5 text-amber-500" />
+                <span>Pre-Paint Denter:</span>
+                <strong className="font-bold">{task.pairedDenterName}</strong>
+              </div>
+            )}
+
             {/* Re-allot & Edit Job Buttons for Managers/Admin */}
             {isManager && (
               <>
@@ -296,6 +310,7 @@ export function TaskDetailCard({
                     setEditPainterPayout(task.painterPayout || 0);
                     setEditDenterPayout(task.denterPayout || 0);
                     setEditAssignedId(task.assignedToId || '');
+                    setEditPairedDenterId(task.pairedDenterId || '');
                   }}
                   className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
                 >
@@ -494,9 +509,9 @@ export function TaskDetailCard({
               />
             </div>
 
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Assign Staff / Sublet Vendor
+                Assign Painter / Main Staff
               </label>
               <select
                 value={editAssignedId}
@@ -516,6 +531,24 @@ export function TaskDetailCard({
                 </optgroup>
               </select>
             </div>
+
+            {(editCategory === 'PAINT' || editDenterPayout > 0) && (
+              <div>
+                <label className="block text-[11px] font-bold text-orange-800 dark:text-orange-300 mb-1">
+                  Assign Pre-Paint Denter
+                </label>
+                <select
+                  value={editPairedDenterId}
+                  onChange={(e) => setEditPairedDenterId(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold"
+                >
+                  <option value="">-- No Denter Assigned --</option>
+                  {employees.filter(e => e.specializedTeam === 'Denting' || e.role === 'DENTER' || true).map(e => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam})</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/20">

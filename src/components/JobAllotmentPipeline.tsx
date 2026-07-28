@@ -96,8 +96,11 @@ export function JobAllotmentPipeline({
       // Remove task associated with this standard job ID
       onTasksChange(selectedTasks.filter(t => t.standardJobId !== stdJob.id));
     } else {
-      const assignedPainterId = panelAssignments[stdJob.id]?.painterId;
+      const assignedPainterId = panelAssignments[stdJob.id]?.painterId || painters[0]?.id;
       const painterObj = employees.find(e => e.id === assignedPainterId);
+
+      const assignedDenterId = panelAssignments[stdJob.id]?.denterId || denters[0]?.id;
+      const denterObj = employees.find(e => e.id === assignedDenterId);
 
       const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
 
@@ -111,7 +114,7 @@ export function JobAllotmentPipeline({
 
       const contractorPayout = painterPayout + denterPayout;
 
-      // Single Paint Task containing both Painter and Pre-Paint Denter payout rates
+      // Single Paint Task containing both Painter and Pre-Paint Denter payout rates and staff assignments
       const paintTask: AllocatedTaskItem = {
         id: `task-paint-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: stdJob.title,
@@ -126,6 +129,8 @@ export function JobAllotmentPipeline({
         isContractBasis: true,
         painterPayout: painterPayout,
         denterPayout: denterPayout,
+        pairedDenterId: denterObj?.id || undefined,
+        pairedDenterName: denterObj?.name || undefined,
         standardJobId: stdJob.id
       };
 
@@ -193,15 +198,17 @@ export function JobAllotmentPipeline({
     }));
 
     const staffObj = employees.find(e => e.id === staffId);
-    if (!staffObj) return;
 
     onTasksChange(selectedTasks.map(task => {
       if (task.standardJobId === stdJobId) {
         if (type === 'PAINTER' && task.category === 'PAINT') {
-          return { ...task, assignedToId: staffObj.id, assignedToName: staffObj.name };
+          return { ...task, assignedToId: staffObj?.id || undefined, assignedToName: staffObj?.name || undefined };
         }
-        if (type === 'DENTER' && task.category === 'DENTING' && task.title.includes('Pre-Paint')) {
-          return { ...task, assignedToId: staffObj.id, assignedToName: staffObj.name };
+        if (type === 'DENTER' && task.category === 'PAINT') {
+          return { ...task, pairedDenterId: staffObj?.id || undefined, pairedDenterName: staffObj?.name || undefined };
+        }
+        if (type === 'DENTER' && task.category === 'DENTING') {
+          return { ...task, assignedToId: staffObj?.id || undefined, assignedToName: staffObj?.name || undefined };
         }
       }
       return task;
@@ -311,6 +318,10 @@ export function JobAllotmentPipeline({
                 selectedTasks.find(t => t.standardJobId === panel.id && t.category === 'PAINT')?.assignedToId || 
                 painters[0]?.id || '';
 
+              const currentDenterId = panelAssignments[panel.id]?.denterId || 
+                selectedTasks.find(t => t.standardJobId === panel.id && t.category === 'PAINT')?.pairedDenterId || 
+                denters[0]?.id || '';
+
               return (
                 <div
                   key={panel.id}
@@ -368,7 +379,7 @@ export function JobAllotmentPipeline({
                       {/* Painter Select */}
                       <div className="flex items-center justify-between text-xs gap-2">
                         <span className="font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 shrink-0">
-                          <Paintbrush className="w-3 h-3 text-purple-500" /> Painter:
+                          <Paintbrush className="w-3.5 h-3.5 text-purple-500" /> Painter:
                         </span>
                         <select
                           value={currentPainterId}
@@ -378,6 +389,23 @@ export function JobAllotmentPipeline({
                           <option value="">-- Select Painter --</option>
                           {painters.map(p => (
                             <option key={p.id} value={p.id}>{p.name} (Painter)</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Pre-Paint Denter Select */}
+                      <div className="flex items-center justify-between text-xs gap-2">
+                        <span className="font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 shrink-0">
+                          <Hammer className="w-3.5 h-3.5 text-orange-500" /> Pre-Paint Denter:
+                        </span>
+                        <select
+                          value={currentDenterId}
+                          onChange={(e) => handleUpdatePanelStaff(panel.id, 'DENTER', e.target.value)}
+                          className="flex-1 p-1.5 rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                        >
+                          <option value="">-- Select Denter --</option>
+                          {denters.map(d => (
+                            <option key={d.id} value={d.id}>{d.name} (Denter)</option>
                           ))}
                         </select>
                       </div>
