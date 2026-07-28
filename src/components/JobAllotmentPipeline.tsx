@@ -73,8 +73,8 @@ export function JobAllotmentPipeline({
   const [panelAssignments, setPanelAssignments] = useState<Record<string, { painterId: string; denterId: string }>>({});
 
   const sections = [
-    { id: 'PAINTING_DENTING', label: 'Painting & Denting', icon: Paintbrush, color: 'text-purple-600 dark:text-purple-400', count: selectedTasks.filter(t => t.category === 'PAINT' || (t.category === 'DENTING' && t.title.includes('Pre-Paint'))).length },
-    { id: 'DENTING', label: 'Exclusive Denting', icon: Hammer, color: 'text-orange-600 dark:text-orange-400', count: selectedTasks.filter(t => t.category === 'DENTING' && !t.title.includes('Pre-Paint')).length },
+    { id: 'PAINTING_DENTING', label: 'Painting & Denting', icon: Paintbrush, color: 'text-purple-600 dark:text-purple-400', count: selectedTasks.filter(t => t.category === 'PAINT').length },
+    { id: 'DENTING', label: 'Exclusive Denting', icon: Hammer, color: 'text-orange-600 dark:text-orange-400', count: selectedTasks.filter(t => t.category === 'DENTING').length },
     { id: 'MECHANICAL', label: 'Mechanical', icon: Wrench, color: 'text-blue-600 dark:text-blue-400', count: selectedTasks.filter(t => t.category === 'MECHANICAL').length },
     { id: 'WASHING', label: 'Washing & Spa', icon: Sparkles, color: 'text-emerald-600 dark:text-emerald-400', count: selectedTasks.filter(t => t.category === 'WASHING').length },
     { id: 'ACCESSORIES', label: 'Accessories', icon: Layers, color: 'text-pink-600 dark:text-pink-400', count: selectedTasks.filter(t => t.category === 'ACCESSORIES').length },
@@ -88,20 +88,16 @@ export function JobAllotmentPipeline({
     return selectedTasks.some(t => t.standardJobId === stdJobId);
   };
 
-  // Toggle Panel Painting + Pre-Paint Denting Task
+  // Toggle Panel Painting Job (Includes Pre-Paint Denting)
   const handleTogglePanel = (stdJob: StandardJob) => {
     const isAlreadyAdded = isJobSelected(stdJob.id);
 
     if (isAlreadyAdded) {
-      // Remove all tasks associated with this standard job ID
+      // Remove task associated with this standard job ID
       onTasksChange(selectedTasks.filter(t => t.standardJobId !== stdJob.id));
     } else {
-      // Add Painter + Denter pair for panel
       const assignedPainterId = panelAssignments[stdJob.id]?.painterId || painters[0]?.id || employees[0]?.id;
-      const assignedDenterId = panelAssignments[stdJob.id]?.denterId || denters[0]?.id || employees[0]?.id;
-
       const painterObj = employees.find(e => e.id === assignedPainterId);
-      const denterObj = employees.find(e => e.id === assignedDenterId);
 
       const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
 
@@ -113,43 +109,27 @@ export function JobAllotmentPipeline({
         ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
         : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200);
 
-      // 1. Paint Task assigned to Painter
+      const contractorPayout = painterPayout + denterPayout;
+
+      // Single Paint Task containing both Painter and Pre-Paint Denter payout rates
       const paintTask: AllocatedTaskItem = {
         id: `task-paint-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        title: stdJob.title.includes('Paint') ? stdJob.title : `${stdJob.title} - Paint Refinish`,
+        title: stdJob.title,
         category: 'PAINT',
         team: 'Paint',
         assignedToId: painterObj?.id,
         assignedToName: painterObj?.name || 'Unassigned Painter',
         assignedType: 'EMPLOYEE',
-        estimatedCost: painterPayout,
-        customerPrice: price, // Main panel charge billed here
+        estimatedCost: contractorPayout,
+        customerPrice: price, // Panel charge
         requiresCustomerApproval: false,
         isContractBasis: true,
         painterPayout: painterPayout,
-        denterPayout: 0,
-        standardJobId: stdJob.id
-      };
-
-      // 2. Pre-Paint Denting Task assigned to Denter
-      const preDentTask: AllocatedTaskItem = {
-        id: `task-dent-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        title: `${stdJob.title.replace(' - Paint & Dent Repair', '')} - Pre-Paint Denting`,
-        category: 'DENTING',
-        team: 'Denting',
-        assignedToId: denterObj?.id,
-        assignedToName: denterObj?.name || 'Unassigned Denter',
-        assignedType: 'EMPLOYEE',
-        estimatedCost: denterPayout,
-        customerPrice: 0, // Billed inside main panel charge
-        requiresCustomerApproval: false,
-        isContractBasis: true,
-        painterPayout: 0,
         denterPayout: denterPayout,
         standardJobId: stdJob.id
       };
 
-      onTasksChange([...selectedTasks, paintTask, preDentTask]);
+      onTasksChange([...selectedTasks, paintTask]);
     }
   };
 
@@ -258,7 +238,7 @@ export function JobAllotmentPipeline({
               )}
             </div>
             <p className="text-slate-700 dark:text-slate-300 font-medium">
-              Fixed panel rates apply per Cars24 B2B tariff. When you allot a panel for painting, the system <strong>automatically allots it to a Painter for paint refinish</strong> AND <strong>allots the same panel to a Denter for pre-paint denting</strong>.
+              Fixed panel rates apply per Cars24 B2B tariff. Selecting a panel creates a painting job which includes prepaint denting.
             </p>
           </div>
         </div>
@@ -311,10 +291,10 @@ export function JobAllotmentPipeline({
             <div>
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Paintbrush className="w-4 h-4 text-purple-600" />
-                Standard Exterior Body Panels (Paint + Pre-Paint Dent)
+                Standard Exterior Body Panels (Painting Job)
               </h3>
               <p className="text-xs text-slate-500">
-                Selecting any panel automatically creates linked tasks for both Painter (Paint Refinish) and Denter (Pre-Paint Denting).
+                Selecting a panel creates the painting job (prepaint denting included in the job).
               </p>
             </div>
             <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-3 py-1 rounded-xl">
@@ -330,10 +310,6 @@ export function JobAllotmentPipeline({
               const currentPainterId = panelAssignments[panel.id]?.painterId || 
                 selectedTasks.find(t => t.standardJobId === panel.id && t.category === 'PAINT')?.assignedToId || 
                 painters[0]?.id || '';
-
-              const currentDenterId = panelAssignments[panel.id]?.denterId || 
-                selectedTasks.find(t => t.standardJobId === panel.id && t.category === 'DENTING')?.assignedToId || 
-                denters[0]?.id || '';
 
               return (
                 <div
@@ -371,22 +347,22 @@ export function JobAllotmentPipeline({
                       return (
                         <div className="mt-2 p-2 rounded-xl bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 flex items-center justify-between text-[11px]">
                           <span className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1">
-                            <span>Contractor Payouts:</span>
+                            <span>Contractor Rates:</span>
                             <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200">
                               {isCars24 ? '⚡ Cars24' : '🛒 Retail'}
                             </span>
                           </span>
                           <div className="flex items-center gap-2 font-black text-purple-700 dark:text-purple-300">
-                            <span>Painter: ₹{panelPainterPayout}</span>
+                            <span>Paint: ₹{panelPainterPayout}</span>
                             <span>•</span>
-                            <span>Denter: ₹{panelDenterPayout}</span>
+                            <span>Dent: ₹{panelDenterPayout}</span>
                           </div>
                         </div>
                       );
                     })()}
                   </div>
 
-                  {/* Staff Allocation Dropdowns when Selected */}
+                  {/* Staff Allocation Dropdown when Selected */}
                   {selected && (
                     <div className="pt-2 border-t border-purple-200 dark:border-purple-800/60 space-y-2 animate-in fade-in duration-150">
                       {/* Painter Select */}
@@ -402,23 +378,6 @@ export function JobAllotmentPipeline({
                           <option value="">-- Select Painter --</option>
                           {painters.map(p => (
                             <option key={p.id} value={p.id}>{p.name} (Painter)</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Denter Select */}
-                      <div className="flex items-center justify-between text-xs gap-2">
-                        <span className="font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 shrink-0">
-                          <Hammer className="w-3 h-3 text-orange-500" /> Pre-Denter:
-                        </span>
-                        <select
-                          value={currentDenterId}
-                          onChange={(e) => handleUpdatePanelStaff(panel.id, 'DENTER', e.target.value)}
-                          className="flex-1 p-1.5 rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200"
-                        >
-                          <option value="">-- Select Denter --</option>
-                          {denters.map(d => (
-                            <option key={d.id} value={d.id}>{d.name} (Denter)</option>
                           ))}
                         </select>
                       </div>
@@ -441,7 +400,7 @@ export function JobAllotmentPipeline({
                       </>
                     ) : (
                       <>
-                        <Plus className="w-3.5 h-3.5" /> Allot Panel (Paint + Dent)
+                        <Plus className="w-3.5 h-3.5" /> Allot Painting Job
                       </>
                     )}
                   </button>

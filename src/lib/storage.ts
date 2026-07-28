@@ -1228,108 +1228,57 @@ export function addStandardJobToJobCard(
     ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
     : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
 
-  // If this is a panel paint job with denterPayout > 0 (or category === 'PAINT'), we create BOTH Painter and Denter tasks!
-  const hasDenterPairing = stdJob.category === 'PAINT' && (denterPayout > 0 || (stdJob.denterPayout || 0) > 0);
   const createdTasks: JobTask[] = [];
 
-  if (hasDenterPairing) {
-    // 1. Paint Task assigned to Painter
-    const painterEmp = customAssignedId 
-      ? employees.find(e => e.id === customAssignedId) 
-      : employees.find(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
-    
-    const paintTask: JobTask = {
-      id: `task-paint-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      jobCardId,
-      title: stdJob.title.includes('Paint') ? stdJob.title : `${stdJob.title} - Paint Refinish`,
-      category: 'PAINT',
-      assignedToId: painterEmp?.id || customAssignedId,
-      assignedToName: painterEmp?.name || (customAssignedId ? 'Assigned Painter' : 'Unassigned Painter'),
-      assignedType: 'EMPLOYEE',
-      estimatedCost: painterPayout,
-      customerPrice: customerPrice, // Main customer panel charge
-      status: 'PENDING',
-      requiresCustomerApproval: false,
-      isContractBasis: true,
-      contractorPayout: painterPayout,
-      painterPayout: painterPayout,
-      denterPayout: 0,
-      standardJobId: stdJob.id,
-      notes: `${card.isCars24 ? '⚡ Cars24 Panel Paint Contract Rate' : '🛒 Retail Panel Paint Contract Rate'}. ${stdJob.description || ''}`
-    };
-    createdTasks.push(paintTask);
+  let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
+  let assignedName: string | undefined = undefined;
 
-    // 2. Pre-Paint Denting Task assigned to Denter
-    const denterEmp = customDenterId 
-      ? employees.find(e => e.id === customDenterId) 
-      : employees.find(e => e.role === 'DENTER' || e.specializedTeam === 'Denting');
-
-    const dentTask: JobTask = {
-      id: `task-dent-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      jobCardId,
-      title: `${stdJob.title.replace(' - Paint & Dent Repair', '')} - Pre-Paint Denting`,
-      category: 'DENTING',
-      assignedToId: denterEmp?.id || customDenterId,
-      assignedToName: denterEmp?.name || (customDenterId ? 'Assigned Denter' : 'Unassigned Denter'),
-      assignedType: 'EMPLOYEE',
-      estimatedCost: denterPayout,
-      customerPrice: 0, // Included in main panel billing
-      status: 'PENDING',
-      requiresCustomerApproval: false,
-      isContractBasis: true,
-      contractorPayout: denterPayout,
-      painterPayout: 0,
-      denterPayout: denterPayout,
-      standardJobId: stdJob.id,
-      notes: `Pre-paint panel denting (${card.isCars24 ? '⚡ Cars24' : '🛒 Retail'} rate) for ${stdJob.title}`
-    };
-    createdTasks.push(dentTask);
-  } else {
-    // Single task creation
-    let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
-    let assignedName: string | undefined = undefined;
-
-    if (customAssignedId) {
-      const emp = employees.find(e => e.id === customAssignedId);
-      if (emp) {
-        assignedType = 'EMPLOYEE';
-        assignedName = emp.name;
-      } else {
-        const ven = vendorList.find(v => v.id === customAssignedId);
-        if (ven) {
-          assignedType = 'VENDOR';
-          assignedName = ven.name;
-        }
-      }
-    } else if (stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK') {
-      assignedType = 'VENDOR';
-      const ven = vendorList[0];
+  if (customAssignedId) {
+    const emp = employees.find(e => e.id === customAssignedId);
+    if (emp) {
+      assignedType = 'EMPLOYEE';
+      assignedName = emp.name;
+    } else {
+      const ven = vendorList.find(v => v.id === customAssignedId);
       if (ven) {
+        assignedType = 'VENDOR';
         assignedName = ven.name;
       }
     }
-
-    const newTask: JobTask = {
-      id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      jobCardId,
-      title: stdJob.title,
-      category: stdJob.category,
-      assignedToId: customAssignedId,
-      assignedToName: assignedName,
-      assignedType,
-      estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(customerPrice * 0.5),
-      customerPrice,
-      status: 'PENDING',
-      requiresCustomerApproval: false,
-      isContractBasis: stdJob.isContractBasis,
-      contractorPayout: stdJob.isContractBasis ? contractorPayout : 0,
-      painterPayout: painterPayout,
-      denterPayout: denterPayout,
-      standardJobId: stdJob.id,
-      notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
-    };
-    createdTasks.push(newTask);
+  } else if (stdJob.category === 'PAINT') {
+    const painterEmp = employees.find(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
+    if (painterEmp) {
+      assignedName = painterEmp.name;
+      customAssignedId = painterEmp.id;
+    }
+  } else if (stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK') {
+    assignedType = 'VENDOR';
+    const ven = vendorList[0];
+    if (ven) {
+      assignedName = ven.name;
+    }
   }
+
+  const newTask: JobTask = {
+    id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    jobCardId,
+    title: stdJob.title,
+    category: stdJob.category,
+    assignedToId: customAssignedId,
+    assignedToName: assignedName,
+    assignedType,
+    estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(customerPrice * 0.5),
+    customerPrice,
+    status: 'PENDING',
+    requiresCustomerApproval: false,
+    isContractBasis: stdJob.isContractBasis,
+    contractorPayout: stdJob.isContractBasis ? contractorPayout : 0,
+    painterPayout: painterPayout,
+    denterPayout: denterPayout,
+    standardJobId: stdJob.id,
+    notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
+  };
+  createdTasks.push(newTask);
 
   card.tasks = [...(card.tasks || []), ...createdTasks];
   cards[cardIndex] = card;

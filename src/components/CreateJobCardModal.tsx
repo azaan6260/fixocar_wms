@@ -637,7 +637,7 @@ export function CreateJobCardModal({
                     </h3>
                     <p className="text-xs text-slate-300 mt-0.5">
                       {isCars24 
-                        ? '⚡ Cars24 Fleet Mode: Selecting paint panels automatically allots Painter for paint work AND Denter for pre-paint denting.'
+                        ? '⚡ Cars24 Fleet Mode: Selecting paint panels creates painting jobs which include prepaint denting.'
                         : 'Select standard jobs from 8 categorized sections or run AI diagnostics below.'}
                     </p>
                   </div>
