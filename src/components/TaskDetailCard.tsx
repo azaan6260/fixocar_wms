@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { JobCard, JobTask, Employee, Vendor, UserRole, TaskStatus } from '../types';
+import { JobCard, JobTask, Employee, Vendor, UserRole, TaskStatus, TaskCategory } from '../types';
 import { 
   reallotTask, 
   addRequisitionToTask, 
@@ -8,7 +8,9 @@ import {
   resolveConcern, 
   addPartToTask,
   getInventoryItems,
-  consumeInventoryItemForTask 
+  consumeInventoryItemForTask,
+  updateJobCardTask,
+  deleteJobCardTask
 } from '../lib/storage';
 import { 
   User, 
@@ -24,7 +26,11 @@ import {
   ChevronDown, 
   Tag, 
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Edit,
+  Trash2,
+  Save,
+  DollarSign
 } from 'lucide-react';
 
 interface TaskDetailCardProps {
@@ -84,7 +90,49 @@ export function TaskDetailCard({
   const [partUnitPrice, setPartUnitPrice] = useState(0);
   const [partType, setPartType] = useState<'PART' | 'CONSUMABLE' | 'LABOR'>('PART');
 
+  // Edit Job & Payouts state
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [editTitle, setEditTitle] = useState(task.title);
+  const [editCategory, setEditCategory] = useState<TaskCategory>(task.category);
+  const [editCustomerPrice, setEditCustomerPrice] = useState(task.customerPrice || 0);
+  const [editContractorPayout, setEditContractorPayout] = useState(task.contractorPayout || task.estimatedCost || 0);
+  const [editPainterPayout, setEditPainterPayout] = useState(task.painterPayout || 0);
+  const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout || 0);
+  const [editAssignedId, setEditAssignedId] = useState(task.assignedToId || '');
+
   // Handlers
+  const handleSaveTaskEdits = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim()) return;
+
+    const matchedEmp = employees.find(e => e.id === editAssignedId);
+    const matchedVendor = vendors.find(v => v.id === editAssignedId);
+
+    const painter = Number(editPainterPayout) || 0;
+    const denter = Number(editDenterPayout) || 0;
+    const totalContractor = Number(editContractorPayout) || (painter + denter);
+
+    updateJobCardTask(card.id, task.id, {
+      title: editTitle.trim(),
+      category: editCategory,
+      customerPrice: Number(editCustomerPrice) || 0,
+      contractorPayout: totalContractor,
+      estimatedCost: totalContractor,
+      painterPayout: painter,
+      denterPayout: denter,
+      assignedToId: editAssignedId,
+      assignedToName: matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : (editAssignedId ? 'Assigned Staff' : 'Unassigned'),
+      assignedType: matchedVendor ? 'VENDOR' : 'EMPLOYEE'
+    });
+
+    setIsEditingTask(false);
+  };
+
+  const handleDeleteTaskSubmit = () => {
+    if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
+      deleteJobCardTask(card.id, task.id);
+    }
+  };
   const handleReallotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAssignee) return;
@@ -225,15 +273,36 @@ export function TaskDetailCard({
               </span>
             </div>
 
-            {/* Re-allot Button for Managers/Admin */}
+            {/* Re-allot & Edit Job Buttons for Managers/Admin */}
             {isManager && (
-              <button
-                onClick={() => setIsReallotting(!isReallotting)}
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-              >
-                <User className="w-3 h-3" />
-                {isReallotting ? 'Cancel Re-allotment' : 'Re-allot / Reassign'}
-              </button>
+              <>
+                <button
+                  onClick={() => { setIsReallotting(!isReallotting); setIsEditingTask(false); }}
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  <User className="w-3 h-3" />
+                  {isReallotting ? 'Cancel Re-allotment' : 'Reassign'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsEditingTask(!isEditingTask);
+                    setIsReallotting(false);
+                    // refresh edit state from task
+                    setEditTitle(task.title);
+                    setEditCategory(task.category);
+                    setEditCustomerPrice(task.customerPrice || 0);
+                    setEditContractorPayout(task.contractorPayout || task.estimatedCost || 0);
+                    setEditPainterPayout(task.painterPayout || 0);
+                    setEditDenterPayout(task.denterPayout || 0);
+                    setEditAssignedId(task.assignedToId || '');
+                  }}
+                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <Edit className="w-3 h-3" />
+                  {isEditingTask ? 'Cancel Edit' : 'Edit Job & Payouts'}
+                </button>
+              </>
             )}
 
             <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
@@ -311,6 +380,157 @@ export function TaskDetailCard({
               className="px-3 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold"
             >
               Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* EDIT TASK & PAYOUTS PANEL */}
+      {isEditingTask && (
+        <form onSubmit={handleSaveTaskEdits} className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
+            <span className="font-extrabold text-amber-900 dark:text-amber-300 flex items-center gap-1.5 uppercase tracking-wide">
+              <Edit className="w-4 h-4 text-amber-500" /> Edit Job Details & Contractor Payout Rates
+            </span>
+            <button
+              type="button"
+              onClick={handleDeleteTaskSubmit}
+              className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 hover:bg-rose-500 hover:text-white font-bold text-xs flex items-center gap-1 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Remove Job
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Job Title / Repair Description
+              </label>
+              <input
+                type="text"
+                required
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Category
+              </label>
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value as TaskCategory)}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold"
+              >
+                <option value="MECHANICAL">MECHANICAL</option>
+                <option value="DENTING">DENTING</option>
+                <option value="PAINT">PAINT</option>
+                <option value="SUBLET_VENDOR">SUBLET_VENDOR</option>
+                <option value="WASHING">WASHING</option>
+                <option value="LATHE_WORK">LATHE_WORK</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1">
+                Customer Billing Price (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={editCustomerPrice}
+                onChange={(e) => setEditCustomerPrice(Number(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-mono font-extrabold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-purple-800 dark:text-purple-300 mb-1">
+                Painter Payout Rate (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={editPainterPayout}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || 0;
+                  setEditPainterPayout(val);
+                  setEditContractorPayout(val + editDenterPayout);
+                }}
+                className="w-full px-3 py-1.5 rounded-lg border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 font-mono font-extrabold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-orange-800 dark:text-orange-300 mb-1">
+                Denter Payout Rate (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={editDenterPayout}
+                onChange={(e) => {
+                  const val = Number(e.target.value) || 0;
+                  setEditDenterPayout(val);
+                  setEditContractorPayout(editPainterPayout + val);
+                }}
+                className="w-full px-3 py-1.5 rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 font-mono font-extrabold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-1">
+                Total Contractor Payout (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={editContractorPayout}
+                onChange={(e) => setEditContractorPayout(Number(e.target.value) || 0)}
+                className="w-full px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 font-mono font-black"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Assign Staff / Sublet Vendor
+              </label>
+              <select
+                value={editAssignedId}
+                onChange={(e) => setEditAssignedId(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold"
+              >
+                <option value="">-- Unassigned --</option>
+                <optgroup label="Workshop Employees">
+                  {employees.map(e => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam})</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Sublet Vendors">
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/20">
+            <button
+              type="button"
+              onClick={() => setIsEditingTask(false)}
+              className="px-3.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs"
+            >
+              <Save className="w-3.5 h-3.5" /> Save Changes
             </button>
           </div>
         </form>

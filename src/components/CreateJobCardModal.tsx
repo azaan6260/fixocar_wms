@@ -808,15 +808,66 @@ export function CreateJobCardModal({
                           <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
                             <span>Team: <strong>{task.team || 'General'}</strong></span>
                             <span>Category: <strong>{task.category}</strong></span>
-                            {task.isContractBasis && (
-                              <span className="text-amber-600 dark:text-amber-400 font-bold">
-                                Contract Payout: ₹{task.estimatedCost}
-                              </span>
-                            )}
                           </div>
+
+                          {/* Editable Painter/Denter or Contractor Payouts inline */}
+                          {task.isContractBasis && (
+                            <div className="flex items-center gap-2 pt-1 text-[11px]">
+                              <span className="font-bold text-amber-600 dark:text-amber-400">Payout:</span>
+                              {task.category === 'PAINT' ? (
+                                <div className="flex items-center gap-2">
+                                  <label className="flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                                    P: ₹
+                                    <input
+                                      type="number"
+                                      value={task.painterPayout ?? 800}
+                                      onChange={(e) => {
+                                        const pVal = Number(e.target.value) || 0;
+                                        setTasks(prev => prev.map((t, i) => i === idx ? {
+                                          ...t,
+                                          painterPayout: pVal,
+                                          estimatedCost: pVal + (t.denterPayout || 0)
+                                        } : t));
+                                      }}
+                                      className="w-14 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-purple-300 dark:border-purple-800 font-mono font-bold"
+                                    />
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400 font-medium">
+                                    D: ₹
+                                    <input
+                                      type="number"
+                                      value={task.denterPayout ?? 150}
+                                      onChange={(e) => {
+                                        const dVal = Number(e.target.value) || 0;
+                                        setTasks(prev => prev.map((t, i) => i === idx ? {
+                                          ...t,
+                                          denterPayout: dVal,
+                                          estimatedCost: (t.painterPayout || 0) + dVal
+                                        } : t));
+                                      }}
+                                      className="w-14 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-orange-300 dark:border-orange-800 font-mono font-bold"
+                                    />
+                                  </label>
+                                </div>
+                              ) : (
+                                <label className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                  Total: ₹
+                                  <input
+                                    type="number"
+                                    value={task.estimatedCost}
+                                    onChange={(e) => {
+                                      const cost = Number(e.target.value) || 0;
+                                      setTasks(prev => prev.map((t, i) => i === idx ? { ...t, estimatedCost: cost } : t));
+                                    }}
+                                    className="w-16 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-800 font-mono font-bold"
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {/* Team Assignment Dropdown */}
+                        {/* Team Assignment & Customer Price */}
                         <div className="flex items-center gap-2 w-full md:w-auto">
                           <select
                             value={task.assignedToId || ''}
@@ -845,7 +896,7 @@ export function CreateJobCardModal({
                           </select>
 
                           <div className="flex items-center gap-1">
-                            <span className="text-slate-400">₹</span>
+                            <span className="text-emerald-600 font-bold text-[10px]">Bill: ₹</span>
                             <input
                               type="number"
                               value={task.customerPrice}
@@ -853,7 +904,8 @@ export function CreateJobCardModal({
                                 const price = Number(e.target.value);
                                 setTasks(prev => prev.map((t, i) => i === idx ? { ...t, customerPrice: price } : t));
                               }}
-                              className="w-16 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono font-bold"
+                              className="w-16 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-mono font-bold"
+                              title="Customer Billing Price"
                             />
                           </div>
 

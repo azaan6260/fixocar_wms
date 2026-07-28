@@ -174,6 +174,34 @@ export function addJobCardComment(jobCardId: string, comment: Omit<JobCardCommen
   return createdComment!;
 }
 
+export function updateJobCardTask(jobCardId: string, taskId: string, updates: Partial<JobTask>) {
+  updateJobCard(jobCardId, (card) => {
+    const updatedTasks = card.tasks.map(task => {
+      if (task.id === taskId) {
+        return {
+          ...task,
+          ...updates
+        };
+      }
+      return task;
+    });
+
+    return {
+      ...card,
+      tasks: updatedTasks
+    };
+  });
+}
+
+export function deleteJobCardTask(jobCardId: string, taskId: string) {
+  updateJobCard(jobCardId, (card) => {
+    return {
+      ...card,
+      tasks: card.tasks.filter(task => task.id !== taskId)
+    };
+  });
+}
+
 export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: JobTask['status']) {
   updateJobCard(jobCardId, (card) => {
     const updatedTasks = card.tasks.map(task => {
