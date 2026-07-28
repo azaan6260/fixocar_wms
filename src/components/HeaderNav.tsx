@@ -23,7 +23,9 @@ import {
   Boxes,
   DollarSign,
   Palette,
-  QrCode
+  QrCode,
+  Flame,
+  Clock
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -60,6 +62,7 @@ export function HeaderNav({
 
   const row1Items = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'daily-huddle', label: '🔥 Daily Huddle', icon: Flame },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
     { id: 'standard-jobs', label: 'Standard Jobs Library', icon: Zap },

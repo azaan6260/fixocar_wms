@@ -25,6 +25,7 @@ import { CityWorkshopManagementView } from './components/CityWorkshopManagementV
 import { InventoryView } from './components/InventoryView';
 import { StandardJobsManagementView } from './components/StandardJobsManagementView';
 import { ContractorPayoutsView } from './components/ContractorPayoutsView';
+import { DailyHuddleView } from './components/DailyHuddleView';
 import { JobCardQRModal } from './components/JobCardQRModal';
 import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
 
@@ -176,6 +177,17 @@ export default function App() {
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenAIDiagnostics={() => setIsCreateModalOpen(true)}
             onNavigateTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'daily-huddle' && (
+          <DailyHuddleView
+            jobCards={jobCards}
+            currentRole={currentRole}
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
+            onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
+            onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
+            onOpenQCModal={(id) => setQcModalCardId(id)}
           />
         )}
 

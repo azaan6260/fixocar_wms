@@ -116,14 +116,14 @@ export function CreateJobCardModal({
   const [deliveryRequested, setDeliveryRequested] = useState(true);
 
   const [serviceType, setServiceType] = useState<'STANDARD_PACKAGE' | 'CUSTOM_REPAIR' | 'ACCIDENT_BODYWORK'>('STANDARD_PACKAGE');
-  const [selectedPackage, setSelectedPackage] = useState<StandardServicePackage | null>(STANDARD_PACKAGES[0]);
+  const [selectedPackage, setSelectedPackage] = useState<StandardServicePackage | null>(null);
 
   // AI Symptoms
   const [symptomsInput, setSymptomsInput] = useState('');
   const [isAiDiagnosing, setIsAiDiagnosing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Tasks List
+  // Tasks List (starts completely empty until user selects or adds jobs)
   const [tasks, setTasks] = useState<{
     title: string;
     category: TaskCategory;
@@ -136,7 +136,7 @@ export function CreateJobCardModal({
     requiresCustomerApproval: boolean;
   }[]>([]);
 
-  // When package changes, auto fill tasks
+  // When package changes on explicit user click, populate tasks
   const handlePackageSelect = (pkg: StandardServicePackage) => {
     setSelectedPackage(pkg);
     const mappedTasks = pkg.includedTasks.map(t => {
@@ -155,19 +155,16 @@ export function CreateJobCardModal({
     setTasks(mappedTasks);
   };
 
-  // Reset form when modal opens
+  // Reset form & clear tasks when modal opens
   React.useEffect(() => {
     if (isOpen) {
+      setStep(1);
+      setTasks([]);
+      setSelectedPackage(null);
+      setSymptomsInput('');
       setRegNo(prefilledRegNum || '');
     }
   }, [isOpen, prefilledRegNum]);
-
-  // Initial load of default package tasks
-  React.useEffect(() => {
-    if (serviceType === 'STANDARD_PACKAGE' && selectedPackage && tasks.length === 0) {
-      handlePackageSelect(selectedPackage);
-    }
-  }, [serviceType, selectedPackage]);
 
   // AI Diagnostics trigger
   const handleRunAiDiagnosis = async () => {
@@ -781,8 +778,9 @@ export function CreateJobCardModal({
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {tasks.length === 0 ? (
-                    <div className="py-8 text-center text-slate-400 text-xs font-medium border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl">
-                      No jobs allotted yet. Use the Job Allotment Pipeline tabs above to select panels, mechanical, or service jobs!
+                    <div className="py-8 text-center text-slate-400 text-xs font-medium border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50 p-4">
+                      <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">No jobs added to this job card yet</p>
+                      <p className="text-[11px] text-slate-500">Select standard jobs section-by-section using the section tabs above (Painting & Denting, Mechanical, Washing, Accessories, etc.) by clicking "+ Add", or add a custom task above.</p>
                     </div>
                   ) : (
                     tasks.map((task, idx) => (

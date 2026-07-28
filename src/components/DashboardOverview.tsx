@@ -19,7 +19,8 @@ import {
   Package,
   AlertTriangle,
   Check,
-  X
+  X,
+  Flame
 } from 'lucide-react';
 import { respondToRequisition, resolveConcern } from '../lib/storage';
 
@@ -164,6 +165,44 @@ export function DashboardOverview({
 
   return (
     <div className="space-y-6">
+
+      {/* Daily Huddle Quick Entry Banner */}
+      <div 
+        onClick={() => onNavigateTab('daily-huddle')}
+        className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 shadow-lg border border-indigo-900/50 hover:border-amber-400/60 transition-all cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-3">
+          <div className="bg-amber-500 text-slate-950 p-3 rounded-2xl shrink-0 font-black shadow-md group-hover:scale-105 transition-transform">
+            <Flame className="w-6 h-6 fill-current" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 font-extrabold text-[10px] uppercase tracking-widest bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                Live Shop Floor Sync
+              </span>
+              <span className="text-indigo-200 text-xs font-semibold">Today's Standup</span>
+            </div>
+            <h2 className="text-base sm:text-lg font-black tracking-tight text-white mt-0.5">
+              Daily Huddle Dashboard • Active Jobs & Upcoming Deadlines
+            </h2>
+            <p className="text-xs text-indigo-200/80">
+              Filtered list of active jobs across body shop, mechanical, washing & sublet with deadline urgency alerts.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNavigateTab('daily-huddle');
+          }}
+          className="px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0"
+        >
+          <span>Open Daily Huddle</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
 
       {/* CARS24 & WORKSHOP VEHICLE BREAKDOWN METRICS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
