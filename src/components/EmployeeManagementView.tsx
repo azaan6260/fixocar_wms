@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, Employee, AttendanceRecord, SalaryRecord, SpecializedTeam } from '../types';
+import { UserRole, Employee, AttendanceRecord, SalaryRecord, SpecializedTeam, Workshop } from '../types';
 import { 
   getEmployees, createEmployee, updateEmployee, deleteEmployee,
   getAttendances, createAttendance,
-  getSalaries, createSalaryRecord, updateSalaryStatus
+  getSalaries, createSalaryRecord, updateSalaryStatus,
+  getWorkshops
 } from '../lib/storage';
 import { 
   Users, UserPlus, Save, Trash2, Edit2, Key, CheckCircle, 
-  MapPin, Camera, DollarSign, Calendar, Clock, Lock
+  MapPin, Camera, DollarSign, Calendar, Clock, Lock, Building2, AlertTriangle
 } from 'lucide-react';
 
 interface EmployeeManagementProps {
@@ -18,6 +19,7 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [salaries, setSalaries] = useState<SalaryRecord[]>([]);
+  const [workshops, setWorkshops] = useState<Workshop[]>([]);
 
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'ATTENDANCE' | 'PAYROLL'>('DIRECTORY');
   
@@ -28,9 +30,13 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
   // Attendance state
   const [markingAttendance, setMarkingAttendance] = useState<boolean>(false);
 
+  const isSuperAdmin = currentRole === 'SUPER_ADMIN';
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
   const isManager = currentRole === 'FLOOR_MANAGER';
-  const canManageEmployees = isAdmin; // Only Admin/Super Admin can add/edit/delete
+  
+  // Admin and Managers can add employees and associate them with workshops
+  const canManageEmployees = isSuperAdmin || isAdmin || isManager;
+  const canDeleteEmployees = isSuperAdmin || isAdmin;
 
   useEffect(() => {
     refreshData();
@@ -40,11 +46,22 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
     setEmployees(getEmployees());
     setAttendances(getAttendances());
     setSalaries(getSalaries());
+    setWorkshops(getWorkshops());
   };
 
   const handleSaveEmployee = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEmployee) return;
+
+    // Ensure workshop association is properly linked
+    if (editingEmployee.workshopId) {
+      const selectedWs = workshops.find(w => w.id === editingEmployee.workshopId);
+      if (selectedWs) {
+        editingEmployee.workshopName = selectedWs.name;
+        editingEmployee.cityId = selectedWs.cityId;
+        editingEmployee.cityName = selectedWs.cityName;
+      }
+    }
 
     if (isNewEmployee) {
       createEmployee(editingEmployee as any);
@@ -140,14 +157,30 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
       {activeTab === 'DIRECTORY' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Staff Directory</h2>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Staff Directory</h2>
+              <p className="text-xs text-slate-500">Superadmins add cities/workshops. Admins & Floor Managers assign employees to workshops.</p>
+            </div>
             {canManageEmployees && (
               <button
                 onClick={() => {
+                  const defaultWs = workshops[0];
                   setEditingEmployee({
-                    id: '', name: '', role: 'MECHANIC', phone: '', email: '', 
-                    specializedTeam: 'Mechanical', status: 'AVAILABLE', activeJobsCount: 0,
-                    loginId: '', password: '', baseSalary: 25000
+                    id: '', 
+                    name: '', 
+                    role: 'MECHANIC', 
+                    phone: '', 
+                    email: '', 
+                    specializedTeam: 'Mechanical', 
+                    status: 'AVAILABLE', 
+                    activeJobsCount: 0,
+                    loginId: '', 
+                    password: '', 
+                    baseSalary: 25000,
+                    workshopId: defaultWs?.id || '',
+                    workshopName: defaultWs?.name || '',
+                    cityId: defaultWs?.cityId || '',
+                    cityName: defaultWs?.cityName || ''
                   });
                   setIsNewEmployee(true);
                 }}
@@ -174,17 +207,50 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                   
                   {canManageEmployees && (
                     <div className="flex items-center gap-2">
-                      <button onClick={() => {
-                        setEditingEmployee(emp);
-                        setIsNewEmployee(false);
-                      }} className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                      <button 
+                        onClick={() => {
+                          setEditingEmployee(emp);
+                          setIsNewEmployee(false);
+                        }} 
+                        title="Edit / Associate Workshop"
+                        className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"
+                      >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDeleteEmployee(emp.id)} className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canDeleteEmployees && (
+                        <button 
+                          onClick={() => handleDeleteEmployee(emp.id)} 
+                          title="Delete Employee"
+                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   )}
+                </div>
+
+                {/* Assigned Workshop & City Display */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                      Workshop Hub:
+                    </span>
+                    {emp.workshopName ? (
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">{emp.workshopName}</span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Unassigned</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      City Location:
+                    </span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{emp.cityName || 'N/A'}</span>
+                  </div>
                 </div>
 
                 <div className="text-xs text-slate-500 space-y-1">
@@ -194,15 +260,27 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                 </div>
 
                 {(isAdmin || isManager) && (
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 space-y-1">
-                    <p className="flex items-center justify-between">
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 space-y-2">
+                    <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1"><Key className="w-3.5 h-3.5" /> Login ID:</span>
                       <strong className="text-slate-700 dark:text-slate-300 font-mono">{emp.loginId || 'Not Set'}</strong>
-                    </p>
-                    <p className="flex items-center justify-between">
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> Base Salary:</span>
                       <strong className="text-slate-700 dark:text-slate-300 font-mono">₹{(emp.baseSalary || 0).toLocaleString('en-IN')}</strong>
-                    </p>
+                    </div>
+
+                    {canManageEmployees && (
+                      <button
+                        onClick={() => {
+                          setEditingEmployee(emp);
+                          setIsNewEmployee(false);
+                        }}
+                        className="w-full mt-2 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[11px] font-bold rounded-lg border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Building2 className="w-3.5 h-3.5" /> Associate / Change Workshop
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -394,6 +472,54 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                     <option value="Management">Management</option>
                     <option value="Logistics">Logistics</option>
                   </select>
+                </div>
+
+                {/* Mandatory Assigned Workshop Dropdown */}
+                <div className="col-span-1 sm:col-span-2 bg-blue-50/50 dark:bg-blue-950/30 p-3.5 rounded-2xl border border-blue-200 dark:border-blue-800/60 space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      Assigned Workshop Hub * (Required)
+                    </span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase">Associated City</span>
+                  </label>
+                  
+                  {workshops.length > 0 ? (
+                    <select
+                      required
+                      value={editingEmployee.workshopId || ''}
+                      onChange={e => {
+                        const selectedWsId = e.target.value;
+                        const ws = workshops.find(w => w.id === selectedWsId);
+                        setEditingEmployee({
+                          ...editingEmployee,
+                          workshopId: selectedWsId,
+                          workshopName: ws?.name || '',
+                          cityId: ws?.cityId || '',
+                          cityName: ws?.cityName || ''
+                        });
+                      }}
+                      className="w-full p-2.5 text-sm font-semibold rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 shadow-xs focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="" disabled>-- Select Assigned Workshop --</option>
+                      {workshops.map(ws => (
+                        <option key={ws.id} value={ws.id}>
+                          {ws.name} ({ws.cityName}) {ws.isCars24Partner ? '⭐ Cars24 Partner' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>No Workshops found! A Superadmin must create a Workshop in Cities & Workshops first.</span>
+                    </div>
+                  )}
+                  {editingEmployee.cityName && (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 pt-0.5">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      Assigned to City: <strong className="text-slate-700 dark:text-slate-300">{editingEmployee.cityName}</strong>
+                    </p>
+                  )}
                 </div>
               </div>
 

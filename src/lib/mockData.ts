@@ -223,6 +223,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Management',
     status: 'AVAILABLE',
     activeJobsCount: 4,
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
   },
   {
     id: 'emp-102',
@@ -233,6 +237,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Mechanical',
     status: 'BUSY',
     activeJobsCount: 2,
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
   },
   {
     id: 'emp-103',
@@ -243,6 +251,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Mechanical',
     status: 'AVAILABLE',
     activeJobsCount: 1,
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
   },
   {
     id: 'emp-104',
@@ -253,6 +265,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Denting',
     status: 'BUSY',
     activeJobsCount: 2,
+    workshopId: 'ws-delhi-south',
+    workshopName: 'FixoCar Fleet Bay - Okhla',
+    cityId: 'city-delhi',
+    cityName: 'Delhi NCR',
   },
   {
     id: 'emp-105',
@@ -263,6 +279,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Paint',
     status: 'BUSY',
     activeJobsCount: 1,
+    workshopId: 'ws-delhi-south',
+    workshopName: 'FixoCar Fleet Bay - Okhla',
+    cityId: 'city-delhi',
+    cityName: 'Delhi NCR',
   },
   {
     id: 'emp-106',
@@ -273,6 +293,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Logistics',
     status: 'BUSY',
     activeJobsCount: 1,
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
   },
   {
     id: 'emp-107',
@@ -283,6 +307,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     specializedTeam: 'Management',
     status: 'AVAILABLE',
     activeJobsCount: 0,
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    cityId: 'city-mumbai',
+    cityName: 'Mumbai',
   },
 ];
 

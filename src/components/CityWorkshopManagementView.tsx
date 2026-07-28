@@ -38,6 +38,7 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
   const [newWsIsCars24, setNewWsIsCars24] = useState(false);
   const [newWsManager, setNewWsManager] = useState('');
 
+  const isSuperAdmin = currentRole === 'SUPER_ADMIN';
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
 
   useEffect(() => {
@@ -59,6 +60,10 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
   const handleAddCitySubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSuperAdmin) {
+      alert('Only Superadmin can add new operational cities.');
+      return;
+    }
     if (!newCityName.trim()) return;
     addCity(newCityName.trim(), newCityState.trim());
     setNewCityName('');
@@ -68,6 +73,10 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
   };
 
   const handleDeleteCityClick = (id: string, name: string) => {
+    if (!isSuperAdmin) {
+      alert('Only Superadmin can delete cities.');
+      return;
+    }
     if (confirm(`Are you sure you want to delete city "${name}"? Workshops under it may need reassignment.`)) {
       deleteCity(id);
       refreshData();
@@ -76,13 +85,25 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
   const handleAddWorkshopSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newWsName.trim() || !newWsCityId) return;
+    if (!isSuperAdmin) {
+      alert('Only Superadmin can add new workshops.');
+      return;
+    }
+    if (!newWsName.trim() || !newWsCityId) {
+      alert('Workshop Name and Associated City are required!');
+      return;
+    }
 
     const city = cities.find(c => c.id === newWsCityId);
+    if (!city) {
+      alert('Please select a valid operational City for this workshop.');
+      return;
+    }
+
     addWorkshop({
       name: newWsName.trim(),
       cityId: newWsCityId,
-      cityName: city?.name || 'Central',
+      cityName: city.name,
       address: newWsAddress.trim() || 'Workshop Bay',
       phone: newWsPhone.trim() || '+91 98000 00000',
       isCars24Partner: newWsIsCars24,
@@ -105,6 +126,10 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
   };
 
   const handleDeleteWorkshopClick = (id: string, name: string) => {
+    if (!isSuperAdmin) {
+      alert('Only Superadmin can delete workshops.');
+      return;
+    }
     if (confirm(`Are you sure you want to delete workshop "${name}"?`)) {
       deleteWorkshop(id);
       refreshData();
@@ -210,24 +235,36 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
           </button>
         </div>
 
-        {activeTab === 'WORKSHOPS' && isAdmin && (
-          <button
-            onClick={() => setShowAddWorkshop(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Workshop</span>
-          </button>
+        {activeTab === 'WORKSHOPS' && (
+          isSuperAdmin ? (
+            <button
+              onClick={() => setShowAddWorkshop(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Workshop</span>
+            </button>
+          ) : (
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              🔒 Superadmin adds workshops
+            </span>
+          )
         )}
 
-        {activeTab === 'CITIES' && isAdmin && (
-          <button
-            onClick={() => setShowAddCity(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Add City</span>
-          </button>
+        {activeTab === 'CITIES' && (
+          isSuperAdmin ? (
+            <button
+              onClick={() => setShowAddCity(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add City</span>
+            </button>
+          ) : (
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              🔒 Superadmin adds cities
+            </span>
+          )
         )}
       </div>
 

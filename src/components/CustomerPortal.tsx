@@ -655,74 +655,70 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
             </div>
 
             {/* Tracker Search Results Display */}
-            {trackerSearchQuery.trim() && (
-              <div className="pt-2">
-                {matchedTrackerCards.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
-                    <Info className="w-4 h-4 shrink-0" />
-                    <span>No active job card found for "<strong>{trackerSearchQuery}</strong>". Please verify your registration number or contact helpline 8819915656.</span>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Found {matchedTrackerCards.length} matching active job card(s):
-                    </span>
+            {trackerSearchQuery.trim() && (() => {
+              const query = trackerSearchQuery.trim().toLowerCase();
+              const matchedTrackerCards = jobCards.filter(c => 
+                c.id.toLowerCase().includes(query) || 
+                c.vehicle.registrationNumber.toLowerCase().includes(query) || 
+                c.customer.phone.includes(query) || 
+                c.customer.name.toLowerCase().includes(query)
+              );
 
-                    {matchedTrackerCards.map(card => {
-                      const pendingApprovalTasks = card.tasks.filter(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
+              return (
+                <div className="pt-2 space-y-3">
+                  {matchedTrackerCards.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <span>No active job card found for "<strong>{trackerSearchQuery}</strong>". Please verify your registration number or contact helpline 8819915656.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> Found {matchedTrackerCards.length} matching active job card(s):
+                      </span>
 
-                      return (
-                        <div
-                          key={card.id}
-                          className="p-4 rounded-2xl bg-slate-900 text-white border border-blue-500/40 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-black px-2.5 py-0.5 rounded bg-blue-600 text-white">
-                                {card.vehicle.registrationNumber}
-                              </span>
-                              <span className="text-xs font-bold text-slate-300">
-                                {card.vehicle.make} {card.vehicle.model}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                ({card.id})
-                              </span>
+                      {matchedTrackerCards.map(card => {
+                        const pendingApprovalTasks = card.tasks.filter(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
+
+                        return (
+                          <div
+                            key={card.id}
+                            className="p-4 rounded-2xl bg-slate-900 text-white border border-blue-500/40 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">
+                                  {card.id}
+                                </span>
+                                <span className="font-extrabold text-sm">{card.vehicle.make} {card.vehicle.model}</span>
+                                <span className="text-xs text-slate-400 font-mono">({card.vehicle.registrationNumber})</span>
+                              </div>
+                              <p className="text-xs text-slate-300">
+                                Customer: <strong>{card.customer.name}</strong> • Service: {card.serviceType}
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-300 flex items-center gap-3">
-                              <span>Service Package: <strong>{card.packageName || 'Custom Repair'}</strong></span>
-                              <span>Floor Mgr: <strong>{card.floorManagerName || 'Assigned Manager'}</strong></span>
-                            </p>
-                          </div>
 
-                          <div className="flex items-center gap-3">
-                            <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono">
-                              Status: {card.status}
-                            </span>
-
-                            {pendingApprovalTasks.length > 0 && (
+                            <div className="flex items-center gap-3 w-full md:w-auto">
+                              {pendingApprovalTasks.length > 0 && (
+                                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 animate-pulse">
+                                  ⚠️ {pendingApprovalTasks.length} Approval Pending
+                                </span>
+                              )}
                               <button
-                                onClick={() => setActiveTab('APPROVALS')}
-                                className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs hover:bg-amber-400 transition-colors flex items-center gap-1"
+                                onClick={() => setActiveTab('JOB_CARDS')}
+                                className="grow md:grow-0 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                               >
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                Approve {pendingApprovalTasks.length} Item(s)
+                                View Live Tracker <ChevronRight className="w-4 h-4" />
                               </button>
-                            )}
-
-                            <button
-                              onClick={() => setActiveTab('JOB_CARDS')}
-                              className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-500 transition-colors"
-                            >
-                              View Full Job Card →
-                            </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Business Offerings & Rates Section Header with City Selector */}
