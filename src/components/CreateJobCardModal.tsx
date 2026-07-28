@@ -140,16 +140,12 @@ export function CreateJobCardModal({
   const handlePackageSelect = (pkg: StandardServicePackage) => {
     setSelectedPackage(pkg);
     const mappedTasks = pkg.includedTasks.map(t => {
-      // Find matching employee or vendor
-      let defaultEmp = employees.find(e => e.specializedTeam === t.defaultTeam);
-      let defaultVendor = vendors.find(v => t.category === 'SUBLET_VENDOR' && v.category === 'LATHE_WORK');
-
       return {
         title: t.title,
         category: t.category,
         team: t.defaultTeam,
-        assignedToId: defaultEmp?.id || defaultVendor?.id || employees[0]?.id,
-        assignedToName: defaultEmp?.name || defaultVendor?.name || employees[0]?.name,
+        assignedToId: undefined,
+        assignedToName: undefined,
         assignedType: (t.category === 'SUBLET_VENDOR' || t.category === 'WASHING') ? ('VENDOR' as const) : ('EMPLOYEE' as const),
         estimatedCost: t.estimatedCost,
         customerPrice: t.price,
@@ -196,8 +192,8 @@ export function CreateJobCardModal({
             title: st.title,
             category: (st.category as TaskCategory) || 'MECHANICAL',
             team: (st.team as SpecializedTeam) || 'Mechanical',
-            assignedToId: employees[0]?.id,
-            assignedToName: employees[0]?.name,
+            assignedToId: undefined,
+            assignedToName: undefined,
             assignedType: 'EMPLOYEE' as const,
             estimatedCost: st.estimatedCost || 25,
             customerPrice: st.customerPrice || 50,
@@ -224,8 +220,8 @@ export function CreateJobCardModal({
         title: 'Custom Repair / Maintenance Task',
         category: 'MECHANICAL',
         team: 'Mechanical',
-        assignedToId: employees[0]?.id,
-        assignedToName: employees[0]?.name,
+        assignedToId: undefined,
+        assignedToName: undefined,
         assignedType: 'EMPLOYEE',
         estimatedCost: 30,
         customerPrice: 65,
@@ -324,7 +320,7 @@ export function CreateJobCardModal({
             </div>
             <div>
               <h2 className="font-bold text-lg">Create New Workshop Job Card</h2>
-              <p className="text-xs text-slate-400">Step {step} of 2 • {step === 1 ? 'Vehicle & Customer Check-In' : 'Task Allotments & Service Selection'}</p>
+              <p className="text-xs text-slate-400">Step {step} of 2 • {step === 1 ? '1. Basic Vehicle & Customer Details' : '2. Tick Standard Services (Allot Later)'}</p>
             </div>
           </div>
           <button
@@ -876,13 +872,14 @@ export function CreateJobCardModal({
                               const ven = vendors.find(v => v.id === e.target.value);
                               setTasks(prev => prev.map((t, i) => i === idx ? {
                                 ...t,
-                                assignedToId: e.target.value,
-                                assignedToName: emp?.name || ven?.name || 'Assigned Staff',
+                                assignedToId: e.target.value || undefined,
+                                assignedToName: emp?.name || ven?.name || undefined,
                                 assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
                               } : t));
                             }}
                             className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
                           >
+                            <option value="">-- Unassigned (Allot Later) --</option>
                             <optgroup label="Workshop Staff">
                               {employees.map(e => (
                                 <option key={e.id} value={e.id}>{e.name} ({e.role})</option>

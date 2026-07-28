@@ -96,7 +96,7 @@ export function JobAllotmentPipeline({
       // Remove task associated with this standard job ID
       onTasksChange(selectedTasks.filter(t => t.standardJobId !== stdJob.id));
     } else {
-      const assignedPainterId = panelAssignments[stdJob.id]?.painterId || painters[0]?.id || employees[0]?.id;
+      const assignedPainterId = panelAssignments[stdJob.id]?.painterId;
       const painterObj = employees.find(e => e.id === assignedPainterId);
 
       const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
@@ -117,8 +117,8 @@ export function JobAllotmentPipeline({
         title: stdJob.title,
         category: 'PAINT',
         team: 'Paint',
-        assignedToId: painterObj?.id,
-        assignedToName: painterObj?.name || 'Unassigned Painter',
+        assignedToId: painterObj?.id || undefined,
+        assignedToName: painterObj?.name || undefined,
         assignedType: 'EMPLOYEE',
         estimatedCost: contractorPayout,
         customerPrice: price, // Panel charge
@@ -141,8 +141,8 @@ export function JobAllotmentPipeline({
       onTasksChange(selectedTasks.filter(t => t.standardJobId !== stdJob.id));
     } else {
       const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
-      let assignedEmp = employees.find(e => e.id === customAssignedId) || mechanics[0] || employees[0];
-      let assignedVendor = vendors.find(v => v.id === customAssignedId) || vendors[0];
+      let assignedEmp = customAssignedId ? employees.find(e => e.id === customAssignedId) : undefined;
+      let assignedVendor = customAssignedId ? vendors.find(v => v.id === customAssignedId) : undefined;
 
       const isVendor = stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK';
 
@@ -400,7 +400,7 @@ export function JobAllotmentPipeline({
                       </>
                     ) : (
                       <>
-                        <Plus className="w-3.5 h-3.5" /> Allot Painting Job
+                        <Plus className="w-3.5 h-3.5" /> Add Painting Job
                       </>
                     )}
                   </button>
@@ -449,12 +449,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, denters[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Denting Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Denting Job'}
                   </button>
                 </div>
               );
@@ -498,12 +498,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, mechanics[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Mechanical Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Mechanical Job'}
                   </button>
                 </div>
               );
@@ -547,12 +547,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, employees[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Washing Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Washing Job'}
                   </button>
                 </div>
               );
@@ -596,12 +596,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, employees[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-pink-600 hover:bg-pink-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-pink-600 hover:bg-pink-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Accessory Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Accessory Job'}
                   </button>
                 </div>
               );
@@ -648,12 +648,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, vendors[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Lathe Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Lathe Job'}
                   </button>
                 </div>
               );
@@ -697,12 +697,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, mechanics[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Alignment Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Alignment Job'}
                   </button>
                 </div>
               );
@@ -746,12 +746,12 @@ export function JobAllotmentPipeline({
 
                   <button
                     type="button"
-                    onClick={() => handleToggleStandardJob(job, mechanics[0]?.id)}
+                    onClick={() => handleToggleStandardJob(job)}
                     className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      selected ? 'bg-rose-500 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white'
+                      selected ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white'
                     }`}
                   >
-                    {selected ? 'Remove Job' : 'Allot Tyre Job'}
+                    {selected ? '✓ Added (Click to Remove)' : '+ Add Tyre Job'}
                   </button>
                 </div>
               );
