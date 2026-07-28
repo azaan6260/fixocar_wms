@@ -22,6 +22,7 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
 
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'ATTENDANCE' | 'PAYROLL'>('DIRECTORY');
+  const [employmentFilter, setEmploymentFilter] = useState<'ALL' | 'PAYROLL' | 'CONTRACT'>('ALL');
   
   // Create/Edit employee state
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -156,135 +157,199 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
       {/* DIRECTORY TAB */}
       {activeTab === 'DIRECTORY' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Staff Directory</h2>
               <p className="text-xs text-slate-500">Superadmins add cities/workshops. Admins & Floor Managers assign employees to workshops.</p>
             </div>
-            {canManageEmployees && (
-              <button
-                onClick={() => {
-                  const defaultWs = workshops[0];
-                  setEditingEmployee({
-                    id: '', 
-                    name: '', 
-                    role: 'MECHANIC', 
-                    phone: '', 
-                    email: '', 
-                    specializedTeam: 'Mechanical', 
-                    status: 'AVAILABLE', 
-                    activeJobsCount: 0,
-                    loginId: '', 
-                    password: '', 
-                    baseSalary: 25000,
-                    workshopId: defaultWs?.id || '',
-                    workshopName: defaultWs?.name || '',
-                    cityId: defaultWs?.cityId || '',
-                    cityName: defaultWs?.cityName || ''
-                  });
-                  setIsNewEmployee(true);
-                }}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-md flex items-center gap-2"
-              >
-                <UserPlus className="w-4 h-4" /> Add Employee
-              </button>
-            )}
+            
+            <div className="flex items-center gap-3">
+              {/* Filter Pills */}
+              <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                <button
+                  onClick={() => setEmploymentFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    employmentFilter === 'ALL'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  All ({employees.length})
+                </button>
+                <button
+                  onClick={() => setEmploymentFilter('PAYROLL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    employmentFilter === 'PAYROLL'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600'
+                  }`}
+                >
+                  💼 Payroll ({employees.filter(e => e.employmentType === 'PAYROLL').length})
+                </button>
+                <button
+                  onClick={() => setEmploymentFilter('CONTRACT')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    employmentFilter === 'CONTRACT'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-purple-600'
+                  }`}
+                >
+                  📜 Contract Basis ({employees.filter(e => e.employmentType === 'CONTRACT').length})
+                </button>
+              </div>
+
+              {canManageEmployees && (
+                <button
+                  onClick={() => {
+                    const defaultWs = workshops[0];
+                    setEditingEmployee({
+                      id: '', 
+                      name: '', 
+                      role: 'MECHANIC', 
+                      phone: '', 
+                      email: '', 
+                      specializedTeam: 'Mechanical', 
+                      status: 'AVAILABLE', 
+                      activeJobsCount: 0,
+                      employmentType: 'PAYROLL',
+                      loginId: '', 
+                      password: '', 
+                      baseSalary: 25000,
+                      workshopId: defaultWs?.id || '',
+                      workshopName: defaultWs?.name || '',
+                      cityId: defaultWs?.cityId || '',
+                      cityName: defaultWs?.cityName || ''
+                    });
+                    setIsNewEmployee(true);
+                  }}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-2 whitespace-nowrap"
+                >
+                  <UserPlus className="w-4 h-4" /> Add Employee
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {employees.map(emp => (
-              <div key={emp.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center text-slate-500 font-bold text-lg">
-                      {emp.avatarUrl ? <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover" /> : emp.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 dark:text-slate-100">{emp.name}</h3>
-                      <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">{emp.role}</span>
-                    </div>
-                  </div>
-                  
-                  {canManageEmployees && (
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => {
-                          setEditingEmployee(emp);
-                          setIsNewEmployee(false);
-                        }} 
-                        title="Edit / Associate Workshop"
-                        className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {canDeleteEmployees && (
-                        <button 
-                          onClick={() => handleDeleteEmployee(emp.id)} 
-                          title="Delete Employee"
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+            {employees
+              .filter(emp => employmentFilter === 'ALL' || emp.employmentType === employmentFilter)
+              .map(emp => {
+                const isContract = emp.employmentType === 'CONTRACT';
+
+                return (
+                  <div key={emp.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center text-slate-500 font-bold text-lg">
+                          {emp.avatarUrl ? <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover" /> : emp.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-slate-900 dark:text-slate-100">{emp.name}</h3>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                              {emp.role}
+                            </span>
+                            {isContract ? (
+                              <span className="text-[10px] uppercase font-black text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded border border-purple-300 dark:border-purple-800">
+                                📜 Contract Basis
+                              </span>
+                            ) : (
+                              <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                                💼 Payroll
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {canManageEmployees && (
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingEmployee(emp);
+                              setIsNewEmployee(false);
+                            }} 
+                            title="Edit / Associate Workshop"
+                            className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {canDeleteEmployees && (
+                            <button 
+                              onClick={() => handleDeleteEmployee(emp.id)} 
+                              title="Delete Employee"
+                              className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Assigned Workshop & City Display */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                      Workshop Hub:
-                    </span>
-                    {emp.workshopName ? (
-                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">{emp.workshopName}</span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Unassigned</span>
-                    )}
-                  </div>
+                    {/* Assigned Workshop & City Display */}
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          Workshop Hub:
+                        </span>
+                        {emp.workshopName ? (
+                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">{emp.workshopName}</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Unassigned</span>
+                        )}
+                      </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      City Location:
-                    </span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">{emp.cityName || 'N/A'}</span>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-500 space-y-1">
-                  <p><strong>Team:</strong> {emp.specializedTeam}</p>
-                  <p><strong>Phone:</strong> {emp.phone}</p>
-                  <p><strong>Status:</strong> {emp.status}</p>
-                </div>
-
-                {(isAdmin || isManager) && (
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1"><Key className="w-3.5 h-3.5" /> Login ID:</span>
-                      <strong className="text-slate-700 dark:text-slate-300 font-mono">{emp.loginId || 'Not Set'}</strong>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> Base Salary:</span>
-                      <strong className="text-slate-700 dark:text-slate-300 font-mono">₹{(emp.baseSalary || 0).toLocaleString('en-IN')}</strong>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          City Location:
+                        </span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">{emp.cityName || 'N/A'}</span>
+                      </div>
                     </div>
 
-                    {canManageEmployees && (
-                      <button
-                        onClick={() => {
-                          setEditingEmployee(emp);
-                          setIsNewEmployee(false);
-                        }}
-                        className="w-full mt-2 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[11px] font-bold rounded-lg border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <Building2 className="w-3.5 h-3.5" /> Associate / Change Workshop
-                      </button>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p><strong>Team:</strong> {emp.specializedTeam}</p>
+                      <p><strong>Phone:</strong> {emp.phone}</p>
+                      <p><strong>Status:</strong> {emp.status}</p>
+                    </div>
+
+                    {(isAdmin || isManager) && (
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1"><Key className="w-3.5 h-3.5" /> Login ID:</span>
+                          <strong className="text-slate-700 dark:text-slate-300 font-mono">{emp.loginId || 'Not Set'}</strong>
+                        </div>
+
+                        {isContract ? (
+                          <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-[11px] text-purple-800 dark:text-purple-300">
+                            <strong>Piece-Rate / Job Basis:</strong> Earns payout per job allocation (Denting & Painting). Settled via Contractor Desk.
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> Base Salary:</span>
+                            <strong className="text-slate-700 dark:text-slate-300 font-mono">₹{(emp.baseSalary || 0).toLocaleString('en-IN')} / mo</strong>
+                          </div>
+                        )}
+
+                        {canManageEmployees && (
+                          <button
+                            onClick={() => {
+                              setEditingEmployee(emp);
+                              setIsNewEmployee(false);
+                            }}
+                            className="w-full mt-2 py-1.5 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[11px] font-bold rounded-lg border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Building2 className="w-3.5 h-3.5" /> Associate / Edit Details
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                );
+              })}
           </div>
         </div>
       )}
@@ -353,29 +418,68 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
       {/* PAYROLL TAB */}
       {activeTab === 'PAYROLL' && (isAdmin || isManager) && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Payroll & Salary Transfers</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">Payroll & Salary Transfers</h2>
+              <p className="text-xs text-slate-500">Monthly salary processing for full-time payroll staff. Piece-rate contractors (Denters & Painters) are managed in Contractor Payouts Desk.</p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-purple-50/80 dark:bg-purple-950/40 rounded-2xl border border-purple-200 dark:border-purple-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                📜
+              </div>
+              <div>
+                <h4 className="font-extrabold text-xs text-purple-900 dark:text-purple-200">Contract Basis Staff (Denters & Painters)</h4>
+                <p className="text-xs text-purple-700 dark:text-purple-300">Contractors earn piece-rate job payouts per allocated job card panel instead of a monthly fixed salary.</p>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Generate Salary List */}
             <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Eligible Employees</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                <span>Eligible Payroll Staff</span>
+                <span className="text-xs text-blue-600 font-bold bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">Fixed Salary</span>
+              </h3>
+              
               <div className="space-y-3">
-                {employees.map(emp => (
-                  <div key={`sal-gen-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                    <div>
-                      <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{emp.name}</p>
-                      <p className="text-xs text-slate-500">₹{(emp.baseSalary || 0).toLocaleString('en-IN')} / mo</p>
+                {employees.map(emp => {
+                  const isContract = emp.employmentType === 'CONTRACT';
+                  
+                  return (
+                    <div key={`sal-gen-${emp.id}`} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{emp.name}</p>
+                          {isContract ? (
+                            <span className="text-[9px] font-black uppercase text-purple-600 bg-purple-100 dark:bg-purple-950 px-1.5 py-0.5 rounded">Contract</span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase text-emerald-600 bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.5 rounded">Payroll</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          {isContract ? 'Piece-rate payouts per job' : `₹${(emp.baseSalary || 0).toLocaleString('en-IN')} / mo`}
+                        </p>
+                      </div>
+
+                      {isAdmin && (
+                        isContract ? (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+                            Contract Desk
+                          </span>
+                        ) : (
+                          <button onClick={() => handleGenerateSalary(emp.id)} className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
+                            Generate
+                          </button>
+                        )
+                      )}
                     </div>
-                    {isAdmin && (
-                      <button onClick={() => handleGenerateSalary(emp.id)} className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
-                        Generate
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -446,11 +550,30 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">System Role</label>
-                  <select value={editingEmployee.role} onChange={e => setEditingEmployee({...editingEmployee, role: e.target.value as UserRole})} className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                  <select 
+                    value={editingEmployee.role} 
+                    onChange={e => {
+                      const newRole = e.target.value as UserRole;
+                      const isContractRole = newRole === 'DENTER' || newRole === 'PAINTER';
+                      const defaultTeam: SpecializedTeam = 
+                        newRole === 'DENTER' ? 'Denting' : 
+                        newRole === 'PAINTER' ? 'Paint' : 
+                        newRole === 'MECHANIC' ? 'Mechanical' : 
+                        newRole === 'DELIVERY_BOY' ? 'Logistics' : editingEmployee.specializedTeam;
+
+                      setEditingEmployee({
+                        ...editingEmployee, 
+                        role: newRole,
+                        specializedTeam: defaultTeam,
+                        employmentType: isContractRole ? 'CONTRACT' : 'PAYROLL'
+                      });
+                    }} 
+                    className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                  >
                     <option value="MECHANIC">Mechanic</option>
                     <option value="FLOOR_MANAGER">Floor Manager</option>
-                    <option value="DENTER">Denter</option>
-                    <option value="PAINTER">Painter</option>
+                    <option value="DENTER">Denter (Contract Basis)</option>
+                    <option value="PAINTER">Painter (Contract Basis)</option>
                     <option value="DELIVERY_BOY">Delivery Boy</option>
                     <option value="ADMIN">Admin</option>
                     <option value="SUPER_ADMIN">Super Admin</option>
@@ -464,14 +587,69 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Specialized Team</label>
-                  <select value={editingEmployee.specializedTeam} onChange={e => setEditingEmployee({...editingEmployee, specializedTeam: e.target.value as SpecializedTeam})} className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                  <select 
+                    value={editingEmployee.specializedTeam} 
+                    onChange={e => {
+                      const team = e.target.value as SpecializedTeam;
+                      const isContractTeam = team === 'Denting' || team === 'Paint';
+                      setEditingEmployee({
+                        ...editingEmployee, 
+                        specializedTeam: team,
+                        employmentType: isContractTeam ? 'CONTRACT' : editingEmployee.employmentType || 'PAYROLL'
+                      });
+                    }} 
+                    className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                  >
                     <option value="Mechanical">Mechanical</option>
-                    <option value="Denting">Denting</option>
-                    <option value="Paint">Paint</option>
+                    <option value="Denting">Denting (Contract Payouts)</option>
+                    <option value="Paint">Paint (Contract Payouts)</option>
                     <option value="Detailing & Washing">Detailing & Washing</option>
                     <option value="Management">Management</option>
                     <option value="Logistics">Logistics</option>
                   </select>
+                </div>
+
+                {/* Employment Basis Selector (Payroll vs Contract) */}
+                <div className="col-span-1 sm:col-span-2 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-2">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      Employment Basis & Pay Structure *
+                    </span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase">Denters & Painters default to Contract Basis</span>
+                  </label>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingEmployee({ ...editingEmployee, employmentType: 'PAYROLL' })}
+                      className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                        editingEmployee.employmentType === 'PAYROLL' || !editingEmployee.employmentType
+                          ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500/30 font-bold'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="font-extrabold text-xs flex items-center gap-1.5">
+                        💼 Full-Time Payroll
+                      </span>
+                      <span className="text-[10px] opacity-80 font-normal">Monthly fixed base salary + monthly payroll</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingEmployee({ ...editingEmployee, employmentType: 'CONTRACT' })}
+                      className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                        editingEmployee.employmentType === 'CONTRACT'
+                          ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-500 text-purple-900 dark:text-purple-100 ring-2 ring-purple-500/30 font-bold'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="font-extrabold text-xs flex items-center gap-1.5">
+                        📜 Contract Basis
+                      </span>
+                      <span className="text-[10px] opacity-80 font-normal">Piece-rate / job-based payout (Denters, Painters)</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Mandatory Assigned Workshop Dropdown */}

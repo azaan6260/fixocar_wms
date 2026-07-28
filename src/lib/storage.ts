@@ -499,11 +499,29 @@ export function addPartToTask(
 // 2. EMPLOYEES STORAGE
 export function getEmployees(): Employee[] {
   const local = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
+  let list: Employee[];
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(INITIAL_EMPLOYEES));
-    return INITIAL_EMPLOYEES;
+    list = INITIAL_EMPLOYEES;
+  } else {
+    try { list = JSON.parse(local); } catch { list = INITIAL_EMPLOYEES; }
   }
-  try { return JSON.parse(local); } catch { return INITIAL_EMPLOYEES; }
+
+  // Ensure default employmentType for denters/painters (CONTRACT) vs others (PAYROLL)
+  let updated = false;
+  const migrated = list.map(emp => {
+    if (!emp.employmentType) {
+      updated = true;
+      const isContract = emp.role === 'DENTER' || emp.role === 'PAINTER' || 
+                         emp.specializedTeam === 'Denting' || emp.specializedTeam === 'Paint';
+      return { ...emp, employmentType: isContract ? ('CONTRACT' as const) : ('PAYROLL' as const) };
+    }
+    return emp;
+  });
+
+  if (!local || updated) {
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(migrated));
+  }
+  return migrated;
 }
 
 export function saveEmployees(employees: Employee[]) {

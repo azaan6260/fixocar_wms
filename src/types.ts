@@ -56,6 +56,7 @@ export interface Employee {
   loginId?: string;
   password?: string;
   baseSalary?: number;
+  employmentType?: 'PAYROLL' | 'CONTRACT'; // Payroll (Full-Time) vs Contract Basis (Piece-rate per job)
   cityId?: string;
   cityName?: string;
   workshopId?: string;
