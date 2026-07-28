@@ -105,6 +105,14 @@ export function JobAllotmentPipeline({
 
       const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
 
+      const painterPayout = isCars24
+        ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
+        : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 950);
+
+      const denterPayout = isCars24
+        ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
+        : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200);
+
       // 1. Paint Task assigned to Painter
       const paintTask: AllocatedTaskItem = {
         id: `task-paint-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -114,11 +122,11 @@ export function JobAllotmentPipeline({
         assignedToId: painterObj?.id,
         assignedToName: painterObj?.name || 'Unassigned Painter',
         assignedType: 'EMPLOYEE',
-        estimatedCost: stdJob.painterPayout || Math.round(price * 0.6),
+        estimatedCost: painterPayout,
         customerPrice: price, // Main panel charge billed here
         requiresCustomerApproval: false,
         isContractBasis: true,
-        painterPayout: stdJob.painterPayout || 800,
+        painterPayout: painterPayout,
         denterPayout: 0,
         standardJobId: stdJob.id
       };
@@ -132,12 +140,12 @@ export function JobAllotmentPipeline({
         assignedToId: denterObj?.id,
         assignedToName: denterObj?.name || 'Unassigned Denter',
         assignedType: 'EMPLOYEE',
-        estimatedCost: stdJob.denterPayout || 150,
+        estimatedCost: denterPayout,
         customerPrice: 0, // Billed inside main panel charge
         requiresCustomerApproval: false,
         isContractBasis: true,
         painterPayout: 0,
-        denterPayout: stdJob.denterPayout || 150,
+        denterPayout: denterPayout,
         standardJobId: stdJob.id
       };
 
@@ -158,6 +166,18 @@ export function JobAllotmentPipeline({
 
       const isVendor = stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK';
 
+      const painterPayout = isCars24
+        ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 0)
+        : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 0);
+
+      const denterPayout = isCars24
+        ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 0)
+        : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 0);
+
+      const contractorPayout = isCars24
+        ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
+        : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
+
       const newTask: AllocatedTaskItem = {
         id: `task-std-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: stdJob.title,
@@ -169,12 +189,12 @@ export function JobAllotmentPipeline({
         assignedToId: isVendor ? assignedVendor?.id : assignedEmp?.id,
         assignedToName: isVendor ? assignedVendor?.name : assignedEmp?.name,
         assignedType: isVendor ? 'VENDOR' : 'EMPLOYEE',
-        estimatedCost: stdJob.isContractBasis ? stdJob.contractorPayout : Math.round(price * 0.5),
+        estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(price * 0.5),
         customerPrice: price,
         requiresCustomerApproval: false,
         isContractBasis: stdJob.isContractBasis,
-        painterPayout: stdJob.painterPayout || 0,
-        denterPayout: stdJob.denterPayout || 0,
+        painterPayout: painterPayout,
+        denterPayout: denterPayout,
         standardJobId: stdJob.id
       };
 
@@ -340,14 +360,30 @@ export function JobAllotmentPipeline({
                     </div>
 
                     {/* Contractor Payout breakdown badge */}
-                    <div className="mt-2 p-2 rounded-xl bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-purple-900 dark:text-purple-200">Contractor Payouts:</span>
-                      <div className="flex items-center gap-2 font-black text-purple-700 dark:text-purple-300">
-                        <span>Painter: ₹{panel.painterPayout || 800}</span>
-                        <span>•</span>
-                        <span>Denter: ₹{panel.denterPayout || 150}</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const panelPainterPayout = isCars24
+                        ? (panel.cars24PainterPayout ?? panel.painterPayout ?? 800)
+                        : (panel.retailPainterPayout ?? panel.painterPayout ?? 950);
+                      const panelDenterPayout = isCars24
+                        ? (panel.cars24DenterPayout ?? panel.denterPayout ?? 150)
+                        : (panel.retailDenterPayout ?? panel.denterPayout ?? 200);
+                      
+                      return (
+                        <div className="mt-2 p-2 rounded-xl bg-purple-100/60 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1">
+                            <span>Contractor Payouts:</span>
+                            <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200">
+                              {isCars24 ? '⚡ Cars24' : '🛒 Retail'}
+                            </span>
+                          </span>
+                          <div className="flex items-center gap-2 font-black text-purple-700 dark:text-purple-300">
+                            <span>Painter: ₹{panelPainterPayout}</span>
+                            <span>•</span>
+                            <span>Denter: ₹{panelDenterPayout}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Staff Allocation Dropdowns when Selected */}

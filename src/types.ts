@@ -347,6 +347,15 @@ export interface StandardJob {
   retailPrice: number;    // Customer price for Retail vehicles
   cars24Price: number;    // B2B Customer price for Cars24 fleet
   isContractBasis: boolean; // True for Denting, Painting, Sublet
+  // Retail Contract Rates
+  retailPainterPayout?: number;  // Painter payout for Retail vehicles
+  retailDenterPayout?: number;   // Denter payout for Retail vehicles
+  retailContractorPayout?: number; // Combined payout for Retail
+  // Cars24 Contract Rates
+  cars24PainterPayout?: number;  // Painter payout for Cars24 fleet
+  cars24DenterPayout?: number;   // Denter payout for Cars24 fleet
+  cars24ContractorPayout?: number; // Combined payout for Cars24
+  // General / Fallback Contract Rates
   contractorPayout: number; // Total direct payout reserved for painter + denter
   painterPayout?: number;   // Specific payout to Painter
   denterPayout?: number;    // Specific payout to Denter

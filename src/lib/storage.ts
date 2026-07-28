@@ -1187,8 +1187,21 @@ export function addStandardJobToJobCard(
   const employees = getEmployees();
   const vendorList = getVendors();
 
+  // Dual contract pricing check: Cars24 vs Retail
+  const painterPayout = card.isCars24
+    ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
+    : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 950);
+
+  const denterPayout = card.isCars24
+    ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
+    : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200);
+
+  const contractorPayout = card.isCars24
+    ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
+    : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
+
   // If this is a panel paint job with denterPayout > 0 (or category === 'PAINT'), we create BOTH Painter and Denter tasks!
-  const hasDenterPairing = stdJob.category === 'PAINT' && (stdJob.denterPayout || 0) > 0;
+  const hasDenterPairing = stdJob.category === 'PAINT' && (denterPayout > 0 || (stdJob.denterPayout || 0) > 0);
   const createdTasks: JobTask[] = [];
 
   if (hasDenterPairing) {
@@ -1205,16 +1218,16 @@ export function addStandardJobToJobCard(
       assignedToId: painterEmp?.id || customAssignedId,
       assignedToName: painterEmp?.name || (customAssignedId ? 'Assigned Painter' : 'Unassigned Painter'),
       assignedType: 'EMPLOYEE',
-      estimatedCost: stdJob.painterPayout || Math.round(customerPrice * 0.6),
+      estimatedCost: painterPayout,
       customerPrice: customerPrice, // Main customer panel charge
       status: 'PENDING',
       requiresCustomerApproval: false,
       isContractBasis: true,
-      contractorPayout: stdJob.painterPayout || 800,
-      painterPayout: stdJob.painterPayout || 800,
+      contractorPayout: painterPayout,
+      painterPayout: painterPayout,
       denterPayout: 0,
       standardJobId: stdJob.id,
-      notes: `${card.isCars24 ? '⚡ Cars24 Panel Paint Rate' : '🛒 Retail Panel Paint Rate'}. ${stdJob.description || ''}`
+      notes: `${card.isCars24 ? '⚡ Cars24 Panel Paint Contract Rate' : '🛒 Retail Panel Paint Contract Rate'}. ${stdJob.description || ''}`
     };
     createdTasks.push(paintTask);
 
@@ -1231,16 +1244,16 @@ export function addStandardJobToJobCard(
       assignedToId: denterEmp?.id || customDenterId,
       assignedToName: denterEmp?.name || (customDenterId ? 'Assigned Denter' : 'Unassigned Denter'),
       assignedType: 'EMPLOYEE',
-      estimatedCost: stdJob.denterPayout || 150,
+      estimatedCost: denterPayout,
       customerPrice: 0, // Included in main panel billing
       status: 'PENDING',
       requiresCustomerApproval: false,
       isContractBasis: true,
-      contractorPayout: stdJob.denterPayout || 150,
+      contractorPayout: denterPayout,
       painterPayout: 0,
-      denterPayout: stdJob.denterPayout || 150,
+      denterPayout: denterPayout,
       standardJobId: stdJob.id,
-      notes: `Pre-paint panel denting & surface flattening for ${stdJob.title}`
+      notes: `Pre-paint panel denting (${card.isCars24 ? '⚡ Cars24' : '🛒 Retail'} rate) for ${stdJob.title}`
     };
     createdTasks.push(dentTask);
   } else {
@@ -1276,16 +1289,16 @@ export function addStandardJobToJobCard(
       assignedToId: customAssignedId,
       assignedToName: assignedName,
       assignedType,
-      estimatedCost: stdJob.isContractBasis ? stdJob.contractorPayout : Math.round(customerPrice * 0.5),
+      estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(customerPrice * 0.5),
       customerPrice,
       status: 'PENDING',
       requiresCustomerApproval: false,
       isContractBasis: stdJob.isContractBasis,
-      contractorPayout: stdJob.isContractBasis ? stdJob.contractorPayout : 0,
-      painterPayout: stdJob.painterPayout || 0,
-      denterPayout: stdJob.denterPayout || 0,
+      contractorPayout: stdJob.isContractBasis ? contractorPayout : 0,
+      painterPayout: painterPayout,
+      denterPayout: denterPayout,
       standardJobId: stdJob.id,
-      notes: `${card.isCars24 ? '⚡ Cars24 Fleet Standard Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
+      notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
     };
     createdTasks.push(newTask);
   }

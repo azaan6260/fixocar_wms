@@ -21,9 +21,14 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [formRetailPrice, setFormRetailPrice] = useState<number>(2500);
   const [formCars24Price, setFormCars24Price] = useState<number>(1800);
   const [formIsContract, setFormIsContract] = useState<boolean>(true);
+  
+  // Dual Contract Payout state: Retail vs Cars24
+  const [formRetailPainterPayout, setFormRetailPainterPayout] = useState<number>(950);
+  const [formRetailDenterPayout, setFormRetailDenterPayout] = useState<number>(200);
+  const [formCars24PainterPayout, setFormCars24PainterPayout] = useState<number>(800);
+  const [formCars24DenterPayout, setFormCars24DenterPayout] = useState<number>(150);
   const [formContractorPayout, setFormContractorPayout] = useState<number>(950);
-  const [formPainterPayout, setFormPainterPayout] = useState<number>(800);
-  const [formDenterPayout, setFormDenterPayout] = useState<number>(150);
+  
   const [formHours, setFormHours] = useState<number>(2);
   const [formDesc, setFormDesc] = useState('');
 
@@ -35,12 +40,14 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setEditingJobId(null);
     setFormTitle('');
     setFormCat('PAINT');
-    setFormRetailPrice(1350);
+    setFormRetailPrice(1800);
     setFormCars24Price(1350);
     setFormIsContract(true);
-    setFormPainterPayout(800);
-    setFormDenterPayout(150);
-    setFormContractorPayout(950);
+    setFormRetailPainterPayout(950);
+    setFormRetailDenterPayout(200);
+    setFormCars24PainterPayout(800);
+    setFormCars24DenterPayout(150);
+    setFormContractorPayout(1150);
     setFormHours(3);
     setFormDesc('');
     setIsModalOpen(true);
@@ -53,8 +60,10 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormRetailPrice(job.retailPrice);
     setFormCars24Price(job.cars24Price);
     setFormIsContract(job.isContractBasis);
-    setFormPainterPayout(job.painterPayout || 0);
-    setFormDenterPayout(job.denterPayout || 0);
+    setFormRetailPainterPayout(job.retailPainterPayout ?? job.painterPayout ?? 950);
+    setFormRetailDenterPayout(job.retailDenterPayout ?? job.denterPayout ?? 200);
+    setFormCars24PainterPayout(job.cars24PainterPayout ?? job.painterPayout ?? 800);
+    setFormCars24DenterPayout(job.cars24DenterPayout ?? job.denterPayout ?? 150);
     setFormContractorPayout(job.contractorPayout || ((job.painterPayout || 0) + (job.denterPayout || 0)));
     setFormHours(job.estimatedHours);
     setFormDesc(job.description || '');
@@ -72,36 +81,42 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     e.preventDefault();
     if (!formTitle.trim()) return;
 
-    const painter = formIsContract ? (Number(formPainterPayout) || 0) : 0;
-    const denter = formIsContract ? (Number(formDenterPayout) || 0) : 0;
-    const totalPayout = formIsContract ? (Number(formContractorPayout) || (painter + denter)) : 0;
+    const retailPainter = formIsContract ? (Number(formRetailPainterPayout) || 0) : 0;
+    const retailDenter = formIsContract ? (Number(formRetailDenterPayout) || 0) : 0;
+    const retailTotal = retailPainter + retailDenter;
+
+    const cars24Painter = formIsContract ? (Number(formCars24PainterPayout) || 0) : 0;
+    const cars24Denter = formIsContract ? (Number(formCars24DenterPayout) || 0) : 0;
+    const cars24Total = cars24Painter + cars24Denter;
+
+    const generalTotal = formIsContract ? (Number(formContractorPayout) || retailTotal || cars24Total) : 0;
+
+    const jobData: Partial<StandardJob> = {
+      title: formTitle.trim(),
+      category: formCat,
+      retailPrice: Number(formRetailPrice) || 0,
+      cars24Price: Number(formCars24Price) || 0,
+      isContractBasis: formIsContract,
+      // Retail contract rates
+      retailPainterPayout: retailPainter,
+      retailDenterPayout: retailDenter,
+      retailContractorPayout: retailTotal,
+      // Cars24 contract rates
+      cars24PainterPayout: cars24Painter,
+      cars24DenterPayout: cars24Denter,
+      cars24ContractorPayout: cars24Total,
+      // Fallback
+      painterPayout: retailPainter || cars24Painter,
+      denterPayout: retailDenter || cars24Denter,
+      contractorPayout: generalTotal,
+      estimatedHours: Number(formHours) || 1,
+      description: formDesc.trim()
+    };
 
     if (editingJobId) {
-      updateStandardJob(editingJobId, {
-        title: formTitle.trim(),
-        category: formCat,
-        retailPrice: Number(formRetailPrice) || 0,
-        cars24Price: Number(formCars24Price) || 0,
-        isContractBasis: formIsContract,
-        painterPayout: painter,
-        denterPayout: denter,
-        contractorPayout: totalPayout,
-        estimatedHours: Number(formHours) || 1,
-        description: formDesc.trim()
-      });
+      updateStandardJob(editingJobId, jobData);
     } else {
-      addStandardJob({
-        title: formTitle.trim(),
-        category: formCat,
-        retailPrice: Number(formRetailPrice) || 0,
-        cars24Price: Number(formCars24Price) || 0,
-        isContractBasis: formIsContract,
-        painterPayout: painter,
-        denterPayout: denter,
-        contractorPayout: totalPayout,
-        estimatedHours: Number(formHours) || 1,
-        description: formDesc.trim()
-      });
+      addStandardJob(jobData as StandardJob);
     }
 
     setIsModalOpen(false);
@@ -240,15 +255,41 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 </div>
               </div>
 
-              {/* Contractor Payout Section */}
+              {/* Contractor Payout Section with Dual Rate Comparison */}
               {job.isContractBasis && (
-                <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-bold text-amber-800 dark:text-amber-200">
-                  <span className="flex items-center gap-1">
-                    <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Contractor Payout Rate:
-                  </span>
-                  <span className="font-black text-amber-600 dark:text-amber-400 text-sm">
-                    ₹{job.contractorPayout.toLocaleString()}
-                  </span>
+                <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-800 dark:text-amber-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                    <span className="flex items-center gap-1 font-extrabold">
+                      <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Contract Rates:
+                    </span>
+                    <span className="text-[10px] text-slate-500">Painter / Denter</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex flex-col">
+                      <span className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Retail Contract</span>
+                      <span className="font-mono font-black">
+                        ₹{job.retailContractorPayout ?? job.contractorPayout}
+                      </span>
+                      {(job.retailPainterPayout || job.painterPayout) ? (
+                        <span className="text-[9.5px] text-emerald-700 dark:text-emerald-400/80">
+                          P: ₹{job.retailPainterPayout ?? job.painterPayout} | D: ₹{job.retailDenterPayout ?? job.denterPayout}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-300 flex flex-col">
+                      <span className="text-[9px] font-extrabold uppercase text-blue-600 dark:text-blue-400">Cars24 Contract</span>
+                      <span className="font-mono font-black">
+                        ₹{job.cars24ContractorPayout ?? job.contractorPayout}
+                      </span>
+                      {(job.cars24PainterPayout || job.painterPayout) ? (
+                        <span className="text-[9.5px] text-blue-700 dark:text-blue-400/80">
+                          P: ₹{job.cars24PainterPayout ?? job.painterPayout} | D: ₹{job.cars24DenterPayout ?? job.denterPayout}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -376,56 +417,80 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 </div>
 
                 {formIsContract && (
-                  <div className="space-y-3 pt-2 border-t border-amber-500/20">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-purple-700 dark:text-purple-300 mb-1">
-                          Painter Payout (₹)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formPainterPayout}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 0;
-                            setFormPainterPayout(val);
-                            setFormContractorPayout(val + formDenterPayout);
-                          }}
-                          className="w-full px-3 py-2 rounded-xl border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
-                        />
+                  <div className="space-y-3 pt-2 border-t border-amber-500/20 text-xs">
+                    
+                    {/* Retail Contract Rates Box */}
+                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-2">
+                      <div className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                        <span>🛒 Retail Contract Rates</span>
+                        <span className="font-mono text-xs">Total: ₹{(Number(formRetailPainterPayout) || 0) + (Number(formRetailDenterPayout) || 0)}</span>
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-orange-700 dark:text-orange-300 mb-1">
-                          Denter Payout (₹)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formDenterPayout}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 0;
-                            setFormDenterPayout(val);
-                            setFormContractorPayout(formPainterPayout + val);
-                          }}
-                          className="w-full px-3 py-2 rounded-xl border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
-                        />
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Retail Painter (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formRetailPainterPayout}
+                            onChange={(e) => setFormRetailPainterPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Retail Denter (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formRetailDenterPayout}
+                            onChange={(e) => setFormRetailDenterPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block font-bold text-amber-800 dark:text-amber-300 mb-1">
-                        Total Combined Contractor Payout (₹)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        required
-                        value={formContractorPayout}
-                        onChange={(e) => setFormContractorPayout(Number(e.target.value))}
-                        className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-black text-amber-600 dark:text-amber-400 text-sm"
-                      />
+                    {/* Cars24 Contract Rates Box */}
+                    <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 space-y-2">
+                      <div className="font-extrabold text-blue-800 dark:text-blue-300 flex items-center justify-between">
+                        <span>⚡ Cars24 Fleet Contract Rates</span>
+                        <span className="font-mono text-xs">Total: ₹{(Number(formCars24PainterPayout) || 0) + (Number(formCars24DenterPayout) || 0)}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Cars24 Painter (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formCars24PainterPayout}
+                            onChange={(e) => setFormCars24PainterPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Cars24 Denter (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formCars24DenterPayout}
+                            onChange={(e) => setFormCars24DenterPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                          />
+                        </div>
+                      </div>
                     </div>
+
                   </div>
                 )}
               </div>
