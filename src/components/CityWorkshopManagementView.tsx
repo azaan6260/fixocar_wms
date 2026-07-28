@@ -53,9 +53,11 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
     setWorkshops(wList);
     setEmployees(eList);
 
-    if (cList.length > 0 && !newWsCityId) {
-      setNewWsCityId(cList[0].id);
-    }
+    setNewWsCityId(prev => {
+      if (cList.length === 0) return '';
+      const exists = cList.some(c => c.id === prev);
+      return exists ? prev : cList[0].id;
+    });
   };
 
   const handleAddCitySubmit = (e: React.FormEvent) => {
@@ -65,10 +67,15 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
       return;
     }
     if (!newCityName.trim()) return;
-    addCity(newCityName.trim(), newCityState.trim());
+    const createdCity = addCity(newCityName.trim(), newCityState.trim());
     setNewCityName('');
     setNewCityState('');
     setShowAddCity(false);
+    
+    // Automatically select newly created city for new workshop creation
+    if (createdCity && createdCity.id) {
+      setNewWsCityId(createdCity.id);
+    }
     refreshData();
   };
 
@@ -89,12 +96,16 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
       alert('Only Superadmin can add new workshops.');
       return;
     }
-    if (!newWsName.trim() || !newWsCityId) {
+
+    const allCities = getCities();
+    const targetCityId = newWsCityId || (allCities[0]?.id ?? '');
+
+    if (!newWsName.trim() || !targetCityId) {
       alert('Workshop Name and Associated City are required!');
       return;
     }
 
-    const city = cities.find(c => c.id === newWsCityId);
+    const city = allCities.find(c => c.id === targetCityId);
     if (!city) {
       alert('Please select a valid operational City for this workshop.');
       return;
@@ -102,7 +113,7 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
     addWorkshop({
       name: newWsName.trim(),
-      cityId: newWsCityId,
+      cityId: city.id,
       cityName: city.name,
       address: newWsAddress.trim() || 'Workshop Bay',
       phone: newWsPhone.trim() || '+91 98000 00000',
@@ -238,7 +249,20 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
         {activeTab === 'WORKSHOPS' && (
           isSuperAdmin ? (
             <button
-              onClick={() => setShowAddWorkshop(true)}
+              onClick={() => {
+                const freshCities = getCities();
+                if (freshCities.length === 0) {
+                  alert('Please add at least one Operational City first before creating a workshop.');
+                  setActiveTab('CITIES');
+                  setShowAddCity(true);
+                  return;
+                }
+                const defaultCityId = (selectedCityId !== 'ALL' && freshCities.some(c => c.id === selectedCityId))
+                  ? selectedCityId
+                  : (newWsCityId && freshCities.some(c => c.id === newWsCityId) ? newWsCityId : freshCities[0].id);
+                setNewWsCityId(defaultCityId);
+                setShowAddWorkshop(true);
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
             >
               <Plus className="w-4 h-4" />
