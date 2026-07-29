@@ -187,6 +187,14 @@ export interface TaskPartItem {
   addedAt: string;
 }
 
+export type RequisitionStatus = 
+  | 'PENDING_APPROVAL' 
+  | 'APPROVED' 
+  | 'ORDERED' 
+  | 'RECEIVED' 
+  | 'CONSUMED' 
+  | 'REJECTED';
+
 export interface TaskRequisition {
   id: string;
   taskId: string;
@@ -200,10 +208,15 @@ export interface TaskRequisition {
   reason?: string;
   suggestedPrice?: number;
   approvedPrice?: number;
-  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  status: RequisitionStatus;
   managerNotes?: string;
   createdAt: string;
   approvedAt?: string;
+  orderedAt?: string;
+  receivedAt?: string;
+  consumedAt?: string;
+  partNumber?: string;
+  inventoryItemId?: string;
 }
 
 export interface TaskConcern {

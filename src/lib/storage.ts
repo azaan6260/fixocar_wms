@@ -309,6 +309,8 @@ export function addRequisitionToTask(
     urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     reason?: string;
     suggestedPrice?: number;
+    partNumber?: string;
+    inventoryItemId?: string;
   }
 ) {
   const newReq: TaskRequisition = {
@@ -365,33 +367,15 @@ export function respondToRequisition(
           return r;
         });
 
-        // If approved, automatically add to task's parts list
-        let updatedParts = t.partsList || [];
-        if (approved && reqItemToConvert) {
-          const req = reqItemToConvert as TaskRequisition;
-          const newPart: TaskPartItem = {
-            id: `PRT-${Date.now().toString().slice(-6)}`,
-            name: req.title,
-            quantity: req.quantity,
-            unitPrice: approvedPrice > 0 ? approvedPrice / req.quantity : 0,
-            totalPrice: approvedPrice,
-            type: req.itemType === 'CONSUMABLE' ? 'CONSUMABLE' : req.itemType === 'PART' ? 'PART' : 'LABOR',
-            isApproved: true,
-            addedAt: new Date().toLocaleString()
-          };
-          updatedParts = [...updatedParts, newPart];
-        }
-
         return {
           ...t,
-          requisitions: updatedReqs,
-          partsList: updatedParts
+          requisitions: updatedReqs
         };
       }
       return t;
     });
 
-    // If approved and is ADDITIONAL_WORK, also create a sub-task or update job card customer price
+    // If approved and is ADDITIONAL_WORK, also create a sub-task
     if (approved && reqItemToConvert && (reqItemToConvert as TaskRequisition).itemType === 'ADDITIONAL_WORK' && approvedPrice > 0) {
       const req = reqItemToConvert as TaskRequisition;
       const additionalTask: JobTask = {
@@ -421,6 +405,147 @@ export function respondToRequisition(
       tasks: updatedTasks
     };
   });
+}
+
+// Update requisition lifecycle stage (Mark as Ordered or Received)
+export function markRequisitionStatus(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  nextStatus: 'ORDERED' | 'RECEIVED',
+  managerNotes?: string
+) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          requisitions: (t.requisitions || []).map(r => {
+            if (r.id === requisitionId) {
+              const nowStr = new Date().toLocaleString();
+              return {
+                ...r,
+                status: nextStatus,
+                managerNotes: managerNotes || r.managerNotes,
+                orderedAt: nextStatus === 'ORDERED' ? nowStr : r.orderedAt,
+                receivedAt: nextStatus === 'RECEIVED' ? nowStr : r.receivedAt,
+              };
+            }
+            return r;
+          })
+        };
+      }
+      return t;
+    })
+  }));
+}
+
+// Mechanic One-Click Consume Part function
+export function consumeRequisitionPart(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  employeeId?: string,
+  employeeName?: string
+): { success: boolean; message: string } {
+  let targetReq: TaskRequisition | null = null;
+  const cards = getJobCards();
+  const card = cards.find(c => c.id === jobCardId);
+  if (!card) return { success: false, message: 'Job Card not found' };
+
+  const task = card.tasks.find(t => t.id === taskId);
+  if (!task) return { success: false, message: 'Task not found' };
+
+  const req = (task.requisitions || []).find(r => r.id === requisitionId);
+  if (!req) return { success: false, message: 'Requisition entry not found' };
+
+  targetReq = req;
+
+  // 1. If linked to an inventory item, deduct stock if available
+  if (req.inventoryItemId) {
+    const items = getInventoryItems();
+    const itemIdx = items.findIndex(i => i.id === req.inventoryItemId);
+    if (itemIdx !== -1) {
+      const item = items[itemIdx];
+      if (item.stockQuantity >= req.quantity) {
+        item.stockQuantity -= req.quantity;
+        items[itemIdx] = item;
+        saveInventoryItems(items);
+      }
+    }
+  }
+
+  // 2. Mark requisition as CONSUMED and add part to task's partsList
+  const nowStr = new Date().toLocaleString();
+  const unitPrice = req.approvedPrice && req.quantity > 0 
+    ? req.approvedPrice / req.quantity 
+    : (req.suggestedPrice || 0);
+
+  const totalPrice = req.approvedPrice || (unitPrice * req.quantity);
+
+  const newPart: TaskPartItem = {
+    id: `PRT-${Date.now().toString().slice(-6)}`,
+    name: `${req.title}${req.partNumber ? ` (${req.partNumber})` : ''}`,
+    quantity: req.quantity,
+    unitPrice,
+    totalPrice,
+    type: req.itemType === 'CONSUMABLE' ? 'CONSUMABLE' : 'PART',
+    isApproved: true,
+    addedAt: nowStr
+  };
+
+  updateJobCard(jobCardId, (c) => ({
+    ...c,
+    tasks: c.tasks.map(t => {
+      if (t.id === taskId) {
+        const updatedReqs = (t.requisitions || []).map(r => {
+          if (r.id === requisitionId) {
+            return {
+              ...r,
+              status: 'CONSUMED' as const,
+              consumedAt: nowStr
+            };
+          }
+          return r;
+        });
+
+        // Avoid adding duplicate if already added
+        const existingParts = t.partsList || [];
+        const alreadyExists = existingParts.some(p => p.name.includes(req.title));
+        const updatedParts = alreadyExists ? existingParts : [...existingParts, newPart];
+
+        return {
+          ...t,
+          requisitions: updatedReqs,
+          partsList: updatedParts
+        };
+      }
+      return t;
+    })
+  }));
+
+  // 3. Log consumption record
+  const records = getInventoryConsumptionRecords();
+  const newRecord: InventoryConsumptionRecord = {
+    id: `cons-${Date.now()}`,
+    inventoryItemId: req.inventoryItemId || `custom-${Date.now()}`,
+    itemName: req.title,
+    jobCardId,
+    taskId,
+    quantityConsumed: req.quantity,
+    unitPrice,
+    totalCost: totalPrice,
+    consumedByEmployeeId: employeeId || req.requestedByEmployeeId,
+    consumedByEmployeeName: employeeName || req.requestedByEmployeeName,
+    consumedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+  };
+  saveInventoryConsumptionRecords([newRecord, ...records]);
+
+  return {
+    success: true,
+    message: `Part "${req.title}" successfully consumed & attached to job card!`
+  };
 }
 
 // Raise a concern / difficulty on a task by employee

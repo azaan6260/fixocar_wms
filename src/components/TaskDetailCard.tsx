@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { JobCard, JobTask, Employee, Vendor, UserRole, TaskStatus, TaskCategory } from '../types';
+import { PartRequisitionTracker } from './PartRequisitionTracker';
 import { 
   reallotTask, 
   addRequisitionToTask, 
@@ -959,87 +960,15 @@ export function TaskDetailCard({
         </form>
       )}
 
-      {/* DISPLAY EXISTING REQUISITIONS */}
-      {task.requisitions && task.requisitions.length > 0 && (
-        <div className="p-3.5 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-2">
-          <span className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Package className="w-3 h-3" />
-            Submitted Requisitions ({task.requisitions.length})
-          </span>
-
-          <div className="space-y-2 text-xs">
-            {task.requisitions.map((req) => (
-              <div key={req.id} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-orange-100 dark:border-orange-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 dark:text-slate-100">{req.title}</span>
-                    <span className="px-2 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600">
-                      Qty: {req.quantity}
-                    </span>
-                    <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${
-                      req.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600' :
-                      req.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-600' :
-                      'bg-amber-500/10 text-amber-600'
-                    }`}>
-                      {req.status === 'PENDING_APPROVAL' ? 'Awaiting Approval' : req.status}
-                    </span>
-                  </div>
-                  {req.reason && <p className="text-[11px] text-slate-500">Note: {req.reason}</p>}
-                  {req.approvedPrice ? (
-                    <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                      Approved Price: ₹{req.approvedPrice.toLocaleString('en-IN')}
-                    </p>
-                  ) : null}
-                </div>
-
-                {/* Manager Review Controls */}
-                {isManager && req.status === 'PENDING_APPROVAL' && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    {approvingReqId === req.id ? (
-                      <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <input
-                          type="number"
-                          placeholder="Approved Price ₹"
-                          value={reqApprovedPrice}
-                          onChange={(e) => setReqApprovedPrice(Number(e.target.value))}
-                          className="w-28 px-2 py-1 text-xs font-bold rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
-                        />
-                        <button
-                          onClick={() => handleApproveRequisitionSubmit(req.id)}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => setApprovingReqId(null)}
-                          className="px-2 py-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-bold"
-                        >
-                          X
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setApprovingReqId(req.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs"
-                        >
-                          Approve Requisition
-                        </button>
-                        <button
-                          onClick={() => handleRejectRequisition(req.id)}
-                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* PART REQUISITION TRACKER COMPONENT */}
+      <PartRequisitionTracker
+        jobCardId={card.id}
+        taskId={task.id}
+        taskTitle={task.title}
+        requisitions={task.requisitions || []}
+        currentRole={currentRole}
+        currentEmployeeName={task.assignedToName}
+      />
 
       {/* DISPLAY EXISTING CONCERNS */}
       {task.concerns && task.concerns.length > 0 && (
