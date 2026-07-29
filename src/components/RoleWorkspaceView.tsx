@@ -3,6 +3,7 @@ import { UserRole, JobCard } from '../types';
 import { updateTaskStatus, respondToCustomerApproval, getEmployees, getVendors } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
 import { TaskDetailCard } from './TaskDetailCard';
+import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { useI18n } from '../lib/i18n';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { 
@@ -115,6 +116,15 @@ export function RoleWorkspaceView({
           </button>
         </div>
       </div>
+
+      {/* MANAGER PART REQUISITIONS APPROVAL QUEUE */}
+      {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER') && (
+        <ManagerRequisitionApprovalView
+          jobCards={jobCards}
+          onOpenJobCard={onOpenJobCard}
+          currentRole={currentRole}
+        />
+      )}
 
       {/* DENTER / PAINTER INTERACTIVE BODY PANEL DIAGRAM */}
       {(currentRole === 'DENTER' || currentRole === 'PAINTER') && (
