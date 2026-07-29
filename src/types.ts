@@ -441,6 +441,53 @@ export const INDIAN_CITIES = [
 
 export type IndianCity = typeof INDIAN_CITIES[number];
 
+export type CheckInStatus = 
+  | 'IDLE_AWAITING_PI'       // Vehicle in workshop, waiting for Cars24 WSM Preliminary Inspection / Estimate Approval
+  | 'AWAITING_JOB_CARD'      // Inspection completed, waiting for Job Card creation
+  | 'JOB_CARD_CREATED'       // Job Card active & vehicle under repair in workshop
+  | 'READY_PENDING_DISPATCH' // QC & Invoice completed, physically in workshop awaiting driver pickup
+  | 'CHECKED_OUT';          // Driver arrived, exit photo captured, vehicle physically departed workshop
+
+export interface VehicleCheckIn {
+  id: string; // e.g. "GATE-2026-101"
+  registrationNumber: string; // e.g. "MH02CB9988"
+  make: string;
+  model: string;
+  color?: string;
+  fuelLevel?: number;
+  mileage?: number;
+  
+  // Ownership & Fleet Partner
+  isCars24: boolean;
+  cars24RefNo?: string;
+  customerName: string;
+  customerPhone: string;
+
+  // Gate Check-In Details
+  checkedInAt: string;
+  checkedInById?: string;
+  checkedInByName?: string;
+  
+  // Arrival Driver & Vehicle Verification
+  checkInDriverName: string;
+  checkInDriverPhone: string;
+  checkInPhotoWithDriverUrl?: string; // Photo of car with driver upon gate arrival
+  checkInNotes?: string;
+
+  // Workshop Status
+  status: CheckInStatus;
+  jobCardId?: string; // Linked Job Card ID if created
+
+  // Departure Check-Out Details
+  checkedOutAt?: string;
+  checkedOutById?: string;
+  checkedOutByName?: string;
+  checkOutDriverName?: string;
+  checkOutDriverPhone?: string;
+  checkOutPhotoWithDriverUrl?: string; // Photo of car with driver upon gate exit
+  checkOutNotes?: string;
+}
+
 export interface JobCardComment {
   id: string;
   jobCardId: string;
@@ -481,4 +528,17 @@ export interface JobCard {
   advancePaid: number;
   notes?: string;
   comments?: JobCardComment[];
+
+  // Gate Pass & Physical Workshop Check-In / Check-Out Tracking
+  isCheckedIn?: boolean;
+  checkInRecordId?: string;
+  checkedInAt?: string;
+  checkInDriverName?: string;
+  checkInDriverPhone?: string;
+  checkInPhotoWithDriverUrl?: string;
+  
+  checkedOutAt?: string;
+  checkOutDriverName?: string;
+  checkOutDriverPhone?: string;
+  checkOutPhotoWithDriverUrl?: string;
 }

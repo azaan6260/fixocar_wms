@@ -1,5 +1,5 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS } from './mockData';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn } from '../types';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
 export const INITIAL_CITIES: City[] = [
@@ -57,6 +57,7 @@ const STORAGE_KEYS = {
   STANDARD_JOBS: 'fixocar_standard_jobs_v1',
   CUSTOMER_SESSION: 'fixocar_customer_session_v1',
   CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v1',
+  VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -1488,5 +1489,57 @@ export function deleteCustomerVehicle(id: string): void {
   const vehicles = getCustomerVehicles();
   const filtered = vehicles.filter(v => v.id !== id);
   saveCustomerVehicles(filtered);
+}
+
+// ----------------------------------------------------
+// VEHICLE GATE CHECK-IN & WORKSHOP PRESENCE STORAGE
+// ----------------------------------------------------
+export function getVehicleCheckIns(): VehicleCheckIn[] {
+  const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(INITIAL_VEHICLE_CHECKINS));
+    return INITIAL_VEHICLE_CHECKINS;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_VEHICLE_CHECKINS;
+  }
+}
+
+export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
+  localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
+  notifyStoreChange();
+}
+
+export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'checkedInAt'>): VehicleCheckIn {
+  const checkIns = getVehicleCheckIns();
+  const nextNum = checkIns.length + 106;
+  const gateId = `GATE-2026-${nextNum}`;
+  const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+  
+  const fullRecord: VehicleCheckIn = {
+    ...newCheckIn,
+    id: gateId,
+    checkedInAt: nowStr,
+    status: newCheckIn.status || 'IDLE_AWAITING_PI',
+  };
+
+  checkIns.unshift(fullRecord);
+  saveVehicleCheckIns(checkIns);
+  return fullRecord;
+}
+
+export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn) => VehicleCheckIn): VehicleCheckIn | null {
+  const checkIns = getVehicleCheckIns();
+  const index = checkIns.findIndex(c => c.id === id);
+  if (index === -1) return null;
+  checkIns[index] = updater(checkIns[index]);
+  saveVehicleCheckIns(checkIns);
+  return checkIns[index];
+}
+
+export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {
+  return getVehicleCheckIns().find(c => c.id === id);
 }
 

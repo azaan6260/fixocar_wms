@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
-import { createJobCard, getCities, getWorkshops } from '../lib/storage';
+import { createJobCard, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { 
   X, 
@@ -241,6 +241,34 @@ export function CreateJobCardModal({
     const selectedCity = cities.find(c => c.id === selectedCityId);
     const selectedWorkshop = workshops.find(w => w.id === selectedWorkshopId);
 
+    // Sync Gate Check-In Record
+    const formattedRegNo = regNo.toUpperCase().trim();
+    const existingCheckIns = getVehicleCheckIns();
+    let matchingCheckIn = existingCheckIns.find(c => c.registrationNumber === formattedRegNo && c.status !== 'CHECKED_OUT');
+
+    if (!matchingCheckIn) {
+      // Create Gate Check-In record automatically upon Job Card creation if not already created
+      matchingCheckIn = createVehicleCheckIn({
+        registrationNumber: formattedRegNo,
+        make,
+        model,
+        color,
+        fuelLevel: Number(fuelLevel),
+        mileage: Number(mileage),
+        isCars24,
+        cars24RefNo: isCars24 ? (cars24RefNo || `C24-${Date.now().toString().slice(-6)}`) : undefined,
+        customerName,
+        customerPhone,
+        checkInDriverName: isCars24 ? 'Cars24 Delivery Driver' : customerName,
+        checkInDriverPhone: customerPhone,
+        checkInPhotoWithDriverUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80',
+        checkInNotes: 'Checked in at workshop counter during Job Card creation.',
+        status: 'JOB_CARD_CREATED',
+      });
+    }
+
+    const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+
     const newJobCard = createJobCard({
       cityId: selectedCityId,
       cityName: selectedCity?.name,
@@ -250,7 +278,7 @@ export function CreateJobCardModal({
       cars24RefNo: isCars24 ? (cars24RefNo || `C24-${Date.now().toString().slice(-6)}`) : undefined,
       estimatedCompletionDate: new Date(Date.now() + 86400000 * 2).toLocaleDateString(),
       vehicle: {
-        registrationNumber: regNo.toUpperCase(),
+        registrationNumber: formattedRegNo,
         make,
         model,
         year: Number(year),
@@ -276,6 +304,15 @@ export function CreateJobCardModal({
       discount: 0,
       taxRate: 18,
       advancePaid: 0,
+
+      // Gate Check-In Details
+      isCheckedIn: true,
+      checkInRecordId: matchingCheckIn.id,
+      checkedInAt: matchingCheckIn.checkedInAt || nowStr,
+      checkInDriverName: matchingCheckIn.checkInDriverName,
+      checkInDriverPhone: matchingCheckIn.checkInDriverPhone,
+      checkInPhotoWithDriverUrl: matchingCheckIn.checkInPhotoWithDriverUrl,
+
       qcChecklist: [
         { id: 'qc-1', label: 'Engine oil cap & dipstick tightened', category: 'ENGINE', isPassed: false },
         { id: 'qc-2', label: 'Brake fluid reservoir level checked', category: 'ENGINE', isPassed: false },
@@ -307,6 +344,13 @@ export function CreateJobCardModal({
         standardJobId: t.standardJobId,
       }))
     });
+
+    // Update Gate Check-In status & link Job Card ID
+    updateVehicleCheckIn(matchingCheckIn.id, (prev) => ({
+      ...prev,
+      status: 'JOB_CARD_CREATED',
+      jobCardId: newJobCard.id,
+    }));
 
     onCardCreated(newJobCard);
     onClose();

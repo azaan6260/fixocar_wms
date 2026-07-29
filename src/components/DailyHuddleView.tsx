@@ -760,7 +760,7 @@ export function DailyHuddleView({
                       <button
                         type="button"
                         onClick={() => {
-                          updateJobCard(card.id, { isUrgent: !card.isUrgent });
+                          updateJobCard(card.id, (prev) => ({ ...prev, isUrgent: !prev.isUrgent }));
                         }}
                         title={card.isUrgent ? "Remove Urgent priority" : "Mark Urgent for Daily Huddle"}
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
@@ -777,10 +777,11 @@ export function DailyHuddleView({
                       <button
                         type="button"
                         onClick={() => {
-                          updateJobCard(card.id, { 
+                          updateJobCard(card.id, (prev) => ({ 
+                            ...prev,
                             estimatedCompletionDate: todayDateStr,
                             isUrgent: true 
-                          });
+                          }));
                         }}
                         title="Set target completion to Today & mark urgent"
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${

@@ -25,7 +25,8 @@ import {
   Palette,
   QrCode,
   Flame,
-  Clock
+  Clock,
+  LogIn
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -62,6 +63,7 @@ export function HeaderNav({
 
   const row1Items = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { id: 'gate-pass', label: '🚗 Gate Pass', icon: LogIn },
     { id: 'daily-huddle', label: '🔥 Daily Huddle', icon: Flame },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },

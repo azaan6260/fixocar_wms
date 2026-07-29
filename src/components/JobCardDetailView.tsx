@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask } from '../types';
-import { updateJobCard, updateTaskStatus, respondToCustomerApproval, createDeliveryRecord } from '../lib/storage';
+import { updateJobCard, updateTaskStatus, respondToCustomerApproval, createDeliveryRecord, updateVehicleCheckIn } from '../lib/storage';
 import { 
   X, 
   Car, 
@@ -26,7 +26,11 @@ import {
   Share2,
   Zap,
   QrCode,
-  Flame
+  Flame,
+  LogOut,
+  LogIn,
+  Camera,
+  UserCheck
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
@@ -55,6 +59,40 @@ export function JobCardDetailView({
   onOpenQRModal,
 }: JobCardDetailViewProps) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'qc' | 'delivery' | 'invoice'>('tasks');
+
+  // Gate Check-Out Modal State
+  const [isGateCheckOutOpen, setIsGateCheckOutOpen] = useState(false);
+  const [gateDriverName, setGateDriverName] = useState(card.checkInDriverName || 'Cars24 Fleet Driver');
+  const [gateDriverPhone, setGateDriverPhone] = useState(card.checkInDriverPhone || '+91 98200 11223');
+  const [gateExitPhotoUrl, setGateExitPhotoUrl] = useState('https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80');
+
+  const handleExecuteGateCheckOut = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      status: 'DELIVERED',
+      checkedOutAt: nowStr,
+      checkOutDriverName: gateDriverName,
+      checkOutDriverPhone: gateDriverPhone,
+      checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
+    }));
+
+    if (card.checkInRecordId) {
+      updateVehicleCheckIn(card.checkInRecordId, (prev) => ({
+        ...prev,
+        status: 'CHECKED_OUT',
+        checkedOutAt: nowStr,
+        checkOutDriverName: gateDriverName,
+        checkOutDriverPhone: gateDriverPhone,
+        checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
+      }));
+    }
+
+    setIsGateCheckOutOpen(false);
+    alert('Vehicle successfully checked out & gate exit recorded!');
+  };
   
   // New additional work item state
   const [isStandardCatalogOpen, setIsStandardCatalogOpen] = useState(false);
@@ -248,7 +286,7 @@ export function JobCardDetailView({
             <button
               type="button"
               onClick={() => {
-                updateJobCard(card.id, { isUrgent: !card.isUrgent });
+                updateJobCard(card.id, (prev) => ({ ...prev, isUrgent: !prev.isUrgent }));
               }}
               className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all border ${
                 card.isUrgent
@@ -265,10 +303,11 @@ export function JobCardDetailView({
               type="button"
               onClick={() => {
                 const todayStr = new Date().toISOString().split('T')[0];
-                updateJobCard(card.id, { 
+                updateJobCard(card.id, (prev) => ({ 
+                  ...prev,
                   estimatedCompletionDate: todayStr,
                   isUrgent: true
-                });
+                }));
               }}
               className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-1.5"
             >
@@ -283,10 +322,63 @@ export function JobCardDetailView({
               type="date"
               value={card.estimatedCompletionDate || ''}
               onChange={(e) => {
-                updateJobCard(card.id, { estimatedCompletionDate: e.target.value });
+                const val = e.target.value;
+                updateJobCard(card.id, (prev) => ({ ...prev, estimatedCompletionDate: val }));
               }}
               className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-amber-500"
             />
+          </div>
+        </div>
+
+        {/* Gate Pass & Physical Workshop Location Banner */}
+        <div className="px-4 py-3 bg-slate-950 text-white border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0 font-black">
+              <LogIn className="w-5 h-5" />
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="font-black text-slate-200 flex items-center gap-1">
+                  <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                  Arrival Driver: <strong className="text-white">{card.checkInDriverName || 'Cars24 Fleet Driver'}</strong>
+                </span>
+                <span className="text-slate-400">• Phone: {card.checkInDriverPhone || '+91 98200 11223'}</span>
+              </div>
+
+              <div className="text-slate-400 text-[11px] flex items-center gap-3">
+                <span>Arrival: {card.checkedInAt || 'Gate Check-In Verified'}</span>
+                {card.checkedOutAt ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <LogOut className="w-3 h-3" />
+                    Departed: {card.checkedOutAt} (Driver: {card.checkOutDriverName})
+                  </span>
+                ) : (
+                  <span className="text-amber-400 font-bold flex items-center gap-1">
+                    <Car className="w-3 h-3" />
+                    Physically Present in Workshop
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!card.checkedOutAt ? (
+              <button
+                type="button"
+                onClick={() => setIsGateCheckOutOpen(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Mark Gate Check-Out & Dispatch</span>
+              </button>
+            ) : (
+              <span className="bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-xl border border-emerald-500/30 font-extrabold flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Gate Exit Confirmed
+              </span>
+            )}
           </div>
         </div>
 
@@ -676,6 +768,112 @@ export function JobCardDetailView({
         isOpen={isStandardCatalogOpen}
         onClose={() => setIsStandardCatalogOpen(false)}
       />
+
+      {/* Gate Departure Check-Out Modal */}
+      {isGateCheckOutOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                  <LogOut className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black">Confirm Gate Check-Out</h2>
+                  <p className="text-xs text-slate-400">{card.vehicle.registrationNumber} • {card.vehicle.make} {card.vehicle.model}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsGateCheckOutOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteGateCheckOut} className="p-6 space-y-4 text-xs">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-2xl space-y-1 text-emerald-800 dark:text-emerald-300">
+                <span className="font-bold flex items-center gap-1 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  Pre-Delivery Inspection Complete & Invoice Ready
+                </span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Verify the driver picking up the car and capture the departure verification photo with driver.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Pickup Driver Name *</label>
+                <input
+                  type="text"
+                  placeholder="Driver picking up vehicle"
+                  value={gateDriverName}
+                  onChange={(e) => setGateDriverName(e.target.value)}
+                  required
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Phone Number</label>
+                <input
+                  type="text"
+                  placeholder="+91 98200 00000"
+                  value={gateDriverPhone}
+                  onChange={(e) => setGateDriverPhone(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Camera className="w-3.5 h-3.5 text-emerald-500" /> Departure Photo of Car with Driver
+                  </span>
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={gateExitPhotoUrl}
+                    onChange={(e) => setGateExitPhotoUrl(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-[11px]"
+                  />
+
+                  {gateExitPhotoUrl && (
+                    <img 
+                      src={gateExitPhotoUrl} 
+                      alt="Departure photo preview"
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-500 shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsGateCheckOutOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Confirm Gate Exit & Departure</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

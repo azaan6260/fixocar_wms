@@ -26,6 +26,7 @@ import { InventoryView } from './components/InventoryView';
 import { StandardJobsManagementView } from './components/StandardJobsManagementView';
 import { ContractorPayoutsView } from './components/ContractorPayoutsView';
 import { DailyHuddleView } from './components/DailyHuddleView';
+import { GatePassCheckInView } from './components/GatePassCheckInView';
 import { JobCardQRModal } from './components/JobCardQRModal';
 import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
 
@@ -177,6 +178,16 @@ export default function App() {
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenAIDiagnostics={() => setIsCreateModalOpen(true)}
             onNavigateTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'gate-pass' && (
+          <GatePassCheckInView
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
+            onOpenCreateJobCardWithPrefill={(reg) => {
+              setCreateModalPrefill(reg);
+              setIsCreateModalOpen(true);
+            }}
           />
         )}
 
