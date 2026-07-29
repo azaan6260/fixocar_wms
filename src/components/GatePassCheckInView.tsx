@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus } from '../types';
 import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
+import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 
 interface GatePassCheckInViewProps {
   onOpenCreateJobCardWithPrefill?: (prefill: {
@@ -55,6 +56,9 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const [activeFilter, setActiveFilter] = useState<'IN_WORKSHOP' | 'IDLE_PI' | 'ACTIVE_REPAIR' | 'READY_DISPATCH' | 'CHECKED_OUT'>('IN_WORKSHOP');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Camera License Plate Scanner Modal State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
   // New Gate Check-In Modal State
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [regNo, setRegNo] = useState('');
@@ -217,17 +221,28 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              resetForm();
-              setIsCheckInModalOpen(true);
-            }}
-            className="px-5 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 shrink-0"
-          >
-            <Plus className="w-5 h-5 stroke-[2.5]" />
-            <span>New Vehicle Gate Check-In</span>
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="px-4 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md"
+            >
+              <Camera className="w-5 h-5 text-amber-400" />
+              <span>Scan License Plate</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setIsCheckInModalOpen(true);
+              }}
+              className="px-5 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-5 h-5 stroke-[2.5]" />
+              <span>New Vehicle Gate Check-In</span>
+            </button>
+          </div>
         </div>
 
         {/* Live Workshop Physical Count KPI Metrics */}
@@ -662,15 +677,35 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
               {/* Vehicle Specs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Registration No *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. MH02CB8811"
-                    value={regNo}
-                    onChange={(e) => setRegNo(e.target.value)}
-                    required
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-black text-sm uppercase"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block">Registration No *</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Scan Camera</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. MH02CB8811"
+                      value={regNo}
+                      onChange={(e) => setRegNo(e.target.value)}
+                      required
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-black text-sm uppercase pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      title="Scan license plate with live camera"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -937,6 +972,19 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
           </div>
         </div>
       )}
+      {/* CAMERA LICENSE PLATE SCANNER MODAL */}
+      <LicensePlateScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={(scannedPlate) => {
+          if (isCheckInModalOpen) {
+            setRegNo(scannedPlate);
+          } else {
+            setRegNo(scannedPlate);
+            setIsCheckInModalOpen(true);
+          }
+        }}
+      />
     </div>
   );
 }

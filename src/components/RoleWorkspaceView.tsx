@@ -4,6 +4,7 @@ import { updateTaskStatus, respondToCustomerApproval, getEmployees, getVendors }
 import { RoleBadge } from './RoleBadge';
 import { TaskDetailCard } from './TaskDetailCard';
 import { useI18n } from '../lib/i18n';
+import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { 
   Wrench, 
   Hammer, 
@@ -16,7 +17,8 @@ import {
   Sparkles,
   Phone,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Camera
 } from 'lucide-react';
 
 interface RoleWorkspaceViewProps {
@@ -63,56 +65,19 @@ export function RoleWorkspaceView({
 
   const roleTasks = getTasksForRole();
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  const handleScanLicensePlate = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleScannedPlate = (regNum: string) => {
+    const activeCard = jobCards.find(
+      j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
+           j.status !== 'CLOSED' && j.status !== 'DELIVERED'
+    );
 
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        
-        alert("Scanning License Plate...");
-        
-        const response = await fetch('/api/scan-plate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ imageBase64: base64 }),
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-          const regNum = data.plateNumber;
-          if (regNum === 'UNKNOWN') {
-            alert("Could not detect license plate. Please try again.");
-            return;
-          }
-
-          // Search active job cards
-          const activeCard = jobCards.find(
-            j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
-                 j.status !== 'CLOSED' && j.status !== 'DELIVERED'
-          );
-
-          if (activeCard) {
-            alert(`Found active job card for ${regNum}. Opening it...`);
-            onOpenJobCard(activeCard.id);
-          } else {
-            alert(`No active job card found for ${regNum}. Please create one from Dashboard.`);
-          }
-        } else {
-          alert('Failed to scan license plate: ' + data.error);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error(err);
-      alert('Error processing image');
+    if (activeCard) {
+      alert(`Found active job card for ${regNum}. Opening it...`);
+      onOpenJobCard(activeCard.id);
+    } else {
+      alert(`No active job card found for ${regNum}.`);
     }
   };
 
@@ -140,20 +105,13 @@ export function RoleWorkspaceView({
         </div>
 
         <div className="flex items-center gap-2">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            hidden 
-            accept="image/*" 
-            capture="environment" 
-            onChange={handleScanLicensePlate} 
-          />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-3.5 py-2 rounded-full font-bold transition-all flex items-center gap-1.5"
+            type="button"
+            onClick={() => setIsScannerOpen(true)}
+            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs px-3.5 py-2 rounded-full font-extrabold transition-all flex items-center gap-1.5 shadow-xs"
           >
-            <Car className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            Scan Plate
+            <Camera className="w-3.5 h-3.5 text-amber-500" />
+            <span>Scan Plate Camera</span>
           </button>
         </div>
       </div>
@@ -243,6 +201,11 @@ export function RoleWorkspaceView({
         )}
       </div>
 
+      <LicensePlateScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={handleScannedPlate}
+      />
     </div>
   );
 }

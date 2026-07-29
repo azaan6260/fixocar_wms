@@ -3,6 +3,7 @@ import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employe
 import { STANDARD_PACKAGES } from '../lib/mockData';
 import { createJobCard, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
+import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { 
   X, 
   Car, 
@@ -19,7 +20,8 @@ import {
   Palette,
   Building,
   MapPin,
-  Layers
+  Layers,
+  Camera
 } from 'lucide-react';
 
 interface CreateJobCardModalProps {
@@ -52,6 +54,7 @@ export function CreateJobCardModal({
   const [cars24RefNo, setCars24RefNo] = useState<string>('');
 
   // Form State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [regNo, setRegNo] = useState(prefilledRegNum || '');
   const [make, setMake] = useState('Toyota');
   const [model, setModel] = useState('Corolla Altis');
@@ -481,17 +484,37 @@ export function CreateJobCardModal({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Registration Number <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={regNo}
-                      onChange={(e) => setRegNo(e.target.value)}
-                      placeholder="e.g. NY-889-XJ"
-                      className="w-full px-3 py-2 text-xs font-mono font-bold uppercase rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Registration Number <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsScannerOpen(true)}
+                        className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Scan Camera</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        value={regNo}
+                        onChange={(e) => setRegNo(e.target.value)}
+                        placeholder="e.g. MH02CB8811"
+                        className="w-full px-3 py-2 text-xs font-mono font-bold uppercase rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsScannerOpen(true)}
+                        title="Scan license plate with live camera"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                      >
+                        <Camera className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -1020,6 +1043,12 @@ export function CreateJobCardModal({
         </form>
 
       </div>
+
+      <LicensePlateScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanComplete={(scannedPlate) => setRegNo(scannedPlate)}
+      />
     </div>
   );
 }

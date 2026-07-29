@@ -442,10 +442,14 @@ export const INDIAN_CITIES = [
 export type IndianCity = typeof INDIAN_CITIES[number];
 
 export type CheckInStatus = 
+  | 'CHECKED_IN'            // Gate Check-in completed, vehicle idle in workshop
+  | 'PDI_IN_PROGRESS'       // Pre-delivery / preliminary inspection in progress
   | 'IDLE_AWAITING_PI'       // Vehicle in workshop, waiting for Cars24 WSM Preliminary Inspection / Estimate Approval
   | 'AWAITING_JOB_CARD'      // Inspection completed, waiting for Job Card creation
   | 'JOB_CARD_CREATED'       // Job Card active & vehicle under repair in workshop
+  | 'INVOICED'               // Repair/service invoice generated
   | 'READY_PENDING_DISPATCH' // QC & Invoice completed, physically in workshop awaiting driver pickup
+  | 'DELIVERED'              // Vehicle delivered to driver/customer
   | 'CHECKED_OUT';          // Driver arrived, exit photo captured, vehicle physically departed workshop
 
 export interface VehicleCheckIn {
