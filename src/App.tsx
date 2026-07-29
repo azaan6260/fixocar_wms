@@ -30,6 +30,7 @@ import { GatePassCheckInView } from './components/GatePassCheckInView';
 import { JobCardQRModal } from './components/JobCardQRModal';
 import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
 import { OutsourcedJobsView } from './components/OutsourcedJobsView';
+import { PartOrderBasketView } from './components/PartOrderBasketView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -223,6 +224,13 @@ export default function App() {
 
         {activeTab === 'inventory' && (
           <InventoryView currentRole={currentRole} vendors={vendors} />
+        )}
+
+        {activeTab === 'part-basket' && (
+          <PartOrderBasketView 
+            currentRole={currentRole} 
+            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+          />
         )}
 
         {activeTab === 'standard-jobs' && (

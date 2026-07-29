@@ -27,7 +27,8 @@ import {
   Flame,
   Clock,
   LogIn,
-  ExternalLink
+  ExternalLink,
+  ShoppingBag
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -68,6 +69,7 @@ export function HeaderNav({
     { id: 'daily-huddle', label: '🔥 Daily Huddle', icon: Flame },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
+    { id: 'part-basket', label: '🛒 Part Order Basket', icon: ShoppingBag },
     { id: 'standard-jobs', label: 'Standard Jobs Library', icon: Zap },
     { id: 'contractor-payouts', label: 'Contractor Payouts', icon: DollarSign },
     { id: 'inventory', label: 'Parts & Inventory', icon: Boxes },

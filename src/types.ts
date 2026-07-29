@@ -120,6 +120,8 @@ export interface InventoryConsumptionRecord {
   itemName: string;
   jobCardId: string;
   taskId: string;
+  requisitionId?: string;
+  partNumber?: string;
   quantityConsumed: number;
   unitPrice: number;
   totalCost: number;
@@ -208,6 +210,9 @@ export interface TaskRequisition {
   reason?: string;
   suggestedPrice?: number;
   approvedPrice?: number;
+  purchasedPrice?: number;
+  vendorName?: string;
+  vendorInvoiceNo?: string;
   status: RequisitionStatus;
   managerNotes?: string;
   createdAt: string;

@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -545,6 +545,48 @@ export function markRequisitionStatus(
   }));
 }
 
+// Update Requisition with Market Runner Purchase details
+export function updateRequisitionMarketPurchase(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  data: {
+    nextStatus: RequisitionStatus;
+    purchasedPrice?: number;
+    vendorName?: string;
+    vendorInvoiceNo?: string;
+    managerNotes?: string;
+  }
+) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          requisitions: (t.requisitions || []).map(r => {
+            if (r.id === requisitionId) {
+              const nowStr = new Date().toLocaleString();
+              return {
+                ...r,
+                status: data.nextStatus,
+                purchasedPrice: data.purchasedPrice !== undefined ? data.purchasedPrice : (r.purchasedPrice || r.approvedPrice),
+                vendorName: data.vendorName || r.vendorName,
+                vendorInvoiceNo: data.vendorInvoiceNo || r.vendorInvoiceNo,
+                managerNotes: data.managerNotes || r.managerNotes,
+                orderedAt: data.nextStatus === 'ORDERED' ? (r.orderedAt || nowStr) : r.orderedAt,
+                receivedAt: data.nextStatus === 'RECEIVED' ? (r.receivedAt || nowStr) : r.receivedAt,
+              };
+            }
+            return r;
+          })
+        };
+      }
+      return t;
+    })
+  }));
+}
+
 // Mechanic One-Click Consume Part function
 export function consumeRequisitionPart(
   jobCardId: string,
@@ -637,6 +679,8 @@ export function consumeRequisitionPart(
     itemName: req.title,
     jobCardId,
     taskId,
+    requisitionId: req.id,
+    partNumber: req.partNumber,
     quantityConsumed: req.quantity,
     unitPrice,
     totalCost: totalPrice,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask } from '../types';
-import { updateJobCard, updateTaskStatus, respondToCustomerApproval, createDeliveryRecord, updateVehicleCheckIn } from '../lib/storage';
+import { updateJobCard, updateTaskStatus, respondToCustomerApproval, createDeliveryRecord, updateVehicleCheckIn, getInventoryConsumptionRecords } from '../lib/storage';
 import { 
   X, 
   Car, 
@@ -30,7 +30,10 @@ import {
   LogOut,
   LogIn,
   Camera,
-  UserCheck
+  UserCheck,
+  PackageCheck,
+  Tag,
+  Boxes
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
@@ -58,7 +61,91 @@ export function JobCardDetailView({
   onOpenQCModal,
   onOpenQRModal,
 }: JobCardDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'qc' | 'delivery' | 'invoice'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice'>('tasks');
+
+  // Part Consumption History compilation
+  const consumedItemsList = React.useMemo(() => {
+    const items: {
+      id: string;
+      requisitionId?: string;
+      partNumber?: string;
+      title: string;
+      taskTitle: string;
+      quantity: number;
+      unitPrice: number;
+      totalCost: number;
+      consumedBy: string;
+      consumedAt: string;
+    }[] = [];
+
+    // 1. From Requisitions marked CONSUMED
+    card.tasks.forEach((t) => {
+      if (t.requisitions) {
+        t.requisitions.forEach((r) => {
+          if (r.status === 'CONSUMED' || r.consumedAt) {
+            const uPrice = r.approvedPrice && r.quantity > 0 ? r.approvedPrice / r.quantity : (r.suggestedPrice || 0);
+            const tCost = r.approvedPrice || (uPrice * r.quantity);
+            items.push({
+              id: r.id,
+              requisitionId: r.id,
+              partNumber: r.partNumber,
+              title: r.title,
+              taskTitle: t.title,
+              quantity: r.quantity,
+              unitPrice: uPrice,
+              totalCost: tCost,
+              consumedBy: r.requestedByEmployeeName || 'Workshop Mechanic',
+              consumedAt: r.consumedAt || r.createdAt
+            });
+          }
+        });
+      }
+
+      // 2. From partsList on task
+      if (t.partsList) {
+        t.partsList.forEach((p) => {
+          const exists = items.some(i => i.title === p.name);
+          if (!exists) {
+            items.push({
+              id: p.id,
+              partNumber: p.partNumber,
+              title: p.name,
+              taskTitle: t.title,
+              quantity: p.quantity,
+              unitPrice: p.unitPrice || 0,
+              totalCost: p.totalPrice || 0,
+              consumedBy: t.assignedToName || 'Assigned Mechanic',
+              consumedAt: p.addedAt || card.createdAt
+            });
+          }
+        });
+      }
+    });
+
+    // 3. From global consumption records matching jobCardId
+    const globalLogs = getInventoryConsumptionRecords().filter(r => r.jobCardId === card.id);
+    globalLogs.forEach((g) => {
+      const exists = items.some(i => i.id === g.id || i.requisitionId === g.requisitionId || (i.title === g.itemName && i.consumedAt === g.consumedAt));
+      if (!exists) {
+        items.push({
+          id: g.id,
+          requisitionId: g.requisitionId,
+          partNumber: g.partNumber,
+          title: g.itemName,
+          taskTitle: card.tasks.find(t => t.id === g.taskId)?.title || 'General Repair',
+          quantity: g.quantityConsumed,
+          unitPrice: g.unitPrice,
+          totalCost: g.totalCost,
+          consumedBy: g.consumedByEmployeeName || 'Workshop Mechanic',
+          consumedAt: g.consumedAt
+        });
+      }
+    });
+
+    return items;
+  }, [card]);
+
+  const totalConsumedCost = consumedItemsList.reduce((sum, item) => sum + item.totalCost, 0);
 
   // Gate Check-Out Modal State
   const [isGateCheckOutOpen, setIsGateCheckOutOpen] = useState(false);
@@ -386,6 +473,7 @@ export function JobCardDetailView({
         <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 overflow-x-auto shrink-0">
           {[
             { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench },
+            { id: 'consumption', label: `Part Consumption History (${consumedItemsList.length})`, icon: PackageCheck },
             { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle },
             { id: 'qc', label: `Floor QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck },
             { id: 'delivery', label: 'Pick & Delivery Track', icon: Truck },
@@ -605,6 +693,115 @@ export function JobCardDetailView({
                   ))
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB: PART CONSUMPTION HISTORY */}
+          {activeTab === 'consumption' && (
+            <div className="space-y-6">
+              
+              {/* Header Banner & Stats */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                    <PackageCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base">
+                      Part & Consumable Consumption History
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Audit log of all spare parts and consumables fitted and consumed on Job Card {card.id}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Items</p>
+                    <p className="text-base font-black text-slate-900 dark:text-white font-mono">{consumedItemsList.length}</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Value</p>
+                    <p className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">₹{totalConsumedCost.toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Consumption History Table */}
+              {consumedItemsList.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
+                  <PackageCheck className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    No parts or consumables consumed yet for this job card.
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    When assigned mechanics consume approved requisitions or install parts on assigned tasks, the consumption records will appear here automatically with timestamp and employee log.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <th className="p-3">Requisition ID</th>
+                        <th className="p-3">Part / Consumable Name</th>
+                        <th className="p-3">Assigned Task</th>
+                        <th className="p-3 text-center">Qty</th>
+                        <th className="p-3 text-right">Unit Price</th>
+                        <th className="p-3 text-right">Total Cost</th>
+                        <th className="p-3">Consumed Date & Time</th>
+                        <th className="p-3">Completed By Employee</th>
+                        <th className="p-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {consumedItemsList.map((item, idx) => (
+                        <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3 font-mono font-black text-amber-600 dark:text-amber-400">
+                            {item.requisitionId || 'PRT-DIRECT'}
+                          </td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-slate-100">
+                            <p>{item.title}</p>
+                            {item.partNumber && (
+                              <p className="text-[10px] text-slate-400 font-mono">PN: {item.partNumber}</p>
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-600 dark:text-slate-300 font-medium">
+                            {item.taskTitle}
+                          </td>
+                          <td className="p-3 text-center font-bold font-mono">
+                            {item.quantity}
+                          </td>
+                          <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
+                            ₹{item.unitPrice.toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-slate-900 dark:text-white">
+                            ₹{item.totalCost.toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">
+                            {item.consumedAt}
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span>{item.consumedBy}</span>
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Fitted & Consumed
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
             </div>
           )}
 
