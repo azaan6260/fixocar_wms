@@ -33,7 +33,9 @@ import {
   Save,
   DollarSign,
   Hammer,
-  Paintbrush
+  Paintbrush,
+  ExternalLink,
+  Truck
 } from 'lucide-react';
 
 interface TaskDetailCardProps {
@@ -285,6 +287,18 @@ export function TaskDetailCard({
                 <Hammer className="w-3.5 h-3.5 text-amber-500" />
                 <span>Pre-Paint Denter:</span>
                 <strong className="font-bold">{task.pairedDenterName}</strong>
+              </div>
+            )}
+
+            {(task.isOutsourced || task.assignedType === 'VENDOR') && (
+              <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <ExternalLink className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Outsourced Sublet Job</span>
+                {task.outsourceStatus && (
+                  <span className="text-[10px] bg-indigo-600 text-white px-1.5 py-0.2 rounded font-black uppercase">
+                    {task.outsourceStatus.replace(/_/g, ' ')}
+                  </span>
+                )}
               </div>
             )}
 

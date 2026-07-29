@@ -55,7 +55,7 @@ export function RoleWorkspaceView({
           list.push({ card, task });
         } else if (currentRole === 'PAINTER' && task.category === 'PAINT') {
           list.push({ card, task });
-        } else if (currentRole === 'VENDOR' && (task.category === 'SUBLET_VENDOR' || task.category === 'WASHING')) {
+        } else if (currentRole === 'VENDOR' && (task.assignedType === 'VENDOR' || task.isOutsourced || task.category === 'SUBLET_VENDOR' || task.category === 'LATHE_WORK' || task.category === 'WASHING')) {
           list.push({ card, task });
         }
       });

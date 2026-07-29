@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -289,6 +289,110 @@ export function reallotTask(
           assignedToName: newAssigneeName,
           assignedType: newAssigneeType,
           notes: (t.notes ? `${t.notes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
+        };
+      }
+      return t;
+    })
+  }));
+}
+
+// Outsource a task to an external vendor
+export function outsourceTaskToVendor(
+  jobCardId: string,
+  taskId: string,
+  data: {
+    vendorId: string;
+    vendorName: string;
+    outsourcedCost: number;
+    expectedReturnDate?: string;
+    outsourceNotes?: string;
+  }
+) {
+  const challanNo = `CHN-${Date.now().toString().slice(-6)}`;
+  const nowStr = new Date().toLocaleString();
+
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          isOutsourced: true,
+          assignedType: 'VENDOR',
+          assignedToId: data.vendorId,
+          assignedToName: data.vendorName,
+          outsourcedVendorId: data.vendorId,
+          outsourcedVendorName: data.vendorName,
+          outsourcedCost: data.outsourcedCost,
+          outsourceStatus: 'PENDING_DISPATCH',
+          expectedReturnDate: data.expectedReturnDate,
+          outsourceNotes: data.outsourceNotes,
+          outsourceChallanNumber: challanNo,
+          outsourcedAt: nowStr,
+          estimatedCost: data.outsourcedCost || t.estimatedCost
+        };
+      }
+      return t;
+    })
+  }));
+
+  // Update vendor outstanding balance
+  if (data.vendorId && data.outsourcedCost > 0) {
+    const vendors = getVendors();
+    const idx = vendors.findIndex(v => v.id === data.vendorId);
+    if (idx !== -1) {
+      vendors[idx].outstandingBalance = (vendors[idx].outstandingBalance || 0) + data.outsourcedCost;
+      saveVendors(vendors);
+    }
+  }
+}
+
+// Update status of an outsourced task
+export function updateTaskOutsourceStatus(
+  jobCardId: string,
+  taskId: string,
+  data: {
+    outsourceStatus: OutsourceStatus;
+    vendorInvoiceNumber?: string;
+    outsourceNotes?: string;
+    outsourcedCost?: number;
+  }
+) {
+  const nowStr = new Date().toLocaleString();
+
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        const isFinished = data.outsourceStatus === 'RECEIVED_BACK' || data.outsourceStatus === 'COMPLETED_BY_VENDOR';
+        return {
+          ...t,
+          outsourceStatus: data.outsourceStatus,
+          vendorInvoiceNumber: data.vendorInvoiceNumber || t.vendorInvoiceNumber,
+          outsourceNotes: data.outsourceNotes || t.outsourceNotes,
+          outsourcedCost: data.outsourcedCost !== undefined ? data.outsourcedCost : t.outsourcedCost,
+          receivedBackAt: isFinished ? (t.receivedBackAt || nowStr) : t.receivedBackAt,
+          status: isFinished ? 'COMPLETED' as const : t.status,
+          completedAt: isFinished ? (t.completedAt || nowStr) : t.completedAt
+        };
+      }
+      return t;
+    })
+  }));
+}
+
+// Cancel task outsourcing
+export function cancelTaskOutsourcing(jobCardId: string, taskId: string) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.id === taskId) {
+        return {
+          ...t,
+          isOutsourced: false,
+          outsourceStatus: undefined,
+          outsourcedVendorId: undefined,
+          outsourcedVendorName: undefined
         };
       }
       return t;

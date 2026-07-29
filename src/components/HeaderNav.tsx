@@ -26,7 +26,8 @@ import {
   QrCode,
   Flame,
   Clock,
-  LogIn
+  LogIn,
+  ExternalLink
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -74,6 +75,7 @@ export function HeaderNav({
 
   const row2Items = [
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },
+    { id: 'outsourced-jobs', label: 'Outsourced Jobs', icon: ExternalLink },
     { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },
     { id: 'deliveries', label: t('nav.delivery'), icon: Truck },
     { id: 'vendors', label: t('nav.vendors'), icon: Building2 },

@@ -29,6 +29,7 @@ import { DailyHuddleView } from './components/DailyHuddleView';
 import { GatePassCheckInView } from './components/GatePassCheckInView';
 import { JobCardQRModal } from './components/JobCardQRModal';
 import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
+import { OutsourcedJobsView } from './components/OutsourcedJobsView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -230,6 +231,13 @@ export default function App() {
 
         {activeTab === 'contractor-payouts' && (
           <ContractorPayoutsView currentRole={currentRole} />
+        )}
+
+        {activeTab === 'outsourced-jobs' && (
+          <OutsourcedJobsView 
+            currentRole={currentRole} 
+            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+          />
         )}
 
         {activeTab === 'role-workspace' && (

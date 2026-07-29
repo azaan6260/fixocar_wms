@@ -232,6 +232,14 @@ export interface TaskConcern {
   createdAt: string;
 }
 
+export type OutsourceStatus = 
+  | 'PENDING_DISPATCH' 
+  | 'SENT_TO_VENDOR' 
+  | 'WORK_IN_PROGRESS' 
+  | 'COMPLETED_BY_VENDOR' 
+  | 'RECEIVED_BACK' 
+  | 'PAID_SETTLED';
+
 export interface JobTask {
   id: string;
   jobCardId: string;
@@ -262,6 +270,18 @@ export interface JobTask {
   pairedDenterId?: string;
   pairedDenterName?: string;
   standardJobId?: string;
+  // Outsourced Job fields
+  isOutsourced?: boolean;
+  outsourcedVendorId?: string;
+  outsourcedVendorName?: string;
+  outsourcedCost?: number;
+  vendorInvoiceNumber?: string;
+  outsourceStatus?: OutsourceStatus;
+  expectedReturnDate?: string;
+  outsourceNotes?: string;
+  outsourceChallanNumber?: string;
+  outsourcedAt?: string;
+  receivedBackAt?: string;
 }
 
 export interface QCCheckitem {
