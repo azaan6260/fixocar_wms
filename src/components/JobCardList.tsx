@@ -16,7 +16,8 @@ import {
   Phone,
   ShieldCheck,
   Building2,
-  QrCode
+  QrCode,
+  Flame
 } from 'lucide-react';
 
 interface JobCardListProps {
@@ -172,10 +173,15 @@ export function JobCardList({
                 {/* Card Top Header */}
                 <div className="p-5 space-y-3">
                   <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
                         {card.id}
                       </span>
+                      {card.isUrgent && (
+                        <span className="bg-amber-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
+                          🔥 URGENT
+                        </span>
+                      )}
                       {card.isCars24 && (
                         <span className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
                           Cars24

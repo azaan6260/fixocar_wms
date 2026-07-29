@@ -84,9 +84,19 @@ export function DailyHuddleView({
   }, [huddleNotes, todayDateStr]);
 
   // Date parsing & Deadline status calculation
-  const getDeadlineInfo = (estimatedCompletionDate: string) => {
+  const getDeadlineInfo = (estimatedCompletionDate: string, isUrgent?: boolean) => {
+    const baseScore = isUrgent ? 200 : 0;
+
     if (!estimatedCompletionDate) {
-      return { status: 'UPCOMING' as const, label: 'No Deadline Set', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300', isOverdue: false, isToday: false };
+      return { 
+        status: 'UPCOMING' as const, 
+        label: isUrgent ? '🔥 MARKED URGENT' : 'No Deadline Set', 
+        subtext: isUrgent ? 'Priority High' : 'Target date unassigned', 
+        color: isUrgent ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-400 font-bold' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300', 
+        isOverdue: false, 
+        isToday: false,
+        urgencyScore: baseScore
+      };
     }
 
     const today = new Date();
@@ -103,46 +113,46 @@ export function DailyHuddleView({
       const overdueDays = Math.abs(diffDays);
       return {
         status: 'OVERDUE' as const,
-        label: `🚨 Overdue by ${overdueDays} day${overdueDays > 1 ? 's' : ''}`,
+        label: `🚨 Overdue by ${overdueDays} day${overdueDays > 1 ? 's' : ''}${isUrgent ? ' 🔥' : ''}`,
         subtext: `Promised: ${estimatedCompletionDate}`,
         color: 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800 animate-pulse',
         badgeBg: 'bg-rose-600 text-white',
         isOverdue: true,
         isToday: false,
-        urgencyScore: 100 + overdueDays
+        urgencyScore: baseScore + 100 + overdueDays
       };
     } else if (diffDays === 0) {
       return {
         status: 'DELIVERY_TODAY' as const,
-        label: '⏰ Promised Delivery Today',
+        label: `⏰ Promised Delivery Today${isUrgent ? ' 🔥' : ''}`,
         subtext: `Target: ${estimatedCompletionDate}`,
         color: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700',
         badgeBg: 'bg-amber-500 text-slate-950',
         isOverdue: false,
         isToday: true,
-        urgencyScore: 80
+        urgencyScore: baseScore + 80
       };
     } else if (diffDays === 1) {
       return {
         status: 'TOMORROW' as const,
-        label: '📅 Promised Tomorrow',
+        label: `📅 Promised Tomorrow${isUrgent ? ' 🔥' : ''}`,
         subtext: `Target: ${estimatedCompletionDate}`,
-        color: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800',
+        color: isUrgent ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-400 font-bold' : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800',
         badgeBg: 'bg-blue-600 text-white',
         isOverdue: false,
         isToday: false,
-        urgencyScore: 50
+        urgencyScore: baseScore + 50
       };
     } else {
       return {
         status: 'UPCOMING' as const,
-        label: `📆 Promised in ${diffDays} days`,
+        label: `📆 Promised in ${diffDays} days${isUrgent ? ' 🔥' : ''}`,
         subtext: `Target: ${estimatedCompletionDate}`,
-        color: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800',
+        color: isUrgent ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-400 font-bold' : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800',
         badgeBg: 'bg-slate-700 text-slate-200',
         isOverdue: false,
         isToday: false,
-        urgencyScore: 10
+        urgencyScore: baseScore + 10
       };
     }
   };
@@ -154,16 +164,19 @@ export function DailyHuddleView({
   const totalActiveCount = activeJobCards.length;
   
   const overdueCards = activeJobCards.filter(c => {
-    const info = getDeadlineInfo(c.estimatedCompletionDate);
+    const info = getDeadlineInfo(c.estimatedCompletionDate, c.isUrgent);
     return info.isOverdue;
   });
 
   const dueTodayCards = activeJobCards.filter(c => {
-    const info = getDeadlineInfo(c.estimatedCompletionDate);
-    return info.isToday;
+    const info = getDeadlineInfo(c.estimatedCompletionDate, c.isUrgent);
+    return info.isToday || c.isUrgent;
   });
 
-  const urgentDeadlineCount = overdueCards.length + dueTodayCards.length;
+  const urgentDeadlineCount = activeJobCards.filter(c => {
+    const info = getDeadlineInfo(c.estimatedCompletionDate, c.isUrgent);
+    return info.isOverdue || info.isToday || c.isUrgent;
+  }).length;
 
   const unassignedTasksCards = activeJobCards.filter(c => 
     c.tasks.some(t => !t.assignedToId && t.status !== 'COMPLETED')
@@ -205,10 +218,10 @@ export function DailyHuddleView({
     if (!matchesSearch) return false;
 
     // 2. Deadline / Urgency filter
-    const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate);
-    if (deadlineFilter === 'URGENT_DEADLINE' && !deadlineInfo.isOverdue && !deadlineInfo.isToday) return false;
+    const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
+    if (deadlineFilter === 'URGENT_DEADLINE' && !card.isUrgent && !deadlineInfo.isOverdue && !deadlineInfo.isToday) return false;
     if (deadlineFilter === 'OVERDUE' && !deadlineInfo.isOverdue) return false;
-    if (deadlineFilter === 'DELIVERY_TODAY' && !deadlineInfo.isToday) return false;
+    if (deadlineFilter === 'DELIVERY_TODAY' && !deadlineInfo.isToday && !card.isUrgent) return false;
     if (deadlineFilter === 'UNASSIGNED' && !card.tasks.some(t => !t.assignedToId && t.status !== 'COMPLETED')) return false;
 
     // 3. Department filter
@@ -234,8 +247,8 @@ export function DailyHuddleView({
   // Sort logic
   const sortedCards = [...filteredCards].sort((a, b) => {
     if (sortBy === 'URGENCY') {
-      const aInfo = getDeadlineInfo(a.estimatedCompletionDate);
-      const bInfo = getDeadlineInfo(b.estimatedCompletionDate);
+      const aInfo = getDeadlineInfo(a.estimatedCompletionDate, a.isUrgent);
+      const bInfo = getDeadlineInfo(b.estimatedCompletionDate, b.isUrgent);
       return bInfo.urgencyScore - aInfo.urgencyScore;
     }
     if (sortBy === 'PROGRESS') {
@@ -662,7 +675,7 @@ export function DailyHuddleView({
           </div>
         ) : (
           sortedCards.map(card => {
-            const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate);
+            const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
             const totalTasks = card.tasks.length;
             const completedTasks = card.tasks.filter(t => t.status === 'COMPLETED').length;
             const inProgressTasks = card.tasks.filter(t => t.status === 'IN_PROGRESS').length;
@@ -680,7 +693,9 @@ export function DailyHuddleView({
               <div 
                 key={card.id}
                 className={`bg-white dark:bg-slate-900 rounded-3xl border transition-all shadow-xs hover:shadow-md overflow-hidden ${
-                  deadlineInfo.isOverdue 
+                  card.isUrgent
+                    ? 'border-amber-500 dark:border-amber-600 ring-2 ring-amber-500/30 shadow-lg'
+                    : deadlineInfo.isOverdue 
                     ? 'border-rose-300 dark:border-rose-900/80 ring-1 ring-rose-500/20' 
                     : deadlineInfo.isToday
                       ? 'border-amber-300 dark:border-amber-900/80 ring-1 ring-amber-500/20'
@@ -702,6 +717,12 @@ export function DailyHuddleView({
                         <h2 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
                           {card.vehicle.make} {card.vehicle.model} ({card.vehicle.color})
                         </h2>
+
+                        {card.isUrgent && (
+                          <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-xs animate-pulse">
+                            🔥 URGENT HUDDLE TARGET
+                          </span>
+                        )}
 
                         {card.isCars24 && (
                           <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
@@ -730,11 +751,51 @@ export function DailyHuddleView({
                     </div>
                   </div>
 
-                  {/* Right: Deadline Badge & Overall Progress */}
-                  <div className="flex items-center gap-4 shrink-0 flex-wrap lg:flex-nowrap justify-between lg:justify-end">
+                  {/* Right: Deadline Badge, Quick Urgency Actions & Progress */}
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap justify-between lg:justify-end">
                     
+                    {/* Huddle Urgency Action Toggles */}
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700/60">
+                      {/* Toggle Urgent Flag */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateJobCard(card.id, { isUrgent: !card.isUrgent });
+                        }}
+                        title={card.isUrgent ? "Remove Urgent priority" : "Mark Urgent for Daily Huddle"}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                          card.isUrgent
+                            ? 'bg-amber-500 text-slate-950 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600'
+                        }`}
+                      >
+                        <Flame className={`w-3.5 h-3.5 ${card.isUrgent ? 'fill-current' : 'text-amber-500'}`} />
+                        <span>{card.isUrgent ? 'Urgent' : 'Mark Urgent'}</span>
+                      </button>
+
+                      {/* Set Target Delivery Today */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateJobCard(card.id, { 
+                            estimatedCompletionDate: todayDateStr,
+                            isUrgent: true 
+                          });
+                        }}
+                        title="Set target completion to Today & mark urgent"
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                          deadlineInfo.isToday
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600'
+                        }`}
+                      >
+                        <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{deadlineInfo.isToday ? 'Due Today' : 'Target Today'}</span>
+                      </button>
+                    </div>
+
                     {/* Deadline Highlight Badge */}
-                    <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end ${deadlineInfo.color}`}>
+                    <div className={`px-3.5 py-1.5 rounded-2xl border flex flex-col items-end ${deadlineInfo.color}`}>
                       <span className="text-xs font-black tracking-tight flex items-center gap-1">
                         {deadlineInfo.label}
                       </span>
@@ -744,10 +805,10 @@ export function DailyHuddleView({
                     </div>
 
                     {/* Overall Task Progress Bar */}
-                    <div className="w-36 space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-500">Task Progress</span>
-                        <span className="text-slate-900 dark:text-slate-100">{completedTasks}/{totalTasks} ({progressPercent}%)</span>
+                    <div className="w-28 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold">
+                        <span className="text-slate-500">Progress</span>
+                        <span className="text-slate-900 dark:text-slate-100">{progressPercent}%</span>
                       </div>
                       <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div 
@@ -767,9 +828,9 @@ export function DailyHuddleView({
                     <button
                       type="button"
                       onClick={() => onSelectJobCard(card.id)}
-                      className="px-4 py-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs shrink-0"
+                      className="px-3.5 py-2 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1 transition-all shadow-xs shrink-0"
                     >
-                      <span>View Card</span>
+                      <span>View</span>
                       <ChevronRight className="w-4 h-4 text-slate-400" />
                     </button>
 

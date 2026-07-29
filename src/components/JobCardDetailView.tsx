@@ -25,7 +25,8 @@ import {
   Calendar,
   Share2,
   Zap,
-  QrCode
+  QrCode,
+  Flame
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
@@ -232,6 +233,60 @@ export function JobCardDetailView({
             <span className="text-slate-400 font-medium">Est. Total Bill:</span>
             <p className="font-extrabold text-sm text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
             <p className="text-[11px] text-slate-400">Advance Paid: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
+          </div>
+        </div>
+
+        {/* Daily Huddle Urgency & Promised Delivery Date Bar */}
+        <div className="px-4 py-2.5 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-black text-amber-400 flex items-center gap-1 uppercase tracking-wider text-[11px]">
+              <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
+              Daily Huddle Priority:
+            </span>
+
+            {/* Toggle Urgent Button */}
+            <button
+              type="button"
+              onClick={() => {
+                updateJobCard(card.id, { isUrgent: !card.isUrgent });
+              }}
+              className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all border ${
+                card.isUrgent
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-amber-500/50 hover:text-white'
+              }`}
+            >
+              <Flame className={`w-3.5 h-3.5 ${card.isUrgent ? 'fill-current text-slate-950' : 'text-amber-400'}`} />
+              <span>{card.isUrgent ? '🔥 MARKED URGENT' : 'Mark Urgent'}</span>
+            </button>
+
+            {/* Set Target Delivery Today Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                updateJobCard(card.id, { 
+                  estimatedCompletionDate: todayStr,
+                  isUrgent: true
+                });
+              }}
+              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-1.5"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Target Completion Today</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 font-medium text-[11px]">Promised Date:</span>
+            <input
+              type="date"
+              value={card.estimatedCompletionDate || ''}
+              onChange={(e) => {
+                updateJobCard(card.id, { estimatedCompletionDate: e.target.value });
+              }}
+              className="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-amber-500"
+            />
           </div>
         </div>
 
