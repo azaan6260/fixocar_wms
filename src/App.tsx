@@ -31,6 +31,8 @@ import { JobCardQRModal } from './components/JobCardQRModal';
 import { LiveJobCardTrackerModal } from './components/LiveJobCardTrackerModal';
 import { OutsourcedJobsView } from './components/OutsourcedJobsView';
 import { PartOrderBasketView } from './components/PartOrderBasketView';
+import { InvoiceManagementView } from './components/InvoiceManagementView';
+import { AccountingAndExpensesView } from './components/AccountingAndExpensesView';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -219,6 +221,19 @@ export default function App() {
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
             onOpenQRModal={(id) => setQrModalCardId(id)}
+          />
+        )}
+
+        {activeTab === 'invoices' && (
+          <InvoiceManagementView
+            currentRole={currentRole}
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
+          />
+        )}
+
+        {activeTab === 'accounting-expenses' && (
+          <AccountingAndExpensesView
+            currentRole={currentRole}
           />
         )}
 

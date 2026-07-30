@@ -599,3 +599,33 @@ export interface JobCard {
   checkOutDriverPhone?: string;
   checkOutPhotoWithDriverUrl?: string;
 }
+
+export type ExpenseCategory = 
+  | 'ELECTRICITY_UTILITIES'
+  | 'RENT_LEASE'
+  | 'STAFF_WELFARE'
+  | 'TOOLS_MAINTENANCE'
+  | 'OFFICE_ADMIN'
+  | 'FUEL_LOGISTICS'
+  | 'STATUTORY_TAXES'
+  | 'MISCELLANEOUS';
+
+export type ExpensePaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CREDIT_CARD' | 'PETTY_CASH';
+
+export interface WorkshopExpense {
+  id: string; // e.g. "EXP-2026-001"
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string; // "YYYY-MM-DD"
+  workshopId?: string;
+  workshopName?: string;
+  paymentMode: ExpensePaymentMode;
+  paidByName: string;
+  vendorName?: string;
+  receiptNumber?: string;
+  notes?: string;
+  isApproved?: boolean;
+  approvedByName?: string;
+  createdAt: string;
+}

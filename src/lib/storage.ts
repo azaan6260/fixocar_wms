@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
 
@@ -58,6 +58,7 @@ const STORAGE_KEYS = {
   CUSTOMER_SESSION: 'fixocar_customer_session_v1',
   CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v1',
   VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v1',
+  WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -1838,5 +1839,181 @@ export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn)
 
 export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {
   return getVehicleCheckIns().find(c => c.id === id);
+}
+
+// -------------------------------------------------------------
+// WORKSHOP EXPENSES & ACCOUNTING STORAGE
+// -------------------------------------------------------------
+export const INITIAL_WORKSHOP_EXPENSES: WorkshopExpense[] = [
+  {
+    id: 'EXP-2026-001',
+    title: 'Monthly Workshop Electricity Bill - 3 Phase Bay Heavy Load',
+    category: 'ELECTRICITY_UTILITIES',
+    amount: 18450,
+    date: '2026-07-25',
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    paymentMode: 'BANK_TRANSFER',
+    paidByName: 'Marcus Vance',
+    vendorName: 'MSEDCL Mumbai Industrial Line',
+    receiptNumber: 'MSEDCL-883921',
+    notes: 'Electricity charges for heavy hydraulic lifts and paint booth compressors.',
+    isApproved: true,
+    approvedByName: 'SUPER ADMIN',
+    createdAt: '2026-07-25T10:30:00Z'
+  },
+  {
+    id: 'EXP-2026-002',
+    title: 'Garage Facility Bay Rent - July 2026',
+    category: 'RENT_LEASE',
+    amount: 85000,
+    date: '2026-07-01',
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    paymentMode: 'BANK_TRANSFER',
+    paidByName: 'Marcus Vance',
+    vendorName: 'Marol Industrial Park Pvt Ltd',
+    receiptNumber: 'RENT-JUL-2026',
+    notes: 'Monthly lease for Marol 6-bay workshop facility.',
+    isApproved: true,
+    approvedByName: 'SUPER ADMIN',
+    createdAt: '2026-07-01T09:00:00Z'
+  },
+  {
+    id: 'EXP-2026-003',
+    title: 'Technicians Tea, Refreshments & Snack Box Allowance',
+    category: 'STAFF_WELFARE',
+    amount: 3420,
+    date: '2026-07-28',
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    paymentMode: 'PETTY_CASH',
+    paidByName: 'Rajesh Sharma',
+    vendorName: 'Sai Tea Stall & Snacks',
+    receiptNumber: 'PETTY-0728',
+    notes: 'Daily refreshments and evening snacks for floor mechanics working overtime.',
+    isApproved: true,
+    approvedByName: 'Marcus Vance',
+    createdAt: '2026-07-28T18:15:00Z'
+  },
+  {
+    id: 'EXP-2026-004',
+    title: 'Pneumatic Impact Wrench & Compressor Hose Servicing',
+    category: 'TOOLS_MAINTENANCE',
+    amount: 7200,
+    date: '2026-07-20',
+    workshopId: 'ws-delhi-south',
+    workshopName: 'FixoCar Fleet Bay - Okhla',
+    paymentMode: 'UPI',
+    paidByName: 'Vikram Mehta',
+    vendorName: 'Okhla Pneumatic Services',
+    receiptNumber: 'OPS-2026-781',
+    notes: 'Replaced seals and oil on 2 pneumatic impact guns and main air compressor line.',
+    isApproved: true,
+    approvedByName: 'SUPER ADMIN',
+    createdAt: '2026-07-20T14:20:00Z'
+  },
+  {
+    id: 'EXP-2026-005',
+    title: 'Airtel High-Speed Fiber Broadband for OBD Diagnostics',
+    category: 'OFFICE_ADMIN',
+    amount: 1799,
+    date: '2026-07-05',
+    workshopId: 'ws-delhi-south',
+    workshopName: 'FixoCar Fleet Bay - Okhla',
+    paymentMode: 'CREDIT_CARD',
+    paidByName: 'Vikram Mehta',
+    vendorName: 'Airtel Business Broadband',
+    receiptNumber: 'AIR-9920192',
+    notes: 'Monthly Wi-Fi connection for ECU diagnostic scanners and workshop tablet system.',
+    isApproved: true,
+    approvedByName: 'SUPER ADMIN',
+    createdAt: '2026-07-05T11:00:00Z'
+  },
+  {
+    id: 'EXP-2026-006',
+    title: 'Emergency Tow Truck Fuel & Flatbed Breakdown Service',
+    category: 'FUEL_LOGISTICS',
+    amount: 4500,
+    date: '2026-07-24',
+    workshopId: 'ws-mumbai-central',
+    workshopName: 'FixoCar Central Hub - Andheri',
+    paymentMode: 'UPI',
+    paidByName: 'Rajesh Sharma',
+    vendorName: 'HP Petrol Pump Marol',
+    receiptNumber: 'HP-FUEL-771',
+    notes: 'Diesel for flatbed recovery truck picking up stranded vehicle on Highway.',
+    isApproved: true,
+    approvedByName: 'Marcus Vance',
+    createdAt: '2026-07-24T16:00:00Z'
+  },
+  {
+    id: 'EXP-2026-007',
+    title: 'Municipal Trade License & Fire Safety Audit Fee',
+    category: 'STATUTORY_TAXES',
+    amount: 12500,
+    date: '2026-07-12',
+    workshopId: 'ws-bangalore-east',
+    workshopName: 'FixoCar Express - Whitefield',
+    paymentMode: 'BANK_TRANSFER',
+    paidByName: 'Anil Kumar',
+    vendorName: 'BBMP Municipal Licensing Authority',
+    receiptNumber: 'BBMP-LIC-2026',
+    notes: 'Annual fire extinguisher inspection & commercial garage trade license renewal.',
+    isApproved: true,
+    approvedByName: 'SUPER ADMIN',
+    createdAt: '2026-07-12T12:00:00Z'
+  }
+];
+
+export function getWorkshopExpenses(): WorkshopExpense[] {
+  const local = localStorage.getItem(STORAGE_KEYS.WORKSHOP_EXPENSES);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.WORKSHOP_EXPENSES, JSON.stringify(INITIAL_WORKSHOP_EXPENSES));
+    return INITIAL_WORKSHOP_EXPENSES;
+  }
+  try {
+    return JSON.parse(local);
+  } catch {
+    return INITIAL_WORKSHOP_EXPENSES;
+  }
+}
+
+export function saveWorkshopExpenses(expenses: WorkshopExpense[]): void {
+  localStorage.setItem(STORAGE_KEYS.WORKSHOP_EXPENSES, JSON.stringify(expenses));
+  notifyStoreChange();
+}
+
+export function addWorkshopExpense(expenseData: Omit<WorkshopExpense, 'id' | 'createdAt'>): WorkshopExpense {
+  const expenses = getWorkshopExpenses();
+  const nextNum = expenses.length + 101;
+  const newExpense: WorkshopExpense = {
+    ...expenseData,
+    id: `EXP-2026-${String(nextNum).padStart(3, '0')}`,
+    createdAt: new Date().toISOString()
+  };
+
+  expenses.unshift(newExpense);
+  saveWorkshopExpenses(expenses);
+  return newExpense;
+}
+
+export function updateWorkshopExpense(id: string, updates: Partial<WorkshopExpense>): WorkshopExpense | null {
+  const expenses = getWorkshopExpenses();
+  const index = expenses.findIndex(e => e.id === id);
+  if (index === -1) return null;
+
+  expenses[index] = { ...expenses[index], ...updates };
+  saveWorkshopExpenses(expenses);
+  return expenses[index];
+}
+
+export function deleteWorkshopExpense(id: string): boolean {
+  const expenses = getWorkshopExpenses();
+  const filtered = expenses.filter(e => e.id !== id);
+  if (filtered.length === expenses.length) return false;
+
+  saveWorkshopExpenses(filtered);
+  return true;
 }
 

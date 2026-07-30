@@ -28,7 +28,9 @@ import {
   Clock,
   LogIn,
   ExternalLink,
-  ShoppingBag
+  Receipt,
+  ShoppingBag,
+  Wallet
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -69,6 +71,8 @@ export function HeaderNav({
     { id: 'daily-huddle', label: '🔥 Daily Huddle', icon: Flame },
     { id: 'workshops', label: 'Cities & Workshops', icon: MapPin },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText },
+    { id: 'invoices', label: '🧾 GST Invoices', icon: Receipt },
+    { id: 'accounting-expenses', label: '💰 Accounting & Expenses', icon: Wallet },
     { id: 'part-basket', label: '🛒 Part Order Basket', icon: ShoppingBag },
     { id: 'standard-jobs', label: 'Standard Jobs Library', icon: Zap },
     { id: 'contractor-payouts', label: 'Contractor Payouts', icon: DollarSign },
