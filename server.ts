@@ -37,12 +37,17 @@ async function startServer() {
       const aiResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
-          prompt,
           {
-            inlineData: {
-              data: base64Data,
-              mimeType: 'image/jpeg'
-            }
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType: 'image/jpeg'
+                }
+              }
+            ]
           }
         ]
       });

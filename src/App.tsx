@@ -7,6 +7,7 @@ import {
   getJobCardById, 
   subscribeToStore 
 } from './lib/storage';
+import { Camera } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
 
 import { HeaderNav } from './components/HeaderNav';
@@ -20,6 +21,7 @@ import { FloorManagerQCModal } from './components/FloorManagerQCModal';
 import { DeliveryTrackingView } from './components/DeliveryTrackingView';
 import { VendorManagementView } from './components/VendorManagementView';
 import { RoleWorkspaceView } from './components/RoleWorkspaceView';
+import { LicensePlateScannerModal } from './components/LicensePlateScannerModal';
 import { SupabaseSettingsModal } from './components/SupabaseSettingsModal';
 import { EmployeeManagementView } from './components/EmployeeManagementView';
 import { CityWorkshopManagementView } from './components/CityWorkshopManagementView';
@@ -63,8 +65,50 @@ export default function App() {
 
   // QR Code Modals State
   const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);
-  const [isLiveQRScannerOpen, setIsLiveQRScannerOpen] = useState<boolean>(false);
-  const [liveTrackerInitialCardId, setLiveTrackerInitialCardId] = useState<string | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
+
+  const handleGlobalScan = (scannedPlate: string) => {
+    setIsScannerOpen(false);
+    const cleanReg = scannedPlate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    
+    // Check if customer view
+    if (isCustomerView) {
+      // It's a customer. In CustomerPortal we have trackerSearchQuery, but that's local state.
+      // If the customer scans their own vehicle, wait, how can we pass it? 
+      // We can use a global event or URL param, but actually for customer, if they scan,
+      // we can just navigate them to dashboard and maybe we should keep track of scanned registration?
+      // For simplicity we can dispatch a custom event that CustomerPortal can listen to, or we just alert them.
+      window.dispatchEvent(new CustomEvent('GLOBAL_SCAN_CUSTOMER', { detail: cleanReg }));
+      return;
+    }
+
+    // Employee view
+    const activeCard = jobCards.find(j => 
+      j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg && 
+      j.status !== 'CLOSED' && j.status !== 'DELIVERED'
+    );
+
+    if (activeCard) {
+      setSelectedJobCardId(activeCard.id);
+      return;
+    }
+
+    // No active card. Any historical ones?
+    const historicalCards = jobCards.filter(j => 
+      j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg
+    );
+
+    if (historicalCards.length > 0) {
+      // Sort to get latest
+      historicalCards.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setSelectedJobCardId(historicalCards[0].id);
+      return;
+    }
+
+    // No cards at all, or they want to create
+    setCreateModalPrefill(scannedPlate);
+    setIsCreateModalOpen(true);
+  };
 
   // Subscribe to storage updates & popstate
   useEffect(() => {
@@ -122,13 +166,25 @@ export default function App() {
               <span className="text-xs font-bold text-blue-300 bg-blue-950/80 px-3 py-1 rounded-full border border-blue-600/40 shadow-xs">Customer Portal</span>
             </h1>
 
-            <button 
-              type="button"
-              onClick={() => toggleViewMode(false)}
-              className="text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-1.5"
-            >
-              <span>⚙️ Workshop Management (WMS)</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-md active:scale-95"
+                title="Scan Vehicle Number Plate"
+              >
+                <Camera className="w-4 h-4" />
+                <span className="hidden sm:inline">Scan Plate</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => toggleViewMode(false)}
+                className="text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-1.5"
+              >
+                <span className="hidden sm:inline">⚙️ Workshop Management (WMS)</span>
+                <span className="sm:hidden">⚙️ WMS</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -172,10 +228,7 @@ export default function App() {
         onTabChange={setActiveTab}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
-        onOpenQRScanner={() => {
-          setLiveTrackerInitialCardId(null);
-          setIsLiveQRScannerOpen(true);
-        }}
+        onOpenScanner={() => setIsScannerOpen(true)}
       />
 
       {/* Main Viewport Content */}
@@ -382,15 +435,12 @@ export default function App() {
         />
       )}
 
-      {/* Live QR Scanner & Interactive Delivery Tracker Modal */}
-      {isLiveQRScannerOpen && (
-        <LiveJobCardTrackerModal
-          isOpen={isLiveQRScannerOpen}
-          onClose={() => {
-            setIsLiveQRScannerOpen(false);
-            setLiveTrackerInitialCardId(null);
-          }}
-          initialJobCardId={liveTrackerInitialCardId || undefined}
+      {/* Global License Plate Scanner */}
+      {isScannerOpen && (
+        <LicensePlateScannerModal
+          isOpen={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          onScanComplete={handleGlobalScan}
         />
       )}
 

@@ -151,6 +151,16 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const handleGlobalScanCustomer = (e: any) => {
+      const scannedReg = e.detail;
+      setTrackerSearchQuery(scannedReg);
+      setActiveTab('JOB_CARDS');
+    };
+    window.addEventListener('GLOBAL_SCAN_CUSTOMER', handleGlobalScanCustomer);
+    return () => window.removeEventListener('GLOBAL_SCAN_CUSTOMER', handleGlobalScanCustomer);
+  }, []);
+
   // Sync login phone changes to vehicles
   useEffect(() => {
     setVehicles(getCustomerVehicles(customerSession.phone));

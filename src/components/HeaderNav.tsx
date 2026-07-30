@@ -30,7 +30,8 @@ import {
   ExternalLink,
   Receipt,
   ShoppingBag,
-  Wallet
+  Wallet,
+  Camera
 } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -41,7 +42,7 @@ interface HeaderNavProps {
   onOpenSupabaseModal: () => void;
   onOpenNewJobCardModal: () => void;
   onSwitchToCustomerPortal?: () => void;
-  onOpenQRScanner?: () => void;
+  onOpenScanner?: () => void;
 }
 
 export function HeaderNav({
@@ -52,7 +53,7 @@ export function HeaderNav({
   onOpenSupabaseModal,
   onOpenNewJobCardModal,
   onSwitchToCustomerPortal,
-  onOpenQRScanner,
+  onOpenScanner,
 }: HeaderNavProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
@@ -181,16 +182,16 @@ export function HeaderNav({
               <span>8819915656</span>
             </a>
 
-            {/* QR Scanner & Number Plate ANPR Scanner Button */}
-            {onOpenQRScanner && (
+            {/* OCR Number Plate Scanner Button */}
+            {onOpenScanner && (
               <button
                 type="button"
-                onClick={onOpenQRScanner}
+                onClick={onOpenScanner}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-xs active:scale-95"
-                title="Scan QR Code or Vehicle Number Plate"
+                title="Scan Vehicle Number Plate"
               >
-                <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden md:inline">Scan QR / Plate</span>
+                <Camera className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden md:inline">Scan Plate</span>
               </button>
             )}
 
