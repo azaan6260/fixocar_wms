@@ -90,16 +90,17 @@ export function getJobCards(): JobCard[] {
   }
 }
 
-export function saveJobCards(cards: JobCard[]) {
+export function saveJobCards(cards: JobCard[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
   notifyStoreChange();
 
-  // Async sync to Supabase if connected
-  const client = getSupabaseClient();
-  if (client) {
-    // Attempt best-effort background sync
-    cards.forEach(card => {
-      client.from('job_cards').upsert({
+  if (!skipPush) {
+    // Async sync to Supabase if connected
+    const client = getSupabaseClient();
+    if (client) {
+      // Attempt best-effort background sync
+      cards.forEach(card => {
+        client.from('job_cards').upsert({
         id: card.id,
         registration_number: card.vehicle.registrationNumber,
         vehicle_make: card.vehicle.make,
@@ -128,6 +129,7 @@ export function saveJobCards(cards: JobCard[]) {
         if (error) console.error('Supabase sync error (job_card):', error);
       });
     });
+    }
   }
 }
 
@@ -851,9 +853,38 @@ export function getEmployees(): Employee[] {
   return migrated;
 }
 
-export function saveEmployees(employees: Employee[]) {
+export function saveEmployees(employees: Employee[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      employees.forEach(emp => {
+        client.from('employees').upsert({
+          id: emp.id,
+          name: emp.name,
+          role: emp.role,
+          phone: emp.phone,
+          email: emp.email,
+          specialized_team: emp.specializedTeam,
+          status: emp.status,
+          active_jobs_count: emp.activeJobsCount,
+          avatar_url: emp.avatarUrl,
+          login_id: emp.loginId,
+          password_hash: emp.password,
+          base_salary: emp.baseSalary,
+          employment_type: emp.employmentType,
+          city_id: emp.cityId,
+          city_name: emp.cityName,
+          workshop_id: emp.workshopId,
+          workshop_name: emp.workshopName
+        }).then(({ error }) => {
+          if (error) console.error('Supabase sync error (employees):', error);
+        });
+      });
+    }
+  }
 }
 
 export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
@@ -947,9 +978,30 @@ export function getVendors(): Vendor[] {
   try { return JSON.parse(local); } catch { return INITIAL_VENDORS; }
 }
 
-export function saveVendors(vendors: Vendor[]) {
+export function saveVendors(vendors: Vendor[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(vendors));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      vendors.forEach(v => {
+        client.from('vendors').upsert({
+          id: v.id,
+          name: v.name,
+          category: v.category,
+          contact_person: v.contactPerson,
+          phone: v.phone,
+          email: v.email,
+          address: v.address,
+          outstanding_balance: v.outstandingBalance,
+          rating: v.rating,
+        }).then(({ error }) => {
+          if (error) console.error('Supabase sync error (vendors):', error);
+        });
+      });
+    }
+  }
 }
 
 export function createVendor(vendor: Omit<Vendor, 'id'>): Vendor {
@@ -1224,9 +1276,24 @@ export function getCities(): City[] {
   }
 }
 
-export function saveCities(cities: City[]) {
+export function saveCities(cities: City[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      cities.forEach(city => {
+        client.from('cities').upsert({
+          id: city.id,
+          name: city.name,
+          state: city.state,
+        }).then(({ error }) => {
+          if (error) console.error('Supabase sync error (cities):', error);
+        });
+      });
+    }
+  }
 }
 
 export function addCity(cityName: string, stateName?: string): City {
@@ -1262,9 +1329,29 @@ export function getWorkshops(): Workshop[] {
   }
 }
 
-export function saveWorkshops(workshops: Workshop[]) {
+export function saveWorkshops(workshops: Workshop[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(workshops));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      workshops.forEach(ws => {
+        client.from('workshops').upsert({
+          id: ws.id,
+          name: ws.name,
+          city_id: ws.cityId,
+          city_name: ws.cityName,
+          address: ws.address,
+          phone: ws.phone,
+          is_cars24_partner: ws.isCars24Partner,
+          manager_name: ws.managerName,
+        }).then(({ error }) => {
+          if (error) console.error('Supabase sync error (workshops):', error);
+        });
+      });
+    }
+  }
 }
 
 export function addWorkshop(wsData: Omit<Workshop, 'id'>): Workshop {

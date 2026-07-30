@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserRole, isTabAllowedForRole, getDefaultTabForRole } from '../types';
 import { RoleBadge, ROLE_CONFIG } from './RoleBadge';
-import { getStoredSupabaseConfig } from '../lib/supabaseClient';
-import { resetToDefaultMockData } from '../lib/storage';
+import { getStoredSupabaseConfig, getSupabaseClient } from '../lib/supabaseClient';
+import { resetToDefaultMockData, getJobCards, subscribeToStore } from '../lib/storage';
 import { useI18n } from '../lib/i18n';
 import { 
   Wrench, 
@@ -58,6 +58,46 @@ export function HeaderNav({
   const [headerSearch, setHeaderSearch] = useState('');
   const supabaseConfig = getStoredSupabaseConfig();
   const { t, language, setLanguage } = useI18n();
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+
+  useEffect(() => {
+    const calculatePending = () => {
+      const cards = getJobCards();
+      let count = 0;
+      cards.forEach(c => {
+        c.tasks.forEach(t => {
+          if (t.requiresCustomerApproval && t.isCustomerApproved === undefined) {
+            count++;
+          }
+        });
+      });
+      setPendingApprovals(count);
+    };
+
+    calculatePending();
+    const unsubscribe = subscribeToStore(calculatePending);
+
+    const client = getSupabaseClient();
+    let subscription: any = null;
+    if (client) {
+      subscription = client.channel('job_tasks_changes_header')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'job_tasks' },
+          () => {
+            calculatePending();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      unsubscribe();
+      if (subscription) {
+        client?.removeChannel(subscription);
+      }
+    };
+  }, []);
 
   const handleReset = () => {
     if (confirm('Reset workshop store to default initial job cards and seed data?')) {
@@ -251,59 +291,35 @@ export function HeaderNav({
           </div>
         </div>
 
-        {/* Navigation Tabs - Structured 2-Row Sub-Bar */}
-        <div className="py-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5">
-          {/* Row 1: Core Operations */}
-          {row1Items.filter(item => isTabAllowedForRole(currentRole, item.id)).length > 0 && (
-            <nav className="flex items-center flex-wrap gap-1.5">
-              {row1Items
-                .filter(item => isTabAllowedForRole(currentRole, item.id))
-                .map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onTabChange(item.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                        isActive
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-            </nav>
-          )}
-
-          {/* Row 2: Management & Workflows */}
-          {row2Items.filter(item => isTabAllowedForRole(currentRole, item.id)).length > 0 && (
-            <nav className="flex items-center flex-wrap gap-1.5">
-              {row2Items
-                .filter(item => isTabAllowedForRole(currentRole, item.id))
-                .map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onTabChange(item.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                        isActive
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-            </nav>
-          )}
+        {/* Navigation Tabs - Horizontal Scrollable Bar */}
+        <div className="py-2 border-t border-slate-200/70 dark:border-slate-800">
+          <nav className="flex items-center gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {[...row1Items, ...row2Items]
+              .filter(item => isTabAllowedForRole(currentRole, item.id))
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onTabChange(item.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap shrink-0 relative ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{item.label}</span>
+                    {item.id === 'customer-portal' && pendingApprovals > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                        {pendingApprovals}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </nav>
         </div>
 
 

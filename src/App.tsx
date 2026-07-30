@@ -7,6 +7,7 @@ import {
   getJobCardById, 
   subscribeToStore 
 } from './lib/storage';
+import { syncFromSupabase } from './lib/syncService';
 
 import { HeaderNav } from './components/HeaderNav';
 import { DashboardOverview } from './components/DashboardOverview';
@@ -67,6 +68,8 @@ export default function App() {
 
   // Subscribe to storage updates & popstate
   useEffect(() => {
+    syncFromSupabase();
+
     const handlePopState = () => {
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
