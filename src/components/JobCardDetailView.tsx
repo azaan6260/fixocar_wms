@@ -63,6 +63,7 @@ export function JobCardDetailView({
   onOpenQRModal,
 }: JobCardDetailViewProps) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice'>('tasks');
+  const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
 
   // Part Consumption History compilation
   const consumedItemsList = React.useMemo(() => {
@@ -341,7 +342,21 @@ export function JobCardDetailView({
           <div>
             <span className="text-slate-400 font-medium">Customer:</span>
             <p className="font-bold text-slate-900 dark:text-slate-100">{card.customer.name}</p>
-            <p className="text-[11px] text-slate-400">{card.customer.phone}</p>
+            {isManagerOrHigher ? (
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[11px] text-slate-400">{card.customer.phone}</p>
+                <a
+                  href={`tel:${card.customer.phone}`}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50 transition-colors text-[10px] font-bold"
+                  title="Quick Call"
+                >
+                  <Phone className="w-3 h-3" />
+                  Call
+                </a>
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500 italic mt-0.5">Phone number hidden</p>
+            )}
           </div>
           <div>
             <span className="text-slate-400 font-medium">Floor Manager:</span>

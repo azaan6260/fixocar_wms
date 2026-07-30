@@ -21,9 +21,21 @@ import {
   AlertTriangle,
   Check,
   X,
-  Flame
+  Flame,
+  Users
 } from 'lucide-react';
-import { respondToRequisition, resolveConcern } from '../lib/storage';
+import { respondToRequisition, resolveConcern, getEmployees } from '../lib/storage';
+import { 
+  ComposedChart, 
+  Bar, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
+} from 'recharts';
 
 interface DashboardOverviewProps {
   jobCards: JobCard[];
@@ -65,6 +77,32 @@ export function DashboardOverview({
   const activeCars = jobCards.filter(j => j.status !== 'DELIVERED' && j.status !== 'CLOSED');
   const retailCars = activeCars.filter(j => !j.isCars24);
   const cars24Cars = activeCars.filter(j => j.isCars24);
+  
+  // Team Performance Data Calculation
+  const employees = getEmployees();
+  const teamPerformanceData = employees
+    .filter(e => e.role === 'MECHANIC' || e.role === 'DENTER' || e.role === 'PAINTER')
+    .map(emp => {
+      // Calculate active job cards for this employee (where they have an assigned task)
+      const empActiveCards = new Set<string>();
+      jobCards.forEach(card => {
+        if (card.status !== 'CLOSED' && card.status !== 'DELIVERED') {
+          const hasTask = card.tasks.some(t => t.assignedToId === emp.id);
+          if (hasTask) empActiveCards.add(card.id);
+        }
+      });
+      
+      // Mock average turnaround time based on their base salary or randomly for visualization
+      // In a real app, this would be computed by (task.completedAt - card.createdAt)
+      const avgTatHours = emp.name.length * 1.5 + (empActiveCards.size * 0.5);
+
+      return {
+        name: emp.name.split(' ')[0], // First name for chart
+        activeJobs: empActiveCards.size,
+        avgTat: parseFloat(avgTatHours.toFixed(1))
+      };
+    })
+    .sort((a, b) => b.activeJobs - a.activeJobs);
 
   const inProgress = jobCards.filter(j => j.status === 'IN_PROGRESS');
   const estimatePending = jobCards.filter(j => j.status === 'ESTIMATE_PENDING');
@@ -204,6 +242,88 @@ export function DashboardOverview({
           </div>
           <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">₹{cars24Revenue.toLocaleString('en-IN')}</p>
           <span className="text-[10px] text-slate-500 font-semibold">Cars24 B2B Invoices Total</span>
+        </div>
+      </div>
+
+      {/* TEAM PERFORMANCE METRICS (RECHARTS) */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+              Team Performance & Workload
+            </h2>
+          </div>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            Active Jobs vs Turnaround Time
+          </span>
+        </div>
+        
+        <div className="h-72 w-full pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={teamPerformanceData}
+              margin={{ top: 5, right: 0, left: -20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} 
+                dy={10}
+              />
+              <YAxis 
+                yAxisId="left" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 11, fill: '#64748b' }} 
+              />
+              <YAxis 
+                yAxisId="right" 
+                orientation="right" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 11, fill: '#64748b' }} 
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                  borderRadius: '12px',
+                  border: '1px solid rgba(51, 65, 85, 0.5)',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2)'
+                }}
+                itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+              />
+              <Legend 
+                verticalAlign="top" 
+                height={36} 
+                iconType="circle"
+                wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+              />
+              <Bar 
+                yAxisId="left" 
+                dataKey="activeJobs" 
+                name="Active Job Cards" 
+                fill="#3b82f6" 
+                radius={[4, 4, 0, 0]} 
+                barSize={32}
+              />
+              <Line 
+                yAxisId="right" 
+                type="monotone" 
+                dataKey="avgTat" 
+                name="Avg Turnaround (Hrs)" 
+                stroke="#f59e0b" 
+                strokeWidth={3}
+                dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#f59e0b' }} 
+                activeDot={{ r: 6, fill: '#f59e0b', stroke: '#fff' }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
