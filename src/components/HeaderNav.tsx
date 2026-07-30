@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserRole } from '../types';
+import { UserRole, isTabAllowedForRole, getDefaultTabForRole } from '../types';
 import { RoleBadge, ROLE_CONFIG } from './RoleBadge';
 import { getStoredSupabaseConfig } from '../lib/supabaseClient';
 import { resetToDefaultMockData } from '../lib/storage';
@@ -216,8 +216,8 @@ export function HeaderNav({
                         onClick={() => {
                           onRoleChange(r);
                           setRoleDropdownOpen(false);
-                          if (r === 'MECHANIC' || r === 'DENTER' || r === 'PAINTER' || r === 'CUSTOMER') {
-                            onTabChange('role-workspace');
+                          if (!isTabAllowedForRole(r, activeTab)) {
+                            onTabChange(getDefaultTabForRole(r));
                           }
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
@@ -254,49 +254,58 @@ export function HeaderNav({
         {/* Navigation Tabs - Structured 2-Row Sub-Bar */}
         <div className="py-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5">
           {/* Row 1: Core Operations */}
-          <nav className="flex items-center flex-wrap gap-1.5">
-            {row1Items.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+          {row1Items.filter(item => isTabAllowedForRole(currentRole, item.id)).length > 0 && (
+            <nav className="flex items-center flex-wrap gap-1.5">
+              {row1Items
+                .filter(item => isTabAllowedForRole(currentRole, item.id))
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onTabChange(item.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+            </nav>
+          )}
 
           {/* Row 2: Management & Workflows */}
-          <nav className="flex items-center flex-wrap gap-1.5">
-            {row2Items.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+          {row2Items.filter(item => isTabAllowedForRole(currentRole, item.id)).length > 0 && (
+            <nav className="flex items-center flex-wrap gap-1.5">
+              {row2Items
+                .filter(item => isTabAllowedForRole(currentRole, item.id))
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onTabChange(item.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+            </nav>
+          )}
         </div>
+
 
       </div>
     </header>

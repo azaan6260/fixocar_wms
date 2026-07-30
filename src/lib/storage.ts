@@ -79,7 +79,7 @@ function notifyStoreChange() {
 // 1. JOB CARDS STORAGE
 export function getJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
-  if (!local) {
+  if (local === null) {
     localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(INITIAL_JOB_CARDS));
     return INITIAL_JOB_CARDS;
   }
@@ -827,7 +827,7 @@ export function addPartToTask(
 export function getEmployees(): Employee[] {
   const local = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
   let list: Employee[];
-  if (!local) {
+  if (local === null) {
     list = INITIAL_EMPLOYEES;
   } else {
     try { list = JSON.parse(local); } catch { list = INITIAL_EMPLOYEES; }
@@ -845,7 +845,7 @@ export function getEmployees(): Employee[] {
     return emp;
   });
 
-  if (!local || updated) {
+  if (local === null || updated) {
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(migrated));
   }
   return migrated;
@@ -940,7 +940,7 @@ export function updateSalaryStatus(id: string, status: 'PENDING' | 'TRANSFERRED'
 // 3. VENDORS STORAGE
 export function getVendors(): Vendor[] {
   const local = localStorage.getItem(STORAGE_KEYS.VENDORS);
-  if (!local) {
+  if (local === null) {
     localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(INITIAL_VENDORS));
     return INITIAL_VENDORS;
   }
@@ -1213,7 +1213,7 @@ export function clearAllDemoData() {
 // 8. CITIES STORAGE
 export function getCities(): City[] {
   const local = localStorage.getItem(STORAGE_KEYS.CITIES);
-  if (!local) {
+  if (local === null) {
     localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(INITIAL_CITIES));
     return INITIAL_CITIES;
   }
@@ -1251,7 +1251,7 @@ export function deleteCity(id: string) {
 // 9. WORKSHOPS STORAGE
 export function getWorkshops(): Workshop[] {
   const local = localStorage.getItem(STORAGE_KEYS.WORKSHOPS);
-  if (!local) {
+  if (local === null) {
     localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(INITIAL_WORKSHOPS));
     return INITIAL_WORKSHOPS;
   }

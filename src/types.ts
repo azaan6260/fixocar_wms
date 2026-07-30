@@ -629,3 +629,79 @@ export interface WorkshopExpense {
   approvedByName?: string;
   createdAt: string;
 }
+
+export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+    return true;
+  }
+
+  if (role === 'FLOOR_MANAGER') {
+    return [
+      'dashboard',
+      'gate-pass',
+      'daily-huddle',
+      'workshops',
+      'job-cards',
+      'part-basket',
+      'standard-jobs',
+      'inventory',
+      'role-workspace',
+      'outsourced-jobs',
+      'deliveries'
+    ].includes(tabId);
+  }
+
+  if (role === 'MECHANIC' || role === 'DENTER' || role === 'PAINTER') {
+    return [
+      'role-workspace',
+      'job-cards',
+      'daily-huddle',
+      'standard-jobs',
+      'gate-pass'
+    ].includes(tabId);
+  }
+
+  if (role === 'DELIVERY_BOY') {
+    return [
+      'deliveries',
+      'gate-pass',
+      'role-workspace'
+    ].includes(tabId);
+  }
+
+  if (role === 'VENDOR') {
+    return [
+      'outsourced-jobs',
+      'part-basket',
+      'vendors',
+      'role-workspace'
+    ].includes(tabId);
+  }
+
+  if (role === 'CUSTOMER') {
+    return [
+      'customer-portal',
+      'gate-pass'
+    ].includes(tabId);
+  }
+
+  return true;
+}
+
+export function getDefaultTabForRole(role: UserRole): string {
+  switch (role) {
+    case 'MECHANIC':
+    case 'DENTER':
+    case 'PAINTER':
+      return 'role-workspace';
+    case 'DELIVERY_BOY':
+      return 'deliveries';
+    case 'VENDOR':
+      return 'outsourced-jobs';
+    case 'CUSTOMER':
+      return 'customer-portal';
+    default:
+      return 'dashboard';
+  }
+}
+

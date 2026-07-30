@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, JobCard, Employee, Vendor } from './types';
+import { UserRole, JobCard, Employee, Vendor, isTabAllowedForRole, getDefaultTabForRole } from './types';
 import { 
   getJobCards, 
   getEmployees, 
@@ -85,6 +85,13 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  // Enforce role-based tab access
+  useEffect(() => {
+    if (!isTabAllowedForRole(currentRole, activeTab)) {
+      setActiveTab(getDefaultTabForRole(currentRole));
+    }
+  }, [currentRole, activeTab]);
 
   const toggleViewMode = (toCustomer: boolean) => {
     setIsCustomerView(toCustomer);
