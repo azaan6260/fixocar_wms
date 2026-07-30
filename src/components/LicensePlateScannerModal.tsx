@@ -134,6 +134,11 @@ export function LicensePlateScannerModal({
       if (data.success && data.plateNumber && data.plateNumber !== 'UNKNOWN') {
         const cleanedPlate = data.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
         setScanResult(cleanedPlate);
+        // Auto-dismiss modal after brief success visual feedback
+        setTimeout(() => {
+          onScanComplete(cleanedPlate);
+          handleClose();
+        }, 700);
       } else {
         // Fallback: Check if there's any pattern in the image name or fallback simulation
         setConfidenceError("AI could not detect a distinct license plate number. Try again or pick a sample plate.");
@@ -293,6 +298,29 @@ export function LicensePlateScannerModal({
                     </div>
                   </div>
 
+                  {/* Scanning Pulse Animation Overlay */}
+                  {isScanning && (
+                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center z-20 space-y-3">
+                      <div className="relative flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full border-4 border-amber-500/30 animate-ping absolute" />
+                        <div className="w-14 h-14 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/50 flex items-center justify-center shadow-[0_0_25px_rgba(245,158,11,0.5)]">
+                          <Zap className="w-7 h-7 animate-pulse text-amber-400" />
+                        </div>
+                      </div>
+                      <div className="text-center space-y-1">
+                        <span className="text-amber-400 font-black text-sm tracking-wider uppercase block animate-pulse">
+                          Scanning...
+                        </span>
+                        <span className="text-[11px] text-slate-300 font-semibold">
+                          Analyzing Vehicle Plate OCR with Gemini AI
+                        </span>
+                      </div>
+                      <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden relative mt-1">
+                        <div className="w-full h-full bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 shadow-[0_0_12px_#f59e0b] animate-pulse rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Hidden Canvas for Snapshots */}
                   <canvas ref={canvasRef} className="hidden" />
 
@@ -371,6 +399,12 @@ export function LicensePlateScannerModal({
                   className="w-full h-full object-contain"
                   referrerPolicy="no-referrer"
                 />
+                {isScanning && (
+                  <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 animate-pulse">
+                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+                    <span className="text-amber-400 font-extrabold text-xs tracking-wider uppercase">Scanning...</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
