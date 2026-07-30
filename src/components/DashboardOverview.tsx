@@ -34,7 +34,10 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 
 interface DashboardOverviewProps {
@@ -165,17 +168,32 @@ export function DashboardOverview({
     )
   );
 
+  // Daily Huddle Summary Data (Tasks from active jobs)
+  const activeTasks = activeCars.flatMap(card => card.tasks);
+  const completedTasksCount = activeTasks.filter(t => t.status === 'COMPLETED').length;
+  const inProgressTasksCount = activeTasks.filter(t => t.status === 'IN_PROGRESS').length;
+  const pendingTasksCount = activeTasks.filter(t => t.status === 'PENDING').length;
+
+  const huddleChartData = [
+    { name: 'Completed', value: completedTasksCount, color: '#10b981' },
+    { name: 'In Progress', value: inProgressTasksCount, color: '#f59e0b' },
+    { name: 'Pending', value: pendingTasksCount, color: '#ef4444' }
+  ].filter(d => d.value > 0);
+  
+  if (huddleChartData.length === 0) {
+    huddleChartData.push({ name: 'No Tasks', value: 1, color: '#64748b' });
+  }
+
   return (
     <div className="space-y-6">
-
       {/* Daily Huddle Quick Entry Banner */}
       <div 
         onClick={() => onNavigateTab('daily-huddle')}
-        className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 shadow-lg border border-indigo-900/50 hover:border-amber-400/60 transition-all cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 shadow-lg border border-indigo-900/50 hover:border-amber-400/60 transition-all cursor-pointer group flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6"
       >
-        <div className="flex items-center gap-3">
-          <div className="bg-amber-500 text-slate-950 p-3 rounded-2xl shrink-0 font-black shadow-md group-hover:scale-105 transition-transform">
-            <Flame className="w-6 h-6 fill-current" />
+        <div className="flex items-center gap-4 flex-1">
+          <div className="bg-amber-500 text-slate-950 p-4 rounded-2xl shrink-0 font-black shadow-md group-hover:scale-105 transition-transform">
+            <Flame className="w-8 h-8 fill-current" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -184,12 +202,65 @@ export function DashboardOverview({
               </span>
               <span className="text-indigo-200 text-xs font-semibold">Today's Standup</span>
             </div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-white mt-0.5">
-              Daily Huddle Dashboard • Active Jobs & Upcoming Deadlines
+            <h2 className="text-lg sm:text-xl font-black tracking-tight text-white mt-1">
+              Daily Huddle Dashboard
             </h2>
-            <p className="text-xs text-indigo-200/80">
+            <p className="text-sm text-indigo-200/80 mt-1 max-w-lg">
               Filtered list of active jobs across body shop, mechanical, washing & sublet with deadline urgency alerts.
             </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6 bg-slate-950/40 p-3 rounded-2xl border border-indigo-500/20 w-full xl:w-auto overflow-hidden">
+          <div className="h-24 w-24 shrink-0 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={huddleChartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={25}
+                  outerRadius={40}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {huddleChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)', 
+                    borderRadius: '8px',
+                    border: '1px solid rgba(51, 65, 85, 0.5)',
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    padding: '4px 8px'
+                  }}
+                  itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+              <span className="text-lg font-black text-white leading-none">{activeTasks.length}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Tasks</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0 pr-2 min-w-[120px]">
+            {huddleChartData.map(d => d.name !== 'No Tasks' && (
+              <div key={d.name} className="flex items-center justify-between text-xs font-bold w-full">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></span>
+                  <span className="text-slate-200">{d.name}</span>
+                </div>
+                <span className="text-white text-right">{d.value}</span>
+              </div>
+            ))}
+            {huddleChartData.length === 1 && huddleChartData[0].name === 'No Tasks' && (
+              <span className="text-xs text-slate-400 italic">No tasks today</span>
+            )}
           </div>
         </div>
 
@@ -199,9 +270,9 @@ export function DashboardOverview({
             e.stopPropagation();
             onNavigateTab('daily-huddle');
           }}
-          className="px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0"
+          className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center gap-2 transition-all shadow-md shrink-0 self-stretch xl:self-auto justify-center"
         >
-          <span>Open Daily Huddle</span>
+          <span>Open Huddle</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
