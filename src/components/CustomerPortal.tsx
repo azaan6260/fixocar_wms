@@ -58,6 +58,8 @@ import {
   Key
 } from 'lucide-react';
 
+import { GSTInvoiceView } from './GSTInvoiceView';
+
 interface CustomerPortalProps {
   currentRole: UserRole;
   onOpenApprovalModal?: (cardId: string) => void;
@@ -1861,116 +1863,15 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
       {/* MODAL 4: INVOICE / RECEIPT MODAL */}
       {invoiceJobCard && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl p-6 sm:p-8 space-y-6 shadow-2xl my-8">
-            
-            {/* Header & Print Control */}
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-600 text-white font-bold">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100">
-                    FixoCar Workshop Tax Invoice
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Invoice #{invoiceJobCard.id} • {invoiceJobCard.createdAt}
-                  </p>
-                </div>
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl p-6 sm:p-8 space-y-4 shadow-2xl my-8 relative">
+            <button 
+              onClick={() => setInvoiceJobCard(null)} 
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-white p-2 rounded-xl bg-slate-100 dark:bg-slate-800 transition-all z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Print / Download PDF
-                </button>
-                <button onClick={() => setInvoiceJobCard(null)} className="text-slate-400 hover:text-white p-1">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Bill Details */}
-            <div className="grid grid-cols-2 gap-4 text-xs p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Customer Info</span>
-                <p className="font-bold text-slate-900 dark:text-slate-100">{invoiceJobCard.customer.name}</p>
-                <p className="text-slate-500">{invoiceJobCard.customer.phone}</p>
-                <p className="text-slate-500">{invoiceJobCard.customer.email}</p>
-              </div>
-
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Vehicle Reg & Details</span>
-                <p className="font-mono font-bold text-blue-600 dark:text-blue-400">{invoiceJobCard.vehicle.registrationNumber}</p>
-                <p className="text-slate-500">{invoiceJobCard.vehicle.make} {invoiceJobCard.vehicle.model} ({invoiceJobCard.vehicle.year})</p>
-                <p className="text-slate-500 font-mono">Odo: {invoiceJobCard.vehicle.mileage?.toLocaleString() || 0} km</p>
-              </div>
-            </div>
-
-            {/* Itemized Tasks Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-600 dark:text-slate-300">
-                  <tr>
-                    <th className="px-4 py-2.5">Item / Task</th>
-                    <th className="px-4 py-2.5">Category</th>
-                    <th className="px-4 py-2.5 text-right">Amount (₹)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                  {invoiceJobCard.tasks.filter(t => t.isCustomerApproved !== false).map((t) => (
-                    <tr key={t.id}>
-                      <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-slate-100">{t.title}</td>
-                      <td className="px-4 py-2.5 font-mono text-[11px]">{t.category}</td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold">₹{t.customerPrice.toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Price Calculations */}
-            {(() => {
-              const subtotal = invoiceJobCard.tasks.reduce((sum, t) => sum + (t.isCustomerApproved !== false ? t.customerPrice : 0), 0);
-              const gst = Math.round(subtotal * 0.18);
-              const grandTotal = subtotal + gst - (invoiceJobCard.discount || 0);
-              const netBalance = grandTotal - (invoiceJobCard.advancePaid || 0);
-
-              return (
-                <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2 text-xs font-mono">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Labor & Spares Subtotal:</span>
-                    <span>₹{subtotal.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>GST (18% Tax):</span>
-                    <span>₹{gst.toLocaleString('en-IN')}</span>
-                  </div>
-                  {invoiceJobCard.discount > 0 && (
-                    <div className="flex justify-between text-emerald-400">
-                      <span>Discount Applied:</span>
-                      <span>-₹{invoiceJobCard.discount.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-base font-extrabold border-t border-slate-700 pt-2 text-blue-400 font-mono">
-                    <span>Grand Total:</span>
-                    <span>₹{grandTotal.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-emerald-400 pt-1">
-                    <span>Advance Paid:</span>
-                    <span>₹{(invoiceJobCard.advancePaid || 0).toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-black border-t border-slate-700 pt-2 text-white">
-                    <span>Net Balance Due:</span>
-                    <span className="text-emerald-400">₹{netBalance.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              );
-            })()}
-
+            <GSTInvoiceView card={invoiceJobCard} isCustomerPortal={true} />
           </div>
         </div>
       )}

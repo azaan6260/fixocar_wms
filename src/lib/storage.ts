@@ -175,6 +175,30 @@ export function addJobCardComment(jobCardId: string, comment: Omit<JobCardCommen
   return createdComment!;
 }
 
+export function updateJobCardGSTInvoice(
+  jobCardId: string,
+  data: {
+    workshopGstin?: string;
+    customerGstin?: string;
+    isInterstate?: boolean;
+    stateCode?: string;
+    invoiceNumber?: string;
+    invoiceDate?: string;
+    customItemTaxRates?: Record<string, { hsnCode: string; gstRate: number }>;
+  }
+) {
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    workshopGstin: data.workshopGstin ?? card.workshopGstin,
+    customerGstin: data.customerGstin ?? card.customerGstin,
+    isInterstate: data.isInterstate ?? card.isInterstate,
+    stateCode: data.stateCode ?? card.stateCode,
+    invoiceNumber: data.invoiceNumber ?? card.invoiceNumber,
+    invoiceDate: data.invoiceDate ?? card.invoiceDate,
+    customItemTaxRates: data.customItemTaxRates ?? card.customItemTaxRates
+  }));
+}
+
 export function updateJobCardTask(jobCardId: string, taskId: string, updates: Partial<JobTask>) {
   updateJobCard(jobCardId, (card) => {
     const updatedTasks = card.tasks.map(task => {

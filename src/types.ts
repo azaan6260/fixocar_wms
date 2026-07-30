@@ -187,6 +187,8 @@ export interface TaskPartItem {
   type: 'PART' | 'CONSUMABLE' | 'LABOR';
   isApproved: boolean;
   addedAt: string;
+  hsnCode?: string;
+  gstRate?: number;
 }
 
 export type RequisitionStatus = 
@@ -222,6 +224,8 @@ export interface TaskRequisition {
   consumedAt?: string;
   partNumber?: string;
   inventoryItemId?: string;
+  hsnCode?: string;
+  gstRate?: number;
 }
 
 export interface TaskConcern {
@@ -275,6 +279,8 @@ export interface JobTask {
   pairedDenterId?: string;
   pairedDenterName?: string;
   standardJobId?: string;
+  hsnCode?: string;
+  gstRate?: number;
   // Outsourced Job fields
   isOutsourced?: boolean;
   outsourcedVendorId?: string;
@@ -570,6 +576,15 @@ export interface JobCard {
   advancePaid: number;
   notes?: string;
   comments?: JobCardComment[];
+
+  // GST Tax Invoice Fields
+  workshopGstin?: string;
+  customerGstin?: string;
+  stateCode?: string;
+  isInterstate?: boolean;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  customItemTaxRates?: Record<string, { hsnCode: string; gstRate: number }>;
 
   // Gate Pass & Physical Workshop Check-In / Check-Out Tracking
   isCheckedIn?: boolean;
