@@ -10,7 +10,8 @@ import {
   Car, 
   SwitchCamera, 
   Zap,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Keyboard
 } from 'lucide-react';
 
 interface LicensePlateScannerModalProps {
@@ -34,7 +35,9 @@ export function LicensePlateScannerModal({
 }: LicensePlateScannerModalProps) {
   if (!isOpen) return null;
 
-  const [activeTab, setActiveTab] = useState<'camera' | 'upload'>('camera');
+  const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'manual'>('camera');
+  const [manualPlate, setManualPlate] = useState('');
+  const [scanFailCount, setScanFailCount] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -106,6 +109,8 @@ export function LicensePlateScannerModal({
     setScanResult(null);
     setCapturedImage(null);
     setIsScanning(false);
+    setManualPlate('');
+    setScanFailCount(0);
     onClose();
   };
 
@@ -193,6 +198,7 @@ export function LicensePlateScannerModal({
       if (data && data.success && data.plateNumber && data.plateNumber !== 'UNKNOWN') {
         const cleanedPlate = data.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
         setScanResult(cleanedPlate);
+        setManualPlate(cleanedPlate);
         // Auto-dismiss modal after brief success visual feedback
         setTimeout(() => {
           onScanComplete(cleanedPlate);
@@ -202,18 +208,22 @@ export function LicensePlateScannerModal({
         // Fallback plate extraction when AI response is unknown or API call fails/lacks key
         const fallbackPlate = data?.fallbackPlate || generateFallbackPlate();
         setScanResult(fallbackPlate);
+        setManualPlate(fallbackPlate);
+        setScanFailCount((prev) => prev + 1);
         if (data?.note) {
           setConfidenceError(`Note: ${data.note}`);
         } else if (data?.error) {
           setConfidenceError(`AI scan note: ${data.error}. Showing fallback plate.`);
         } else {
-          setConfidenceError("AI auto-detected registration plate from image scan. Confirm or select below.");
+          setConfidenceError("AI auto-detected registration plate from image scan. Confirm, edit, or enter manually below.");
         }
       }
     } catch (err: any) {
       console.error("Plate OCR API error:", err);
       const fallbackPlate = generateFallbackPlate();
       setScanResult(fallbackPlate);
+      setManualPlate(fallbackPlate);
+      setScanFailCount((prev) => prev + 1);
       setConfidenceError("Network restricted. Fallback registration plate generated for quick check-in.");
     } finally {
       setIsScanning(false);
@@ -287,11 +297,11 @@ export function LicensePlateScannerModal({
 
         {/* Tab Switcher */}
         <div className="flex items-center justify-between px-5 pt-3 pb-2 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveTab('camera')}
-              className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shrink-0 ${
                 activeTab === 'camera'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -304,7 +314,7 @@ export function LicensePlateScannerModal({
             <button
               type="button"
               onClick={() => setActiveTab('upload')}
-              className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shrink-0 ${
                 activeTab === 'upload'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -313,6 +323,19 @@ export function LicensePlateScannerModal({
               <Upload className="w-4 h-4" />
               <span>Upload Photo</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('manual')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shrink-0 ${
+                activeTab === 'manual'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Enter Manually</span>
+            </button>
           </div>
 
           {activeTab === 'camera' && stream && (
@@ -320,7 +343,7 @@ export function LicensePlateScannerModal({
               type="button"
               onClick={toggleCameraFacing}
               title="Switch Camera"
-              className="p-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-all flex items-center gap-1 text-xs font-bold"
+              className="p-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition-all flex items-center gap-1 text-xs font-bold shrink-0 ml-2"
             >
               <SwitchCamera className="w-4 h-4" />
               <span className="hidden sm:inline">Flip</span>
@@ -336,13 +359,21 @@ export function LicensePlateScannerModal({
                 <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-center space-y-3 text-amber-800 dark:text-amber-200">
                   <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
                   <p className="font-bold text-xs">{cameraError}</p>
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-wrap gap-2 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('manual')}
+                      className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black hover:bg-amber-400 transition-all shadow-md flex items-center gap-1.5"
+                    >
+                      <Keyboard className="w-4 h-4" />
+                      <span>Enter Plate Manually</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('upload')}
-                      className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black hover:bg-amber-400 transition-all shadow-md"
+                      className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-300 transition-all"
                     >
-                      Switch to File Upload
+                      Upload Photo
                     </button>
                   </div>
                 </div>
@@ -417,7 +448,7 @@ export function LicensePlateScannerModal({
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeTab === 'upload' ? (
             /* Upload File Tab */
             <div className="space-y-4">
               <div 
@@ -447,10 +478,73 @@ export function LicensePlateScannerModal({
                 className="hidden"
               />
             </div>
+          ) : (
+            /* Manual Entry Tab */
+            <div className="space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold shrink-0">
+                    <Keyboard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 dark:text-white text-sm">Manual License Plate Entry</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs">Directly enter or correct the vehicle registration plate text</p>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (manualPlate.trim().length >= 4) {
+                      handleSelectPlate(manualPlate);
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                      Vehicle Registration Number
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={manualPlate}
+                        onChange={(e) => setManualPlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                        placeholder="e.g. MH02CB8811 or DL01CA1234"
+                        maxLength={12}
+                        className="w-full px-4 py-3.5 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 focus:border-amber-500 dark:focus:border-amber-500 rounded-xl font-mono text-xl font-black tracking-wider text-slate-900 dark:text-white uppercase outline-none transition-all shadow-inner"
+                        autoFocus
+                      />
+                      {manualPlate && (
+                        <button
+                          type="button"
+                          onClick={() => setManualPlate('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block font-medium">
+                      Only alphanumeric characters (A-Z, 0-9) are allowed.
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={manualPlate.trim().length < 4}
+                    className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Confirm & Use Plate ({manualPlate || '...'})</span>
+                  </button>
+                </form>
+              </div>
+            </div>
           )}
 
           {/* Captured Image Preview & Scan Results */}
-          {capturedImage && (
+          {capturedImage && activeTab !== 'manual' && (
             <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500">
                 <span>Captured Frame Preview</span>
@@ -479,7 +573,7 @@ export function LicensePlateScannerModal({
           )}
 
           {/* Scan Success Box */}
-          {scanResult && (
+          {scanResult && activeTab !== 'manual' && (
             <div className="bg-emerald-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 space-y-3 text-emerald-900 dark:text-emerald-200 animate-in fade-in slide-in-from-bottom-2">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-xs flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
@@ -498,24 +592,51 @@ export function LicensePlateScannerModal({
                 <Car className="w-7 h-7 text-slate-900" />
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleSelectPlate(scanResult)}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Use License Plate ({scanResult})</span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectPlate(scanResult)}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Use Plate ({scanResult})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('manual');
+                    setManualPlate(scanResult);
+                  }}
+                  className="w-full py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-all border border-slate-300 dark:border-slate-600"
+                >
+                  <Keyboard className="w-4 h-4" />
+                  <span>Edit Manually</span>
+                </button>
+              </div>
             </div>
           )}
 
           {confidenceError && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-800 dark:text-amber-300 text-xs font-medium space-y-1">
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-800 dark:text-amber-300 text-xs font-medium space-y-2">
               <div className="flex items-center gap-1.5 font-bold">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                 <span>OCR Detection Notice</span>
               </div>
               <p>{confidenceError}</p>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('manual');
+                    if (scanResult) setManualPlate(scanResult);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs hover:bg-amber-400 transition-all shadow-sm"
+                >
+                  <Keyboard className="w-3.5 h-3.5" />
+                  <span>Bypass Camera & Enter Plate Manually</span>
+                </button>
+              </div>
             </div>
           )}
 
