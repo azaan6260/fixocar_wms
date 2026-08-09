@@ -26,9 +26,8 @@ async function startServer() {
 
       if (!apiKey) {
         return res.json({
-          success: true,
-          plateNumber: 'MH12AB1234',
-          note: 'GEMINI_API_KEY is not set in environment. Using simulated license plate OCR.'
+          success: false,
+          error: 'GEMINI_API_KEY is not configured on the server environment.'
         });
       }
 
@@ -42,20 +41,14 @@ async function startServer() {
       });
 
       const prompt = `You are an expert Optical Character Recognition (OCR) AI specialized in reading vehicle registration license plates.
-Task: Examine the provided image carefully. Locate any license plate / bumper tag / window registration sticker on the vehicle.
+Task: Inspect the provided image carefully and extract the vehicle registration / license plate number.
 
 Instructions:
-1. Identify all visible alphanumeric characters printed on the main license plate.
-2. Strip away country or state header words like "IND", "CALIFORNIA", "TEXAS", "EUROPE", slogans, or spaces.
-3. Return a JSON object with this exact format:
-{
-  "detected": true,
-  "plateNumber": "MH12AB1234",
-  "confidence": "high"
-}
-
-If the license plate is partially visible, read the clearest characters.
-Return ONLY valid raw JSON without markdown formatting.`;
+1. Locate any license plate / bumper tag / registration plate on the vehicle.
+2. Read the EXACT sequence of visible alphanumeric characters printed on the main plate.
+3. Strip away country or state header words like "IND", "CALIFORNIA", "TEXAS", "EUROPE", frame logos, or slogans.
+4. If a valid license plate is found, set detected: true and plateNumber to the uppercase alphanumeric string (e.g. "MH12AB1234", "DL01CA9988", "6XYZ789").
+5. If no license plate is visible, or if text cannot be read, set detected: false and plateNumber: "UNKNOWN". Do NOT guess or hallucinate fake numbers.`;
 
       const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
@@ -76,77 +69,56 @@ Return ONLY valid raw JSON without markdown formatting.`;
               }
             ]
           }
-        ]
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              detected: { type: 'BOOLEAN' },
+              plateNumber: { type: 'STRING' },
+              rawTextFound: { type: 'STRING' }
+            },
+            required: ['detected', 'plateNumber']
+          }
+        }
       });
 
       const rawText = aiResponse.text?.trim() || '';
       let detectedPlate = '';
 
-      // 1. Try parsing JSON first
       try {
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
+          if (parsed.detected && parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
             detectedPlate = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
           }
         }
       } catch (e) {
-        // Fallback to text matching
+        // Fallback text parsing
       }
 
-      // 2. Search for common license plate patterns in rawText
       if (!detectedPlate || detectedPlate.length < 3) {
-        const platePatterns = [
-          /[A-Z]{2}\s*\d{2}\s*[A-Z]{1,2}\s*\d{4}/gi,  // Indian standard: MH12AB1234
-          /[A-Z]{1,3}\s*\d{1,4}\s*[A-Z]{1,3}/gi,     // US/EU standard: ABC1234, 6XYZ789
-          /[A-Z0-9]{5,11}/gi                         // General alphanumeric string
-        ];
-
-        for (const pattern of platePatterns) {
-          const matches = rawText.match(pattern);
-          if (matches && matches.length > 0) {
-            for (const match of matches) {
-              const cleaned = match.toUpperCase().replace(/[^A-Z0-9]/g, '');
-              if (cleaned.length >= 4 && !['UNKNOWN', 'DETECTED', 'LICENSE', 'NUMBER', 'CONFIDENCE', 'HIGH', 'MEDIUM', 'TRUE', 'FALSE'].includes(cleaned)) {
-                detectedPlate = cleaned;
-                break;
-              }
-            }
-          }
-          if (detectedPlate) break;
+        const cleaned = rawText.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (cleaned.length >= 4 && !['UNKNOWN', 'DETECTED', 'LICENSE', 'NUMBER', 'TRUE', 'FALSE'].includes(cleaned)) {
+          detectedPlate = cleaned;
         }
       }
 
-      // 3. Simple fallback clean
-      if (!detectedPlate) {
-        const plainClean = rawText.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (plainClean.length >= 4 && plainClean.length <= 12 && !plainClean.includes('UNKNOWN') && !plainClean.includes('LICENSE')) {
-          detectedPlate = plainClean;
-        }
-      }
-
-      if (detectedPlate && detectedPlate.length >= 4) {
+      if (detectedPlate && detectedPlate.length >= 3 && detectedPlate !== 'UNKNOWN') {
         return res.json({ success: true, plateNumber: detectedPlate });
       }
 
-      // 4. Fallback estimation if image is too blurry/unreadable
-      const fallbackPlates = ['MH12AB1234', 'DL01CA9988', 'KA05MH8822', 'HR26DQ5511', 'GJ01CB4321'];
-      const candidatePlate = fallbackPlates[Math.floor(Math.random() * fallbackPlates.length)];
-
       return res.json({ 
-        success: true, 
-        plateNumber: candidatePlate,
-        isEstimated: true,
-        note: 'Image scan was low contrast or blurry. Provided estimated plate candidate.'
+        success: false, 
+        error: 'Could not clearly detect a valid vehicle registration plate from this image.' 
       });
     } catch (err: any) {
       console.error('Gemini AI License Plate Scan Error:', err);
       return res.json({
-        success: true,
-        plateNumber: 'KA05MH8822',
-        isEstimated: true,
-        note: 'Fallback plate candidate. Confirm or edit the plate number.'
+        success: false,
+        error: err.message || 'Failed to scan license plate'
       });
     }
   });

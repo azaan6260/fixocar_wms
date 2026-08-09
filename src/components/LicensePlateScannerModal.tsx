@@ -122,14 +122,6 @@ export function LicensePlateScannerModal({
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  const generateFallbackPlate = (): string => {
-    const states = ['MH12', 'DL01', 'KA05', 'HR26', 'UP16', 'GJ01', 'TN07', 'TS09'];
-    const state = states[Math.floor(Math.random() * states.length)];
-    const letters = String.fromCharCode(65 + Math.floor(Math.random() * 26)) + String.fromCharCode(65 + Math.floor(Math.random() * 26));
-    const numbers = Math.floor(1000 + Math.random() * 9000);
-    return `${state}${letters}${numbers}`;
-  };
-
   const compressImageBase64 = (base64Str: string, maxWidth = 1600, maxHeight = 1600, quality = 0.9): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -199,28 +191,21 @@ export function LicensePlateScannerModal({
         const cleanedPlate = data.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
         setScanResult(cleanedPlate);
         setManualPlate(cleanedPlate);
-        if (data.note) {
-          setConfidenceError(data.note);
-        } else if (data.isEstimated) {
-          setConfidenceError('AI detected plate candidate from image. Confirm or click Edit to modify.');
-        } else {
-          setConfidenceError(null);
-        }
+        setConfidenceError(null);
       } else {
-        // Fallback plate candidate
-        const fallbackPlate = generateFallbackPlate();
-        setScanResult(fallbackPlate);
-        setManualPlate(fallbackPlate);
+        // OCR could not detect a valid plate
+        setScanResult(null);
         setScanFailCount((prev) => prev + 1);
-        setConfidenceError("AI auto-detected registration plate from image scan. Confirm or click Edit below.");
+        const errMsg = data?.error || "Could not clearly read vehicle registration plate from image.";
+        setConfidenceError(`${errMsg} Please ensure clear lighting or type the plate number manually below.`);
+        setActiveTab('manual');
       }
     } catch (err: any) {
       console.error("Plate OCR API error:", err);
-      const fallbackPlate = generateFallbackPlate();
-      setScanResult(fallbackPlate);
-      setManualPlate(fallbackPlate);
+      setScanResult(null);
       setScanFailCount((prev) => prev + 1);
-      setConfidenceError("Network timeout. Generated candidate plate for quick registration.");
+      setConfidenceError("OCR request failed or timed out. Please enter the registration plate number manually below.");
+      setActiveTab('manual');
     } finally {
       setIsScanning(false);
     }
