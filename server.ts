@@ -41,10 +41,10 @@ async function startServer() {
       });
 
       const prompt = `You are an expert Optical Character Recognition (OCR) AI specialized in reading vehicle registration license plates.
-Task: Inspect the provided vehicle image carefully and extract the vehicle registration / license plate number.
+Task: Inspect the provided image carefully and extract the vehicle registration / license plate number. Note: The image may be a close-up cropped scan or a full photo of a vehicle license plate.
 
 Instructions:
-1. Locate any license plate / bumper tag / registration plate on the vehicle.
+1. Locate any license plate / registration plate / bumper tag visible in the image.
 2. Read the EXACT sequence of visible alphanumeric characters printed on the main plate.
 3. Strip away country or state header words like "IND", "CALIFORNIA", "TEXAS", "EUROPE", frame logos, or slogans.
 4. Format the output as uppercase alphanumeric characters without hyphens or spaces (e.g. "MH12AB1234", "DL01CA9988", "KA05MB9988", "6XYZ789").
