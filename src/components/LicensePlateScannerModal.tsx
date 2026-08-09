@@ -130,7 +130,7 @@ export function LicensePlateScannerModal({
     return `${state}${letters}${numbers}`;
   };
 
-  const compressImageBase64 = (base64Str: string, maxWidth = 1024, maxHeight = 1024, quality = 0.8): Promise<string> => {
+  const compressImageBase64 = (base64Str: string, maxWidth = 1600, maxHeight = 1600, quality = 0.9): Promise<string> => {
     return new Promise((resolve) => {
       const img = new Image();
       img.src = base64Str;
@@ -169,13 +169,13 @@ export function LicensePlateScannerModal({
     setScanResult(null);
 
     try {
-      // 1. Compress image to prevent network payload limit issues
-      const compressedImage = await compressImageBase64(imageBase64, 1024, 1024, 0.8);
+      // 1. Compress image to maintain high resolution for OCR
+      const compressedImage = await compressImageBase64(imageBase64, 1600, 1600, 0.9);
 
       let data: any = null;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         const response = await fetch('/api/scan-plate', {
           method: 'POST',
@@ -203,28 +203,21 @@ export function LicensePlateScannerModal({
         setTimeout(() => {
           onScanComplete(cleanedPlate);
           handleClose();
-        }, 700);
+        }, 800);
       } else {
-        // Fallback plate extraction when AI response is unknown or API call fails/lacks key
-        const fallbackPlate = data?.fallbackPlate || generateFallbackPlate();
-        setScanResult(fallbackPlate);
-        setManualPlate(fallbackPlate);
+        // OCR could not detect a valid plate - ask user to check image or enter manually
+        setScanResult(null);
         setScanFailCount((prev) => prev + 1);
-        if (data?.note) {
-          setConfidenceError(`Note: ${data.note}`);
-        } else if (data?.error) {
-          setConfidenceError(`AI scan note: ${data.error}. Showing fallback plate.`);
-        } else {
-          setConfidenceError("AI auto-detected registration plate from image scan. Confirm, edit, or enter manually below.");
-        }
+        const errMsg = data?.error || "AI could not clearly detect a valid vehicle registration plate from this image.";
+        setConfidenceError(`${errMsg} Please ensure clear lighting or enter the plate number manually below.`);
+        setActiveTab('manual');
       }
     } catch (err: any) {
       console.error("Plate OCR API error:", err);
-      const fallbackPlate = generateFallbackPlate();
-      setScanResult(fallbackPlate);
-      setManualPlate(fallbackPlate);
+      setScanResult(null);
       setScanFailCount((prev) => prev + 1);
-      setConfidenceError("Network restricted. Fallback registration plate generated for quick check-in.");
+      setConfidenceError("Scan error or network timeout. Please enter the registration number manually below.");
+      setActiveTab('manual');
     } finally {
       setIsScanning(false);
     }

@@ -26,21 +26,38 @@ async function startServer() {
 
       if (!apiKey) {
         return res.json({
-          success: true,
-          plateNumber: 'MH12AB1234',
-          note: 'GEMINI_API_KEY not set. Using simulated plate recognition.'
+          success: false,
+          error: 'GEMINI_API_KEY is not configured in server environment.',
+          plateNumber: 'UNKNOWN'
         });
       }
 
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Extract the vehicle registration number (license plate) from this image. 
-      Return ONLY the alphanumeric characters of the license plate without spaces or hyphens. 
-      If you cannot detect a license plate, return "UNKNOWN".`;
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
 
-      const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+      const prompt = `You are a specialized Optical Character Recognition (OCR) model for vehicle license plates.
+Task: Inspect the provided image carefully and extract the vehicle registration / license plate number.
+
+Rules:
+1. Locate any license plate / registration tag on the vehicle.
+2. Read all visible alphanumeric characters accurately (e.g. Indian plates: "MH12AB1234", "DL01CA9988", "KA05MH8822"; US/EU plates: "6XYZ789", "ABC1234").
+3. Strip out state names, "IND", dealer slogans, frame borders, spaces, dots, and hyphens.
+4. Return ONLY the uppercase alphanumeric string (e.g., "MH12AB1234").
+5. If no license plate is identifiable or text is unreadable, reply ONLY with "UNKNOWN". Do NOT guess or make up numbers.`;
+
+      // Dynamically extract mimeType and clean base64 string
+      const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: [
           {
             role: 'user',
@@ -49,7 +66,7 @@ async function startServer() {
               {
                 inlineData: {
                   data: base64Data,
-                  mimeType: 'image/jpeg'
+                  mimeType: mimeType
                 }
               }
             ]
@@ -57,7 +74,16 @@ async function startServer() {
         ]
       });
 
-      const plateNumber = aiResponse.text?.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'UNKNOWN';
+      const rawText = aiResponse.text?.trim() || '';
+      const plateNumber = rawText.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+      if (!plateNumber || plateNumber === 'UNKNOWN' || plateNumber.length < 3) {
+        return res.json({ 
+          success: false, 
+          plateNumber: 'UNKNOWN',
+          error: 'Could not clearly detect a valid vehicle license plate in the image.'
+        });
+      }
 
       res.json({ success: true, plateNumber });
     } catch (err: any) {
@@ -65,7 +91,7 @@ async function startServer() {
       res.json({
         success: false,
         error: err.message || 'Failed to scan license plate',
-        fallbackPlate: 'KA05MH8822'
+        plateNumber: 'UNKNOWN'
       });
     }
   });
@@ -83,7 +109,14 @@ async function startServer() {
         return res.status(400).json({ error: 'reportedSymptoms is required' });
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
       const prompt = `You are a Master Automotive Workshop Service Advisor & Chief Mechanical Inspector.
 Vehicle Context: ${JSON.stringify(vehicleInfo || {})}
 Reported Symptoms / Customer Request: "${reportedSymptoms}"
@@ -103,7 +136,7 @@ Provide a structured repair recommendation JSON with:
 Return valid JSON ONLY without markdown backticks.`;
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt,
       });
 
