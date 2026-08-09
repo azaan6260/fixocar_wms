@@ -205,13 +205,14 @@ export function LicensePlateScannerModal({
       }
 
       const avgGradient = sampleCount > 0 ? totalGradient / sampleCount : 0;
-      const score = Math.min(100, Math.max(0, Math.round(avgGradient * 3.8)));
+      const score = Math.min(100, Math.max(0, Math.round(avgGradient * 5.2)));
       setFocusScore(score);
 
       // Auto-trigger threshold (sharp frame with distinct features)
-      if (score >= 38) {
+      const threshold = 22;
+      if (score >= threshold) {
         consecutiveSharpFramesRef.current += 1;
-        if (consecutiveSharpFramesRef.current >= 2 && !autoCaptureCooldownRef.current) {
+        if (consecutiveSharpFramesRef.current >= 1 && !autoCaptureCooldownRef.current) {
           autoCaptureCooldownRef.current = true;
           setAutoCaptureStatus('locked');
           setAutoCaptureMessage('Sharp Frame Detected! Auto Capturing...');
@@ -232,7 +233,7 @@ export function LicensePlateScannerModal({
       } else {
         consecutiveSharpFramesRef.current = 0;
         setAutoCaptureStatus('analyzing');
-        if (score < 18) {
+        if (score < 10) {
           setAutoCaptureMessage('Move camera closer to license plate...');
         } else {
           setAutoCaptureMessage('Hold camera steady to auto-capture...');
