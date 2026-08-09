@@ -27,7 +27,7 @@ async function startServer() {
       if (!apiKey) {
         return res.json({
           success: false,
-          error: 'GEMINI_API_KEY is not configured on the server environment.'
+          error: 'GEMINI_API_KEY is not configured on the server environment. You can enter the license plate manually or select a sample vehicle plate.'
         });
       }
 
@@ -41,21 +41,23 @@ async function startServer() {
       });
 
       const prompt = `You are an expert Optical Character Recognition (OCR) AI specialized in reading vehicle registration license plates.
-Task: Inspect the provided image carefully and extract the vehicle registration / license plate number.
+Task: Inspect the provided vehicle image carefully and extract the vehicle registration / license plate number.
 
 Instructions:
 1. Locate any license plate / bumper tag / registration plate on the vehicle.
 2. Read the EXACT sequence of visible alphanumeric characters printed on the main plate.
 3. Strip away country or state header words like "IND", "CALIFORNIA", "TEXAS", "EUROPE", frame logos, or slogans.
-4. If a valid license plate is found, set detected: true and plateNumber to the uppercase alphanumeric string (e.g. "MH12AB1234", "DL01CA9988", "6XYZ789").
-5. If no license plate is visible, or if text cannot be read, set detected: false and plateNumber: "UNKNOWN". Do NOT guess or hallucinate fake numbers.`;
+4. Format the output as uppercase alphanumeric characters without hyphens or spaces (e.g. "MH12AB1234", "DL01CA9988", "KA05MB9988", "6XYZ789").
+5. Also estimate the vehicle body style (e.g. Sedan, SUV, Hatchback, Truck, Coupe) and vehicle color if visible.
+6. If a valid license plate is found, set detected: true.
+7. If no license plate is visible, or if text cannot be read at all, set detected: false and plateNumber: "UNKNOWN". Do NOT guess or hallucinate fake numbers if no plate is present.`;
 
       const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: [
           {
             role: 'user',
@@ -77,6 +79,9 @@ Instructions:
             properties: {
               detected: { type: 'BOOLEAN' },
               plateNumber: { type: 'STRING' },
+              confidence: { type: 'STRING' },
+              vehicleType: { type: 'STRING' },
+              vehicleColor: { type: 'STRING' },
               rawTextFound: { type: 'STRING' }
             },
             required: ['detected', 'plateNumber']
@@ -86,6 +91,9 @@ Instructions:
 
       const rawText = aiResponse.text?.trim() || '';
       let detectedPlate = '';
+      let confidence = 'high';
+      let vehicleType = '';
+      let vehicleColor = '';
 
       try {
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
@@ -93,6 +101,9 @@ Instructions:
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed.detected && parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
             detectedPlate = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            confidence = parsed.confidence || 'high';
+            vehicleType = parsed.vehicleType || '';
+            vehicleColor = parsed.vehicleColor || '';
           }
         }
       } catch (e) {
@@ -103,16 +114,23 @@ Instructions:
         const cleaned = rawText.toUpperCase().replace(/[^A-Z0-9]/g, '');
         if (cleaned.length >= 4 && !['UNKNOWN', 'DETECTED', 'LICENSE', 'NUMBER', 'TRUE', 'FALSE'].includes(cleaned)) {
           detectedPlate = cleaned;
+          confidence = 'medium';
         }
       }
 
       if (detectedPlate && detectedPlate.length >= 3 && detectedPlate !== 'UNKNOWN') {
-        return res.json({ success: true, plateNumber: detectedPlate });
+        return res.json({ 
+          success: true, 
+          plateNumber: detectedPlate,
+          confidence,
+          vehicleType,
+          vehicleColor
+        });
       }
 
       return res.json({ 
         success: false, 
-        error: 'Could not clearly detect a valid vehicle registration plate from this image.' 
+        error: 'Could not clearly detect a valid vehicle registration plate from this image. Please adjust camera angle or type plate manually.' 
       });
     } catch (err: any) {
       console.error('Gemini AI License Plate Scan Error:', err);

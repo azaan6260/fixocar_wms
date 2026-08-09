@@ -11,7 +11,10 @@ import {
   SwitchCamera, 
   Zap,
   Image as ImageIcon,
-  Keyboard
+  Keyboard,
+  History,
+  ScanLine,
+  ChevronRight
 } from 'lucide-react';
 
 interface LicensePlateScannerModalProps {
@@ -21,11 +24,11 @@ interface LicensePlateScannerModalProps {
 }
 
 const SAMPLE_TEST_PLATES = [
-  { plate: 'MH02CB8811', label: 'MH-02-CB-8811 (White Hatchback)' },
-  { plate: 'DL01CA1234', label: 'DL-01-CA-1234 (Grey SUV)' },
-  { plate: 'KA05MB9988', label: 'KA-05-MB-9988 (Silver Sedan)' },
-  { plate: 'HR26DQ5544', label: 'HR-26-DQ-5544 (Black Luxury)' },
-  { plate: 'GJ01RS7788', label: 'GJ-01-RS-7788 (Red Compact)' },
+  { plate: 'MH12AB1234', label: 'MH-12-AB-1234 (Pune White Hatchback)', color: 'White' },
+  { plate: 'DL01CA9988', label: 'DL-01-CA-9988 (Delhi Grey SUV)', color: 'Grey' },
+  { plate: 'KA05MH8822', label: 'KA-05-MH-8822 (Bengaluru Silver Sedan)', color: 'Silver' },
+  { plate: 'HR26DQ5511', label: 'HR-26-DQ-5511 (Gurugram Black Luxury)', color: 'Black' },
+  { plate: 'GJ01CB4321', label: 'GJ-01-CB-4321 (Ahmedabad Red Compact)', color: 'Red' },
 ];
 
 export function LicensePlateScannerModal({
@@ -37,18 +40,44 @@ export function LicensePlateScannerModal({
 
   const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'manual'>('camera');
   const [manualPlate, setManualPlate] = useState('');
-  const [scanFailCount, setScanFailCount] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanMeta, setScanMeta] = useState<{ vehicleType?: string; vehicleColor?: string; confidence?: string } | null>(null);
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [recentScans, setRecentScans] = useState<string[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load recent scans from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('autocraft_recent_scanned_plates');
+      if (stored) {
+        setRecentScans(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn("Could not load recent scans", e);
+    }
+  }, []);
+
+  const saveRecentScan = (plate: string) => {
+    try {
+      const cleaned = plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!cleaned || cleaned.length < 3) return;
+      const filtered = recentScans.filter((p) => p !== cleaned);
+      const updated = [cleaned, ...filtered].slice(0, 8);
+      setRecentScans(updated);
+      localStorage.setItem('autocraft_recent_scanned_plates', JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not save recent scan", e);
+    }
+  };
 
   // Start Camera Stream when Modal opens & Tab is 'camera'
   useEffect(() => {
@@ -87,7 +116,7 @@ export function LicensePlateScannerModal({
             .catch((fallbackErr) => {
               console.error("Camera permissions denied or unavailable:", fallbackErr);
               setCameraError(
-                "Unable to access camera. Please allow camera permissions in your browser, or upload an image file directly below."
+                "Unable to access camera directly in preview. You can upload a photo file or select from sample registration plates below."
               );
             });
         });
@@ -110,7 +139,7 @@ export function LicensePlateScannerModal({
     setCapturedImage(null);
     setIsScanning(false);
     setManualPlate('');
-    setScanFailCount(0);
+    setScanMeta(null);
     onClose();
   };
 
@@ -159,9 +188,9 @@ export function LicensePlateScannerModal({
     setIsScanning(true);
     setConfidenceError(null);
     setScanResult(null);
+    setScanMeta(null);
 
     try {
-      // 1. Compress image to maintain high resolution for OCR
       const compressedImage = await compressImageBase64(imageBase64, 1600, 1600, 0.9);
 
       let data: any = null;
@@ -181,7 +210,7 @@ export function LicensePlateScannerModal({
           data = await response.json();
         } else {
           const errText = await response.text().catch(() => '');
-          console.warn("Scan plate server response not OK:", response.status, errText);
+          console.warn("Scan plate server response error:", response.status, errText);
         }
       } catch (fetchErr: any) {
         console.warn("API request failed or timed out:", fetchErr);
@@ -191,38 +220,44 @@ export function LicensePlateScannerModal({
         const cleanedPlate = data.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
         setScanResult(cleanedPlate);
         setManualPlate(cleanedPlate);
+        setScanMeta({
+          vehicleType: data.vehicleType,
+          vehicleColor: data.vehicleColor,
+          confidence: data.confidence || 'high'
+        });
         setConfidenceError(null);
+        saveRecentScan(cleanedPlate);
       } else {
         // OCR could not detect a valid plate
         setScanResult(null);
-        setScanFailCount((prev) => prev + 1);
         const errMsg = data?.error || "Could not clearly read vehicle registration plate from image.";
-        setConfidenceError(`${errMsg} Please ensure clear lighting or type the plate number manually below.`);
-        setActiveTab('manual');
+        setConfidenceError(`${errMsg} Select a sample plate or enter the registration number manually below.`);
       }
     } catch (err: any) {
       console.error("Plate OCR API error:", err);
       setScanResult(null);
-      setScanFailCount((prev) => prev + 1);
-      setConfidenceError("OCR request failed or timed out. Please enter the registration plate number manually below.");
-      setActiveTab('manual');
+      setConfidenceError("OCR request failed. Please select a sample registration or type manually below.");
     } finally {
       setIsScanning(false);
     }
   };
 
+  // Capture center cropped frame for maximum OCR accuracy
   const captureFrameFromCamera = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    canvas.width = width;
+    canvas.height = height;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, width, height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
     setCapturedImage(dataUrl);
 
@@ -243,27 +278,41 @@ export function LicensePlateScannerModal({
   };
 
   const handleSelectPlate = (plateNumber: string) => {
-    onScanComplete(plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, ''));
-    handleClose();
+    const cleaned = plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (cleaned) {
+      saveRecentScan(cleaned);
+      onScanComplete(cleaned);
+      handleClose();
+    }
+  };
+
+  // Format license plate nicely (e.g., MH12AB1234 -> MH 12 AB 1234)
+  const formatPlateDisplay = (raw: string) => {
+    const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean.length === 10) {
+      return `${clean.slice(0, 2)} ${clean.slice(2, 4)} ${clean.slice(4, 6)} ${clean.slice(6)}`;
+    }
+    return clean;
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
+        
         {/* Modal Header */}
         <div className="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
-              <Camera className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/20">
+              <ScanLine className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-black flex items-center gap-2">
                 <span>License Plate Scanner</span>
                 <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-500/30 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Gemini AI
+                  <Sparkles className="w-3 h-3 text-amber-400" /> Gemini AI
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Live Camera OCR & Vehicle Plate Recognition</p>
+              <p className="text-xs text-slate-400">Automatic Vehicle Registration Recognition & OCR</p>
             </div>
           </div>
 
@@ -276,7 +325,7 @@ export function LicensePlateScannerModal({
           </button>
         </div>
 
-        {/* Tab Switcher */}
+        {/* Tab Navigation */}
         <div className="flex items-center justify-between px-5 pt-3 pb-2 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <button
@@ -315,7 +364,7 @@ export function LicensePlateScannerModal({
               }`}
             >
               <Keyboard className="w-4 h-4" />
-              <span>Enter Manually</span>
+              <span>Manual Entry</span>
             </button>
           </div>
 
@@ -343,18 +392,18 @@ export function LicensePlateScannerModal({
                   <div className="pt-2 flex flex-wrap gap-2 justify-center">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('manual')}
+                      onClick={() => setActiveTab('upload')}
                       className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black hover:bg-amber-400 transition-all shadow-md flex items-center gap-1.5"
                     >
-                      <Keyboard className="w-4 h-4" />
-                      <span>Enter Plate Manually</span>
+                      <Upload className="w-4 h-4" />
+                      <span>Upload Photo File</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('upload')}
+                      onClick={() => setActiveTab('manual')}
                       className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-300 transition-all"
                     >
-                      Upload Photo
+                      Enter Plate Manually
                     </button>
                   </div>
                 </div>
@@ -368,18 +417,18 @@ export function LicensePlateScannerModal({
                     className="w-full h-full object-cover"
                   />
 
-                  {/* License Plate Frame Overlay */}
+                  {/* License Plate Alignment Overlay */}
                   <div className="absolute inset-0 pointer-events-none border-2 border-amber-500/40 m-6 rounded-2xl flex items-center justify-center">
                     <div className="w-64 h-24 border-2 border-dashed border-amber-400 bg-amber-500/10 rounded-xl flex items-center justify-center relative overflow-hidden shadow-lg">
                       <span className="text-[10px] font-black uppercase text-amber-300 tracking-widest bg-slate-900/80 px-2 py-1 rounded-md">
                         Align License Plate Here
                       </span>
-                      {/* Scanning Line Animation */}
-                      <div className="absolute inset-x-0 h-0.5 bg-amber-400 shadow-[0_0_8px_#f59e0b] animate-bounce opacity-80" />
+                      {/* Scanning Laser Line */}
+                      <div className="absolute inset-x-0 h-0.5 bg-amber-400 shadow-[0_0_10px_#f59e0b] animate-bounce opacity-90" />
                     </div>
                   </div>
 
-                  {/* Scanning Pulse Animation Overlay */}
+                  {/* Scanning Spinner Overlay */}
                   {isScanning && (
                     <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center z-20 space-y-3">
                       <div className="relative flex items-center justify-center">
@@ -390,22 +439,18 @@ export function LicensePlateScannerModal({
                       </div>
                       <div className="text-center space-y-1">
                         <span className="text-amber-400 font-black text-sm tracking-wider uppercase block animate-pulse">
-                          Scanning...
+                          Scanning Plate...
                         </span>
                         <span className="text-[11px] text-slate-300 font-semibold">
-                          Analyzing Vehicle Plate OCR with Gemini AI
+                          Extracting Vehicle Registration via Gemini AI
                         </span>
-                      </div>
-                      <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden relative mt-1">
-                        <div className="w-full h-full bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 shadow-[0_0_12px_#f59e0b] animate-pulse rounded-full" />
                       </div>
                     </div>
                   )}
 
-                  {/* Hidden Canvas for Snapshots */}
                   <canvas ref={canvasRef} className="hidden" />
 
-                  {/* Camera Shutter Button Overlay */}
+                  {/* Capture Button Overlay */}
                   <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-3">
                     <button
                       type="button"
@@ -421,7 +466,7 @@ export function LicensePlateScannerModal({
                       ) : (
                         <>
                           <Camera className="w-4 h-4" />
-                          <span>Capture & Scan Plate</span>
+                          <span>Snap & Read Plate</span>
                         </>
                       )}
                     </button>
@@ -441,7 +486,7 @@ export function LicensePlateScannerModal({
                 </div>
                 <div>
                   <p className="font-black text-slate-900 dark:text-slate-100 text-sm">Click to Select Vehicle Photo</p>
-                  <p className="text-slate-500 text-xs mt-1">Supports JPG, PNG, WEBP images of license plates</p>
+                  <p className="text-slate-500 text-xs mt-1">Select any JPG, PNG or WEBP vehicle image</p>
                 </div>
                 <button
                   type="button"
@@ -458,34 +503,6 @@ export function LicensePlateScannerModal({
                 onChange={handleFileUpload}
                 className="hidden"
               />
-
-              {/* Quick Sample Plates for Testing */}
-              <div className="pt-2">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
-                  Quick Sample Plates (Click to Test)
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {['MH12AB1234', 'DL01CA9988', 'KA05MH8822', 'HR26DQ5511'].map((sample) => (
-                    <button
-                      key={sample}
-                      type="button"
-                      onClick={() => {
-                        setScanResult(sample);
-                        setManualPlate(sample);
-                        setConfidenceError(null);
-                        setTimeout(() => {
-                          onScanComplete(sample);
-                          handleClose();
-                        }, 600);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs border border-amber-500/30 transition-all flex items-center gap-1.5"
-                    >
-                      <Car className="w-3.5 h-3.5" />
-                      <span>{sample}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           ) : (
             /* Manual Entry Tab */
@@ -504,7 +521,7 @@ export function LicensePlateScannerModal({
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (manualPlate.trim().length >= 4) {
+                    if (manualPlate.trim().length >= 3) {
                       handleSelectPlate(manualPlate);
                     }
                   }}
@@ -519,7 +536,7 @@ export function LicensePlateScannerModal({
                         type="text"
                         value={manualPlate}
                         onChange={(e) => setManualPlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                        placeholder="e.g. MH02CB8811 or DL01CA1234"
+                        placeholder="e.g. MH12AB1234 or DL01CA9988"
                         maxLength={12}
                         className="w-full px-4 py-3.5 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 focus:border-amber-500 dark:focus:border-amber-500 rounded-xl font-mono text-xl font-black tracking-wider text-slate-900 dark:text-white uppercase outline-none transition-all shadow-inner"
                         autoFocus
@@ -534,29 +551,26 @@ export function LicensePlateScannerModal({
                         </button>
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block font-medium">
-                      Only alphanumeric characters (A-Z, 0-9) are allowed.
-                    </span>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={manualPlate.trim().length < 4}
+                    disabled={manualPlate.trim().length < 3}
                     className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirm & Use Plate ({manualPlate || '...'})</span>
+                    <span>Confirm & Select Plate ({manualPlate || '...'})</span>
                   </button>
                 </form>
               </div>
             </div>
           )}
 
-          {/* Captured Image Preview & Scan Results */}
+          {/* Captured Image Preview */}
           {capturedImage && activeTab !== 'manual' && (
             <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-                <span>Captured Frame Preview</span>
+                <span>Captured Image Preview</span>
                 {isScanning && (
                   <span className="text-amber-500 flex items-center gap-1 font-bold animate-pulse">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processing AI OCR...
@@ -571,34 +585,40 @@ export function LicensePlateScannerModal({
                   className="w-full h-full object-contain"
                   referrerPolicy="no-referrer"
                 />
-                {isScanning && (
-                  <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 animate-pulse">
-                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
-                    <span className="text-amber-400 font-extrabold text-xs tracking-wider uppercase">Scanning...</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {/* Scan Success Box */}
+          {/* Detected Plate Output Card */}
           {scanResult && activeTab !== 'manual' && (
             <div className="bg-emerald-500/10 border-2 border-emerald-500/40 rounded-2xl p-4 space-y-3 text-emerald-900 dark:text-emerald-200 animate-in fade-in slide-in-from-bottom-2">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-xs flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> License Plate Detected
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> License Plate Recognized
                 </span>
-                <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-md font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                  100% OCR Confidence
-                </span>
+                {scanMeta?.confidence && (
+                  <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-md font-mono font-bold text-emerald-700 dark:text-emerald-300 capitalize">
+                    {scanMeta.confidence} AI Confidence
+                  </span>
+                )}
               </div>
 
-              <div className="bg-amber-400 text-slate-950 px-4 py-2.5 rounded-xl border-2 border-slate-950 shadow-md flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-slate-700 block">Registration Number</span>
-                  <span className="font-mono text-xl font-black tracking-wider">{scanResult}</span>
+              {/* Realistic License Plate Graphics */}
+              <div className="bg-amber-400 text-slate-950 px-5 py-3 rounded-2xl border-4 border-slate-900 shadow-xl flex items-center justify-between relative overflow-hidden">
+                <div className="absolute left-0 top-0 bottom-0 w-8 bg-blue-700 flex flex-col items-center justify-between py-1 text-white text-[9px] font-black">
+                  <span>IND</span>
+                  <div className="w-3 h-3 rounded-full border border-white flex items-center justify-center text-[7px]">🇮🇳</div>
                 </div>
-                <Car className="w-7 h-7 text-slate-900" />
+                <div className="pl-6">
+                  <span className="text-[9px] uppercase font-black tracking-widest text-slate-800 block opacity-75">Vehicle Registration</span>
+                  <span className="font-mono text-2xl font-black tracking-widest uppercase">{formatPlateDisplay(scanResult)}</span>
+                  {(scanMeta?.vehicleType || scanMeta?.vehicleColor) && (
+                    <span className="text-[10px] font-bold text-slate-800 block mt-0.5">
+                      {[scanMeta.vehicleColor, scanMeta.vehicleType].filter(Boolean).join(' • ')}
+                    </span>
+                  )}
+                </div>
+                <Car className="w-8 h-8 text-slate-900 opacity-80" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -620,7 +640,7 @@ export function LicensePlateScannerModal({
                   className="w-full py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-all border border-slate-300 dark:border-slate-600"
                 >
                   <Keyboard className="w-4 h-4" />
-                  <span>Edit Manually</span>
+                  <span>Edit Number</span>
                 </button>
               </div>
             </div>
@@ -630,29 +650,16 @@ export function LicensePlateScannerModal({
             <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-800 dark:text-amber-300 text-xs font-medium space-y-2">
               <div className="flex items-center gap-1.5 font-bold">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>OCR Detection Notice</span>
+                <span>Plate Detection Notice</span>
               </div>
               <p>{confidenceError}</p>
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('manual');
-                    if (scanResult) setManualPlate(scanResult);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs hover:bg-amber-400 transition-all shadow-sm"
-                >
-                  <Keyboard className="w-3.5 h-3.5" />
-                  <span>Bypass Camera & Enter Plate Manually</span>
-                </button>
-              </div>
             </div>
           )}
 
-          {/* Quick Sample Test Plates */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-            <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider block">
-              Quick Test - Preset Sample License Plates
+          {/* Quick Preset Sample License Plates */}
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+            <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider block flex items-center gap-1">
+              <Car className="w-3.5 h-3.5 text-amber-500" /> One-Click Test Registration Plates
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {SAMPLE_TEST_PLATES.map((sample) => (
@@ -660,7 +667,7 @@ export function LicensePlateScannerModal({
                   key={sample.plate}
                   type="button"
                   onClick={() => handleSelectPlate(sample.plate)}
-                  className="p-2.5 rounded-xl bg-slate-100 hover:bg-amber-500/20 dark:bg-slate-800 dark:hover:bg-amber-500/20 border border-slate-200 dark:border-slate-700 hover:border-amber-500 text-left transition-all group flex items-center justify-between"
+                  className="p-2.5 rounded-2xl bg-slate-100 hover:bg-amber-500/20 dark:bg-slate-800 dark:hover:bg-amber-500/20 border border-slate-200 dark:border-slate-700 hover:border-amber-500 text-left transition-all group flex items-center justify-between"
                 >
                   <div className="space-y-0.5">
                     <span className="font-mono font-black text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 text-xs block">
@@ -668,11 +675,32 @@ export function LicensePlateScannerModal({
                     </span>
                     <span className="text-[10px] text-slate-500 block truncate">{sample.label}</span>
                   </div>
-                  <CheckCircle2 className="w-4 h-4 text-slate-400 group-hover:text-amber-500 shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500 shrink-0 transition-transform group-hover:translate-x-0.5" />
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Recent Scans History */}
+          {recentScans.length > 0 && (
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider block flex items-center gap-1">
+                <History className="w-3.5 h-3.5 text-slate-400" /> Recently Scanned Vehicles
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {recentScans.map((plate) => (
+                  <button
+                    key={plate}
+                    type="button"
+                    onClick={() => handleSelectPlate(plate)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-amber-500/20 dark:bg-slate-800 dark:hover:bg-amber-500/20 text-slate-800 dark:text-slate-200 font-mono font-bold text-xs border border-slate-300 dark:border-slate-700 transition-all flex items-center gap-1.5"
+                  >
+                    <span>{plate}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}
@@ -682,7 +710,7 @@ export function LicensePlateScannerModal({
             onClick={handleClose}
             className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs hover:bg-slate-300 transition-all"
           >
-            Cancel
+            Close
           </button>
         </div>
       </div>

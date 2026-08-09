@@ -3,11 +3,11 @@
  * User can execute this SQL in Supabase SQL Editor to set up tables & RLS policies
  */
 
-export const SUPABASE_SQL_SCHEMA = `-- AutoCraft / FixoCar Workshop Management System - Supabase SQL Schema
--- Run this script in the Supabase SQL Editor (https://app.supabase.com/project/_/sql)
+export const SUPABASE_SQL_SCHEMA = `-- AutoCraft / FixoCar Workshop Management System - Complete Production SQL Schema
+-- Run this script in the Supabase / PostgreSQL SQL Editor (https://app.supabase.com/project/_/sql)
 
 -- ==========================================
--- 1. EXTENSIONS & ENUMS
+-- 1. EXTENSIONS & ENUM TYPES
 -- ==========================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -50,9 +50,33 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 -- ==========================================
--- 2. EMPLOYEES TABLE
+-- 2. MASTER LOCATION TABLES (CITIES & WORKSHOPS)
 -- ==========================================
-CREATE TABLE IF NOT EXISTS employees (
+CREATE TABLE IF NOT EXISTS public.cities (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  state TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.workshops (
+  id TEXT PRIMARY KEY,
+  city_id TEXT NOT NULL REFERENCES public.cities(id) ON DELETE CASCADE,
+  city_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  address TEXT NOT NULL,
+  gstin TEXT,
+  phone TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 3. EMPLOYEES & VENDORS
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.employees (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   role user_role NOT NULL DEFAULT 'MECHANIC',
@@ -64,15 +88,17 @@ CREATE TABLE IF NOT EXISTS employees (
   avatar_url TEXT,
   login_id TEXT,
   password_hash TEXT,
-  base_salary NUMERIC(10,2) DEFAULT 0,
+  base_salary NUMERIC(12,2) DEFAULT 0,
+  employment_type TEXT DEFAULT 'PAYROLL',
+  city_id TEXT,
+  city_name TEXT,
+  workshop_id TEXT,
+  workshop_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 3. VENDORS TABLE
--- ==========================================
-CREATE TABLE IF NOT EXISTS vendors (
+CREATE TABLE IF NOT EXISTS public.vendors (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   category vendor_category NOT NULL DEFAULT 'PARTS_SUPPLIER',
@@ -80,17 +106,50 @@ CREATE TABLE IF NOT EXISTS vendors (
   phone TEXT NOT NULL,
   email TEXT,
   address TEXT,
-  outstanding_balance NUMERIC(10,2) DEFAULT 0,
+  outstanding_balance NUMERIC(12,2) DEFAULT 0,
   rating NUMERIC(2,1) DEFAULT 5.0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ==========================================
--- 4. JOB CARDS TABLE
+-- 4. STANDARD JOBS & INVENTORY
 -- ==========================================
-CREATE TABLE IF NOT EXISTS job_cards (
-  id TEXT PRIMARY KEY, -- e.g. "JC-2026-101"
+CREATE TABLE IF NOT EXISTS public.standard_jobs (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL,
+  hsn_sac_code TEXT DEFAULT '998729',
+  default_price NUMERIC(10,2) DEFAULT 0,
+  estimated_hours NUMERIC(4,1) DEFAULT 1.0,
+  gst_rate NUMERIC(5,2) DEFAULT 18.0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  part_number TEXT,
+  category TEXT NOT NULL,
+  stock_quantity INT DEFAULT 0,
+  unit TEXT NOT NULL DEFAULT 'Pcs',
+  min_stock_alert INT DEFAULT 5,
+  unit_cost NUMERIC(10,2) DEFAULT 0,
+  selling_price NUMERIC(10,2) DEFAULT 0,
+  supplier_vendor_id TEXT REFERENCES public.vendors(id) ON DELETE SET NULL,
+  supplier_vendor_name TEXT,
+  shelf_location TEXT,
+  workshop_id TEXT,
+  workshop_name TEXT,
+  last_restocked_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 5. JOB CARDS & AUDIT HISTORY
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.job_cards (
+  id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   estimated_completion_date TIMESTAMPTZ,
@@ -117,30 +176,41 @@ CREATE TABLE IF NOT EXISTS job_cards (
   status job_card_status NOT NULL DEFAULT 'CREATED',
   service_type TEXT NOT NULL DEFAULT 'CUSTOM_REPAIR',
   package_name TEXT,
-  floor_manager_id TEXT REFERENCES employees(id) ON DELETE SET NULL,
+  floor_manager_id TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
   floor_manager_name TEXT,
 
-  -- Financials
+  -- Financials & Invoicing
   discount NUMERIC(10,2) DEFAULT 0,
   tax_rate NUMERIC(5,2) DEFAULT 18.0,
   advance_paid NUMERIC(10,2) DEFAULT 0,
+  invoice_number TEXT,
+  invoice_date DATE,
+  workshop_gstin TEXT,
+  customer_gstin TEXT,
+  custom_item_tax_rates JSONB DEFAULT '{}'::jsonb,
 
-  -- QC & Delivery Options
+  -- Flags & Checklists
   qc_passed BOOLEAN DEFAULT FALSE,
   qc_notes TEXT,
   qc_passed_at TIMESTAMPTZ,
   pickup_requested BOOLEAN DEFAULT FALSE,
   delivery_requested BOOLEAN DEFAULT FALSE,
   delivery_record_id TEXT,
-  notes TEXT
+  notes TEXT,
+  is_urgent BOOLEAN DEFAULT FALSE,
+  is_cars24 BOOLEAN DEFAULT FALSE,
+  cars24_ref_no TEXT,
+  city_id TEXT,
+  city_name TEXT,
+  workshop_id TEXT,
+  workshop_name TEXT,
+  qc_checklist JSONB DEFAULT '[]'::jsonb,
+  comments JSONB DEFAULT '[]'::jsonb
 );
 
--- ==========================================
--- 5. JOB CARD HISTORY TABLE (AUDIT LOG)
--- ==========================================
-CREATE TABLE IF NOT EXISTS job_card_history (
+CREATE TABLE IF NOT EXISTS public.job_card_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_card_id TEXT NOT NULL REFERENCES job_cards(id) ON DELETE CASCADE,
+  job_card_id TEXT NOT NULL REFERENCES public.job_cards(id) ON DELETE CASCADE,
   previous_status job_card_status,
   new_status job_card_status NOT NULL,
   action_type TEXT NOT NULL DEFAULT 'STATUS_CHANGE',
@@ -153,11 +223,11 @@ CREATE TABLE IF NOT EXISTS job_card_history (
 );
 
 -- ==========================================
--- 6. JOB TASKS TABLE
+-- 6. JOB TASKS & REQUISITIONS
 -- ==========================================
-CREATE TABLE IF NOT EXISTS job_tasks (
+CREATE TABLE IF NOT EXISTS public.job_tasks (
   id TEXT PRIMARY KEY,
-  job_card_id TEXT NOT NULL REFERENCES job_cards(id) ON DELETE CASCADE,
+  job_card_id TEXT NOT NULL REFERENCES public.job_cards(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   category task_category NOT NULL,
   assigned_to_id TEXT,
@@ -171,19 +241,33 @@ CREATE TABLE IF NOT EXISTS job_tasks (
   rejection_reason TEXT,
   notes TEXT,
   completed_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  standard_job_id TEXT,
+  is_contract_basis BOOLEAN DEFAULT FALSE,
+  contractor_payout NUMERIC(10,2) DEFAULT 0,
+  painter_payout NUMERIC(10,2) DEFAULT 0,
+  denter_payout NUMERIC(10,2) DEFAULT 0,
+  paired_denter_id TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
+  paired_denter_name TEXT,
+  is_additional_work BOOLEAN DEFAULT FALSE,
+  additional_work_requested_by TEXT,
+  additional_work_requested_at TIMESTAMPTZ,
+  approval_status TEXT,
+  parts_list JSONB DEFAULT '[]'::jsonb,
+  requisitions JSONB DEFAULT '[]'::jsonb,
+  concerns JSONB DEFAULT '[]'::jsonb
 );
 
 -- ==========================================
--- 7. DELIVERY RECORDS TABLE
+-- 7. LOGISTICS, PURCHASING & GATE CHECK-INS
 -- ==========================================
-CREATE TABLE IF NOT EXISTS delivery_records (
+CREATE TABLE IF NOT EXISTS public.delivery_records (
   id TEXT PRIMARY KEY,
-  job_card_id TEXT NOT NULL REFERENCES job_cards(id) ON DELETE CASCADE,
+  job_card_id TEXT NOT NULL REFERENCES public.job_cards(id) ON DELETE CASCADE,
   vehicle_reg TEXT NOT NULL,
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
-  delivery_boy_id TEXT REFERENCES employees(id) ON DELETE SET NULL,
+  delivery_boy_id TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
   delivery_boy_name TEXT,
   delivery_boy_phone TEXT,
   type TEXT NOT NULL DEFAULT 'DELIVERY',
@@ -203,14 +287,11 @@ CREATE TABLE IF NOT EXISTS delivery_records (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 8. PURCHASE ORDERS TABLE
--- ==========================================
-CREATE TABLE IF NOT EXISTS purchase_orders (
+CREATE TABLE IF NOT EXISTS public.purchase_orders (
   id TEXT PRIMARY KEY,
-  job_card_id TEXT NOT NULL REFERENCES job_cards(id) ON DELETE CASCADE,
+  job_card_id TEXT NOT NULL REFERENCES public.job_cards(id) ON DELETE CASCADE,
   vehicle_reg TEXT NOT NULL,
-  vendor_id TEXT NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+  vendor_id TEXT NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
   vendor_name TEXT NOT NULL,
   category TEXT NOT NULL,
   item_description TEXT NOT NULL,
@@ -219,60 +300,154 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 9. INDEXES FOR HIGH PERFORMANCE
--- ==========================================
-CREATE INDEX IF NOT EXISTS idx_job_cards_reg_num ON job_cards(registration_number);
-CREATE INDEX IF NOT EXISTS idx_job_cards_status ON job_cards(status);
-CREATE INDEX IF NOT EXISTS idx_job_cards_customer_phone ON job_cards(customer_phone);
-CREATE INDEX IF NOT EXISTS idx_job_card_history_card_id ON job_card_history(job_card_id);
-CREATE INDEX IF NOT EXISTS idx_job_tasks_job_card_id ON job_tasks(job_card_id);
-CREATE INDEX IF NOT EXISTS idx_job_tasks_assigned ON job_tasks(assigned_to_id);
-CREATE INDEX IF NOT EXISTS idx_delivery_records_job_card ON delivery_records(job_card_id);
-CREATE INDEX IF NOT EXISTS idx_purchase_orders_job_card ON purchase_orders(job_card_id);
-CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);
+CREATE TABLE IF NOT EXISTS public.vehicle_check_ins (
+  id TEXT PRIMARY KEY DEFAULT ('GATE-' || floor(EXTRACT(epoch FROM NOW()))::text),
+  registration_number TEXT NOT NULL,
+  check_in_time TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT NOT NULL DEFAULT 'CHECKED_IN' CHECK (status IN ('CHECKED_IN', 'PDI_IN_PROGRESS', 'IDLE_AWAITING_PI', 'AWAITING_JOB_CARD', 'JOB_CARD_CREATED', 'INVOICED', 'READY_PENDING_DISPATCH', 'DELIVERED', 'CHECKED_OUT')),
+  driver_photo_url TEXT,
+  workshop_id TEXT,
+  make TEXT,
+  model TEXT,
+  color TEXT,
+  fuel_level INT,
+  mileage INT,
+  is_cars24 BOOLEAN DEFAULT false,
+  cars24_ref_no TEXT,
+  customer_name TEXT,
+  customer_phone TEXT,
+  check_in_driver_name TEXT,
+  check_in_driver_phone TEXT,
+  check_in_notes TEXT,
+  job_card_id TEXT REFERENCES public.job_cards(id) ON DELETE SET NULL,
+  check_out_time TIMESTAMPTZ,
+  check_out_driver_name TEXT,
+  check_out_driver_phone TEXT,
+  check_out_driver_photo_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- ==========================================
--- 10. AUTOMATED TRIGGER FOR JOB CARD HISTORY
+-- 8. EXPENSES, PAYROLL & ATTENDANCE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.workshop_expenses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  workshop_id TEXT REFERENCES public.workshops(id) ON DELETE SET NULL,
+  workshop_name TEXT,
+  payment_mode TEXT NOT NULL DEFAULT 'UPI',
+  paid_by_name TEXT NOT NULL,
+  vendor_name TEXT,
+  receipt_number TEXT,
+  notes TEXT,
+  is_approved BOOLEAN DEFAULT true,
+  approved_by_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.attendance_records (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  clock_in_time TEXT,
+  clock_out_time TEXT,
+  status TEXT NOT NULL DEFAULT 'PRESENT',
+  clock_in_location TEXT,
+  clock_out_location TEXT,
+  photo_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.salary_records (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  base_salary NUMERIC(12,2) DEFAULT 0,
+  deductions NUMERIC(12,2) DEFAULT 0,
+  bonuses NUMERIC(12,2) DEFAULT 0,
+  net_pay NUMERIC(12,2) DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  transfer_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 9. PERFORMANCE INDEXES
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_job_cards_reg_num ON public.job_cards(registration_number);
+CREATE INDEX IF NOT EXISTS idx_job_cards_status ON public.job_cards(status);
+CREATE INDEX IF NOT EXISTS idx_job_cards_customer_phone ON public.job_cards(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_job_card_history_card_id ON public.job_card_history(job_card_id);
+CREATE INDEX IF NOT EXISTS idx_job_tasks_job_card_id ON public.job_tasks(job_card_id);
+CREATE INDEX IF NOT EXISTS idx_job_tasks_assigned ON public.job_tasks(assigned_to_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_records_job_card ON public.delivery_records(job_card_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_job_card ON public.purchase_orders(job_card_id);
+CREATE INDEX IF NOT EXISTS idx_employees_role ON public.employees(role);
+CREATE INDEX IF NOT EXISTS idx_vehicle_checkins_reg ON public.vehicle_check_ins(registration_number);
+CREATE INDEX IF NOT EXISTS idx_attendance_emp_date ON public.attendance_records(employee_id, date);
+CREATE INDEX IF NOT EXISTS idx_expenses_workshop ON public.workshop_expenses(workshop_id, date);
+
+-- ==========================================
+-- 10. AUTOMATED AUDIT TRIGGER
 -- ==========================================
 CREATE OR REPLACE FUNCTION log_job_card_status_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF (TG_OP = 'INSERT') THEN
-    INSERT INTO job_card_history (job_card_id, new_status, action_type, notes)
+    INSERT INTO public.job_card_history (job_card_id, new_status, action_type, notes)
     VALUES (NEW.id, NEW.status, 'CARD_CREATED', 'Job card created in system');
   ELSIF (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
-    INSERT INTO job_card_history (job_card_id, previous_status, new_status, action_type, notes)
+    INSERT INTO public.job_card_history (job_card_id, previous_status, new_status, action_type, notes)
     VALUES (NEW.id, OLD.status, NEW.status, 'STATUS_CHANGE', CONCAT('Status changed from ', OLD.status, ' to ', NEW.status));
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_job_card_status_history ON job_cards;
+DROP TRIGGER IF EXISTS trg_job_card_status_history ON public.job_cards;
 CREATE TRIGGER trg_job_card_status_history
-  AFTER INSERT OR UPDATE ON job_cards
+  AFTER INSERT OR UPDATE ON public.job_cards
   FOR EACH ROW
   EXECUTE FUNCTION log_job_card_status_change();
 
 -- ==========================================
 -- 11. ROW LEVEL SECURITY (RLS) POLICIES
 -- ==========================================
-ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vendors ENABLE ROW LEVEL SECURITY;
-ALTER TABLE job_cards ENABLE ROW LEVEL SECURITY;
-ALTER TABLE job_card_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE job_tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE delivery_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workshops ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.standard_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.job_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.job_card_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.job_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.delivery_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vehicle_check_ins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workshop_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.salary_records ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies for workshop operations
-CREATE POLICY "Public full access on employees" ON employees FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on vendors" ON vendors FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on job_cards" ON job_cards FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on job_card_history" ON job_card_history FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on job_tasks" ON job_tasks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on delivery_records" ON delivery_records FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on purchase_orders" ON purchase_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on cities" ON public.cities FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on workshops" ON public.workshops FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on employees" ON public.employees FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on vendors" ON public.vendors FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on standard_jobs" ON public.standard_jobs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on inventory_items" ON public.inventory_items FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on job_cards" ON public.job_cards FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on job_card_history" ON public.job_card_history FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on job_tasks" ON public.job_tasks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on delivery_records" ON public.delivery_records FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on purchase_orders" ON public.purchase_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on vehicle_check_ins" ON public.vehicle_check_ins FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on workshop_expenses" ON public.workshop_expenses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on attendance_records" ON public.attendance_records FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on salary_records" ON public.salary_records FOR ALL USING (true) WITH CHECK (true);
 `;
+
 
