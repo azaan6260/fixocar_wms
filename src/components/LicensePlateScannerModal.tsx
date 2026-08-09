@@ -61,6 +61,15 @@ export function LicensePlateScannerModal({
   const [autoEnhance, setAutoEnhance] = useState<boolean>(true); // Apply contrast boost
   const [uploadZoom, setUploadZoom] = useState<number>(1.0); // Zoom for uploaded photos
 
+  // Auto-Capture & Sharpness Detection State
+  const [isAutoCapture, setIsAutoCapture] = useState<boolean>(true);
+  const [focusScore, setFocusScore] = useState<number>(0);
+  const [autoCaptureStatus, setAutoCaptureStatus] = useState<'analyzing' | 'locked' | 'cooldown'>('analyzing');
+  const [autoCaptureMessage, setAutoCaptureMessage] = useState<string>('Hold steady on plate...');
+
+  const autoCaptureCooldownRef = useRef<boolean>(false);
+  const consecutiveSharpFramesRef = useRef<number>(0);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +158,90 @@ export function LicensePlateScannerModal({
       }
     };
   }, [isOpen, activeTab, facingMode]);
+
+  // Auto-Capture Sharpness & Frame Detection Engine
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'camera' || !stream || !isAutoCapture || isScanning) {
+      return;
+    }
+
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = 160;
+    offscreenCanvas.height = 90;
+    const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
+    const interval = setInterval(() => {
+      if (!videoRef.current || !ctx || isScanning || autoCaptureCooldownRef.current) return;
+
+      const video = videoRef.current;
+      if (video.readyState < 2) return; // Video not ready yet
+
+      const vWidth = video.videoWidth || 1280;
+      const vHeight = video.videoHeight || 720;
+      const cropW = Math.round(vWidth / zoomLevel);
+      const cropH = Math.round(vHeight / zoomLevel);
+      const cropX = Math.max(0, Math.round((vWidth - cropW) / 2));
+      const cropY = Math.max(0, Math.round((vHeight - cropH) / 2));
+
+      // Draw center crop to offscreen canvas
+      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, 160, 90);
+      let imageData;
+      try {
+        imageData = ctx.getImageData(0, 0, 160, 90);
+      } catch (e) {
+        return;
+      }
+
+      const pixels = imageData.data;
+      let totalGradient = 0;
+      let sampleCount = 0;
+
+      // Calculate spatial contrast/gradient across pixels (proxy for sharpness/edges)
+      for (let i = 0; i < pixels.length - 16; i += 16) {
+        const gray1 = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+        const gray2 = 0.299 * pixels[i + 16] + 0.587 * pixels[i + 17] + 0.114 * pixels[i + 18];
+        totalGradient += Math.abs(gray1 - gray2);
+        sampleCount++;
+      }
+
+      const avgGradient = sampleCount > 0 ? totalGradient / sampleCount : 0;
+      const score = Math.min(100, Math.max(0, Math.round(avgGradient * 3.8)));
+      setFocusScore(score);
+
+      // Auto-trigger threshold (sharp frame with distinct features)
+      if (score >= 38) {
+        consecutiveSharpFramesRef.current += 1;
+        if (consecutiveSharpFramesRef.current >= 2 && !autoCaptureCooldownRef.current) {
+          autoCaptureCooldownRef.current = true;
+          setAutoCaptureStatus('locked');
+          setAutoCaptureMessage('Sharp Frame Detected! Auto Capturing...');
+
+          // Trigger automated snap
+          captureFrameFromCamera();
+
+          // Cooldown for 4s to prevent repeated spam scanning
+          setTimeout(() => {
+            autoCaptureCooldownRef.current = false;
+            setAutoCaptureStatus('analyzing');
+            setAutoCaptureMessage('Hold steady on plate...');
+            consecutiveSharpFramesRef.current = 0;
+          }, 4000);
+        } else {
+          setAutoCaptureMessage('Sharp Plate Detected - Holding...');
+        }
+      } else {
+        consecutiveSharpFramesRef.current = 0;
+        setAutoCaptureStatus('analyzing');
+        if (score < 18) {
+          setAutoCaptureMessage('Move camera closer to license plate...');
+        } else {
+          setAutoCaptureMessage('Hold camera steady to auto-capture...');
+        }
+      }
+    }, 280);
+
+    return () => clearInterval(interval);
+  }, [isOpen, activeTab, stream, isAutoCapture, isScanning, zoomLevel]);
 
   // Clean up camera stream on close
   const handleClose = () => {
@@ -548,6 +641,21 @@ export function LicensePlateScannerModal({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {/* Auto-Capture Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setIsAutoCapture(!isAutoCapture)}
+                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 border transition-all ${
+                          isAutoCapture
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-sm'
+                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                        }`}
+                        title="Automatically trigger scan when a sharp clear license plate frame is aligned"
+                      >
+                        <Zap className={`w-3 h-3 ${isAutoCapture ? 'animate-pulse text-slate-950' : 'text-slate-400'}`} />
+                        <span>Auto-Snap: {isAutoCapture ? 'ON' : 'OFF'}</span>
+                      </button>
+
                       {/* Contrast Enhance Toggle */}
                       <button
                         type="button"
@@ -595,14 +703,54 @@ export function LicensePlateScannerModal({
                       />
                     </div>
 
+                    {/* Live Auto-Capture Focus Gauge */}
+                    {isAutoCapture && !isScanning && (
+                      <div className="absolute top-3 inset-x-3 flex items-center justify-center z-10 pointer-events-none">
+                        <div className="bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-800 flex items-center gap-2.5 text-[11px] shadow-xl">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <Zap className={`w-3.5 h-3.5 ${focusScore >= 38 ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
+                            <span className="text-slate-300">Frame Sharpness:</span>
+                            <span className={`font-mono font-black ${
+                              focusScore >= 38 ? 'text-emerald-400' : focusScore >= 22 ? 'text-amber-400' : 'text-slate-400'
+                            }`}>
+                              {focusScore}%
+                            </span>
+                          </div>
+                          <div className="w-20 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                            <div 
+                              className={`h-full transition-all duration-200 ${
+                                focusScore >= 38 ? 'bg-emerald-400' : focusScore >= 22 ? 'bg-amber-400' : 'bg-slate-500'
+                              }`}
+                              style={{ width: `${Math.min(100, focusScore)}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-300 font-semibold hidden sm:inline">
+                            {autoCaptureMessage}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* License Plate Alignment Overlay */}
                     <div className="absolute inset-0 pointer-events-none border-2 border-amber-500/40 m-6 rounded-2xl flex items-center justify-center z-10">
-                      <div className="w-64 h-24 border-2 border-dashed border-amber-400 bg-amber-500/15 rounded-xl flex items-center justify-center relative overflow-hidden shadow-2xl">
-                        <span className="text-[10px] font-black uppercase text-amber-300 tracking-widest bg-slate-900/90 px-2.5 py-1 rounded-md border border-amber-500/30">
-                          Align License Plate Here ({zoomLevel}x)
+                      <div className={`w-64 h-24 border-2 border-dashed rounded-xl flex flex-col items-center justify-center relative overflow-hidden shadow-2xl transition-all duration-300 ${
+                        autoCaptureStatus === 'locked' || focusScore >= 38
+                          ? 'border-emerald-400 bg-emerald-500/20 shadow-[0_0_25px_rgba(52,211,153,0.4)]'
+                          : 'border-amber-400 bg-amber-500/15'
+                      }`}>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border backdrop-blur-xs transition-all ${
+                          autoCaptureStatus === 'locked' || focusScore >= 38
+                            ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40 animate-pulse'
+                            : 'bg-slate-900/90 text-amber-300 border-amber-500/30'
+                        }`}>
+                          {autoCaptureStatus === 'locked' 
+                            ? '⚡ TARGET LOCKED — CAPTURING' 
+                            : `Align License Plate Here (${zoomLevel}x)`}
                         </span>
                         {/* Scanning Laser Line */}
-                        <div className="absolute inset-x-0 h-0.5 bg-amber-400 shadow-[0_0_12px_#f59e0b] animate-bounce opacity-90" />
+                        <div className={`absolute inset-x-0 h-0.5 shadow-md animate-bounce opacity-90 ${
+                          focusScore >= 38 ? 'bg-emerald-400 shadow-emerald-400' : 'bg-amber-400 shadow-amber-400'
+                        }`} />
                       </div>
                     </div>
 
