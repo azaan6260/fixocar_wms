@@ -470,6 +470,34 @@ export function LicensePlateScannerModal({
                 onChange={handleFileUpload}
                 className="hidden"
               />
+
+              {/* Quick Sample Plates for Testing */}
+              <div className="pt-2">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
+                  Quick Sample Plates (Click to Test)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {['MH12AB1234', 'DL01CA9988', 'KA05MH8822', 'HR26DQ5511'].map((sample) => (
+                    <button
+                      key={sample}
+                      type="button"
+                      onClick={() => {
+                        setScanResult(sample);
+                        setManualPlate(sample);
+                        setConfidenceError(null);
+                        setTimeout(() => {
+                          onScanComplete(sample);
+                          handleClose();
+                        }, 600);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs border border-amber-500/30 transition-all flex items-center gap-1.5"
+                    >
+                      <Car className="w-3.5 h-3.5" />
+                      <span>{sample}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             /* Manual Entry Tab */
