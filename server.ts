@@ -65,7 +65,7 @@ Rules:
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-2.5-flash',
         contents: [
           {
             role: 'user',
