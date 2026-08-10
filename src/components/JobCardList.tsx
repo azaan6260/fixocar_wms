@@ -17,8 +17,10 @@ import {
   ShieldCheck,
   Building2,
   QrCode,
-  Flame
+  Flame,
+  PackageCheck
 } from 'lucide-react';
+import { PartRequisitionModal } from './PartRequisitionModal';
 
 interface JobCardListProps {
   jobCards: JobCard[];
@@ -52,6 +54,7 @@ export function JobCardList({
 }: JobCardListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'APPROVAL' | 'QC' | 'DELIVERY' | 'CARS24'>('ALL');
+  const [requisitionModalCard, setRequisitionModalCard] = useState<JobCard | null>(null);
 
   const filteredCards = jobCards.filter((card) => {
     const matchesSearch = 
@@ -76,53 +79,54 @@ export function JobCardList({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       
       {/* Search & Filter Header */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4">
         
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">
               Automotive Job Cards
             </span>
-            <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
+              <FileText className="w-5 h-5 text-blue-600 shrink-0" />
               Workshop Job Cards Directory
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
               Manage work orders, team task allotments, customer approvals, floor inspection checklists and deliveries.
             </p>
           </div>
 
           <button
             onClick={onOpenNewJobCardModal}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95"
+            className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl sm:rounded-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            New Job Card
+            <span>+ New Job Card</span>
           </button>
         </div>
 
         {/* Filter Controls & Search Input */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1">
           
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search Reg No, Customer, Make, Model..."
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl sm:rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+          {/* Touch-optimized horizontal scrolling filter pills */}
+          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none -mx-1 px-1">
             {[
               { id: 'ALL', label: `All (${jobCards.length})` },
-              { id: 'ACTIVE', label: `Active (${jobCards.filter(c => c.status !== 'DELIVERED').length})` },
-              { id: 'CARS24', label: `Cars24 Partner (${jobCards.filter(c => c.isCars24).length})` },
+              { id: 'ACTIVE', label: `Active (${jobCards.filter(c => c.status !== 'DELIVERED' && c.status !== 'CLOSED').length})` },
+              { id: 'CARS24', label: `Cars24 (${jobCards.filter(c => c.isCars24).length})` },
               { id: 'APPROVAL', label: `Needs Approval (${jobCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
               { id: 'QC', label: `QC Audit (${jobCards.filter(c => c.status === 'QC_PENDING').length})` },
               { id: 'DELIVERY', label: `Ready/Delivery (${jobCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
@@ -130,10 +134,10 @@ export function JobCardList({
               <button
                 key={f.id}
                 onClick={() => setActiveFilter(f.id as any)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
                   activeFilter === f.id
-                    ? f.id === 'CARS24' ? 'bg-orange-600 text-white' : 'bg-blue-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 {f.label}
@@ -145,36 +149,36 @@ export function JobCardList({
 
       </div>
 
-      {/* Cards Grid */}
+      {/* Cards Responsive Grid */}
       {filteredCards.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-500">
-          <Car className="w-12 h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
-          <h3 className="font-bold text-slate-800 dark:text-slate-200">No Job Cards Found</h3>
-          <p className="text-xs mt-1">Try adjusting your search filter or create a new job card.</p>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
+          <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
+          <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">No Job Cards Found</h3>
+          <p className="text-xs mt-1">Try adjusting your search query or filter selection above.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {filteredCards.map((card) => {
             const statusStyle = STATUS_BADGES[card.status] || STATUS_BADGES.IN_PROGRESS;
             const completedCount = card.tasks.filter((t) => t.status === 'COMPLETED').length;
             const progress = card.tasks.length ? Math.round((completedCount / card.tasks.length) * 100) : 0;
             const needsApproval = card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
             const totalBill = card.tasks.reduce((acc, t) => acc + (t.customerPrice || 0), 0);
-
-            // Sublet / Team badges
             const hasSublet = card.tasks.some(t => t.category === 'SUBLET_VENDOR' || t.category === 'WASHING');
 
             return (
               <div
                 key={card.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all shadow-xs flex flex-col justify-between overflow-hidden group"
+                className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all shadow-xs flex flex-col justify-between overflow-hidden group"
               >
                 
-                {/* Card Top Header */}
-                <div className="p-5 space-y-3">
-                  <div className="flex items-center justify-between gap-1">
+                {/* Card Top Header & Main Info */}
+                <div className="p-4 sm:p-5 space-y-3">
+                  
+                  {/* Top Bar: ID, Urgency, Cars24 & Status */}
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                      <span className="font-mono text-[11px] font-extrabold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
                         {card.id}
                       </span>
                       {card.isUrgent && (
@@ -188,46 +192,53 @@ export function JobCardList({
                         </span>
                       )}
                     </div>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wide border shrink-0 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
                       {statusStyle.label}
                     </span>
                   </div>
 
-                  {/* Vehicle Information */}
+                  {/* Vehicle Information Row */}
                   <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center shrink-0 font-bold">
-                      <Car className="w-6 h-6" />
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold border border-blue-100 dark:border-blue-900/40">
+                      <Car className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
-                    <div>
-                      <h2 className="font-black text-base text-slate-900 dark:text-slate-100 tracking-tight font-mono">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">
                         {card.vehicle.registrationNumber}
                       </h2>
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <p className="text-xs font-extrabold text-slate-700 dark:text-slate-300 truncate">
                         {card.vehicle.make} {card.vehicle.model} ({card.vehicle.year})
                       </p>
-                      <p className="text-[11px] text-slate-500">Color: {card.vehicle.color} • {card.vehicle.mileage.toLocaleString()} km</p>
+                      <p className="text-[11px] text-slate-500 font-medium truncate">
+                        Color: {card.vehicle.color} • {card.vehicle.mileage.toLocaleString('en-IN')} km
+                      </p>
                     </div>
                   </div>
 
-                  {/* Customer Info */}
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs space-y-1">
+                  {/* Customer Info Card */}
+                  <div className="p-2.5 sm:p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80 text-xs space-y-1">
                     <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
-                      <span className="flex items-center gap-1.5 font-bold">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        {card.customer.name}
+                      <span className="flex items-center gap-1.5 font-bold truncate">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{card.customer.name}</span>
                       </span>
-                      <span className="flex items-center gap-1 text-slate-500 text-[11px] font-mono">
+                      <a
+                        href={`tel:${card.customer.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline text-[11px] font-mono font-bold shrink-0 ml-2"
+                      >
                         <Phone className="w-3 h-3" />
-                        {card.customer.phone}
-                      </span>
+                        <span>{card.customer.phone}</span>
+                      </a>
                     </div>
                   </div>
 
                   {/* Tasks Progress Bar */}
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Progress</span>
-                      <span className="font-bold text-blue-600 dark:text-blue-400">
+                      <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Repair Progress</span>
+                      <span className="font-extrabold text-blue-600 dark:text-blue-400 font-mono text-[11px]">
                         {completedCount}/{card.tasks.length} Done ({progress}%)
                       </span>
                     </div>
@@ -240,34 +251,53 @@ export function JobCardList({
                   </div>
 
                   {/* Badges / Sublet alert */}
-                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
                     {hasSublet && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                         <Building2 className="w-3 h-3" />
                         Sublet Vendor Work
                       </span>
                     )}
                     {needsApproval && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse">
                         <AlertCircle className="w-3 h-3" />
                         Customer Approval Needed
                       </span>
                     )}
                     {card.status === 'QC_PENDING' && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                         <ShieldCheck className="w-3 h-3" />
-                        QC Ready
+                        QC Audit Ready
                       </span>
                     )}
                   </div>
 
                 </div>
 
+                {/* Mobile Quick Action Bar for Parts / Requisitions */}
+                <div className="px-3.5 sm:px-4 py-2.5 bg-amber-500/10 dark:bg-amber-500/5 border-t border-b border-amber-500/20 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-900 dark:text-amber-300 font-bold">
+                    <PackageCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Parts Requisition</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setRequisitionModalCard(card)}
+                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>+ Requisition / Parts</span>
+                  </button>
+                </div>
+
                 {/* Card Footer Actions */}
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="p-3 sm:p-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Est. Bill</p>
-                    <p className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">₹{totalBill.toLocaleString('en-IN')}</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest font-bold">Est. Bill</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 font-mono">
+                      ₹{totalBill.toLocaleString('en-IN')}
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -275,7 +305,7 @@ export function JobCardList({
                       <button
                         type="button"
                         onClick={() => onOpenQRModal(card.id)}
-                        className="p-1.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-amber-500 hover:text-slate-950 transition-colors"
+                        className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-amber-500 hover:text-slate-950 transition-colors flex items-center justify-center shrink-0 active:scale-95"
                         title="View Job Card QR Code"
                       >
                         <QrCode className="w-4 h-4" />
@@ -284,27 +314,30 @@ export function JobCardList({
 
                     {needsApproval && (
                       <button
+                        type="button"
                         onClick={() => onOpenCustomerApprovalPortal(card.id)}
-                        className="px-3 py-1.5 rounded-full bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400 transition-colors"
+                        className="min-h-[38px] px-3 py-1.5 rounded-full bg-amber-500 text-slate-950 text-xs font-extrabold hover:bg-amber-400 transition-colors active:scale-95"
                       >
-                        Approval View
+                        Approval
                       </button>
                     )}
 
                     {card.status === 'QC_PENDING' && (
                       <button
+                        type="button"
                         onClick={() => onOpenQCModal(card.id)}
-                        className="px-3 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 transition-colors"
+                        className="min-h-[38px] px-3 py-1.5 rounded-full bg-purple-600 text-white text-xs font-extrabold hover:bg-purple-500 transition-colors active:scale-95"
                       >
                         QC Audit
                       </button>
                     )}
 
                     <button
+                      type="button"
                       onClick={() => onSelectJobCard(card.id)}
-                      className="px-3.5 py-1.5 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors flex items-center gap-1"
+                      className="min-h-[38px] px-3.5 py-1.5 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-1 shadow-xs active:scale-95"
                     >
-                      Manage
+                      <span>Manage</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -314,6 +347,15 @@ export function JobCardList({
             );
           })}
         </div>
+      )}
+
+      {/* Part Requisition / Consumption Modal */}
+      {requisitionModalCard && (
+        <PartRequisitionModal
+          card={requisitionModalCard}
+          isOpen={Boolean(requisitionModalCard)}
+          onClose={() => setRequisitionModalCard(null)}
+        />
       )}
 
     </div>

@@ -33,12 +33,14 @@ import {
   UserCheck,
   PackageCheck,
   Tag,
-  Boxes
+  Boxes,
+  Lock
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
 import { StandardJobsCatalogModal } from './StandardJobsCatalogModal';
 import { GSTInvoiceView } from './GSTInvoiceView';
+import { PartRequisitionModal } from './PartRequisitionModal';
 import { UserRole } from '../types';
 
 interface JobCardDetailViewProps {
@@ -63,6 +65,7 @@ export function JobCardDetailView({
   onOpenQRModal,
 }: JobCardDetailViewProps) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice'>('tasks');
+  const [isReqModalOpen, setIsReqModalOpen] = useState(false);
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
 
   // Part Consumption History compilation
@@ -206,6 +209,9 @@ export function JobCardDetailView({
 
   const completedCount = card.tasks.filter(t => t.status === 'COMPLETED').length;
   const progressPct = card.tasks.length ? Math.round((completedCount / card.tasks.length) * 100) : 0;
+  const isWorkCompleted = card.tasks.length > 0 && card.tasks.every(t => t.status === 'COMPLETED');
+  const isInspectionDone = Boolean(card.qcPassed);
+  const isCheckoutAllowed = isWorkCompleted && isInspectionDone;
 
   const handleCreateNewTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,7 +315,16 @@ export function JobCardDetailView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsReqModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <PackageCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>+ Requisition / Parts</span>
+            </button>
+
             {onOpenQRModal && (
               <button
                 type="button"
@@ -468,14 +483,41 @@ export function JobCardDetailView({
 
           <div className="flex items-center gap-2">
             {!card.checkedOutAt ? (
-              <button
-                type="button"
-                onClick={() => setIsGateCheckOutOpen(true)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all shrink-0"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Mark Gate Check-Out & Dispatch</span>
-              </button>
+              isCheckoutAllowed ? (
+                <button
+                  type="button"
+                  onClick={() => setIsGateCheckOutOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all shrink-0 active:scale-95"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Mark Gate Check-Out & Dispatch</span>
+                </button>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 text-slate-300 border border-slate-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="text-[11px] text-left">
+                      <span className="font-extrabold text-amber-300 block">Gate Exit Locked</span>
+                      <span className="text-slate-400">
+                        {!isWorkCompleted 
+                          ? `Work in progress (${completedCount}/${card.tasks.length} tasks done)` 
+                          : 'Floor QC inspection pending'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!isInspectionDone && isWorkCompleted && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenQCModal(card.id)}
+                      className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm shrink-0 active:scale-95 transition-all"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Perform QC Audit</span>
+                    </button>
+                  )}
+                </div>
+              )
             ) : (
               <span className="bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-xl border border-emerald-500/30 font-extrabold flex items-center gap-1">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -732,16 +774,27 @@ export function JobCardDetailView({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Items</p>
-                    <p className="text-base font-black text-slate-900 dark:text-white font-mono">{consumedItemsList.length}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Items</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white font-mono">{consumedItemsList.length}</p>
+                    </div>
+                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Value</p>
+                      <p className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">₹{totalConsumedCost.toLocaleString('en-IN')}</p>
+                    </div>
                   </div>
-                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Total Consumed Value</p>
-                    <p className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">₹{totalConsumedCost.toLocaleString('en-IN')}</p>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsReqModalOpen(true)}
+                    className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>Requisition / Issue Part</span>
+                  </button>
                 </div>
               </div>
 
@@ -997,6 +1050,15 @@ export function JobCardDetailView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Part Requisition & Consumption Modal */}
+      {isReqModalOpen && (
+        <PartRequisitionModal
+          card={card}
+          isOpen={isReqModalOpen}
+          onClose={() => setIsReqModalOpen(false)}
+        />
       )}
     </div>
   );
