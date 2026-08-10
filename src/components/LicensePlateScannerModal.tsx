@@ -161,6 +161,15 @@ export function LicensePlateScannerModal({
         body: JSON.stringify({ imageBase64 }),
       });
 
+      if (!response.ok) {
+        if (response.status === 405 || response.status === 404) {
+          setErrorMessage(
+            `API Endpoint returned ${response.status} (${response.statusText}). If deployed on Vercel or static hosting, ensure GEMINI_API_KEY is configured in project settings. You can enter the registration number manually below.`
+          );
+          return;
+        }
+      }
+
       const data = await response.json().catch(() => null);
 
       if (data && data.success && data.plateNumber && data.plateNumber !== 'UNKNOWN') {
@@ -174,12 +183,12 @@ export function LicensePlateScannerModal({
         });
         saveRecentScan(cleanedPlate);
       } else {
-        const errText = data?.error || 'Could not clearly read the registration plate from this image.';
+        const errText = data?.error || 'Could not clearly read the registration plate from this image. Try entering manually or select a test plate below.';
         setErrorMessage(errText);
       }
     } catch (err) {
       console.error('OCR Request Error:', err);
-      setErrorMessage('OCR service request failed. Please enter registration plate manually.');
+      setErrorMessage('OCR request failed. Please check network or enter registration plate manually.');
     } finally {
       setIsScanning(false);
     }
