@@ -1560,8 +1560,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 1: CUSTOMER LOGIN / REGISTER MODAL */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 sm:p-8 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-5 sm:p-8 space-y-5 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-blue-600 text-white font-bold">
@@ -1690,8 +1690,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 2: ADD / EDIT VEHICLE MODAL */}
       {isAddVehicleModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-6 sm:p-8 space-y-4 shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-5 sm:p-8 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Car className="w-5 h-5 text-blue-600" />
@@ -1822,8 +1822,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 3: DECLINE REASON MODAL */}
       {declineTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
                 Decline Recommendation
@@ -1872,8 +1872,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 4: INVOICE / RECEIPT MODAL */}
       {invoiceJobCard && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl p-6 sm:p-8 space-y-4 shadow-2xl my-8 relative">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl p-5 sm:p-8 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto relative">
             <button 
               onClick={() => setInvoiceJobCard(null)} 
               className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-white p-2 rounded-xl bg-slate-100 dark:bg-slate-800 transition-all z-10"
@@ -1888,8 +1888,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 5: SERVICE BOOKING CONFIRMATION MODAL */}
       {bookingService && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl p-6 sm:p-8 space-y-5 shadow-2xl my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl p-5 sm:p-8 space-y-5 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest font-mono">
@@ -2004,8 +2004,8 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
       {/* MODAL 6: CONFIRMED BOOKING SUCCESS MODAL */}
       {confirmedBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-6 sm:p-8 space-y-5 text-center shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-5 sm:p-8 space-y-5 text-center shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="w-16 h-16 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
               <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
             </div>

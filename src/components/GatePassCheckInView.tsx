@@ -587,8 +587,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
 
       {/* NEW VEHICLE GATE CHECK-IN MODAL */}
       {isCheckInModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
@@ -609,7 +609,7 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
               </button>
             </div>
 
-            <form onSubmit={handleCreateCheckIn} className="p-6 space-y-5 text-xs">
+            <form onSubmit={handleCreateCheckIn} className="p-6 space-y-5 text-xs overflow-y-auto">
               {/* Fleet / Ownership Selector */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
                 <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
@@ -858,8 +858,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
 
       {/* CHECK-OUT / GATE DEPARTURE MODAL */}
       {checkOutItem && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">

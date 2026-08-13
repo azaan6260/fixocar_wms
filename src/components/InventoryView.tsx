@@ -519,8 +519,8 @@ export function InventoryView({ currentRole, vendors = [] }: InventoryViewProps)
 
       {/* ADD / EDIT ITEM MODAL */}
       {showItemModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-lg w-full space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100">
                 {editingItemId ? 'Edit Inventory Item' : 'Add New Inventory Stock Item'}
@@ -672,8 +672,8 @@ export function InventoryView({ currentRole, vendors = [] }: InventoryViewProps)
 
       {/* QUICK RESTOCK MODAL */}
       {restockItemId && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-sm w-full space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
             <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">
               Restock Item Quantity
             </h3>

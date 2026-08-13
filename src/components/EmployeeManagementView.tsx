@@ -535,8 +535,8 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
 
       {/* CREATE / EDIT EMPLOYEE MODAL */}
       {editingEmployee && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl shadow-2xl p-6 sm:p-8 space-y-6">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl shadow-2xl p-5 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-black text-slate-900 dark:text-slate-100">
               {isNewEmployee ? 'Add New Employee' : 'Edit Employee Profile'}
             </h3>
@@ -735,8 +735,8 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
 
       {/* MARK ATTENDANCE MOCK MODAL */}
       {markingAttendance && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl p-8 text-center space-y-6">
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl p-6 sm:p-8 text-center space-y-6 my-auto max-h-[90vh] overflow-y-auto">
             <div className="w-32 h-32 rounded-full border-4 border-blue-500/30 overflow-hidden mx-auto relative group">
               <img src="https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=200&h=200&fit=crop" alt="Face Scanner" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-blue-500/20 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
