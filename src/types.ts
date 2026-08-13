@@ -635,6 +635,11 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
     return true;
   }
 
+  // Standard Jobs Library is strictly restricted to Administrators and hidden from Employee accounts
+  if (tabId === 'standard-jobs') {
+    return false;
+  }
+
   if (role === 'FLOOR_MANAGER') {
     return [
       'dashboard',
@@ -645,7 +650,6 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'job-cards-history',
       'status-pipeline',
       'part-basket',
-      'standard-jobs',
       'inventory',
       'role-workspace',
       'outsourced-jobs',
@@ -660,7 +664,6 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'job-cards-history',
       'status-pipeline',
       'daily-huddle',
-      'standard-jobs',
       'gate-pass'
     ].includes(tabId);
   }

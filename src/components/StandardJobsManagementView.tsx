@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
 import { UserRole, StandardJob, TaskCategory } from '../types';
 import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob } from '../lib/storage';
-import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search } from 'lucide-react';
+import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search, Lock } from 'lucide-react';
 
 interface StandardJobsManagementViewProps {
   currentRole: UserRole;
 }
 
 export function StandardJobsManagementView({ currentRole }: StandardJobsManagementViewProps) {
+  const canManage = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
+
+  if (!canManage) {
+    return (
+      <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg mx-auto my-12 animate-in fade-in zoom-in-95 duration-200">
+        <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center mx-auto mb-4">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-black text-slate-900 dark:text-white">Access Restricted</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+          The Standard Jobs Library is confidential and restricted to Workshop Administrators (Super Admin & Admin). Employee accounts do not have access to view or edit standard job rates and contractor payouts.
+        </p>
+      </div>
+    );
+  }
   const [standardJobs, setStandardJobs] = useState<StandardJob[]>(() => getStandardJobs());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCat, setFilterCat] = useState<string>('ALL');
@@ -129,8 +144,6 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     const matchesCat = filterCat === 'ALL' || j.category === filterCat;
     return matchesSearch && matchesCat;
   });
-
-  const canManage = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
 
   return (
     <div className="space-y-6">
