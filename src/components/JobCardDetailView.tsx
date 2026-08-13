@@ -41,6 +41,7 @@ import { TaskDetailCard } from './TaskDetailCard';
 import { StandardJobsCatalogModal } from './StandardJobsCatalogModal';
 import { GSTInvoiceView } from './GSTInvoiceView';
 import { PartRequisitionModal } from './PartRequisitionModal';
+import { AIPrioritySuggestionBox } from './AIPrioritySuggestionBox';
 import { UserRole } from '../types';
 
 interface JobCardDetailViewProps {
@@ -184,6 +185,21 @@ export function JobCardDetailView({
 
     setIsGateCheckOutOpen(false);
     alert('Vehicle successfully checked out & gate exit recorded!');
+  };
+
+  const handleApplyUrgencyToggle = (isUrgent: boolean) => {
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      isUrgent
+    }));
+  };
+
+  const handleSetTargetToday = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      estimatedCompletionDate: todayStr
+    }));
   };
   
   // New additional work item state
@@ -526,6 +542,13 @@ export function JobCardDetailView({
             )}
           </div>
         </div>
+
+        {/* AI Priority Advisor Box */}
+        <AIPrioritySuggestionBox
+          card={card}
+          onApplyUrgencyToggle={handleApplyUrgencyToggle}
+          onSetTargetToday={handleSetTargetToday}
+        />
 
         {/* Tab Switcher */}
         <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 overflow-x-auto shrink-0">

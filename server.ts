@@ -211,6 +211,203 @@ Return valid JSON ONLY without markdown backticks.`;
     }
   });
 
+  // Helper for Priority Suggestion fallback
+  function generateFallbackPrioritySuggestion(ctx: any) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const estDate = ctx.estimatedCompletionDate || todayStr;
+    const progressPct = ctx.progressPct || 0;
+    const remainingTasks = (ctx.totalCount || 0) - (ctx.completedCount || 0);
+    const isUrgent = ctx.isUrgent || false;
+    const pendingApprovals = ctx.pendingApprovalsCount || 0;
+    const pendingReqs = ctx.pendingRequisitionsCount || 0;
+
+    const isTodayOrPast = estDate <= todayStr;
+    let suggestedPriority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
+    let urgencyScore = 50;
+    let headline = '';
+    let keyReasons: string[] = [];
+    let recommendedActions: string[] = [];
+    let estimatedRisk = '';
+    let shouldBeMarkedUrgent = false;
+
+    if (isTodayOrPast && progressPct < 70) {
+      suggestedPriority = 'CRITICAL';
+      urgencyScore = 95;
+      headline = `Critical Alert: Vehicle promised ${estDate === todayStr ? 'TODAY' : 'OVERDUE'} with ${remainingTasks} tasks pending (${progressPct}% completed).`;
+      keyReasons = [
+        `Promised delivery date (${estDate}) is ${estDate === todayStr ? 'today' : 'overdue'}, but ${remainingTasks} tasks remain incomplete.`,
+        `Overall progress is at ${progressPct}%, requiring immediate floor intervention.`,
+        pendingApprovals > 0 ? `${pendingApprovals} unapproved customer estimate items are blocking repair progress.` : 'Work sequence needs immediate escalation.'
+      ];
+      recommendedActions = [
+        'Reassign available technicians from low-priority cars to accelerate active tasks.',
+        'Contact customer or service advisor to clear pending estimate approvals.',
+        'Flag job card as 🔥 URGENT for priority bay allocation.'
+      ];
+      estimatedRisk = 'High Risk: Delivery delay highly probable without immediate intervention.';
+      shouldBeMarkedUrgent = true;
+    } else if (isTodayOrPast || progressPct < 50 || isUrgent || pendingReqs > 0) {
+      suggestedPriority = 'HIGH';
+      urgencyScore = 78;
+      headline = `High Priority: Completion target ${estDate} with ${remainingTasks} tasks remaining (${progressPct}% done).`;
+      keyReasons = [
+        `Completion deadline is scheduled for ${estDate}.`,
+        `${remainingTasks} remaining task(s) in repair pipeline (${progressPct}% total progress).`,
+        pendingReqs > 0 ? `${pendingReqs} spare part requisition(s) pending fulfillment.` : (isUrgent ? 'Card manually marked as urgent in daily huddle.' : 'Sub-optimal progress speed detected.')
+      ];
+      recommendedActions = [
+        'Issue required spare parts from inventory store immediately.',
+        'Pair senior mechanic with apprentice to expedite remaining jobs.',
+        'Schedule mid-day inspection check with Floor Manager.'
+      ];
+      estimatedRisk = 'Moderate Risk: Potential bottleneck if parts or approval stall.';
+      shouldBeMarkedUrgent = true;
+    } else if (progressPct >= 80) {
+      suggestedPriority = 'LOW';
+      urgencyScore = 20;
+      headline = `On Track / Low Urgency: ${progressPct}% completed. Final inspection & delivery prep active.`;
+      keyReasons = [
+        `Most repair tasks (${ctx.completedCount}/${ctx.totalCount}) are successfully finished.`,
+        `Promised delivery timeline (${estDate}) has comfortable buffer.`,
+        'No major workflow bottlenecks or part shortages flagged.'
+      ];
+      recommendedActions = [
+        'Conduct final Quality Control (QC) inspection.',
+        'Initiate washing and interior detailing.',
+        'Generate GST Invoice and notify delivery driver.'
+      ];
+      estimatedRisk = 'Low Risk: On track for on-time customer delivery.';
+      shouldBeMarkedUrgent = false;
+    } else {
+      suggestedPriority = 'MEDIUM';
+      urgencyScore = 48;
+      headline = `Standard Priority: ${progressPct}% completed for promised completion date ${estDate}.`;
+      keyReasons = [
+        `Job card is progressing at steady pace (${ctx.completedCount}/${ctx.totalCount} completed).`,
+        `Completion deadline (${estDate}) allows sufficient time under standard workflow.`,
+        'Technicians are actively assigned to current task phase.'
+      ];
+      recommendedActions = [
+        'Continue standard repair workflow sequence.',
+        'Ensure technicians log task completions upon finishing.',
+        'Verify required parts are available before starting next phase.'
+      ];
+      estimatedRisk = 'Low-Moderate Risk: Normal monitoring required.';
+      shouldBeMarkedUrgent = isUrgent;
+    }
+
+    return {
+      suggestedPriority,
+      urgencyScore,
+      headline,
+      keyReasons,
+      recommendedActions,
+      estimatedRisk,
+      shouldBeMarkedUrgent
+    };
+  }
+
+  // AI-Powered Priority Suggestion Endpoint
+  app.post('/api/ai-priority-suggestion', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const { jobContext } = req.body;
+      if (!jobContext) {
+        return res.status(400).json({ error: 'jobContext is required' });
+      }
+
+      if (!apiKey) {
+        const fallback = generateFallbackPrioritySuggestion(jobContext);
+        return res.json({ success: true, analysis: fallback, isFallback: true });
+      }
+
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const prompt = `You are an AI Workshop Operations Director & Master Service Scheduler.
+Analyze this automotive job card's deadline, progress, and blockers to suggest an optimal team priority level and key operational next steps:
+
+Current Date: ${todayStr}
+Job Card Details:
+${JSON.stringify(jobContext, null, 2)}
+
+Requirements for Analysis:
+1. Compare current date (${todayStr}) with estimated completion date (${jobContext.estimatedCompletionDate}).
+2. Evaluate task progress (${jobContext.completedCount}/${jobContext.totalCount} = ${jobContext.progressPct}%).
+3. Consider pending customer approvals (${jobContext.pendingApprovalsCount || 0}) and pending spare parts requisitions (${jobContext.pendingRequisitionsCount || 0}).
+4. Determine priority rating:
+   - CRITICAL: Deadline is today/overdue AND < 75% completed OR major blockers present.
+   - HIGH: Deadline within 24-48 hours AND < 60% completed OR parts pending.
+   - MEDIUM: Steady progress with standard time buffer remaining.
+   - LOW: > 80% completed or ample time remaining.
+
+Return JSON matching this structure:
+{
+  "suggestedPriority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+  "urgencyScore": number 1 to 100,
+  "headline": "concise 1-sentence priority diagnosis summary",
+  "keyReasons": ["reason 1", "reason 2", "reason 3"],
+  "recommendedActions": ["action 1", "action 2"],
+  "estimatedRisk": "short risk assessment text",
+  "shouldBeMarkedUrgent": boolean
+}
+Return valid JSON ONLY.`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              suggestedPriority: { type: 'STRING' },
+              urgencyScore: { type: 'NUMBER' },
+              headline: { type: 'STRING' },
+              keyReasons: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
+              },
+              recommendedActions: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
+              },
+              estimatedRisk: { type: 'STRING' },
+              shouldBeMarkedUrgent: { type: 'BOOLEAN' }
+            },
+            required: ['suggestedPriority', 'urgencyScore', 'headline', 'keyReasons', 'recommendedActions', 'estimatedRisk', 'shouldBeMarkedUrgent']
+          }
+        }
+      });
+
+      const rawText = aiResponse.text?.trim() || '{}';
+      let parsed = null;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch (e) {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      }
+
+      if (!parsed || !parsed.suggestedPriority) {
+        parsed = generateFallbackPrioritySuggestion(jobContext);
+      }
+
+      res.json({ success: true, analysis: parsed });
+    } catch (err: any) {
+      console.error('Gemini Priority Analysis Error:', err);
+      const fallback = generateFallbackPrioritySuggestion(req.body.jobContext || {});
+      res.json({ success: true, analysis: fallback, isFallback: true, error: err.message });
+    }
+  });
+
   // Vite middleware setup for Development vs Production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
