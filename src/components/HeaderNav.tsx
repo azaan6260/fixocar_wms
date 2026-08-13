@@ -37,6 +37,8 @@ import {
   Settings
 } from 'lucide-react';
 
+import { NotificationDrawer } from './NotificationDrawer';
+
 interface HeaderNavProps {
   currentRole: UserRole;
   onRoleChange: (role: UserRole) => void;
@@ -46,6 +48,7 @@ interface HeaderNavProps {
   onOpenNewJobCardModal: () => void;
   onSwitchToCustomerPortal?: () => void;
   onOpenScanner?: () => void;
+  onSelectJobCard?: (id: string) => void;
 }
 
 export function HeaderNav({
@@ -57,6 +60,7 @@ export function HeaderNav({
   onOpenNewJobCardModal,
   onSwitchToCustomerPortal,
   onOpenScanner,
+  onSelectJobCard,
 }: HeaderNavProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
@@ -209,6 +213,9 @@ export function HeaderNav({
               <Sparkles className="w-3.5 h-3.5" />
               <span>+ Create Card</span>
             </button>
+
+            {/* Live Toast & Pipeline Notifications Drawer */}
+            <NotificationDrawer onSelectJobCard={onSelectJobCard} />
 
             {/* Settings Dropdown */}
             <div className="relative">

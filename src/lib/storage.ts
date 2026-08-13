@@ -1,6 +1,18 @@
 import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { getSupabaseClient } from './supabaseClient';
+import { ToastNotification, formatJobCardStatus } from '../types/toast';
+
+export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>) {
+  if (typeof window === 'undefined') return;
+  const fullNotification: ToastNotification = {
+    ...notification,
+    id: `toast-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    read: false,
+  };
+  window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: fullNotification }));
+}
 
 export const INITIAL_CITIES: City[] = [
   { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2026-01-01' },
@@ -148,6 +160,16 @@ export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCa
   };
   cards.unshift(fullCard);
   saveJobCards(cards);
+
+  dispatchToastNotification({
+    type: 'JOB_CARD_CREATED',
+    title: `📋 New Job Card Created: ${fullCard.id}`,
+    message: `${fullCard.vehicle.registrationNumber} (${fullCard.vehicle.make} ${fullCard.vehicle.model}) registered for ${fullCard.customer.name}.`,
+    vehicleReg: fullCard.vehicle.registrationNumber,
+    jobCardId: fullCard.id,
+    customerName: fullCard.customer.name,
+  });
+
   return fullCard;
 }
 
@@ -155,7 +177,54 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
   const cards = getJobCards();
   const index = cards.findIndex(c => c.id === id);
   if (index !== -1) {
-    cards[index] = updater(cards[index]);
+    const oldCard = cards[index];
+    const newCard = updater(oldCard);
+    cards[index] = newCard;
+
+    // 1. Detect vehicle pipeline status changes
+    if (oldCard.status !== newCard.status) {
+      const oldLabel = formatJobCardStatus(oldCard.status);
+      const newLabel = formatJobCardStatus(newCard.status);
+      dispatchToastNotification({
+        type: 'STATUS_CHANGE',
+        title: `🚘 Pipeline Status Updated: ${newCard.vehicle.registrationNumber}`,
+        message: `${newCard.vehicle.make} ${newCard.vehicle.model} (${newCard.id}) moved from "${oldLabel}" ➔ "${newLabel}".`,
+        vehicleReg: newCard.vehicle.registrationNumber,
+        jobCardId: newCard.id,
+        customerName: newCard.customer.name,
+        oldStatus: oldCard.status,
+        newStatus: newCard.status,
+      });
+    }
+
+    // 2. Detect customer estimate approval/decline changes on tasks
+    oldCard.tasks.forEach(oldTask => {
+      const newTask = newCard.tasks.find(t => t.id === oldTask.id);
+      if (newTask && oldTask.isCustomerApproved !== newTask.isCustomerApproved) {
+        if (newTask.isCustomerApproved === true) {
+          dispatchToastNotification({
+            type: 'ESTIMATE_APPROVED',
+            title: `✅ Customer Estimate Approved!`,
+            message: `${newCard.customer.name} approved "${newTask.title}" (₹${(newTask.customerPrice || 0).toLocaleString('en-IN')}) for ${newCard.vehicle.registrationNumber}.`,
+            vehicleReg: newCard.vehicle.registrationNumber,
+            jobCardId: newCard.id,
+            customerName: newCard.customer.name,
+            amount: newTask.customerPrice || 0,
+          });
+        } else if (newTask.isCustomerApproved === false) {
+          dispatchToastNotification({
+            type: 'ESTIMATE_DECLINED',
+            title: `❌ Customer Declined Estimate Item`,
+            message: `${newCard.customer.name} declined "${newTask.title}" for ${newCard.vehicle.registrationNumber}${newTask.rejectionReason ? ` (${newTask.rejectionReason})` : ''}.`,
+            vehicleReg: newCard.vehicle.registrationNumber,
+            jobCardId: newCard.id,
+            customerName: newCard.customer.name,
+            amount: newTask.customerPrice || 0,
+          });
+        }
+      }
+    });
+
     saveJobCards(cards);
   }
 }

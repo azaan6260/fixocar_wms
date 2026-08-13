@@ -37,6 +37,7 @@ import { OutsourcedJobsView } from './components/OutsourcedJobsView';
 import { PartOrderBasketView } from './components/PartOrderBasketView';
 import { InvoiceManagementView } from './components/InvoiceManagementView';
 import { AccountingAndExpensesView } from './components/AccountingAndExpensesView';
+import { ToastContainer } from './components/ToastContainer';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
@@ -221,6 +222,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
       
+      {/* Global Toast Alert Notifications Container */}
+      <ToastContainer onSelectJobCard={(id) => setSelectedJobCardId(id)} />
+
       {/* Top Header Navigation */}
       <HeaderNav
         currentRole={currentRole}
@@ -230,6 +234,7 @@ export default function App() {
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
         onOpenScanner={() => setIsScannerOpen(true)}
+        onSelectJobCard={(id) => setSelectedJobCardId(id)}
       />
 
       {/* Main Viewport Content */}
