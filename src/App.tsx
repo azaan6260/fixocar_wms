@@ -277,9 +277,10 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'job-cards' && (
+        {(activeTab === 'job-cards' || activeTab === 'job-cards-history') && (
           <JobCardList
             jobCards={jobCards}
+            initialSection={activeTab === 'job-cards-history' ? 'HISTORY' : 'ACTIVE'}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}

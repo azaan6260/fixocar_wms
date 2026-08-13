@@ -642,6 +642,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'daily-huddle',
       'workshops',
       'job-cards',
+      'job-cards-history',
       'status-pipeline',
       'part-basket',
       'standard-jobs',
@@ -656,6 +657,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
     return [
       'role-workspace',
       'job-cards',
+      'job-cards-history',
       'status-pipeline',
       'daily-huddle',
       'standard-jobs',

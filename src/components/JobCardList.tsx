@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { JobCard, JobCardStatus } from '../types';
 import { 
   Search, 
@@ -18,7 +18,11 @@ import {
   Building2,
   QrCode,
   Flame,
-  PackageCheck
+  PackageCheck,
+  History,
+  Clock,
+  Archive,
+  Check
 } from 'lucide-react';
 import { PartRequisitionModal } from './PartRequisitionModal';
 
@@ -29,6 +33,7 @@ interface JobCardListProps {
   onOpenCustomerApprovalPortal: (cardId: string) => void;
   onOpenQCModal: (cardId: string) => void;
   onOpenQRModal?: (cardId: string) => void;
+  initialSection?: 'ACTIVE' | 'HISTORY';
 }
 
 const STATUS_BADGES: Record<JobCardStatus, { label: string; bg: string; text: string; border: string }> = {
@@ -51,29 +56,48 @@ export function JobCardList({
   onOpenCustomerApprovalPortal,
   onOpenQCModal,
   onOpenQRModal,
+  initialSection = 'ACTIVE'
 }: JobCardListProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'APPROVAL' | 'QC' | 'DELIVERY' | 'CARS24'>('ALL');
+  const [mainSection, setMainSection] = useState<'ACTIVE' | 'HISTORY'>(initialSection);
+  const [activeSubFilter, setActiveSubFilter] = useState<string>('ALL');
   const [requisitionModalCard, setRequisitionModalCard] = useState<JobCard | null>(null);
 
-  const filteredCards = jobCards.filter((card) => {
-    const matchesSearch = 
-      card.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.vehicle.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.vehicle.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      card.customer.phone.includes(searchTerm) ||
-      (card.cityName && card.cityName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (card.workshopName && card.workshopName.toLowerCase().includes(searchTerm.toLowerCase()));
+  useEffect(() => {
+    if (initialSection) {
+      setMainSection(initialSection);
+    }
+  }, [initialSection]);
+
+  const activeCards = jobCards.filter((c) => c.status !== 'DELIVERED' && c.status !== 'CLOSED');
+  const historyCards = jobCards.filter((c) => c.status === 'DELIVERED' || c.status === 'CLOSED');
+
+  const filteredCards = (mainSection === 'ACTIVE' ? activeCards : historyCards).filter((card) => {
+    const searchLower = searchTerm.toLowerCase().trim();
+    const matchesSearch = !searchLower || (
+      card.id.toLowerCase().includes(searchLower) ||
+      card.vehicle.registrationNumber.toLowerCase().includes(searchLower) ||
+      card.vehicle.make.toLowerCase().includes(searchLower) ||
+      card.vehicle.model.toLowerCase().includes(searchLower) ||
+      card.customer.name.toLowerCase().includes(searchLower) ||
+      card.customer.phone.includes(searchLower) ||
+      (card.cityName && card.cityName.toLowerCase().includes(searchLower)) ||
+      (card.workshopName && card.workshopName.toLowerCase().includes(searchLower))
+    );
 
     if (!matchesSearch) return false;
 
-    if (activeFilter === 'ACTIVE') return card.status !== 'DELIVERED' && card.status !== 'CLOSED';
-    if (activeFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
-    if (activeFilter === 'QC') return card.status === 'QC_PENDING';
-    if (activeFilter === 'DELIVERY') return card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY';
-    if (activeFilter === 'CARS24') return card.isCars24;
+    if (mainSection === 'ACTIVE') {
+      if (activeSubFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
+      if (activeSubFilter === 'QC') return card.status === 'QC_PENDING';
+      if (activeSubFilter === 'DELIVERY') return card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY';
+      if (activeSubFilter === 'CARS24') return card.isCars24;
+      if (activeSubFilter === 'URGENT') return card.isUrgent;
+    } else {
+      if (activeSubFilter === 'DELIVERED') return card.status === 'DELIVERED';
+      if (activeSubFilter === 'CLOSED') return card.status === 'CLOSED';
+      if (activeSubFilter === 'CARS24') return card.isCars24;
+    }
 
     return true;
   });
@@ -81,34 +105,81 @@ export function JobCardList({
   return (
     <div className="space-y-4 sm:space-y-6">
       
-      {/* Search & Filter Header */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-xs space-y-3 sm:space-y-4">
+      {/* Primary Section Switcher Header */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-xs space-y-4">
         
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">
-              Automotive Job Cards
+              Automotive Job Cards Directory
             </span>
-            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
-              <FileText className="w-5 h-5 text-blue-600 shrink-0" />
-              Workshop Job Cards Directory
+            <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-0.5">
+              {mainSection === 'ACTIVE' ? (
+                <>
+                  <Car className="w-6 h-6 text-blue-600 shrink-0" />
+                  Active Workshop Job Cards ({activeCards.length})
+                </>
+              ) : (
+                <>
+                  <History className="w-6 h-6 text-emerald-600 shrink-0" />
+                  History of Job Cards (Delivered & Closed) ({historyCards.length})
+                </>
+              )}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
-              Manage work orders, team task allotments, customer approvals, floor inspection checklists and deliveries.
+              {mainSection === 'ACTIVE'
+                ? 'Vehicles currently undergoing inspection, diagnosis, repair, QC, or awaiting customer approval and handover.'
+                : 'Completed & delivered vehicle job card archives with historical work orders, final billing, and check-out logs.'}
             </p>
           </div>
 
           <button
+            type="button"
             onClick={onOpenNewJobCardModal}
-            className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl sm:rounded-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0"
+            className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>+ New Job Card</span>
+            <span>+ Create Job Card</span>
+          </button>
+        </div>
+
+        {/* Section Tabs: Active Job Cards vs History of Job Cards */}
+        <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => {
+              setMainSection('ACTIVE');
+              setActiveSubFilter('ALL');
+            }}
+            className={`flex-1 min-h-[42px] px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
+              mainSection === 'ACTIVE'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+            }`}
+          >
+            <Car className="w-4 h-4" />
+            <span>Active Job Cards ({activeCards.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMainSection('HISTORY');
+              setActiveSubFilter('ALL');
+            }}
+            className={`flex-1 min-h-[42px] px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
+              mainSection === 'HISTORY'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>📜 History of Job Cards ({historyCards.length})</span>
           </button>
         </div>
 
         {/* Filter Controls & Search Input */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1 border-t border-slate-100 dark:border-slate-800">
           
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
@@ -117,32 +188,55 @@ export function JobCardList({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search Reg No, Customer, Make, Model..."
-              className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl sm:rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
           </div>
 
-          {/* Touch-optimized horizontal scrolling filter pills */}
-          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none -mx-1 px-1">
-            {[
-              { id: 'ALL', label: `All (${jobCards.length})` },
-              { id: 'ACTIVE', label: `Active (${jobCards.filter(c => c.status !== 'DELIVERED' && c.status !== 'CLOSED').length})` },
-              { id: 'CARS24', label: `Cars24 (${jobCards.filter(c => c.isCars24).length})` },
-              { id: 'APPROVAL', label: `Needs Approval (${jobCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
-              { id: 'QC', label: `QC Audit (${jobCards.filter(c => c.status === 'QC_PENDING').length})` },
-              { id: 'DELIVERY', label: `Ready/Delivery (${jobCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setActiveFilter(f.id as any)}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
-                  activeFilter === f.id
-                    ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          {/* Sub-Filter Pills */}
+          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {mainSection === 'ACTIVE' ? (
+              [
+                { id: 'ALL', label: `All Active (${activeCards.length})` },
+                { id: 'APPROVAL', label: `Needs Approval (${activeCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
+                { id: 'QC', label: `QC Audit (${activeCards.filter(c => c.status === 'QC_PENDING').length})` },
+                { id: 'DELIVERY', label: `Ready/Delivery (${activeCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
+                { id: 'CARS24', label: `Cars24 (${activeCards.filter(c => c.isCars24).length})` },
+                { id: 'URGENT', label: `Urgent (${activeCards.filter(c => c.isUrgent).length})` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setActiveSubFilter(f.id)}
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
+                    activeSubFilter === f.id
+                      ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))
+            ) : (
+              [
+                { id: 'ALL', label: `All History (${historyCards.length})` },
+                { id: 'DELIVERED', label: `Delivered (${historyCards.filter(c => c.status === 'DELIVERED').length})` },
+                { id: 'CLOSED', label: `Closed (${historyCards.filter(c => c.status === 'CLOSED').length})` },
+                { id: 'CARS24', label: `Cars24 (${historyCards.filter(c => c.isCars24).length})` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setActiveSubFilter(f.id)}
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
+                    activeSubFilter === f.id
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))
+            )}
           </div>
 
         </div>
@@ -153,8 +247,14 @@ export function JobCardList({
       {filteredCards.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
           <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
-          <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">No Job Cards Found</h3>
-          <p className="text-xs mt-1">Try adjusting your search query or filter selection above.</p>
+          <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
+            No {mainSection === 'ACTIVE' ? 'Active' : 'History'} Job Cards Found
+          </h3>
+          <p className="text-xs mt-1">
+            {mainSection === 'ACTIVE'
+              ? 'All delivered vehicles have been moved to the History of Job Cards section.'
+              : 'Delivered and closed vehicle job cards will automatically appear here.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
@@ -165,6 +265,7 @@ export function JobCardList({
             const needsApproval = card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
             const totalBill = card.tasks.reduce((acc, t) => acc + (t.customerPrice || 0), 0);
             const hasSublet = card.tasks.some(t => t.category === 'SUBLET_VENDOR' || t.category === 'WASHING');
+            const isDeliveredOrClosed = card.status === 'DELIVERED' || card.status === 'CLOSED';
 
             return (
               <div
@@ -200,7 +301,11 @@ export function JobCardList({
 
                   {/* Vehicle Information Row */}
                   <div className="flex items-start gap-3">
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold border border-blue-100 dark:border-blue-900/40">
+                    <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 font-bold border ${
+                      isDeliveredOrClosed 
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40' 
+                        : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40'
+                    }`}>
                       <Car className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -237,18 +342,33 @@ export function JobCardList({
                   {/* Tasks Progress Bar */}
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">Repair Progress</span>
+                      <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                        {isDeliveredOrClosed ? 'Work Order Completed' : 'Repair Progress'}
+                      </span>
                       <span className="font-extrabold text-blue-600 dark:text-blue-400 font-mono text-[11px]">
                         {completedCount}/{card.tasks.length} Done ({progress}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        className={`${isDeliveredOrClosed ? 'bg-emerald-500' : 'bg-blue-600'} h-2 rounded-full transition-all duration-300`}
                         style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
+
+                  {/* Checked out timestamp for history */}
+                  {isDeliveredOrClosed && card.checkedOutAt && (
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between font-medium">
+                      <span className="flex items-center gap-1 font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        Delivered
+                      </span>
+                      <span className="font-mono text-[10px]">
+                        {new Date(card.checkedOutAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Badges / Sublet alert */}
                   <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
@@ -258,43 +378,39 @@ export function JobCardList({
                         Sublet Vendor Work
                       </span>
                     )}
-                    {needsApproval && (
+                    {!isDeliveredOrClosed && needsApproval && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse">
                         <AlertCircle className="w-3 h-3" />
                         Customer Approval Needed
                       </span>
                     )}
-                    {card.status === 'QC_PENDING' && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                        <ShieldCheck className="w-3 h-3" />
-                        QC Audit Ready
-                      </span>
-                    )}
                   </div>
 
                 </div>
 
-                {/* Mobile Quick Action Bar for Parts / Requisitions */}
-                <div className="px-3.5 sm:px-4 py-2.5 bg-amber-500/10 dark:bg-amber-500/5 border-t border-b border-amber-500/20 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-[11px] text-amber-900 dark:text-amber-300 font-bold">
-                    <PackageCheck className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span>Parts Requisition</span>
-                  </div>
+                {/* Mobile Quick Action Bar for Parts / Requisitions (only for active cards) */}
+                {!isDeliveredOrClosed && (
+                  <div className="px-3.5 sm:px-4 py-2 bg-amber-500/10 dark:bg-amber-500/5 border-t border-b border-amber-500/20 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] text-amber-900 dark:text-amber-300 font-bold">
+                      <PackageCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>Parts Requisition</span>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setRequisitionModalCard(card)}
-                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>+ Requisition / Parts</span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setRequisitionModalCard(card)}
+                      className="min-h-[36px] px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-xs transition-transform active:scale-95 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>+ Requisition</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Card Footer Actions */}
                 <div className="p-3 sm:p-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest font-bold">Est. Bill</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest font-bold">Final Bill</p>
                     <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 font-mono">
                       ₹{totalBill.toLocaleString('en-IN')}
                     </p>
@@ -312,32 +428,12 @@ export function JobCardList({
                       </button>
                     )}
 
-                    {needsApproval && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenCustomerApprovalPortal(card.id)}
-                        className="min-h-[38px] px-3 py-1.5 rounded-full bg-amber-500 text-slate-950 text-xs font-extrabold hover:bg-amber-400 transition-colors active:scale-95"
-                      >
-                        Approval
-                      </button>
-                    )}
-
-                    {card.status === 'QC_PENDING' && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenQCModal(card.id)}
-                        className="min-h-[38px] px-3 py-1.5 rounded-full bg-purple-600 text-white text-xs font-extrabold hover:bg-purple-500 transition-colors active:scale-95"
-                      >
-                        QC Audit
-                      </button>
-                    )}
-
                     <button
                       type="button"
                       onClick={() => onSelectJobCard(card.id)}
                       className="min-h-[38px] px-3.5 py-1.5 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-1 shadow-xs active:scale-95"
                     >
-                      <span>Manage</span>
+                      <span>{isDeliveredOrClosed ? 'View History' : 'Manage'}</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -361,3 +457,4 @@ export function JobCardList({
     </div>
   );
 }
+
