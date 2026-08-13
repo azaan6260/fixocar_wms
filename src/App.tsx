@@ -13,6 +13,7 @@ import { syncFromSupabase } from './lib/syncService';
 import { HeaderNav } from './components/HeaderNav';
 import { DashboardOverview } from './components/DashboardOverview';
 import { JobCardList } from './components/JobCardList';
+import { VehicleStatusPipelineView } from './components/VehicleStatusPipelineView';
 import { JobCardDetailView } from './components/JobCardDetailView';
 import { CreateJobCardModal } from './components/CreateJobCardModal';
 import { CustomerPortal } from './components/CustomerPortal';
@@ -284,6 +285,17 @@ export default function App() {
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
             onOpenQRModal={(id) => setQrModalCardId(id)}
+          />
+        )}
+
+        {activeTab === 'status-pipeline' && (
+          <VehicleStatusPipelineView
+            jobCards={jobCards}
+            currentRole={currentRole}
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
+            onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
+            onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
+            onOpenQCModal={(id) => setQcModalCardId(id)}
           />
         )}
 
