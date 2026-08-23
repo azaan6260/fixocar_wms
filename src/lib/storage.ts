@@ -63,12 +63,17 @@ function notifyStoreChange() {
 // 1. JOB CARDS STORAGE
 export function getJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
-  if (local === null) {
+  if (!local) {
     localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(INITIAL_JOB_CARDS));
     return INITIAL_JOB_CARDS;
   }
   try {
-    return JSON.parse(local);
+    const parsed = JSON.parse(local);
+    if (Array.isArray(parsed) && parsed.length === 0 && INITIAL_JOB_CARDS.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(INITIAL_JOB_CARDS));
+      return INITIAL_JOB_CARDS;
+    }
+    return parsed;
   } catch {
     return INITIAL_JOB_CARDS;
   }
@@ -2151,7 +2156,12 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
     return INITIAL_VEHICLE_CHECKINS;
   }
   try {
-    return JSON.parse(local);
+    const parsed = JSON.parse(local);
+    if (Array.isArray(parsed) && parsed.length === 0 && INITIAL_VEHICLE_CHECKINS.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(INITIAL_VEHICLE_CHECKINS));
+      return INITIAL_VEHICLE_CHECKINS;
+    }
+    return parsed;
   } catch {
     return INITIAL_VEHICLE_CHECKINS;
   }

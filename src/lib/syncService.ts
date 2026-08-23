@@ -5,9 +5,10 @@ import {
   getCities, saveCities,
   getWorkshops, saveWorkshops,
   getJobCards, saveJobCards,
+  getVehicleCheckIns, saveVehicleCheckIns,
   dispatchToastNotification
 } from './storage';
-import { JobCard, JobTask } from '../types';
+import { JobCard, JobTask, VehicleCheckIn } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -144,68 +145,140 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (jcErr.code === '42P01') missingTables.push('job_cards');
       errors.push(`Job cards table error: ${jcErr.message}`);
     } else if (jobCards !== null) {
-      const localCards = jobCards.map((c: any): JobCard => {
-        const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
-          id: t.id,
-          jobCardId: t.job_card_id,
-          title: t.title || t.description || 'Task', 
-          category: t.category || 'REPAIR',
-          assignedToId: t.assigned_to_id || t.assigned_to,
-          assignedToName: t.assigned_to_name,
-          assignedType: t.assigned_type || 'EMPLOYEE',
-          estimatedCost: t.estimated_cost || 0,
-          customerPrice: t.customer_price || t.estimated_cost || 0,
-          status: t.status || 'PENDING',
-          requiresCustomerApproval: t.requires_customer_approval || false,
-          isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
-          rejectionReason: t.rejection_reason,
-          notes: t.notes || t.description,
-          completedAt: t.completed_at,
-          isAdditionalWork: t.is_additional_work,
-          additionalWorkRequestedBy: t.additional_work_requested_by,
-          additionalWorkRequestedAt: t.additional_work_requested_at,
-          approvalStatus: t.approval_status
+      if (jobCards.length > 0) {
+        const localCards = jobCards.map((c: any): JobCard => {
+          const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
+            id: t.id,
+            jobCardId: t.job_card_id,
+            title: t.title || t.description || 'Task', 
+            category: t.category || 'REPAIR',
+            assignedToId: t.assigned_to_id || t.assigned_to,
+            assignedToName: t.assigned_to_name,
+            assignedType: t.assigned_type || 'EMPLOYEE',
+            estimatedCost: t.estimated_cost || 0,
+            customerPrice: t.customer_price || t.estimated_cost || 0,
+            status: t.status || 'PENDING',
+            requiresCustomerApproval: t.requires_customer_approval || false,
+            isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
+            rejectionReason: t.rejection_reason,
+            notes: t.notes || t.description,
+            completedAt: t.completed_at,
+            isAdditionalWork: t.is_additional_work,
+            additionalWorkRequestedBy: t.additional_work_requested_by,
+            additionalWorkRequestedAt: t.additional_work_requested_at,
+            approvalStatus: t.approval_status
+          }));
+
+          return {
+            id: c.id,
+            vehicle: {
+              registrationNumber: c.registration_number,
+              make: c.vehicle_make,
+              model: c.vehicle_model,
+              year: c.vehicle_year,
+              color: c.vehicle_color,
+              vin: c.vehicle_vin,
+              fuelLevel: c.fuel_level,
+              mileage: c.mileage
+            },
+            customer: {
+              id: c.customer_id || `cust-${c.id}`,
+              name: c.customer_name,
+              phone: c.customer_phone,
+              email: c.customer_email,
+              address: c.customer_address
+            },
+            status: c.status,
+            serviceType: c.service_type,
+            packageName: c.package_name,
+            floorManagerId: c.floor_manager_id,
+            pickupRequested: c.pickup_requested,
+            deliveryRequested: c.delivery_requested,
+            discount: c.discount,
+            taxRate: c.tax_rate,
+            advancePaid: c.advance_paid,
+            qcPassed: c.qc_passed,
+            qcNotes: c.qc_notes,
+            tasks,
+            createdAt: c.created_at,
+            estimatedCompletionDate: c.estimated_completion_date,
+            qcChecklist: []
+          };
+        });
+
+        saveJobCards(localCards, true);
+        jobCardsSynced = localCards.length;
+      } else {
+        // Supabase job_cards table is empty. Push local job cards to seed database
+        const localCurrent = getJobCards();
+        if (localCurrent.length > 0) {
+          saveJobCards(localCurrent, false); // triggers push to Supabase
+          jobCardsSynced = localCurrent.length;
+        }
+      }
+    }
+
+    // 6. VEHICLE CHECK-INS (GATE PASS)
+    const { data: vehicleCheckIns, error: vciErr } = await client.from('vehicle_check_ins').select('*');
+    if (vciErr) {
+      if (vciErr.code === '42P01') missingTables.push('vehicle_check_ins');
+    } else if (vehicleCheckIns !== null) {
+      if (vehicleCheckIns.length > 0) {
+        const localCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => ({
+          id: v.id,
+          registrationNumber: v.registration_number,
+          make: v.make || 'Vehicle',
+          model: v.model || '',
+          variant: v.variant,
+          fuelType: v.fuel_type || 'Petrol',
+          color: v.color || 'White',
+          fuelLevel: v.fuel_level || 50,
+          mileage: v.mileage || 10000,
+          isCars24: v.is_cars24 ?? false,
+          cars24RefNo: v.cars24_ref_no,
+          customerName: v.customer_name || 'Customer',
+          customerPhone: v.customer_phone || '',
+          checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
+          checkedInByName: v.check_in_driver_name || 'Security',
+          checkInDriverName: v.check_in_driver_name || 'Driver',
+          checkInDriverPhone: v.check_in_driver_phone || '',
+          checkInPhotoWithDriverUrl: v.driver_photo_url,
+          checkInNotes: v.check_in_notes,
+          status: v.status || 'CHECKED_IN',
+          jobCardId: v.job_card_id,
+          checkedOutAt: v.check_out_time,
+          checkOutDriverName: v.check_out_driver_name,
+          checkOutDriverPhone: v.check_out_driver_phone,
+          checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url
         }));
-
-        return {
-          id: c.id,
-          vehicle: {
-            registrationNumber: c.registration_number,
-            make: c.vehicle_make,
-            model: c.vehicle_model,
-            year: c.vehicle_year,
-            color: c.vehicle_color,
-            vin: c.vehicle_vin,
-            fuelLevel: c.fuel_level,
-            mileage: c.mileage
-          },
-          customer: {
-            id: c.customer_id || `cust-${c.id}`,
-            name: c.customer_name,
-            phone: c.customer_phone,
-            email: c.customer_email,
-            address: c.customer_address
-          },
-          status: c.status,
-          serviceType: c.service_type,
-          packageName: c.package_name,
-          floorManagerId: c.floor_manager_id,
-          pickupRequested: c.pickup_requested,
-          deliveryRequested: c.delivery_requested,
-          discount: c.discount,
-          taxRate: c.tax_rate,
-          advancePaid: c.advance_paid,
-          qcPassed: c.qc_passed,
-          qcNotes: c.qc_notes,
-          tasks,
-          createdAt: c.created_at,
-          estimatedCompletionDate: c.estimated_completion_date,
-          qcChecklist: []
-        };
-      });
-
-      saveJobCards(localCards, true);
-      jobCardsSynced = localCards.length;
+        saveVehicleCheckIns(localCheckIns);
+      } else {
+        // Supabase table empty -> push local check-ins to Supabase
+        const currentCheckIns = getVehicleCheckIns();
+        for (const ci of currentCheckIns) {
+          await client.from('vehicle_check_ins').upsert({
+            id: ci.id,
+            registration_number: ci.registrationNumber,
+            make: ci.make,
+            model: ci.model,
+            variant: ci.variant,
+            fuel_type: ci.fuelType,
+            color: ci.color,
+            fuel_level: ci.fuelLevel,
+            mileage: ci.mileage,
+            is_cars24: ci.isCars24,
+            cars24_ref_no: ci.cars24RefNo,
+            customer_name: ci.customerName,
+            customer_phone: ci.customerPhone,
+            check_in_driver_name: ci.checkInDriverName,
+            check_in_driver_phone: ci.checkInDriverPhone,
+            driver_photo_url: ci.checkInPhotoWithDriverUrl,
+            check_in_notes: ci.checkInNotes,
+            status: ci.status,
+            job_card_id: ci.jobCardId
+          });
+        }
+      }
     }
 
     if (missingTables.length > 0) {
@@ -382,11 +455,40 @@ export async function pushLocalDataToSupabase(): Promise<{
     else jcPushed++;
   }
 
+  // Push Vehicle Check-Ins (Gate Pass)
+  const checkIns = getVehicleCheckIns();
+  let vciPushed = 0;
+  for (const ci of checkIns) {
+    const { error } = await client.from('vehicle_check_ins').upsert({
+      id: ci.id,
+      registration_number: ci.registrationNumber,
+      make: ci.make,
+      model: ci.model,
+      variant: ci.variant,
+      fuel_type: ci.fuelType,
+      color: ci.color,
+      fuel_level: ci.fuelLevel,
+      mileage: ci.mileage,
+      is_cars24: ci.isCars24,
+      cars24_ref_no: ci.cars24RefNo,
+      customer_name: ci.customerName,
+      customer_phone: ci.customerPhone,
+      check_in_driver_name: ci.checkInDriverName,
+      check_in_driver_phone: ci.checkInDriverPhone,
+      driver_photo_url: ci.checkInPhotoWithDriverUrl,
+      check_in_notes: ci.checkInNotes,
+      status: ci.status,
+      job_card_id: ci.jobCardId
+    });
+    if (error) errors.push(`Vehicle Check-ins table error (${ci.id}): ${error.message}`);
+    else vciPushed++;
+  }
+
   const isSuccess = errors.length === 0;
   return {
     success: isSuccess,
     message: isSuccess
-      ? `Successfully pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees, ${vPushed} vendors, ${jcPushed} job cards to Supabase database!`
+      ? `Successfully pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees, ${vPushed} vendors, ${jcPushed} job cards, ${vciPushed} gate pass check-ins to Supabase database!`
       : `Pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees (${errors.length} failed). Please check if tables exist.`,
     details: { cities: cPushed, workshops: wPushed, employees: ePushed, vendors: vPushed, jobCards: jcPushed },
     errors
