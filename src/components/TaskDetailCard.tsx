@@ -11,7 +11,8 @@ import {
   getInventoryItems,
   consumeInventoryItemForTask,
   updateJobCardTask,
-  deleteJobCardTask
+  deleteJobCardTask,
+  reassignAllPaintTasksForJobCard
 } from '../lib/storage';
 import { 
   User, 
@@ -107,6 +108,7 @@ export function TaskDetailCard({
   const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout || 0);
   const [editAssignedId, setEditAssignedId] = useState(task.assignedToId || '');
   const [editPairedDenterId, setEditPairedDenterId] = useState(task.pairedDenterId || '');
+  const [applyToAllPaintPanels, setApplyToAllPaintPanels] = useState(true);
 
   // Handlers
   const handleSaveTaskEdits = (e: React.FormEvent) => {
@@ -135,6 +137,17 @@ export function TaskDetailCard({
       pairedDenterId: editPairedDenterId || undefined,
       pairedDenterName: matchedDenter ? matchedDenter.name : undefined
     });
+
+    // If editing a paint task and user opted to apply to all paint panels on this vehicle together
+    if (editCategory === 'PAINT' && applyToAllPaintPanels) {
+      reassignAllPaintTasksForJobCard(
+        card.id,
+        editAssignedId || undefined,
+        matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : undefined,
+        editPairedDenterId || undefined,
+        matchedDenter ? matchedDenter.name : undefined
+      );
+    }
 
     setIsEditingTask(false);
   };
@@ -570,6 +583,21 @@ export function TaskDetailCard({
               </div>
             )}
           </div>
+
+          {editCategory === 'PAINT' && card.tasks.filter(t => t.category === 'PAINT').length > 1 && (
+            <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id={`apply-all-paint-${task.id}`}
+                checked={applyToAllPaintPanels}
+                onChange={(e) => setApplyToAllPaintPanels(e.target.checked)}
+                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+              />
+              <label htmlFor={`apply-all-paint-${task.id}`} className="text-xs font-bold text-purple-900 dark:text-purple-200 cursor-pointer">
+                Reassign Painter & Denter to ALL {card.tasks.filter(t => t.category === 'PAINT').length} paint panels on {card.vehicle.registrationNumber} together
+              </label>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/20">
             <button

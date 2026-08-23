@@ -3,6 +3,7 @@ import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employe
 import { STANDARD_PACKAGES } from '../lib/mockData';
 import { createJobCard, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
+import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -859,8 +860,33 @@ export function CreateJobCardModal({
               </div>
 
               {/* Itemized Allotted Tasks Table */}
-              <div className="border-t border-slate-200 dark:border-slate-800 pt-5">
-                <div className="flex items-center justify-between mb-3">
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-5 space-y-4">
+                {/* Vehicle Paint Batch Allotment Control */}
+                {tasks.some(t => t.category === 'PAINT') && (
+                  <PaintBatchAllotmentControl
+                    paintTasks={tasks.filter(t => t.category === 'PAINT')}
+                    employees={employees}
+                    vehicleReg={regNo}
+                    isCars24={isCars24}
+                    onApplyBatchAllotment={(pId, pName, dId, dName) => {
+                      setTasks(prev => prev.map(t => {
+                        if (t.category === 'PAINT') {
+                          return {
+                            ...t,
+                            assignedToId: pId !== undefined ? pId : t.assignedToId,
+                            assignedToName: pName !== undefined ? pName : t.assignedToName,
+                            assignedType: 'EMPLOYEE',
+                            pairedDenterId: dId !== undefined ? dId : t.pairedDenterId,
+                            pairedDenterName: dName !== undefined ? dName : t.pairedDenterName,
+                          };
+                        }
+                        return t;
+                      }));
+                    }}
+                  />
+                )}
+
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Alloted Job Card Tasks List ({tasks.length})
                   </h3>
@@ -960,33 +986,97 @@ export function CreateJobCardModal({
                         </div>
 
                         {/* Team Assignment & Customer Price */}
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                          <select
-                            value={task.assignedToId || ''}
-                            onChange={(e) => {
-                              const emp = employees.find(emp => emp.id === e.target.value);
-                              const ven = vendors.find(v => v.id === e.target.value);
-                              setTasks(prev => prev.map((t, i) => i === idx ? {
-                                ...t,
-                                assignedToId: e.target.value || undefined,
-                                assignedToName: emp?.name || ven?.name || undefined,
-                                assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
-                              } : t));
-                            }}
-                            className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
-                          >
-                            <option value="">-- Unassigned (Allot Later) --</option>
-                            <optgroup label="Workshop Staff">
-                              {employees.map(e => (
-                                <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
-                              ))}
-                            </optgroup>
-                            <optgroup label="Sublet Vendors">
-                              {vendors.map(v => (
-                                <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
-                              ))}
-                            </optgroup>
-                          </select>
+                        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                          {task.category === 'PAINT' ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* Painter Select */}
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 uppercase">Painter</span>
+                                <select
+                                  value={task.assignedToId || ''}
+                                  onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    const emp = employees.find(emp => emp.id === selectedId);
+                                    setTasks(prev => prev.map((t) => {
+                                      // If user changed painter on one panel, ask/update all paint panels together if desired
+                                      if (t.category === 'PAINT') {
+                                        return {
+                                          ...t,
+                                          assignedToId: selectedId || undefined,
+                                          assignedToName: emp?.name || undefined,
+                                          assignedType: 'EMPLOYEE'
+                                        };
+                                      }
+                                      return t;
+                                    }));
+                                  }}
+                                  className="px-1.5 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-purple-300 dark:border-purple-800 text-slate-900 dark:text-slate-100 font-medium"
+                                  title="Select Painter for all paint panels on this vehicle"
+                                >
+                                  <option value="">-- Painter --</option>
+                                  {employees.map(e => (
+                                    <option key={e.id} value={e.id}>{e.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Denter Select */}
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-bold text-orange-600 dark:text-orange-400 uppercase">Denter</span>
+                                <select
+                                  value={task.pairedDenterId || ''}
+                                  onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    const emp = employees.find(emp => emp.id === selectedId);
+                                    setTasks(prev => prev.map((t) => {
+                                      if (t.category === 'PAINT') {
+                                        return {
+                                          ...t,
+                                          pairedDenterId: selectedId || undefined,
+                                          pairedDenterName: emp?.name || undefined,
+                                        };
+                                      }
+                                      return t;
+                                    }));
+                                  }}
+                                  className="px-1.5 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-orange-300 dark:border-orange-800 text-slate-900 dark:text-slate-100 font-medium"
+                                  title="Select Denter for all paint panels on this vehicle"
+                                >
+                                  <option value="">-- Denter --</option>
+                                  {employees.map(e => (
+                                    <option key={e.id} value={e.id}>{e.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <select
+                              value={task.assignedToId || ''}
+                              onChange={(e) => {
+                                const emp = employees.find(emp => emp.id === e.target.value);
+                                const ven = vendors.find(v => v.id === e.target.value);
+                                setTasks(prev => prev.map((t, i) => i === idx ? {
+                                  ...t,
+                                  assignedToId: e.target.value || undefined,
+                                  assignedToName: emp?.name || ven?.name || undefined,
+                                  assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                                } : t));
+                              }}
+                              className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
+                            >
+                              <option value="">-- Unassigned (Allot Later) --</option>
+                              <optgroup label="Workshop Staff">
+                                {employees.map(e => (
+                                  <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
+                                ))}
+                              </optgroup>
+                              <optgroup label="Sublet Vendors">
+                                {vendors.map(v => (
+                                  <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                                ))}
+                              </optgroup>
+                            </select>
+                          )}
 
                           <div className="flex items-center gap-1">
                             <span className="text-emerald-600 font-bold text-[10px]">Bill: ₹</span>

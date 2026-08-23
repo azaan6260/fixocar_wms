@@ -8,8 +8,10 @@ import {
   updateVehicleCheckIn, 
   getInventoryConsumptionRecords,
   getStandardJobs,
-  dispatchToastNotification
+  dispatchToastNotification,
+  reassignAllPaintTasksForJobCard
 } from '../lib/storage';
+import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 
 // Re-export mapping helpers for visual panel IDs to Standard Job IDs
@@ -677,6 +679,26 @@ export function JobCardDetailView({
               {/* Manager Tab Contents */}
               {activeManagerTab === 'tasks' && (
                 <div className="space-y-4">
+                  {/* Vehicle Paint & Dent Batch Allotment Protocol */}
+                  {card.tasks.some(t => t.category === 'PAINT') && (
+                    <PaintBatchAllotmentControl
+                      paintTasks={card.tasks.filter(t => t.category === 'PAINT')}
+                      employees={employees}
+                      vehicleReg={card.vehicle.registrationNumber}
+                      isCars24={card.isCars24}
+                      onApplyBatchAllotment={(pId, pName, dId, dName) => {
+                        reassignAllPaintTasksForJobCard(card.id, pId, pName, dId, dName);
+                        dispatchToastNotification({
+                          type: 'STATUS_CHANGE',
+                          title: 'Paint Panels Reassigned',
+                          message: `Reassigned all paint panels on ${card.vehicle.registrationNumber} to ${pName || 'Unassigned Painter'} & ${dName || 'Unassigned Denter'}.`,
+                          vehicleReg: card.vehicle.registrationNumber,
+                          jobCardId: card.id
+                        });
+                      }}
+                    />
+                  )}
+
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-extrabold text-sm text-white">Department Task Allotments</h4>

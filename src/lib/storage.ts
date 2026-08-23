@@ -410,6 +410,42 @@ export function reallotTask(
   }));
 }
 
+// Reassign all paint tasks on a job card to a painter and/or paired denter together
+export function reassignAllPaintTasksForJobCard(
+  jobCardId: string,
+  painterId?: string,
+  painterName?: string,
+  denterId?: string,
+  denterName?: string
+) {
+  const timestampStr = new Date().toLocaleTimeString();
+  updateJobCard(jobCardId, (card) => ({
+    ...card,
+    tasks: card.tasks.map(t => {
+      if (t.category === 'PAINT') {
+        const updated: JobTask = { ...t };
+        let noteMsg = '';
+        if (painterId !== undefined) {
+          updated.assignedToId = painterId || undefined;
+          updated.assignedToName = painterName || undefined;
+          updated.assignedType = 'EMPLOYEE';
+          if (painterName) noteMsg += `Painter set to ${painterName}`;
+        }
+        if (denterId !== undefined) {
+          updated.pairedDenterId = denterId || undefined;
+          updated.pairedDenterName = denterName || undefined;
+          if (denterName) noteMsg += (noteMsg ? ' & ' : '') + `Denter set to ${denterName}`;
+        }
+        if (noteMsg) {
+          updated.notes = (t.notes ? `${t.notes} | ` : '') + `Batch re-allotted: ${noteMsg} on ${timestampStr}`;
+        }
+        return updated;
+      }
+      return t;
+    })
+  }));
+}
+
 // Outsource a task to an external vendor
 export function outsourceTaskToVendor(
   jobCardId: string,
