@@ -1,16 +1,11 @@
-/**
- * Supabase SQL Schema Generator & Exporter
- * User can execute this SQL in Supabase SQL Editor to set up tables & RLS policies
- */
-
-export const SUPABASE_SQL_SCHEMA = `-- AutoCraft / FixoCar Workshop Management System - Complete Production SQL Schema
+-- AutoCraft / FixoCar Workshop Management System - Complete Executable SQL Schema
 -- Run this script in the Supabase SQL Editor (https://app.supabase.com/project/_/sql)
 
--- ==========================================
--- 1. EXTENSIONS & ENUM TYPES
--- ==========================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ==========================================
+-- 1. ENUM TYPES
+-- ==========================================
 DO $$ BEGIN
     CREATE TYPE user_role AS ENUM (
       'SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER', 'SERVICE_ADVISOR', 'MECHANIC', 
@@ -435,7 +430,7 @@ CREATE TABLE IF NOT EXISTS public.salary_records (
 );
 
 -- ==========================================
--- 10. ENABLE ROW LEVEL SECURITY & OPEN PERMISSIVE POLICIES
+-- 10. ENABLE ROW LEVEL SECURITY & POLICIES
 -- ==========================================
 ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workshops ENABLE ROW LEVEL SECURITY;
@@ -454,7 +449,6 @@ ALTER TABLE public.workshop_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.salary_records ENABLE ROW LEVEL SECURITY;
 
--- Clean up any existing policies before recreating
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Public full access on cities" ON public.cities;
   DROP POLICY IF EXISTS "Public full access on workshops" ON public.workshops;
@@ -490,6 +484,3 @@ CREATE POLICY "Public full access on vehicle_check_ins" ON public.vehicle_check_
 CREATE POLICY "Public full access on workshop_expenses" ON public.workshop_expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on attendance_records" ON public.attendance_records FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on salary_records" ON public.salary_records FOR ALL USING (true) WITH CHECK (true);
-`;
-
-

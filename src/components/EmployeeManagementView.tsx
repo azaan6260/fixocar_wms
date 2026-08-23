@@ -6,9 +6,10 @@ import {
   getSalaries, createSalaryRecord, updateSalaryStatus,
   getWorkshops
 } from '../lib/storage';
+import { syncAllEmployeesToSupabase } from '../lib/supabaseClient';
 import { 
   Users, UserPlus, Save, Trash2, Edit2, Key, CheckCircle, 
-  MapPin, Camera, DollarSign, Calendar, Clock, Lock, Building2, AlertTriangle
+  MapPin, Camera, DollarSign, Calendar, Clock, Lock, Building2, AlertTriangle, Database, RefreshCw
 } from 'lucide-react';
 
 interface EmployeeManagementProps {
@@ -20,6 +21,8 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [salaries, setSalaries] = useState<SalaryRecord[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [supabaseSyncNotice, setSupabaseSyncNotice] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'ATTENDANCE' | 'PAYROLL'>('DIRECTORY');
   const [employmentFilter, setEmploymentFilter] = useState<'ALL' | 'PAYROLL' | 'CONTRACT'>('ALL');
@@ -199,36 +202,71 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
               </div>
 
               {canManageEmployees && (
-                <button
-                  onClick={() => {
-                    const defaultWs = workshops[0];
-                    setEditingEmployee({
-                      id: '', 
-                      name: '', 
-                      role: 'MECHANIC', 
-                      phone: '', 
-                      email: '', 
-                      specializedTeam: 'Mechanical', 
-                      status: 'AVAILABLE', 
-                      activeJobsCount: 0,
-                      employmentType: 'PAYROLL',
-                      loginId: '', 
-                      password: '', 
-                      baseSalary: 25000,
-                      workshopId: defaultWs?.id || '',
-                      workshopName: defaultWs?.name || '',
-                      cityId: defaultWs?.cityId || '',
-                      cityName: defaultWs?.cityName || ''
-                    });
-                    setIsNewEmployee(true);
-                  }}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-2 whitespace-nowrap"
-                >
-                  <UserPlus className="w-4 h-4" /> Add Employee
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      setIsSyncingSupabase(true);
+                      setSupabaseSyncNotice(null);
+                      try {
+                        const res = await syncAllEmployeesToSupabase(employees);
+                        setIsSyncingSupabase(false);
+                        setSupabaseSyncNotice(`Synced ${res.synced} / ${res.total} staff to Supabase database & Auth.`);
+                        setTimeout(() => setSupabaseSyncNotice(null), 5000);
+                      } catch (err: any) {
+                        setIsSyncingSupabase(false);
+                        setSupabaseSyncNotice(`Sync warning: ${err.message}`);
+                      }
+                    }}
+                    disabled={isSyncingSupabase}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 whitespace-nowrap cursor-pointer disabled:opacity-50"
+                    title="Push all local staff user records to Supabase Auth and Database"
+                  >
+                    {isSyncingSupabase ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                    ) : (
+                      <Database className="w-3.5 h-3.5 text-blue-400" />
+                    )}
+                    <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Staff to Supabase'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const defaultWs = workshops[0];
+                      setEditingEmployee({
+                        id: '', 
+                        name: '', 
+                        role: 'MECHANIC', 
+                        phone: '', 
+                        email: '', 
+                        specializedTeam: 'Mechanical', 
+                        status: 'AVAILABLE', 
+                        activeJobsCount: 0,
+                        employmentType: 'PAYROLL',
+                        loginId: '', 
+                        password: '', 
+                        baseSalary: 25000,
+                        workshopId: defaultWs?.id || '',
+                        workshopName: defaultWs?.name || '',
+                        cityId: defaultWs?.cityId || '',
+                        cityName: defaultWs?.cityName || ''
+                      });
+                      setIsNewEmployee(true);
+                    }}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <UserPlus className="w-4 h-4" /> Add Employee
+                  </button>
+                </div>
               )}
             </div>
           </div>
+
+          {supabaseSyncNotice && (
+            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+              <span>{supabaseSyncNotice}</span>
+              <button onClick={() => setSupabaseSyncNotice(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {employees

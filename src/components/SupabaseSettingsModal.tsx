@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { getStoredSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig } from '../lib/supabaseClient';
+import { getStoredSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig, syncAllEmployeesToSupabase } from '../lib/supabaseClient';
+import { getEmployees } from '../lib/storage';
 import { SUPABASE_SQL_SCHEMA } from '../lib/supabaseSchema';
 import { 
   Database, 
@@ -9,7 +10,10 @@ import {
   Check, 
   Trash2, 
   ExternalLink,
-  Code2
+  Code2,
+  RefreshCw,
+  Users,
+  AlertCircle
 } from 'lucide-react';
 
 interface SupabaseSettingsModalProps {
@@ -26,12 +30,30 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const [serviceKey, setServiceKey] = useState(config.supabaseServiceKey || '');
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'config' | 'schema'>('config');
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     saveSupabaseConfig(url, anonKey, serviceKey);
     alert('Supabase credentials saved! Connecting to live Supabase database & Auth admin sync.');
     onClose();
+  };
+
+  const handleBulkSync = async () => {
+    saveSupabaseConfig(url, anonKey, serviceKey);
+    setIsSyncingAll(true);
+    setSyncResult(null);
+
+    try {
+      const allStaff = getEmployees();
+      const res = await syncAllEmployeesToSupabase(allStaff);
+      setIsSyncingAll(false);
+      setSyncResult(`Successfully synced ${res.synced} / ${res.total} staff users to Supabase database & Auth!`);
+    } catch (err: any) {
+      setIsSyncingAll(false);
+      setSyncResult(`Sync encountered errors: ${err.message}`);
+    }
   };
 
   const handleClear = () => {
@@ -131,16 +153,53 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) - Optional</span>
-                  <span className="text-[10px] text-emerald-500 font-normal">Enables live Auth admin user creation</span>
+                  <span>Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) - Recommended</span>
+                  <span className="text-[10px] text-emerald-500 font-normal">Enables live Auth Admin API</span>
                 </label>
                 <input
                   type="password"
                   value={serviceKey}
                   onChange={(e) => setServiceKey(e.target.value)}
-                  placeholder="eyJhY2... (Service Role secret key for Auth Admin API)"
+                  placeholder="eyJhY2... (Service Role secret key to populate Auth -> Users panel)"
                   className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                 />
+              </div>
+
+              {/* Step-by-Step Diagnostic & Sync Box */}
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-2 text-[11px]">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>How to see users in your Supabase Dashboard:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-slate-700 dark:text-slate-300">
+                  <li>Switch to the <strong>SQL Migration Schema Script</strong> tab above, copy the SQL code, and run it in your <strong>Supabase SQL Editor</strong> to create the <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">public.employees</code> table.</li>
+                  <li>Provide your <strong>Supabase Service Role Key</strong> above (from Supabase Settings -&gt; API) so users show up in the <strong>Auth -&gt; Users</strong> tab.</li>
+                  <li>Click the button below to push all current staff accounts to Supabase:</li>
+                </ol>
+
+                <div className="pt-2 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBulkSync}
+                    disabled={isSyncingAll}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {isSyncingAll ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Syncing Staff to Supabase...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Sync All Existing Staff to Supabase Now</span>
+                      </>
+                    )}
+                  </button>
+                  {syncResult && (
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">{syncResult}</span>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
