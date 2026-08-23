@@ -37,8 +37,10 @@ import {
   Settings,
   Car,
   LogOut,
-  Home
+  Home,
+  Fingerprint
 } from 'lucide-react';
+import { getSavedBiometricBinding, registerBiometricForUser } from '../lib/biometricAuth';
 
 import { NotificationDrawer } from './NotificationDrawer';
 
@@ -352,6 +354,24 @@ export function HeaderNav({
                 </div>
               )}
             </div>
+
+            {/* Biometric Pairing Shortcut for Staff */}
+            {authUser && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (authUser) {
+                    const res = await registerBiometricForUser(authUser);
+                    alert(res.message);
+                  }
+                }}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold transition-all cursor-pointer"
+                title="Register or test mobile Fingerprint / Face ID for this device"
+              >
+                <Fingerprint className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="hidden lg:inline">Link Biometrics</span>
+              </button>
+            )}
 
             {/* Home Portal Shortcut */}
             {onGoHome && (

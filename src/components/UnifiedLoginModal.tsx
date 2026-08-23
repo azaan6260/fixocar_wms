@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2
+  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2
 } from 'lucide-react';
 import { AuthUser } from '../types';
 import { authenticateUser, saveAuthUser, INITIAL_CITIES } from '../lib/storage';
 import { authenticateViaSupabase } from '../lib/supabaseClient';
+import { 
+  getSavedBiometricBinding, 
+  authenticateWithBiometrics, 
+  registerBiometricForUser, 
+  checkBiometricSupport,
+  BiometricBinding 
+} from '../lib/biometricAuth';
 
 interface UnifiedLoginModalProps {
   isOpen: boolean;
@@ -30,6 +37,9 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
   const [selectedCity, setSelectedCity] = useState('Mumbai');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBiometricScanning, setIsBiometricScanning] = useState(false);
+  const [savedBinding, setSavedBinding] = useState<BiometricBinding | null>(null);
+  const [biometricNotice, setBiometricNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (forcedMode) {
@@ -40,11 +50,34 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
       setActiveTab(initialTab);
     }
     setError(null);
+    setBiometricNotice(null);
     setIdentifier('');
     setPassword('');
+    setSavedBinding(getSavedBiometricBinding());
   }, [isOpen, initialTab, defaultTab, forcedMode]);
 
   if (!isOpen) return null;
+
+  const handleBiometricLogin = async () => {
+    setIsBiometricScanning(true);
+    setError(null);
+    setBiometricNotice(null);
+
+    try {
+      const res = await authenticateWithBiometrics();
+      setIsBiometricScanning(false);
+
+      if (res.success && res.user) {
+        onLoginSuccess(res.user);
+        onClose();
+      } else {
+        setError(res.error || 'Biometric scan failed. Please verify with your password.');
+      }
+    } catch (err: any) {
+      setIsBiometricScanning(false);
+      setError('Biometric authentication failed. Please enter your work password.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +121,10 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
     setIsLoading(false);
     if (result.success && result.user) {
+      // Register biometric binding automatically if staff user logged in on mobile/tablet
+      if (activeTab === 'STAFF') {
+        registerBiometricForUser(result.user).catch(() => {});
+      }
       onLoginSuccess(result.user);
       onClose();
     } else {
@@ -172,6 +209,79 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             {activeTab === 'STAFF' ? (
               <>
+                {/* Biometric Quick Login Banner / Button */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/80 to-blue-950/80 border border-blue-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-300">
+                      <Fingerprint className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span>Biometric Mobile Quick Sign-In</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                      Touch ID / Face ID
+                    </span>
+                  </div>
+
+                  {savedBinding ? (
+                    <div className="text-xs text-slate-300 flex items-center justify-between bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <span>{savedBinding.userName}</span>
+                          <span className="text-[10px] font-mono text-blue-400 bg-blue-500/10 px-1.5 py-0.2 rounded">{savedBinding.userRole}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">Bound on this mobile device</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBiometricLogin}
+                        disabled={isBiometricScanning}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30 cursor-pointer disabled:opacity-50"
+                      >
+                        {isBiometricScanning ? (
+                          <>
+                            <ScanFace className="w-3.5 h-3.5 animate-spin" />
+                            <span>Scanning...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Fingerprint className="w-3.5 h-3.5" />
+                            <span>1-Tap Scan</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-slate-400">
+                        Log in once with your work password to link Fingerprint/Face ID for instant 1-tap mobile access.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleBiometricLogin}
+                        disabled={isBiometricScanning}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-500/30 text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isBiometricScanning ? (
+                          <>
+                            <ScanFace className="w-3.5 h-3.5 animate-spin" />
+                            <span>Scanning...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Fingerprint className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Scan Biometrics</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative flex items-center my-1">
+                  <div className="flex-grow border-t border-slate-800"></div>
+                  <span className="flex-shrink mx-3 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Or Work Password</span>
+                  <div className="flex-grow border-t border-slate-800"></div>
+                </div>
+
                 {/* Staff Sign In Fields */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">
