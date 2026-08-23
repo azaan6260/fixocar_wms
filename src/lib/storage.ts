@@ -82,37 +82,78 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
     // Async sync to Supabase if connected
     const client = getSupabaseClient();
     if (client) {
-      // Attempt best-effort background sync
       cards.forEach(card => {
         client.from('job_cards').upsert({
-        id: card.id,
-        registration_number: card.vehicle.registrationNumber,
-        vehicle_make: card.vehicle.make,
-        vehicle_model: card.vehicle.model,
-        vehicle_year: card.vehicle.year,
-        vehicle_color: card.vehicle.color,
-        vehicle_vin: card.vehicle.vin,
-        fuel_level: card.vehicle.fuelLevel,
-        mileage: card.vehicle.mileage,
-        customer_name: card.customer.name,
-        customer_phone: card.customer.phone,
-        customer_email: card.customer.email,
-        customer_address: card.customer.address,
-        status: card.status,
-        service_type: card.serviceType,
-        package_name: card.packageName,
-        floor_manager_id: card.floorManagerId,
-        pickup_requested: card.pickupRequested,
-        delivery_requested: card.deliveryRequested,
-        discount: card.discount,
-        tax_rate: card.taxRate,
-        advance_paid: card.advancePaid,
-        qc_passed: card.qcPassed,
-        qc_notes: card.qcNotes,
-      }).then(({ error }) => {
-        if (error) console.error('Supabase sync error (job_card):', error);
+          id: card.id,
+          registration_number: card.vehicle.registrationNumber,
+          vehicle_make: card.vehicle.make,
+          vehicle_model: card.vehicle.model,
+          vehicle_year: card.vehicle.year,
+          vehicle_color: card.vehicle.color,
+          vehicle_vin: card.vehicle.vin,
+          fuel_level: card.vehicle.fuelLevel,
+          mileage: card.vehicle.mileage,
+          customer_name: card.customer.name,
+          customer_phone: card.customer.phone,
+          customer_email: card.customer.email,
+          customer_address: card.customer.address,
+          status: card.status,
+          service_type: card.serviceType,
+          package_name: card.packageName,
+          floor_manager_id: card.floorManagerId,
+          pickup_requested: card.pickupRequested,
+          delivery_requested: card.deliveryRequested,
+          discount: card.discount,
+          tax_rate: card.taxRate,
+          advance_paid: card.advancePaid,
+          qc_passed: card.qcPassed,
+          qc_notes: card.qcNotes,
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Supabase sync error (job_card):', error);
+            dispatchToastNotification({
+              type: 'ESTIMATE_DECLINED',
+              title: `❌ Supabase Sync Error (Job Card)`,
+              message: `Could not sync Job Card "${card.id}" to Supabase: ${error.message}`
+            });
+          } else {
+            dispatchToastNotification({
+              type: 'ESTIMATE_APPROVED',
+              title: `✅ Saved to Supabase Database`,
+              message: `Job Card "${card.id}" saved to Supabase database successfully.`
+            });
+          }
+        });
+
+        // Also upsert tasks
+        if (card.tasks && card.tasks.length > 0) {
+          card.tasks.forEach(t => {
+            client.from('job_tasks').upsert({
+              id: t.id,
+              job_card_id: card.id,
+              title: t.title,
+              category: t.category,
+              assigned_to_id: t.assignedToId,
+              assigned_to_name: t.assignedToName,
+              assigned_type: t.assignedType || 'EMPLOYEE',
+              estimated_cost: t.estimatedCost || 0,
+              customer_price: t.customerPrice || 0,
+              status: t.status || 'PENDING',
+              requires_customer_approval: t.requiresCustomerApproval || false,
+              is_customer_approved: t.isCustomerApproved ?? null,
+              rejection_reason: t.rejectionReason || null,
+              notes: t.notes || '',
+              completed_at: t.completedAt || null,
+              is_additional_work: t.isAdditionalWork || false,
+              additional_work_requested_by: t.additionalWorkRequestedBy || null,
+              additional_work_requested_at: t.additionalWorkRequestedAt || null,
+              approval_status: t.approvalStatus || 'PENDING'
+            }).then(({ error }) => {
+              if (error) console.warn(`Supabase task sync error (${t.id}):`, error.message);
+            });
+          });
+        }
       });
-    });
     }
   }
 }
@@ -899,9 +940,50 @@ export function saveEmployees(employees: Employee[], skipPush = false) {
   notifyStoreChange();
 
   if (!skipPush) {
-    employees.forEach(emp => {
-      syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
-    });
+    const client = getSupabaseClient();
+    if (client) {
+      employees.forEach(emp => {
+        const payload = {
+          id: emp.id,
+          name: emp.name,
+          role: emp.role,
+          phone: emp.phone,
+          email: emp.email || `${emp.id}@workshop.fixocar.com`,
+          specialized_team: emp.specializedTeam,
+          status: emp.status || 'AVAILABLE',
+          active_jobs_count: emp.activeJobsCount || 0,
+          avatar_url: emp.avatarUrl,
+          login_id: emp.loginId,
+          password_hash: emp.password || 'password123',
+          base_salary: emp.baseSalary || 0,
+          employment_type: emp.employmentType || 'PAYROLL',
+          city_id: emp.cityId,
+          city_name: emp.cityName,
+          workshop_id: emp.workshopId,
+          workshop_name: emp.workshopName,
+          updated_at: new Date().toISOString()
+        };
+
+        client.from('employees').upsert(payload).then(({ error }) => {
+          if (error) {
+            console.error('Supabase sync error (employees):', error);
+            dispatchToastNotification({
+              type: 'ESTIMATE_DECLINED',
+              title: `❌ Supabase Sync Error (Employee)`,
+              message: `Could not sync "${emp.name}" to Supabase: ${error.message}`
+            });
+          } else {
+            dispatchToastNotification({
+              type: 'ESTIMATE_APPROVED',
+              title: `✅ Saved to Supabase Database`,
+              message: `Employee "${emp.name}" saved to Supabase database successfully.`
+            });
+          }
+        });
+
+        syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
+      });
+    }
   }
 }
 
@@ -912,8 +994,12 @@ export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
     id: `emp-${Date.now().toString().slice(-4)}`
   };
   employees.push(newEmp);
-  saveEmployees(employees, true);
-  syncEmployeeToSupabaseAuth(newEmp, newEmp.password, 'create');
+  saveEmployees(employees, false);
+  syncEmployeeToSupabaseAuth(newEmp, newEmp.password, 'create').then((res) => {
+    if (res && res.message) {
+      console.log('Employee Auth create response:', res.message);
+    }
+  });
   return newEmp;
 }
 
@@ -923,18 +1009,42 @@ export function updateEmployee(id: string, updates: Partial<Employee>) {
   if (index !== -1) {
     const updatedEmp = { ...employees[index], ...updates };
     employees[index] = updatedEmp;
-    saveEmployees(employees, true);
-    syncEmployeeToSupabaseAuth(updatedEmp, updatedEmp.password, 'update');
+    saveEmployees(employees, false);
+    syncEmployeeToSupabaseAuth(updatedEmp, updatedEmp.password, 'update').then((res) => {
+      if (res && res.message) {
+        console.log('Employee Auth update response:', res.message);
+      }
+    });
   }
 }
 
 export function deleteEmployee(id: string) {
   const employees = getEmployees();
   const emp = employees.find(e => e.id === id);
-  if (emp) {
+  const remaining = employees.filter(e => e.id !== id);
+
+  localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(remaining));
+  notifyStoreChange();
+
+  const client = getSupabaseClient();
+  if (client && emp) {
+    client.from('employees').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_DECLINED',
+          title: `❌ Supabase Delete Error`,
+          message: `Could not delete employee from Supabase: ${error.message}`
+        });
+      } else {
+        dispatchToastNotification({
+          type: 'ESTIMATE_APPROVED',
+          title: `🗑️ Removed from Supabase`,
+          message: `Employee "${emp.name}" removed from Supabase database.`
+        });
+      }
+    });
     syncEmployeeToSupabaseAuth(emp, undefined, 'delete');
   }
-  saveEmployees(employees.filter(e => e.id !== id), true);
 }
 
 // 2b. ATTENDANCE STORAGE
@@ -1022,7 +1132,20 @@ export function saveVendors(vendors: Vendor[], skipPush = false) {
           outstanding_balance: v.outstandingBalance,
           rating: v.rating,
         }).then(({ error }) => {
-          if (error) console.error('Supabase sync error (vendors):', error);
+          if (error) {
+            console.error('Supabase sync error (vendors):', error);
+            dispatchToastNotification({
+              type: 'ESTIMATE_DECLINED',
+              title: `❌ Supabase Sync Error (Vendors)`,
+              message: `Could not sync "${v.name}" to Supabase: ${error.message}`
+            });
+          } else {
+            dispatchToastNotification({
+              type: 'ESTIMATE_APPROVED',
+              title: `✅ Saved to Supabase Database`,
+              message: `Vendor "${v.name}" saved to Supabase database successfully.`
+            });
+          }
         });
       });
     }
@@ -1036,8 +1159,35 @@ export function createVendor(vendor: Omit<Vendor, 'id'>): Vendor {
     id: `ven-${Date.now().toString().slice(-4)}`
   };
   vendors.push(newVen);
-  saveVendors(vendors);
+  saveVendors(vendors, false);
   return newVen;
+}
+
+export function deleteVendor(id: string) {
+  const vendors = getVendors();
+  const target = vendors.find(v => v.id === id);
+  const remaining = vendors.filter(v => v.id !== id);
+  localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(remaining));
+  notifyStoreChange();
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('vendors').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_DECLINED',
+          title: `❌ Supabase Delete Error`,
+          message: `Could not delete vendor from Supabase: ${error.message}`
+        });
+      } else if (target) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_APPROVED',
+          title: `🗑️ Removed from Supabase`,
+          message: `Vendor "${target.name}" removed from Supabase database.`
+        });
+      }
+    });
+  }
 }
 
 // 4. DELIVERIES STORAGE
@@ -1321,6 +1471,12 @@ export function saveCities(cities: City[], skipPush = false) {
               title: `❌ Supabase Sync Error (Cities)`,
               message: `Could not sync "${city.name}" to Supabase: ${error.message}`
             });
+          } else {
+            dispatchToastNotification({
+              type: 'ESTIMATE_APPROVED',
+              title: `✅ Saved to Supabase Database`,
+              message: `City "${city.name}" saved to Supabase database successfully.`
+            });
           }
         });
       });
@@ -1343,8 +1499,30 @@ export function addCity(cityName: string, stateName?: string): City {
 }
 
 export function deleteCity(id: string) {
-  const cities = getCities().filter(c => c.id !== id);
-  saveCities(cities);
+  const cities = getCities();
+  const target = cities.find(c => c.id === id);
+  const remaining = cities.filter(c => c.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(remaining));
+  notifyStoreChange();
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('cities').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_DECLINED',
+          title: `❌ Supabase Delete Error`,
+          message: `Could not delete city from Supabase: ${error.message}`
+        });
+      } else if (target) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_APPROVED',
+          title: `🗑️ Removed from Supabase`,
+          message: `City "${target.name}" removed from Supabase database.`
+        });
+      }
+    });
+  }
 }
 
 // 9. WORKSHOPS STORAGE
@@ -1406,7 +1584,7 @@ export function saveWorkshops(workshops: Workshop[], skipPush = false) {
                   });
                 } else {
                   dispatchToastNotification({
-                    type: 'ESTIMATE_DECLINED',
+                    type: 'ESTIMATE_APPROVED',
                     title: `⚠️ Workshop Saved (Missing Column)`,
                     message: `"${ws.name}" saved to Supabase! To save Cars24 status, run SQL script in Database Settings.`
                   });
@@ -1419,6 +1597,12 @@ export function saveWorkshops(workshops: Workshop[], skipPush = false) {
                 message: `Could not sync "${ws.name}" to Supabase: ${error.message}`
               });
             }
+          } else {
+            dispatchToastNotification({
+              type: 'ESTIMATE_APPROVED',
+              title: `✅ Saved to Supabase Database`,
+              message: `Workshop "${ws.name}" saved to Supabase database successfully.`
+            });
           }
         });
       });
@@ -1449,8 +1633,30 @@ export function updateWorkshop(id: string, updates: Partial<Workshop>) {
 }
 
 export function deleteWorkshop(id: string) {
-  const workshops = getWorkshops().filter(w => w.id !== id);
-  saveWorkshops(workshops);
+  const workshops = getWorkshops();
+  const target = workshops.find(w => w.id === id);
+  const remaining = workshops.filter(w => w.id !== id);
+  localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(remaining));
+  notifyStoreChange();
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('workshops').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_DECLINED',
+          title: `❌ Supabase Delete Error`,
+          message: `Could not delete workshop from Supabase: ${error.message}`
+        });
+      } else if (target) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_APPROVED',
+          title: `🗑️ Removed from Supabase`,
+          message: `Workshop "${target.name}" removed from Supabase database.`
+        });
+      }
+    });
+  }
 }
 
 // 10. INVENTORY STORAGE & CONSUMPTION MANAGEMENT
