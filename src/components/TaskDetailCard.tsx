@@ -25,6 +25,7 @@ import {
   AlertCircle, 
   MessageSquare, 
   ChevronDown, 
+  ChevronUp,
   Tag, 
   ShieldAlert,
   ArrowRight,
@@ -64,6 +65,7 @@ export function TaskDetailCard({
 
   // Requisition form state
   const [showReqForm, setShowReqForm] = useState(false);
+  const [showRequisitionTracker, setShowRequisitionTracker] = useState(false);
   const [reqTitle, setReqTitle] = useState('');
   const [reqType, setReqType] = useState<'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK'>('PART');
   const [reqQty, setReqQty] = useState(1);
@@ -175,6 +177,7 @@ export function TaskDetailCard({
     setReqQty(1);
     setReqUrgency('MEDIUM');
     setShowReqForm(false);
+    setShowRequisitionTracker(true);
   };
 
   const handleConsumeInventoryItem = (e: React.FormEvent) => {
@@ -250,7 +253,9 @@ export function TaskDetailCard({
     setShowDirectPartForm(false);
   };
 
-  const openReqs = (task.requisitions || []).filter(r => r.status === 'PENDING_APPROVAL');
+  const allReqs = task.requisitions || [];
+  const openReqs = allReqs.filter(r => r.status === 'PENDING_APPROVAL');
+  const receivedReqs = allReqs.filter(r => r.status === 'RECEIVED');
   const openConcerns = (task.concerns || []).filter(c => c.status !== 'RESOLVED');
 
   return (
@@ -794,24 +799,52 @@ export function TaskDetailCard({
       </div>
 
       {/* EMPLOYEE REQUISITIONS & CONCERNS ACTION BAR */}
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Button: Toggle Part Requisition Tracker */}
+          <button
+            type="button"
+            onClick={() => setShowRequisitionTracker(!showRequisitionTracker)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
+              showRequisitionTracker
+                ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                : allReqs.length > 0
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>{showRequisitionTracker ? 'Hide Part Requisitions' : 'Part Requisition Tracker'}</span>
+            {allReqs.length > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                showRequisitionTracker
+                  ? 'bg-slate-950 text-amber-400'
+                  : receivedReqs.length > 0
+                    ? 'bg-emerald-500 text-white animate-pulse'
+                    : openReqs.length > 0
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}>
+                {allReqs.length}
+                {receivedReqs.length > 0 ? ' Ready' : openReqs.length > 0 ? ' Pending' : ''}
+              </span>
+            )}
+            {showRequisitionTracker ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
           {/* Button: Raise Requisition */}
           <button
+            type="button"
             onClick={() => { setShowReqForm(!showReqForm); setShowConcernForm(false); setShowInventoryConsumeForm(false); }}
             className="px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
-            <Package className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5" />
             + Raise Part/Consumable Requisition
-            {openReqs.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-orange-500 text-white text-[10px] font-black">
-                {openReqs.length}
-              </span>
-            )}
           </button>
 
           {/* Button: Report Difficulty / Concern */}
           <button
+            type="button"
             onClick={() => { setShowConcernForm(!showConcernForm); setShowReqForm(false); setShowInventoryConsumeForm(false); }}
             className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
@@ -974,15 +1007,19 @@ export function TaskDetailCard({
         </form>
       )}
 
-      {/* PART REQUISITION TRACKER COMPONENT */}
-      <PartRequisitionTracker
-        jobCardId={card.id}
-        taskId={task.id}
-        taskTitle={task.title}
-        requisitions={task.requisitions || []}
-        currentRole={currentRole}
-        currentEmployeeName={task.assignedToName}
-      />
+      {/* PART REQUISITION TRACKER COMPONENT (OPENABLE BELOW WHEN TOGGLED) */}
+      {showRequisitionTracker && (
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-2 duration-200">
+          <PartRequisitionTracker
+            jobCardId={card.id}
+            taskId={task.id}
+            taskTitle={task.title}
+            requisitions={task.requisitions || []}
+            currentRole={currentRole}
+            currentEmployeeName={task.assignedToName}
+          />
+        </div>
+      )}
 
       {/* DISPLAY EXISTING CONCERNS */}
       {task.concerns && task.concerns.length > 0 && (
