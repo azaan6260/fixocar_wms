@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { getStoredSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig, syncAllEmployeesToSupabase } from '../lib/supabaseClient';
+import { 
+  getStoredSupabaseConfig, 
+  saveSupabaseConfig, 
+  clearSupabaseConfig, 
+  syncAllEmployeesToSupabase,
+  diagnoseSupabaseAuthSync,
+  SupabaseSyncDiagnostic
+} from '../lib/supabaseClient';
 import { getEmployees } from '../lib/storage';
 import { SUPABASE_SQL_SCHEMA } from '../lib/supabaseSchema';
 import { 
@@ -13,7 +20,12 @@ import {
   Code2,
   RefreshCw,
   Users,
-  AlertCircle
+  AlertCircle,
+  Stethoscope,
+  ShieldCheck,
+  ShieldAlert,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 
 interface SupabaseSettingsModalProps {
@@ -29,15 +41,33 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const [anonKey, setAnonKey] = useState(config.supabaseAnonKey);
   const [serviceKey, setServiceKey] = useState(config.supabaseServiceKey || '');
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'config' | 'schema'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'diagnostic' | 'schema'>('config');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  // Diagnostic state
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosticReport, setDiagnosticReport] = useState<SupabaseSyncDiagnostic | null>(null);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     saveSupabaseConfig(url, anonKey, serviceKey);
     alert('Supabase credentials saved! Connecting to live Supabase database & Auth admin sync.');
     onClose();
+  };
+
+  const handleRunDiagnostics = async () => {
+    saveSupabaseConfig(url, anonKey, serviceKey);
+    setIsDiagnosing(true);
+    try {
+      const staff = getEmployees();
+      const report = await diagnoseSupabaseAuthSync(staff);
+      setDiagnosticReport(report);
+    } catch (err: any) {
+      console.error('Diagnostic error:', err);
+    } finally {
+      setIsDiagnosing(false);
+    }
   };
 
   const handleBulkSync = async () => {
@@ -50,6 +80,8 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
       const res = await syncAllEmployeesToSupabase(allStaff);
       setIsSyncingAll(false);
       setSyncResult(`Successfully synced ${res.synced} / ${res.total} staff users to Supabase database & Auth!`);
+      // Re-run diagnostic after sync
+      handleRunDiagnostics();
     } catch (err: any) {
       setIsSyncingAll(false);
       setSyncResult(`Sync encountered errors: ${err.message}`);
@@ -95,19 +127,29 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
         <div className="flex items-center gap-2 px-6 pt-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
           <button
             onClick={() => setActiveTab('config')}
-            className={`pb-2.5 border-b-2 ${activeTab === 'config' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400'}`}
+            className={`pb-2.5 border-b-2 transition-colors ${activeTab === 'config' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
           >
             Connection Settings
           </button>
           <button
+            onClick={() => {
+              setActiveTab('diagnostic');
+              if (!diagnosticReport) handleRunDiagnostics();
+            }}
+            className={`pb-2.5 border-b-2 flex items-center gap-1.5 transition-colors ${activeTab === 'diagnostic' ? 'border-indigo-500 text-indigo-500' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+          >
+            <Stethoscope className="w-3.5 h-3.5" />
+            <span>Auth Sync Diagnostic</span>
+          </button>
+          <button
             onClick={() => setActiveTab('schema')}
-            className={`pb-2.5 border-b-2 ${activeTab === 'schema' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400'}`}
+            className={`pb-2.5 border-b-2 transition-colors ${activeTab === 'schema' ? 'border-emerald-500 text-emerald-500' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
           >
             SQL Migration Schema Script
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
           {activeTab === 'config' ? (
             <form onSubmit={handleSave} className="space-y-4 text-xs">
               
@@ -178,24 +220,37 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
                 </ol>
 
                 <div className="pt-2 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={handleBulkSync}
-                    disabled={isSyncingAll}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-                  >
-                    {isSyncingAll ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Syncing Staff to Supabase...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Sync All Existing Staff to Supabase Now</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleBulkSync}
+                      disabled={isSyncingAll}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      {isSyncingAll ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Syncing Staff to Supabase...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Sync All Existing Staff to Supabase Now</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('diagnostic');
+                        handleRunDiagnostics();
+                      }}
+                      className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Stethoscope className="w-3.5 h-3.5" />
+                      <span>Run Diagnostic</span>
+                    </button>
+                  </div>
                   {syncResult && (
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">{syncResult}</span>
                   )}
@@ -222,6 +277,144 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
               </div>
 
             </form>
+          ) : activeTab === 'diagnostic' ? (
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-white flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    <Stethoscope className="w-4 h-4 text-indigo-400" />
+                    <span>Supabase 'auth.users' Sync Diagnostic Tool</span>
+                  </div>
+                  <p className="text-slate-400 text-[11px] mt-0.5">
+                    Verifies whether employee signups in <code className="text-amber-400 font-mono">public.employees</code> are synced into Supabase <code className="text-indigo-400 font-mono">auth.users</code>.
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunDiagnostics}
+                  disabled={isDiagnosing}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isDiagnosing ? 'animate-spin' : ''}`} />
+                  <span>{isDiagnosing ? 'Running...' : 'Run Test Now'}</span>
+                </button>
+              </div>
+
+              {diagnosticReport ? (
+                <div className="space-y-4">
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Local Staff</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{diagnosticReport.localEmployeesCount}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Database Table</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{diagnosticReport.dbEmployeesCount} records</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                      <p className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-wider">Auth Users Tab</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">
+                        {diagnosticReport.canQueryAuthUsers ? `${diagnosticReport.authUsersCount} users` : 'Requires Key'}
+                      </p>
+                    </div>
+                    <div className={`p-3 rounded-xl border ${diagnosticReport.unsyncedCount === 0 && diagnosticReport.canQueryAuthUsers ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+                      <p className="font-medium text-[10px] uppercase tracking-wider opacity-80">Sync Health</p>
+                      <p className="text-lg font-bold mt-1">
+                        {diagnosticReport.canQueryAuthUsers
+                          ? (diagnosticReport.unsyncedCount === 0 ? '100% Synced' : `${diagnosticReport.unsyncedCount} Unsynced`)
+                          : 'Service Key Needed'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Warnings & Recommendations */}
+                  {diagnosticReport.warnings.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-1.5">
+                      <p className="font-bold flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> Diagnostic Findings & Warnings:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-700 dark:text-slate-300">
+                        {diagnosticReport.warnings.map((w, idx) => (
+                          <li key={idx}>{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {diagnosticReport.recommendations.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-900 dark:text-blue-200 space-y-1.5">
+                      <p className="font-bold flex items-center gap-1.5 text-xs text-blue-800 dark:text-blue-300">
+                        <ShieldCheck className="w-4 h-4 shrink-0" /> Recommended Action Steps:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-700 dark:text-slate-300">
+                        {diagnosticReport.recommendations.map((r, idx) => (
+                          <li key={idx}>{r}</li>
+                        ))}
+                      </ul>
+                      {diagnosticReport.unsyncedCount > 0 && (
+                        <div className="pt-2">
+                          <button
+                            onClick={handleBulkSync}
+                            disabled={isSyncingAll}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
+                            <span>Auto-Fix: Provision All Unsynced Staff to auth.users</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Account Matched / Missing Table */}
+                  {diagnosticReport.canQueryAuthUsers && (
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-900 dark:text-slate-100 text-xs">Employee Auth Sync Audit List:</p>
+                      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-[11px]">
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                              <th className="p-2.5">Staff Name & Role</th>
+                              <th className="p-2.5">Email / Login ID</th>
+                              <th className="p-2.5">Table (public.employees)</th>
+                              <th className="p-2.5">Auth Users Tab</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                            {diagnosticReport.matchedAccounts.map((m) => (
+                              <tr key={m.id} className="bg-white dark:bg-slate-900">
+                                <td className="p-2.5 font-bold text-slate-900 dark:text-slate-100">{m.name} <span className="text-[10px] text-slate-500 font-normal">({m.role})</span></td>
+                                <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400">{m.email}</td>
+                                <td className="p-2.5 text-emerald-500 font-bold flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Synced</td>
+                                <td className="p-2.5 text-emerald-500 font-bold flex items-center gap-1"><UserCheck className="w-3.5 h-3.5" /> Active in auth.users</td>
+                              </tr>
+                            ))}
+                            {diagnosticReport.missingInAuth.map((m) => (
+                              <tr key={m.id} className="bg-amber-500/5">
+                                <td className="p-2.5 font-bold text-slate-900 dark:text-slate-100">{m.name} <span className="text-[10px] text-slate-500 font-normal">({m.role})</span></td>
+                                <td className="p-2.5 font-mono text-slate-600 dark:text-slate-400">{m.email}</td>
+                                <td className="p-2.5 text-emerald-500 font-bold">{m.inDatabaseTable ? '✅ Present' : '❌ Missing'}</td>
+                                <td className="p-2.5 text-amber-500 font-bold flex items-center gap-1"><UserX className="w-3.5 h-3.5" /> Missing in auth.users</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              ) : (
+                <div className="p-8 text-center border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-xl space-y-3">
+                  <Stethoscope className="w-8 h-8 text-indigo-400 mx-auto" />
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-xs">Run Diagnostic Check</p>
+                    <p className="text-slate-500 text-[11px]">Click the button above to test synchronization between employees table and auth.users.</p>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="space-y-3 text-xs">
               <div className="flex items-center justify-between">

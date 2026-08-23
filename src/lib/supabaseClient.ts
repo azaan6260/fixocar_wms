@@ -187,3 +187,132 @@ export async function syncAllEmployeesToSupabase(
   return { total: employees.length, synced, messages };
 }
 
+export interface SupabaseSyncDiagnostic {
+  success: boolean;
+  timestamp: string;
+  isConfigured: boolean;
+  hasServiceRoleKey: boolean;
+  canQueryAuthUsers: boolean;
+  localEmployeesCount: number;
+  dbEmployeesCount: number;
+  authUsersCount: number;
+  syncedCount: number;
+  unsyncedCount: number;
+  matchedAccounts: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    authUserId: string;
+    lastSignIn: string;
+    emailConfirmed: boolean;
+  }>;
+  missingInAuth: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    inDatabaseTable: boolean;
+  }>;
+  warnings: string[];
+  recommendations: string[];
+  error?: string;
+}
+
+/**
+ * Diagnostic utility function to verify if Supabase 'auth.users' table
+ * is correctly in sync with local 'employees' data after signup/modifications.
+ */
+export async function diagnoseSupabaseAuthSync(
+  localEmployees: Employee[] = []
+): Promise<SupabaseSyncDiagnostic> {
+  const config = getStoredSupabaseConfig();
+
+  try {
+    const res = await fetch('/api/supabase/admin/diagnose-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supabaseUrl: config.supabaseUrl,
+        supabaseServiceKey: config.supabaseServiceKey,
+        supabaseAnonKey: config.supabaseAnonKey,
+        localEmployees
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err: any) {
+    console.warn('Backend diagnostic endpoint error:', err);
+  }
+
+  // Fallback client-side diagnostic check if API endpoint fails
+  const client = getSupabaseClient();
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+
+  if (!config.isConfigured || !client) {
+    return {
+      success: false,
+      timestamp: new Date().toISOString(),
+      isConfigured: false,
+      hasServiceRoleKey: Boolean(config.supabaseServiceKey),
+      canQueryAuthUsers: false,
+      localEmployeesCount: localEmployees.length,
+      dbEmployeesCount: 0,
+      authUsersCount: 0,
+      syncedCount: 0,
+      unsyncedCount: localEmployees.length,
+      matchedAccounts: [],
+      missingInAuth: localEmployees.map(e => ({
+        id: e.id,
+        name: e.name,
+        email: e.email || `${e.loginId || e.id}@workshop.fixocar.com`,
+        role: e.role,
+        inDatabaseTable: false
+      })),
+      warnings: ['Supabase URL and API Keys are not configured in settings.'],
+      recommendations: ['Configure Supabase URL & Service Role Key in Database settings.']
+    };
+  }
+
+  let dbEmployeesCount = 0;
+  try {
+    const { data } = await client.from('employees').select('id');
+    dbEmployeesCount = data?.length || 0;
+  } catch (e) {
+    warnings.push('Could not query public.employees table.');
+  }
+
+  const hasServiceRole = Boolean(config.supabaseServiceKey && config.supabaseServiceKey.length > 20);
+  if (!hasServiceRole) {
+    warnings.push('Service Role Key is not saved in settings. Standard anon key cannot query auth.users directly.');
+    recommendations.push('Paste your Supabase service_role secret key in Database Settings.');
+  }
+
+  return {
+    success: true,
+    timestamp: new Date().toISOString(),
+    isConfigured: true,
+    hasServiceRoleKey: hasServiceRole,
+    canQueryAuthUsers: false,
+    localEmployeesCount: localEmployees.length,
+    dbEmployeesCount,
+    authUsersCount: 0,
+    syncedCount: 0,
+    unsyncedCount: localEmployees.length,
+    matchedAccounts: [],
+    missingInAuth: localEmployees.map(e => ({
+      id: e.id,
+      name: e.name,
+      email: e.email || `${e.loginId || e.id}@workshop.fixocar.com`,
+      role: e.role,
+      inDatabaseTable: true
+    })),
+    warnings,
+    recommendations
+  };
+}
+

@@ -7,9 +7,10 @@ import {
   getWorkshops
 } from '../lib/storage';
 import { syncAllEmployeesToSupabase } from '../lib/supabaseClient';
+import { SupabaseSettingsModal } from './SupabaseSettingsModal';
 import { 
   Users, UserPlus, Save, Trash2, Edit2, Key, CheckCircle, 
-  MapPin, Camera, DollarSign, Calendar, Clock, Lock, Building2, AlertTriangle, Database, RefreshCw
+  MapPin, Camera, DollarSign, Calendar, Clock, Lock, Building2, AlertTriangle, Database, RefreshCw, Stethoscope
 } from 'lucide-react';
 
 interface EmployeeManagementProps {
@@ -23,6 +24,7 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [supabaseSyncNotice, setSupabaseSyncNotice] = useState<string | null>(null);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'ATTENDANCE' | 'PAYROLL'>('DIRECTORY');
   const [employmentFilter, setEmploymentFilter] = useState<'ALL' | 'PAYROLL' | 'CONTRACT'>('ALL');
@@ -227,6 +229,15 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                       <Database className="w-3.5 h-3.5 text-blue-400" />
                     )}
                     <span>{isSyncingSupabase ? 'Syncing...' : 'Sync Staff to Supabase'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsSupabaseModalOpen(true)}
+                    className="px-3 py-2 bg-indigo-900/40 hover:bg-indigo-800/60 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    title="Run Supabase auth.users & employees table sync diagnostic"
+                  >
+                    <Stethoscope className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Auth Sync Diagnostic</span>
                   </button>
 
                   <button
@@ -800,6 +811,11 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
           </div>
         </div>
       )}
+
+      <SupabaseSettingsModal 
+        isOpen={isSupabaseModalOpen} 
+        onClose={() => setIsSupabaseModalOpen(false)} 
+      />
 
     </div>
   );

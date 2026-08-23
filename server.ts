@@ -828,6 +828,137 @@ Return valid JSON ONLY.`;
     });
   });
 
+  // Diagnostic utility endpoint to verify if Supabase 'auth.users' is in sync with 'public.employees'
+  app.post('/api/supabase/admin/diagnose-sync', async (req, res) => {
+    try {
+      const { supabaseUrl, supabaseServiceKey, supabaseAnonKey, localEmployees = [] } = req.body;
+      const url = supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      const serviceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const anonKey = supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const warnings: string[] = [];
+      const recommendations: string[] = [];
+
+      if (!url) {
+        return res.json({
+          success: false,
+          isConfigured: false,
+          error: 'Supabase URL is not configured.',
+          recommendations: ['Enter your Supabase URL in Database Settings']
+        });
+      }
+
+      const client = getSupabaseAdminClient(url, serviceKey || anonKey);
+      if (!client) {
+        return res.json({
+          success: false,
+          isConfigured: false,
+          error: 'Failed to initialize Supabase client.',
+          recommendations: ['Verify Supabase URL and API keys in Database Settings.']
+        });
+      }
+
+      const hasServiceRoleKey = Boolean(serviceKey && serviceKey.length > 20);
+      if (!hasServiceRoleKey) {
+        warnings.push('Supabase Service Role Key is missing. Standard anon key can only query public.employees, not auth.users.');
+        recommendations.push('Provide the Supabase service_role key in Database Settings to allow querying and auto-syncing auth.users directly.');
+      }
+
+      // Fetch records from public.employees table
+      let dbEmployees: any[] = [];
+      try {
+        const { data, error } = await client.from('employees').select('*');
+        if (error) {
+          warnings.push(`DB Query error on public.employees: ${error.message}`);
+        } else {
+          dbEmployees = data || [];
+        }
+      } catch (dbErr: any) {
+        warnings.push(`Could not query public.employees: ${dbErr.message}`);
+      }
+
+      // Fetch users from auth.users (if service role key is provided)
+      let authUsers: any[] = [];
+      let canQueryAuthUsers = false;
+      if (hasServiceRoleKey && client.auth?.admin) {
+        try {
+          const { data: userList, error: listErr } = await client.auth.admin.listUsers();
+          if (listErr) {
+            warnings.push(`Failed to list users from auth.users: ${listErr.message}`);
+          } else {
+            authUsers = userList?.users || [];
+            canQueryAuthUsers = true;
+          }
+        } catch (authErr: any) {
+          warnings.push(`Auth admin query exception: ${authErr.message}`);
+        }
+      }
+
+      // Cross-verify between local employees, public.employees, and auth.users
+      const employeeList = localEmployees.length > 0 ? localEmployees : dbEmployees;
+      
+      const matchedAccounts: any[] = [];
+      const missingInAuth: any[] = [];
+
+      for (const emp of employeeList) {
+        const empEmail = (emp.email || `${emp.loginId || emp.id}@workshop.fixocar.com`).toLowerCase().trim();
+        const inDb = dbEmployees.some((d: any) => d.id === emp.id || (d.email && d.email.toLowerCase() === empEmail));
+        const authMatch = authUsers.find((u: any) => 
+          u.email?.toLowerCase() === empEmail || 
+          u.user_metadata?.employee_id === emp.id || 
+          u.user_metadata?.login_id === emp.loginId
+        );
+
+        if (authMatch) {
+          matchedAccounts.push({
+            id: emp.id,
+            name: emp.name,
+            email: empEmail,
+            role: emp.role,
+            authUserId: authMatch.id,
+            lastSignIn: authMatch.last_sign_in_at || 'Never',
+            emailConfirmed: Boolean(authMatch.email_confirmed_at)
+          });
+        } else {
+          missingInAuth.push({
+            id: emp.id,
+            name: emp.name,
+            email: empEmail,
+            role: emp.role,
+            inDatabaseTable: inDb
+          });
+        }
+      }
+
+      if (missingInAuth.length > 0) {
+        warnings.push(`${missingInAuth.length} employee account(s) exist in local/database state but are missing in Supabase Authentication (auth.users).`);
+        recommendations.push('Click "Sync Staff to Supabase" in Staff Directory (with Service Role Key configured) to create these accounts in auth.users.');
+      } else if (canQueryAuthUsers) {
+        recommendations.push('All employee accounts are 100% in sync between public.employees and auth.users!');
+      }
+
+      return res.json({
+        success: true,
+        timestamp: new Date().toISOString(),
+        isConfigured: true,
+        hasServiceRoleKey,
+        canQueryAuthUsers,
+        localEmployeesCount: localEmployees.length,
+        dbEmployeesCount: dbEmployees.length,
+        authUsersCount: authUsers.length,
+        syncedCount: matchedAccounts.length,
+        unsyncedCount: missingInAuth.length,
+        matchedAccounts,
+        missingInAuth,
+        warnings,
+        recommendations
+      });
+    } catch (err: any) {
+      console.error('Supabase diagnostic endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Sync / Create / Update / Delete User Credential in Supabase Auth & Database
   app.post('/api/supabase/admin/sync-user', async (req, res) => {
     try {
