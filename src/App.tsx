@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, JobCard, Employee, Vendor, isTabAllowedForRole, getDefaultTabForRole } from './types';
+import { UserRole, JobCard, Employee, Vendor, AuthUser, isTabAllowedForRole, getDefaultTabForRole } from './types';
 import { 
   getJobCards, 
   getEmployees, 
   getVendors, 
   getJobCardById, 
-  subscribeToStore 
+  subscribeToStore,
+  getAuthUser,
+  logoutAuthUser
 } from './lib/storage';
 import { Camera } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
@@ -39,18 +41,27 @@ import { InvoiceManagementView } from './components/InvoiceManagementView';
 import { AccountingAndExpensesView } from './components/AccountingAndExpensesView';
 import { CarModelsManagementView } from './components/CarModelsManagementView';
 import { ToastContainer } from './components/ToastContainer';
+import { UnifiedLoginModal } from './components/UnifiedLoginModal';
+import { CommonHomePage } from './components/CommonHomePage';
+import { CustomerDashboard } from './components/CustomerDashboard';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<UserRole>('SUPER_ADMIN');
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  // Authentication state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getAuthUser());
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [loginModalInitialTab, setLoginModalInitialTab] = useState<'STAFF' | 'CUSTOMER'>('CUSTOMER');
 
-  const [isCustomerView, setIsCustomerView] = useState<boolean>(() => {
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    if (path.includes('wms') || search.includes('wms') || search.includes('workshop')) {
-      return false;
-    }
-    return true;
+  // WMS Role & Tab State
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => {
+    const user = getAuthUser();
+    if (user && user.role) return user.role;
+    return 'SUPER_ADMIN';
+  });
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const user = getAuthUser();
+    if (user && user.role) return getDefaultTabForRole(user.role);
+    return 'dashboard';
   });
 
   // Reactive store state
@@ -74,17 +85,6 @@ export default function App() {
     setIsScannerOpen(false);
     const cleanReg = scannedPlate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     
-    // Check if customer view
-    if (isCustomerView) {
-      // It's a customer. In CustomerPortal we have trackerSearchQuery, but that's local state.
-      // If the customer scans their own vehicle, wait, how can we pass it? 
-      // We can use a global event or URL param, but actually for customer, if they scan,
-      // we can just navigate them to dashboard and maybe we should keep track of scanned registration?
-      // For simplicity we can dispatch a custom event that CustomerPortal can listen to, or we just alert them.
-      window.dispatchEvent(new CustomEvent('GLOBAL_SCAN_CUSTOMER', { detail: cleanReg }));
-      return;
-    }
-
     // Employee view
     const activeCard = jobCards.find(j => 
       j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg && 
@@ -102,113 +102,97 @@ export default function App() {
     );
 
     if (historicalCards.length > 0) {
-      // Sort to get latest
       historicalCards.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setSelectedJobCardId(historicalCards[0].id);
       return;
     }
 
-    // No cards at all, or they want to create
+    // No cards at all, prefill create modal
     setCreateModalPrefill(scannedPlate);
     setIsCreateModalOpen(true);
   };
 
-  // Subscribe to storage updates & popstate
+  // Handle Login Success
+  const handleLoginSuccess = (user: AuthUser) => {
+    setAuthUser(user);
+    setIsLoginModalOpen(false);
+    if (user.role) {
+      setCurrentRole(user.role);
+      setActiveTab(getDefaultTabForRole(user.role));
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    logoutAuthUser();
+    setAuthUser(null);
+  };
+
+  // Subscribe to storage updates
   useEffect(() => {
     syncFromSupabase();
 
-    const handlePopState = () => {
-      const path = window.location.pathname.toLowerCase();
-      const search = window.location.search.toLowerCase();
-      setIsCustomerView(!path.includes('wms') && !search.includes('wms') && !search.includes('workshop'));
-    };
-    window.addEventListener('popstate', handlePopState);
-    
     const unsubscribe = subscribeToStore(() => {
       setJobCards(getJobCards());
       setEmployees(getEmployees());
       setVendors(getVendors());
+      setAuthUser(getAuthUser());
     });
     
     return () => {
-      window.removeEventListener('popstate', handlePopState);
       unsubscribe();
     };
   }, []);
 
   // Enforce role-based tab access
   useEffect(() => {
-    if (!isTabAllowedForRole(currentRole, activeTab)) {
-      setActiveTab(getDefaultTabForRole(currentRole));
+    if (authUser && authUser.role) {
+      if (!isTabAllowedForRole(currentRole, activeTab)) {
+        setActiveTab(getDefaultTabForRole(currentRole));
+      }
     }
-  }, [currentRole, activeTab]);
-
-  const toggleViewMode = (toCustomer: boolean) => {
-    setIsCustomerView(toCustomer);
-    try {
-      const targetPath = toCustomer ? '/' : '/wms';
-      window.history.pushState({}, '', targetPath);
-    } catch (e) {
-      // ignore state push restrictions if any
-    }
-  };
+  }, [currentRole, activeTab, authUser]);
 
   const activeCardForDetail = selectedJobCardId ? getJobCardById(selectedJobCardId) : null;
   const activeCardForCustomerPortal = customerPortalCardId ? getJobCardById(customerPortalCardId) : null;
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
   const activeCardForQR = qrModalCardId ? getJobCardById(qrModalCardId) : null;
 
-  // CUSTOMER FACING ROUTE
-  if (isCustomerView) {
+  // VIEW 1: NOT AUTHENTICATED -> COMMON HOME PAGE FOR ALL USERS
+  if (!authUser) {
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white flex flex-col">
-        <header className="bg-slate-950 text-white p-4 border-b border-blue-900/40 shadow-lg relative">
-          <div className="max-w-7xl mx-auto w-full flex justify-between items-center px-4">
-            <h1 className="font-black text-2xl tracking-tight text-white flex items-center gap-2">
-              <span className="text-blue-500">Fixo</span>Car
-              <span className="text-xs font-bold text-blue-300 bg-blue-950/80 px-3 py-1 rounded-full border border-blue-600/40 shadow-xs">Customer Portal</span>
-            </h1>
+      <div className="min-h-screen bg-slate-950 font-sans">
+        <CommonHomePage
+          onOpenLogin={(tab) => {
+            setLoginModalInitialTab(tab || 'CUSTOMER');
+            setIsLoginModalOpen(true);
+          }}
+          onBookService={() => {
+            setLoginModalInitialTab('CUSTOMER');
+            setIsLoginModalOpen(true);
+          }}
+        />
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsScannerOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-md active:scale-95"
-                title="Scan Vehicle Number Plate"
-              >
-                <Camera className="w-4 h-4" />
-                <span className="hidden sm:inline">Scan Plate</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => toggleViewMode(false)}
-                className="text-xs font-black bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-1.5"
-              >
-                <span className="hidden sm:inline">⚙️ Workshop Management (WMS)</span>
-                <span className="sm:hidden">⚙️ WMS</span>
-              </button>
-            </div>
-          </div>
-        </header>
+        {/* Global Unified Authentication Modal */}
+        <UnifiedLoginModal
+          isOpen={isLoginModalOpen}
+          initialTab={loginModalInitialTab}
+          onClose={() => setIsLoginModalOpen(false)}
+          onLoginSuccess={handleLoginSuccess}
+        />
+      </div>
+    );
+  }
 
-        <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <CustomerPortal
-            currentRole={'CUSTOMER' as any}
-            onOpenApprovalModal={(id) => setCustomerPortalCardId(id)}
-          />
-        </main>
+  // VIEW 2: AUTHENTICATED AS CUSTOMER -> REDESIGNED CUSTOMER DASHBOARD
+  if (authUser.userType === 'CUSTOMER') {
+    return (
+      <div className="min-h-screen bg-slate-950 font-sans">
+        <CustomerDashboard
+          onLogout={handleLogout}
+        />
 
-        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-6 text-xs text-slate-500">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="font-black text-slate-900 dark:text-white text-sm"><span className="text-blue-600">Fixo</span>Car</span>
-              <span className="text-slate-400">• Worry-Free Vehicle Care & Repair</span>
-            </div>
-            <p className="text-slate-400 font-mono">24x7 Customer Helpline: <strong className="text-blue-600 dark:text-blue-400 font-bold">8819915656</strong></p>
-          </div>
-        </footer>
-
-        {/* Render Customer Approval Modal if needed in customer portal */}
+        {/* Render Customer Approval Modal if opened */}
         {activeCardForCustomerPortal && (
           <CustomerApprovalPortalModal
             card={activeCardForCustomerPortal}
@@ -219,7 +203,7 @@ export default function App() {
     );
   }
 
-  // WMS ROUTE (/wms)
+  // VIEW 3: AUTHENTICATED AS STAFF / CONTRACTOR / ADMIN -> WORKSHOP MANAGEMENT SYSTEM (WMS)
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
       
@@ -236,6 +220,8 @@ export default function App() {
         onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
         onOpenScanner={() => setIsScannerOpen(true)}
         onSelectJobCard={(id) => setSelectedJobCardId(id)}
+        onLogout={handleLogout}
+        onGoHome={handleLogout}
       />
 
       {/* Main Viewport Content */}
@@ -250,22 +236,12 @@ export default function App() {
               setIsCreateModalOpen(true);
             }}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
-            onOpenAIDiagnostics={() => setIsCreateModalOpen(true)}
-            onNavigateTab={setActiveTab}
+            onOpenAIDiagnostics={() => {}}
+            onNavigateTab={(tab) => setActiveTab(tab)}
           />
         )}
 
-        {activeTab === 'gate-pass' && (
-          <GatePassCheckInView
-            onSelectJobCard={(id) => setSelectedJobCardId(id)}
-            onOpenCreateJobCardWithPrefill={(reg) => {
-              setCreateModalPrefill(reg);
-              setIsCreateModalOpen(true);
-            }}
-          />
-        )}
-
-        {activeTab === 'daily-huddle' && (
+        {activeTab === 'huddle' && (
           <DailyHuddleView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -276,17 +252,18 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'customer-portal' && (
-          <CustomerPortal
-            currentRole={currentRole}
-            onOpenApprovalModal={(id) => setCustomerPortalCardId(id)}
+        {activeTab === 'gatepass' && (
+          <GatePassCheckInView
+            onOpenCreateJobCardWithPrefill={(prefill) => {
+              setCreateModalPrefill(prefill.regNo);
+              setIsCreateModalOpen(true);
+            }}
           />
         )}
 
-        {(activeTab === 'job-cards' || activeTab === 'job-cards-history') && (
+        {activeTab === 'jobs' && (
           <JobCardList
             jobCards={jobCards}
-            initialSection={activeTab === 'job-cards-history' ? 'HISTORY' : 'ACTIVE'}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
@@ -295,7 +272,21 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'status-pipeline' && (
+        {activeTab === 'outsourced-jobs' && (
+          <OutsourcedJobsView
+            currentRole={currentRole}
+            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+          />
+        )}
+
+        {activeTab === 'part-basket' && (
+          <PartOrderBasketView
+            currentRole={currentRole}
+            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+          />
+        )}
+
+        {activeTab === 'pipeline' && (
           <VehicleStatusPipelineView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -306,28 +297,8 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'invoices' && (
-          <InvoiceManagementView
-            currentRole={currentRole}
-            onSelectJobCard={(id) => setSelectedJobCardId(id)}
-          />
-        )}
-
-        {activeTab === 'accounting-expenses' && (
-          <AccountingAndExpensesView
-            currentRole={currentRole}
-          />
-        )}
-
         {activeTab === 'inventory' && (
-          <InventoryView currentRole={currentRole} vendors={vendors} />
-        )}
-
-        {activeTab === 'part-basket' && (
-          <PartOrderBasketView 
-            currentRole={currentRole} 
-            onOpenJobCard={(id) => setSelectedJobCardId(id)}
-          />
+          <InventoryView currentRole={currentRole} />
         )}
 
         {activeTab === 'standard-jobs' && (
@@ -338,11 +309,15 @@ export default function App() {
           <ContractorPayoutsView currentRole={currentRole} />
         )}
 
-        {activeTab === 'outsourced-jobs' && (
-          <OutsourcedJobsView 
+        {activeTab === 'invoices' && (
+          <InvoiceManagementView 
             currentRole={currentRole} 
-            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
           />
+        )}
+
+        {activeTab === 'accounting' && (
+          <AccountingAndExpensesView currentRole={currentRole} />
         )}
 
         {activeTab === 'role-workspace' && (
@@ -386,7 +361,7 @@ export default function App() {
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span className="font-semibold text-slate-700 dark:text-slate-300">
-            FixoCar • Worry-Free Car Repair OS
+            FixoCar • Worry-Free Car Repair OS ({authUser.name} - {authUser.role})
           </span>
           <div className="flex items-center gap-3">
             <a href="tel:8819915656" className="font-bold text-blue-600 dark:text-blue-400 hover:underline">
@@ -395,9 +370,16 @@ export default function App() {
             <span>•</span>
             <button
               onClick={() => setIsSupabaseModalOpen(true)}
-              className="hover:text-blue-600 transition-colors"
+              className="hover:text-blue-600 transition-colors cursor-pointer"
             >
               Supabase DB Configuration
+            </button>
+            <span>•</span>
+            <button
+              onClick={handleLogout}
+              className="text-rose-500 hover:underline font-bold cursor-pointer"
+            >
+              Sign Out
             </button>
           </div>
         </div>

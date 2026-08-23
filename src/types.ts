@@ -148,6 +148,28 @@ export interface Vendor {
   address: string;
   outstandingBalance: number;
   rating: number; // 1-5
+  loginId?: string;
+  password?: string;
+}
+
+export interface AuthUser {
+  id: string; // Employee ID (emp-101) or Vendor ID (ven-201) or Customer ID or Admin ID
+  name: string;
+  loginId: string;
+  email: string;
+  phone?: string;
+  role: UserRole;
+  userType: 'EMPLOYEE' | 'CONTRACTOR' | 'VENDOR' | 'CUSTOMER' | 'ADMIN';
+  employeeId?: string;
+  vendorId?: string;
+  customerId?: string;
+  specializedTeam?: SpecializedTeam;
+  workshopId?: string;
+  workshopName?: string;
+  cityId?: string;
+  cityName?: string;
+  employmentType?: 'PAYROLL' | 'CONTRACT';
+  loggedInAt?: string;
 }
 
 export type JobCardStatus = 

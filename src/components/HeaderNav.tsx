@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, isTabAllowedForRole, getDefaultTabForRole } from '../types';
 import { RoleBadge, ROLE_CONFIG } from './RoleBadge';
 import { getStoredSupabaseConfig, getSupabaseClient } from '../lib/supabaseClient';
-import { resetToDefaultMockData, getJobCards, subscribeToStore } from '../lib/storage';
+import { resetToDefaultMockData, getJobCards, subscribeToStore, getAuthUser, logoutAuthUser } from '../lib/storage';
 import { useI18n } from '../lib/i18n';
 import { 
   Wrench, 
@@ -35,7 +35,9 @@ import {
   Wallet,
   Camera,
   Settings,
-  Car
+  Car,
+  LogOut,
+  Home
 } from 'lucide-react';
 
 import { NotificationDrawer } from './NotificationDrawer';
@@ -50,6 +52,8 @@ interface HeaderNavProps {
   onSwitchToCustomerPortal?: () => void;
   onOpenScanner?: () => void;
   onSelectJobCard?: (id: string) => void;
+  onLogout?: () => void;
+  onGoHome?: () => void;
 }
 
 export function HeaderNav({
@@ -62,13 +66,20 @@ export function HeaderNav({
   onSwitchToCustomerPortal,
   onOpenScanner,
   onSelectJobCard,
+  onLogout,
+  onGoHome,
 }: HeaderNavProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
+  const [authUser, setAuthUser] = useState(() => getAuthUser());
   const supabaseConfig = getStoredSupabaseConfig();
   const { t, language, setLanguage } = useI18n();
   const [pendingApprovals, setPendingApprovals] = useState(0);
+
+  useEffect(() => {
+    setAuthUser(getAuthUser());
+  }, [currentRole]);
 
   useEffect(() => {
     const calculatePending = () => {
@@ -332,6 +343,32 @@ export function HeaderNav({
                 </div>
               )}
             </div>
+
+            {/* Home Portal Shortcut */}
+            {onGoHome && (
+              <button
+                type="button"
+                onClick={onGoHome}
+                className="hidden lg:flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+                title="Return to Common Home Portal"
+              >
+                <Home className="w-3.5 h-3.5 text-blue-500" />
+                <span>Home</span>
+              </button>
+            )}
+
+            {/* Sign Out Button */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 text-xs font-bold transition-all cursor-pointer"
+                title="Sign Out of Session"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            )}
 
           </div>
         </div>

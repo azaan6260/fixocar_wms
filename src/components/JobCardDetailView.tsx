@@ -495,6 +495,9 @@ export function JobCardDetailView({
             requisitionsCount={totalRequisitionsCount}
             qcPassed={Boolean(card.qcPassed)}
             isDelivered={isDelivered}
+            vehicleReg={card.vehicle.registrationNumber}
+            vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+            isCars24={card.isCars24}
           />
         )}
 
