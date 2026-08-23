@@ -3,6 +3,7 @@ import { UserRole, JobCard } from '../types';
 import { updateTaskStatus, respondToCustomerApproval, getEmployees, getVendors } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
 import { TaskDetailCard } from './TaskDetailCard';
+import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { useI18n } from '../lib/i18n';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
@@ -126,49 +127,16 @@ export function RoleWorkspaceView({
         />
       )}
 
-      {/* DENTER / PAINTER INTERACTIVE BODY PANEL DIAGRAM */}
+      {/* DENTER / PAINTER INTERACTIVE AR BODY PANEL SKETCH & DAMAGE CHART */}
       {(currentRole === 'DENTER' || currentRole === 'PAINTER') && (
-        <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              {currentRole === 'DENTER' ? <Hammer className="w-4 h-4" /> : <Palette className="w-4 h-4" />}
-              Interactive Vehicle Body Panel Inspection Chart
-            </span>
-            <span className="text-[11px] text-slate-400">Click panel to view damage stage</span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-            {[
-              'Front Bumper',
-              'Hood / Bonnet',
-              'Right Front Fender',
-              'Left Door Panel',
-              'Rear Quarter Panel'
-            ].map((panel) => {
-              const isSel = selectedPanel === panel;
-              return (
-                <button
-                  key={panel}
-                  onClick={() => setSelectedPanel(isSel ? null : panel)}
-                  className={`p-3 rounded-xl border font-bold transition-all ${
-                    isSel
-                      ? 'border-amber-500 bg-amber-500/20 text-amber-300 shadow-md'
-                      : 'border-slate-800 bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-                  }`}
-                >
-                  {panel}
-                </button>
-              );
-            })}
-          </div>
-
-          {selectedPanel && (
-            <div className="p-3 rounded-xl bg-slate-800/80 text-xs text-amber-300 border border-amber-500/20 flex items-center justify-between">
-              <span>Selected Panel: <strong>{selectedPanel}</strong></span>
-              <span className="text-slate-300">Stage: {currentRole === 'DENTER' ? 'Hydro Pulling & Metal Sanding' : 'Anti-Rust Primer & Baked Paint Curing'}</span>
-            </div>
-          )}
-        </div>
+        <InteractiveVehicleInspectionChart
+          currentRole={currentRole}
+          mode="VIEW"
+          selectedPanelIds={selectedPanel ? [selectedPanel] : []}
+          onPanelToggle={(panelId) => {
+            setSelectedPanel(prev => prev === panelId ? null : panelId);
+          }}
+        />
       )}
 
       {/* Role Tasks List */}

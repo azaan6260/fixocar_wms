@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob } from '../types';
 import { getStandardJobs } from '../lib/storage';
+import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
   Hammer, 
@@ -20,7 +21,9 @@ import {
   Info,
   ChevronRight,
   Layers,
-  Zap
+  Zap,
+  LayoutGrid,
+  Eye
 } from 'lucide-react';
 
 export interface AllocatedTaskItem {
@@ -67,6 +70,43 @@ export function JobAllotmentPipeline({
 
   // Staged job IDs selected by checkbox before pressing "Add Selected Jobs to Job Card"
   const [stagedJobIds, setStagedJobIds] = useState<string[]>([]);
+
+  // Toggle between interactive Visual Sketch view vs standard list view for body panels
+  const [paintViewMode, setPaintViewMode] = useState<'VISUAL_SKETCH' | 'GRID_LIST'>('VISUAL_SKETCH');
+
+  // Helper to handle panel toggles from interactive visual sketch chart
+  const handlePanelChartToggle = (panelId: string, matchedJobId?: string) => {
+    // Find panel definition
+    const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
+    if (!panelDef) return;
+
+    // Find matched standard job or fallback
+    const targetJobId = matchedJobId || panelDef.standardJobId;
+    const stdJob = standardJobs.find(j => j.id === targetJobId) || {
+      id: targetJobId,
+      title: `${panelDef.nameEn} Painting & Denting`,
+      category: 'PAINT' as TaskCategory,
+      retailPrice: panelDef.defaultPrice,
+      cars24Price: isCars24 ? 1350 : panelDef.defaultPrice,
+      isContractBasis: true,
+      contractorPayout: 1150,
+      painterPayout: isCars24 ? 800 : 950,
+      denterPayout: isCars24 ? 150 : 200,
+      estimatedHours: 4
+    };
+
+    // Check if task already exists in selectedTasks
+    const existingTask = selectedTasks.find(t => t.standardJobId === stdJob.id || t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()));
+
+    if (existingTask) {
+      // Remove from task list
+      onTasksChange(selectedTasks.filter(t => t.id !== existingTask.id));
+    } else {
+      // Add to task list
+      const newTask = createUnallocatedTask(stdJob);
+      onTasksChange([...selectedTasks, newTask]);
+    }
+  };
 
   const sections = [
     { id: 'PAINTING_DENTING', label: 'Painting & Denting', icon: Paintbrush, color: 'text-purple-600 dark:text-purple-400', count: selectedTasks.filter(t => t.category === 'PAINT').length },
@@ -387,7 +427,65 @@ export function JobAllotmentPipeline({
       </div>
 
       {/* SECTION 1: PAINTING & DENTING */}
-      {activeSection === 'PAINTING_DENTING' && renderJobSelectionGrid(paintPanels, 'Painting & Denting')}
+      {activeSection === 'PAINTING_DENTING' && (
+        <div className="space-y-4">
+          {/* Sub-view switcher: Visual Interactive Sketch vs Standard List */}
+          <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 p-2 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 ml-2">
+                पैनल चुनने का तरीका (Selection View):
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPaintViewMode('VISUAL_SKETCH')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  paintViewMode === 'VISUAL_SKETCH'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Car className="w-3.5 h-3.5" />
+                <span>🎨 Visual Car Sketch (AR Diagram)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaintViewMode('GRID_LIST')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  paintViewMode === 'GRID_LIST'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>📋 List View</span>
+              </button>
+            </div>
+          </div>
+
+          {paintViewMode === 'VISUAL_SKETCH' ? (
+            <InteractiveVehicleInspectionChart
+              mode="INTERACTIVE_SELECT"
+              isCars24={isCars24}
+              selectedPanelIds={selectedTasks.map(t => {
+                // match panel ID
+                const matched = VEHICLE_PANELS.find(p => 
+                  p.standardJobId === t.standardJobId || 
+                  t.title.toLowerCase().includes(p.nameEn.toLowerCase())
+                );
+                return matched ? matched.id : '';
+              }).filter(Boolean)}
+              onPanelToggle={handlePanelChartToggle}
+              availableStandardJobs={standardJobs}
+            />
+          ) : (
+            renderJobSelectionGrid(paintPanels, 'Painting & Denting')
+          )}
+        </div>
+      )}
 
       {/* SECTION 2: EXCLUSIVE DENTING */}
       {activeSection === 'DENTING' && renderJobSelectionGrid(dentingJobs, 'Exclusive Denting')}
