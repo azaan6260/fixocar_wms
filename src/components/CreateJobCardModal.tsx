@@ -353,6 +353,9 @@ export function CreateJobCardModal({
         pairedDenterId: t.pairedDenterId,
         pairedDenterName: t.pairedDenterName,
         standardJobId: t.standardJobId,
+        panelKey: (t as any).panelKey,
+        panelNameEn: (t as any).panelNameEn,
+        paintScope: (t as any).paintScope,
       }))
     });
 

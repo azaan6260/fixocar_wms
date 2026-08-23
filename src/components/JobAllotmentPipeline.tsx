@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob } from '../types';
+import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { 
@@ -43,6 +43,9 @@ export interface AllocatedTaskItem {
   pairedDenterId?: string;
   pairedDenterName?: string;
   standardJobId?: string;
+  panelKey?: string;
+  panelNameEn?: string;
+  paintScope?: PaintScope;
 }
 
 interface JobAllotmentPipelineProps {
@@ -82,10 +85,12 @@ export function JobAllotmentPipeline({
 
     // Find matched standard job or fallback
     const targetJobId = matchedJobId || panelDef.standardJobId;
-    const stdJob = standardJobs.find(j => j.id === targetJobId) || {
+    const stdJob = standardJobs.find(j => j.id === targetJobId || j.panelKey === panelId) || {
       id: targetJobId,
-      title: `${panelDef.nameEn} Painting & Denting`,
+      title: `${panelDef.nameEn} (Full Outer Paint)`,
       category: 'PAINT' as TaskCategory,
+      panelKey: panelId,
+      panelNameEn: panelDef.nameEn,
       retailPrice: panelDef.defaultPrice,
       cars24Price: isCars24 ? 1350 : panelDef.defaultPrice,
       isContractBasis: true,
@@ -96,7 +101,12 @@ export function JobAllotmentPipeline({
     };
 
     // Check if task already exists in selectedTasks
-    const existingTask = selectedTasks.find(t => t.standardJobId === stdJob.id || t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()));
+    const existingTask = selectedTasks.find(t => 
+      (t.panelKey && t.panelKey === panelId) ||
+      t.standardJobId === stdJob.id || 
+      t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()) ||
+      (panelDef.code && t.title.toLowerCase().includes(panelDef.code.toLowerCase()))
+    );
 
     if (existingTask) {
       // Remove from task list
@@ -164,7 +174,10 @@ export function JobAllotmentPipeline({
         denterPayout: denterPayout,
         pairedDenterId: undefined, // Unallocated initially
         pairedDenterName: undefined,
-        standardJobId: stdJob.id
+        standardJobId: stdJob.id,
+        panelKey: stdJob.panelKey,
+        panelNameEn: stdJob.panelNameEn,
+        paintScope: stdJob.paintScope,
       };
     } else {
       return {
@@ -471,12 +484,20 @@ export function JobAllotmentPipeline({
               mode="INTERACTIVE_SELECT"
               isCars24={isCars24}
               selectedPanelIds={selectedTasks.map(t => {
-                // match panel ID
-                const matched = VEHICLE_PANELS.find(p => 
-                  p.standardJobId === t.standardJobId || 
-                  t.title.toLowerCase().includes(p.nameEn.toLowerCase())
+                // 1. Direct panelKey match
+                if (t.panelKey) return t.panelKey;
+
+                // 2. Match standardJobId against VEHICLE_PANELS
+                const matchedByJobId = VEHICLE_PANELS.find(p => p.standardJobId === t.standardJobId);
+                if (matchedByJobId) return matchedByJobId.id;
+
+                // 3. Match title or code against VEHICLE_PANELS
+                const matchedByTitle = VEHICLE_PANELS.find(p => 
+                  t.title.toLowerCase().includes(p.nameEn.toLowerCase()) ||
+                  t.title.toLowerCase().includes(p.id.replace(/_/g, ' ')) ||
+                  (p.code && t.title.toLowerCase().includes(p.code.toLowerCase()))
                 );
-                return matched ? matched.id : '';
+                return matchedByTitle ? matchedByTitle.id : '';
               }).filter(Boolean)}
               onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}

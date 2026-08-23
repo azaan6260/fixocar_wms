@@ -81,7 +81,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'FB',
     nameEn: 'Front Bumper',
     nameHi: 'आगे का बंपर (Front Bumper)',
-    standardJobId: 'std-paint-12',
+    standardJobId: 'std-bumper-front-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -95,7 +95,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'BONNET',
     nameEn: 'Hood / Bonnet',
     nameHi: 'बोनट / हुड (Bonnet)',
-    standardJobId: 'std-paint-15',
+    standardJobId: 'std-hood-bonnet-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -109,7 +109,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'F-LHS',
     nameEn: 'Left Front Fender',
     nameHi: 'बायां अगला फेंडर (Left Front Fender)',
-    standardJobId: 'std-paint-3',
+    standardJobId: 'std-fender-lhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -123,7 +123,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'F-RHS',
     nameEn: 'Right Front Fender',
     nameHi: 'दायां अगला फेंडर (Right Front Fender)',
-    standardJobId: 'std-paint-8',
+    standardJobId: 'std-fender-rhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -153,7 +153,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'ROOF',
     nameEn: 'Roof Panel',
     nameHi: 'छत (Roof)',
-    standardJobId: 'std-paint-13',
+    standardJobId: 'std-roof-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -183,7 +183,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'D-L-FR',
     nameEn: 'Door LHS Front',
     nameHi: 'बायां अगला दरवाजा (Left Front Door)',
-    standardJobId: 'std-paint-1',
+    standardJobId: 'std-door-lhs-front-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -197,7 +197,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'D-L-RR',
     nameEn: 'Door LHS Rear',
     nameHi: 'बायां पिछला दरवाजा (Left Rear Door)',
-    standardJobId: 'std-paint-2',
+    standardJobId: 'std-door-lhs-rear-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -211,7 +211,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'RB-L',
     nameEn: 'Running Board LHS (Sill)',
     nameHi: 'बायां रनिंग बोर्ड / सिल (Left Running Board)',
-    standardJobId: 'std-paint-6',
+    standardJobId: 'std-running-board-lhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -225,7 +225,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'QP-L',
     nameEn: 'Quarter Panel LHS',
     nameHi: 'बायां क्वार्टर पैनल (Left Quarter Panel)',
-    standardJobId: 'std-paint-4',
+    standardJobId: 'std-quarter-panel-lhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -241,7 +241,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'D-R-FR',
     nameEn: 'Door RHS Front',
     nameHi: 'दायां अगला दरवाजा (Right Front Door)',
-    standardJobId: 'std-paint-9',
+    standardJobId: 'std-door-rhs-front-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -255,7 +255,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'D-R-RR',
     nameEn: 'Door RHS Rear',
     nameHi: 'दायां पिछला दरवाजा (Right Rear Door)',
-    standardJobId: 'std-paint-10',
+    standardJobId: 'std-door-rhs-rear-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -269,7 +269,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'RB-R',
     nameEn: 'Running Board RHS (Sill)',
     nameHi: 'दायां रनिंग बोर्ड / सिल (Right Running Board)',
-    standardJobId: 'std-paint-7',
+    standardJobId: 'std-running-board-rhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -283,7 +283,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'QP-R',
     nameEn: 'Quarter Panel RHS',
     nameHi: 'दायां क्वार्टर पैनल (Right Quarter Panel)',
-    standardJobId: 'std-paint-5',
+    standardJobId: 'std-quarter-panel-rhs-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -299,7 +299,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'BOOT',
     nameEn: 'Boot Lid / Tailgate',
     nameHi: 'डिक्की / बूट लिड (Boot Lid / Trunk)',
-    standardJobId: 'std-paint-14',
+    standardJobId: 'std-boot-trunk-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -313,7 +313,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'RB',
     nameEn: 'Rear Bumper',
     nameHi: 'पीछे का बंपर (Rear Bumper)',
-    standardJobId: 'std-paint-11',
+    standardJobId: 'std-bumper-rear-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
@@ -327,7 +327,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     code: 'FLOOR',
     nameEn: 'Trunk Floor / Underbody',
     nameHi: 'डिक्की का फर्श (Boot Floor)',
-    standardJobId: 'std-paint-14',
+    standardJobId: 'std-boot-floor-full',
     view: 'TOP',
     svgShape: {
       type: 'rect',
