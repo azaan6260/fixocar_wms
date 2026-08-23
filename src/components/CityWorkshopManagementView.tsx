@@ -6,9 +6,11 @@ import {
   getEmployees, updateEmployee,
   clearAllDemoData, resetToDefaultMockData
 } from '../lib/storage';
+import { syncFromSupabase, pushLocalDataToSupabase } from '../lib/syncService';
 import { 
   Building2, MapPin, Plus, Trash2, Edit2, ShieldCheck, 
-  Car, Check, Users, RefreshCw, AlertTriangle, Phone, CheckCircle2
+  Car, Check, Users, RefreshCw, AlertTriangle, Phone, CheckCircle2,
+  UploadCloud, DownloadCloud, Database
 } from 'lucide-react';
 
 interface CityWorkshopManagementProps {
@@ -23,6 +25,7 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
   const [activeTab, setActiveTab] = useState<'CITIES' | 'WORKSHOPS' | 'STAFFING'>('WORKSHOPS');
   const [selectedCityId, setSelectedCityId] = useState<string>('ALL');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Form states for new City
   const [showAddCity, setShowAddCity] = useState(false);
@@ -58,6 +61,40 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
       const exists = cList.some(c => c.id === prev);
       return exists ? prev : cList[0].id;
     });
+  };
+
+  const handlePushToSupabase = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await pushLocalDataToSupabase();
+      if (res.success) {
+        alert(`✅ Push Complete!\n\n${res.message}`);
+      } else {
+        alert(`⚠️ Push completed with warnings/errors:\n\n${res.message}\n\nErrors:\n${res.errors.join('\n')}`);
+      }
+      refreshData();
+    } catch (err: any) {
+      alert(`Error pushing to Supabase: ${err.message || String(err)}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleFetchFromSupabase = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncFromSupabase();
+      if (res.success) {
+        alert(`✅ Sync Complete!\n\nFetched from Supabase: ${res.citiesSynced} cities, ${res.workshopsSynced} workshops, ${res.employeesSynced} employees, ${res.vendorsSynced} vendors.`);
+      } else {
+        alert(`⚠️ Sync finished with warnings:\n\n${res.errors.join('\n')}`);
+      }
+      refreshData();
+    } catch (err: any) {
+      alert(`Error fetching from Supabase: ${err.message || String(err)}`);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleAddCitySubmit = (e: React.FormEvent) => {
@@ -189,18 +226,36 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
         {isAdmin && (
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={handlePushToSupabase}
+              disabled={isSyncing}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              title="Push local cities, workshops & staff to Supabase tables"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>{isSyncing ? 'Pushing...' : 'Push All to Supabase'}</span>
+            </button>
+            <button
+              onClick={handleFetchFromSupabase}
+              disabled={isSyncing}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              title="Fetch live records from Supabase tables"
+            >
+              <DownloadCloud className="w-3.5 h-3.5" />
+              <span>{isSyncing ? 'Syncing...' : 'Fetch Live Supabase Data'}</span>
+            </button>
+            <button
               onClick={handleClearDemoDataClick}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear Demo Data (Start Fresh)</span>
+              <span>Clear Local Data</span>
             </button>
             <button
               onClick={handleResetDefaultsClick}
               className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset Defaults</span>
+              <span>Reset</span>
             </button>
           </div>
         )}

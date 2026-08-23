@@ -1314,7 +1314,14 @@ export function saveCities(cities: City[], skipPush = false) {
           name: city.name,
           state: city.state,
         }).then(({ error }) => {
-          if (error) console.error('Supabase sync error (cities):', error);
+          if (error) {
+            console.error('Supabase sync error (cities):', error);
+            dispatchToastNotification({
+              type: 'ESTIMATE_DECLINED',
+              title: `❌ Supabase Sync Error (Cities)`,
+              message: `Could not sync "${city.name}" to Supabase: ${error.message}`
+            });
+          }
         });
       });
     }
@@ -1372,7 +1379,14 @@ export function saveWorkshops(workshops: Workshop[], skipPush = false) {
           is_cars24_partner: ws.isCars24Partner,
           manager_name: ws.managerName,
         }).then(({ error }) => {
-          if (error) console.error('Supabase sync error (workshops):', error);
+          if (error) {
+            console.error('Supabase sync error (workshops):', error);
+            dispatchToastNotification({
+              type: 'ESTIMATE_DECLINED',
+              title: `❌ Supabase Sync Error (Workshops)`,
+              message: `Could not sync "${ws.name}" to Supabase: ${error.message}`
+            });
+          }
         });
       });
     }
