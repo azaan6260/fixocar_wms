@@ -20,19 +20,14 @@ import {
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { StandardJob } from '../types';
 import { getStandardJobs } from '../lib/storage';
+import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 
 export type DamageSeverity = 'SCRATCH' | 'MINOR_DENT' | 'DEEP_DENT' | 'TEAR_CRACK' | 'REPLACE_REQ';
 export type RepairAction = 'PAINT_ONLY' | 'DENT_AND_PAINT' | 'DENT_ONLY' | 'REPLACEMENT';
 
 export function getMatchingStandardJob(panel: PanelDefinition, standardJobs: StandardJob[]): StandardJob | undefined {
-  if (!panel || !standardJobs || standardJobs.length === 0) return undefined;
-  return standardJobs.find(j => 
-    j.id === panel.standardJobId ||
-    (j.panelKey && j.panelKey === panel.id) ||
-    (j.panelNameEn && j.panelNameEn.toLowerCase().trim() === panel.nameEn.toLowerCase().trim()) ||
-    (j.title && j.title.toLowerCase().includes(panel.nameEn.toLowerCase().trim())) ||
-    (panel.code && j.title.toLowerCase().includes(panel.code.toLowerCase().trim()))
-  );
+  if (!panel) return undefined;
+  return mapPanelToStandardJob(panel, standardJobs);
 }
 
 export interface PanelInspectionItem {

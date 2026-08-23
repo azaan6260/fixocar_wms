@@ -497,6 +497,70 @@ CREATE POLICY "Public full access on vehicle_check_ins" ON public.vehicle_check_
 CREATE POLICY "Public full access on workshop_expenses" ON public.workshop_expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on attendance_records" ON public.attendance_records FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on salary_records" ON public.salary_records FOR ALL USING (true) WITH CHECK (true);
+
+-- ==========================================
+-- 11. POST-SIGNUP TRIGGER: AUTO-PUSH NEW AUTH USERS TO PUBLIC.EMPLOYEES
+-- ==========================================
+-- Automatically creates/updates public.employees when a user signs up in auth.users
+CREATE OR REPLACE FUNCTION public.handle_new_user_signup()
+RETURNS TRIGGER AS $$
+DECLARE
+  meta jsonb;
+  emp_id text;
+  emp_name text;
+  emp_role user_role;
+  emp_phone text;
+  emp_team text;
+  emp_login_id text;
+  emp_type text;
+  w_id text;
+  w_name text;
+  c_id text;
+  c_name text;
+BEGIN
+  meta := NEW.raw_user_meta_data;
+  emp_id := COALESCE(meta->>'employee_id', 'emp-' || substring(NEW.id::text from 1 for 8));
+  emp_name := COALESCE(meta->>'name', meta->>'full_name', split_part(NEW.email, '@', 1), 'New Staff');
+  
+  BEGIN
+    emp_role := (COALESCE(meta->>'role', 'MECHANIC'))::user_role;
+  EXCEPTION WHEN OTHERS THEN
+    emp_role := 'MECHANIC'::user_role;
+  END;
+
+  emp_phone := COALESCE(meta->>'phone', '9820011223');
+  emp_team := COALESCE(meta->>'specialized_team', 'General');
+  emp_login_id := COALESCE(meta->>'login_id', split_part(NEW.email, '@', 1));
+  emp_type := COALESCE(meta->>'employment_type', 'PAYROLL');
+  w_id := meta->>'workshop_id';
+  w_name := meta->>'workshop_name';
+  c_id := meta->>'city_id';
+  c_name := meta->>'city_name';
+
+  INSERT INTO public.employees (
+    id, name, role, phone, email, specialized_team, status,
+    login_id, employment_type, workshop_id, workshop_name, city_id, city_name, created_at, updated_at
+  )
+  VALUES (
+    emp_id, emp_name, emp_role, emp_phone, NEW.email, emp_team, 'AVAILABLE',
+    emp_login_id, emp_type, w_id, w_name, c_id, c_name, NOW(), NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    phone = EXCLUDED.phone,
+    specialized_team = EXCLUDED.specialized_team,
+    updated_at = NOW();
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_signup();
 `;
 
 

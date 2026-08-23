@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask, UserRole } from '../types';
+import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask, UserRole, StandardJob } from '../types';
 import { 
   updateJobCard, 
   updateTaskStatus, 
@@ -7,8 +7,13 @@ import {
   createDeliveryRecord, 
   updateVehicleCheckIn, 
   getInventoryConsumptionRecords,
+  getStandardJobs,
   dispatchToastNotification
 } from '../lib/storage';
+import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+
+// Re-export mapping helpers for visual panel IDs to Standard Job IDs
+export { mapPanelToStandardJob, getPanelEnvironmentRates };
 import { 
   speakTechnicianPrompt, 
   stopTechnicianSpeech 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
+import { mapPanelToStandardJob } from '../lib/panelMappingHelper';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
@@ -87,22 +88,17 @@ export function JobAllotmentPipeline({
     const freshJobs = getStandardJobs();
 
     // Find matched standard job in standardJobs library
-    const targetJobId = matchedJobId || panelDef.standardJobId;
-    const stdJob = freshJobs.find(j => 
-      j.id === targetJobId || 
-      (j.panelKey && j.panelKey === panelId) ||
-      (j.panelNameEn && j.panelNameEn.toLowerCase().trim() === panelDef.nameEn.toLowerCase().trim()) ||
-      (j.title && j.title.toLowerCase().includes(panelDef.nameEn.toLowerCase().trim()))
-    ) || {
-      id: targetJobId,
+    const matchedStdJob = mapPanelToStandardJob(panelDef, freshJobs);
+    const stdJob = matchedStdJob || {
+      id: matchedJobId || panelDef.standardJobId,
       title: `${panelDef.nameEn} (Full Outer Paint)`,
       category: 'PAINT' as TaskCategory,
       panelKey: panelId,
       panelNameEn: panelDef.nameEn,
-      retailPrice: panelDef.defaultPrice,
-      cars24Price: isCars24 ? 1350 : Math.round(panelDef.defaultPrice * 0.75),
+      retailPrice: 2000,
+      cars24Price: 1350,
       isContractBasis: true,
-      contractorPayout: 1150,
+      contractorPayout: isCars24 ? 950 : 1150,
       painterPayout: isCars24 ? 800 : 950,
       denterPayout: isCars24 ? 150 : 200,
       estimatedHours: 4

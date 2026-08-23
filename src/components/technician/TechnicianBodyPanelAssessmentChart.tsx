@@ -25,7 +25,8 @@ import {
   Tag
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
-import { updateJobCard, addRequisitionToTask, dispatchToastNotification } from '../../lib/storage';
+import { updateJobCard, addRequisitionToTask, dispatchToastNotification, getStandardJobs } from '../../lib/storage';
+import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../../lib/panelMappingHelper';
 
 export type BodyViewFilter = 'ALL_ASSIGNED' | 'DENTER' | 'PAINTER' | 'INSPECTION';
 
@@ -192,16 +193,22 @@ export function TechnicianBodyPanelAssessmentChart({
     const availableDenter = employees.find(e => e.role === 'DENTER' || e.specializedTeam === 'Denting');
     const availablePainter = employees.find(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
 
+    const standardJobs = getStandardJobs();
+    const envRates = getPanelEnvironmentRates(panel, standardJobs, card.isCars24);
+    const activeStdJob = envRates.standardJob;
+    const stdJobId = activeStdJob?.id || panel.standardJobId;
+
     const tasksToAdd: JobTask[] = [];
 
     if (taskType === 'DENTING' || taskType === 'BOTH') {
-      const dentCost = Math.round(panel.defaultPrice * 0.45);
-      const dentPrice = Math.round(panel.defaultPrice * 0.7);
+      const dentPrice = Math.round(envRates.price * 0.35);
+      const dentCost = Math.round(dentPrice * 0.6);
       tasksToAdd.push({
         id: `task-dent-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         jobCardId: card.id,
         title: `${panel.nameHi} - डेंटिंग रिपेयर (${panel.nameEn} Dent Pulling)`,
         category: 'DENTING',
+        panelKey: panel.id,
         assignedToId: availableDenter?.id || 'emp-104',
         assignedToName: availableDenter?.name || 'David O\'Connor (Denter)',
         assignedType: 'EMPLOYEE',
@@ -211,19 +218,20 @@ export function TechnicianBodyPanelAssessmentChart({
         requiresCustomerApproval: false,
         isCustomerApproved: true,
         notes: customNoteText || `Assessment step inspection request for ${panel.nameEn}`,
-        standardJobId: panel.standardJobId,
-        denterPayout: Math.round(dentCost * 0.7)
+        standardJobId: stdJobId,
+        denterPayout: envRates.denterPayout
       });
     }
 
     if (taskType === 'PAINT' || taskType === 'BOTH') {
-      const paintCost = Math.round(panel.defaultPrice * 0.55);
-      const paintPrice = Math.round(panel.defaultPrice * 0.85);
+      const paintPrice = envRates.price;
+      const paintCost = Math.round(paintPrice * 0.6);
       tasksToAdd.push({
         id: `task-paint-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         jobCardId: card.id,
         title: `${panel.nameHi} - पेंटिंग व क्लियर कोट (${panel.nameEn} 2K Paint)`,
         category: 'PAINT',
+        panelKey: panel.id,
         assignedToId: availablePainter?.id || 'emp-105',
         assignedToName: availablePainter?.name || 'Kenji Sato (Painter)',
         assignedType: 'EMPLOYEE',
@@ -233,8 +241,8 @@ export function TechnicianBodyPanelAssessmentChart({
         requiresCustomerApproval: false,
         isCustomerApproved: true,
         notes: customNoteText || `Assessment step inspection request for ${panel.nameEn}`,
-        standardJobId: panel.standardJobId,
-        painterPayout: Math.round(paintCost * 0.7)
+        standardJobId: stdJobId,
+        painterPayout: envRates.painterPayout
       });
     }
 
@@ -247,7 +255,7 @@ export function TechnicianBodyPanelAssessmentChart({
       dispatchToastNotification({
         type: 'SUCCESS',
         title: `✅ काम दर्ज हुआ (${panel.nameEn})`,
-        message: `${tasksToAdd.length} नया रिपेयर कार्य ${card.vehicle.registrationNumber} के लिए सफलतापूर्वक जोड़ा गया।`,
+        message: `${tasksToAdd.length} नया रिपेयर कार्य ${card.vehicle.registrationNumber} के लिए सफलतापूर्वक जोड़ा गया। (${card.isCars24 ? 'Cars24 Rate' : 'Retail Rate'}: ₹${envRates.price.toLocaleString('en-IN')})`,
         vehicleReg: card.vehicle.registrationNumber,
         jobCardId: card.id
       });
@@ -262,7 +270,7 @@ export function TechnicianBodyPanelAssessmentChart({
         partNumber: panel.code,
         itemType: 'PART',
         quantity: 1,
-        suggestedPrice: panel.defaultPrice * 1.5,
+        suggestedPrice: Math.round(envRates.price * 1.5),
         urgency: 'HIGH',
         reason: `Severe body damage found on ${panel.nameEn} during visual inspection.`
       });
@@ -873,8 +881,8 @@ export function TechnicianBodyPanelAssessmentChart({
                     <Zap className="w-4 h-4 text-amber-400" />
                     इस पैनल के लिए काम दर्ज करें (Log Repair Request):
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Std: ₹{selectedPanel.defaultPrice}
+                  <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                    Std ({card.isCars24 ? 'Cars24' : 'Retail'}): ₹{(getPanelEnvironmentRates(selectedPanel, getStandardJobs(), card.isCars24).price).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -891,7 +899,7 @@ export function TechnicianBodyPanelAssessmentChart({
                       + डेंटिंग जोड़ें
                     </span>
                     <span className="text-[10px] text-red-200/80 font-normal">
-                      Dent Pulling • ₹{Math.round(selectedPanel.defaultPrice * 0.7)}
+                      Dent Pulling • ₹{Math.round(getPanelEnvironmentRates(selectedPanel, getStandardJobs(), card.isCars24).price * 0.35).toLocaleString('en-IN')} (Payout ₹{getPanelEnvironmentRates(selectedPanel, getStandardJobs(), card.isCars24).denterPayout})
                     </span>
                   </button>
 
@@ -906,7 +914,7 @@ export function TechnicianBodyPanelAssessmentChart({
                       + पेंटिंग जोड़ें
                     </span>
                     <span className="text-[10px] text-blue-200/80 font-normal">
-                      2K Paint & Clear • ₹{Math.round(selectedPanel.defaultPrice * 0.85)}
+                      2K Paint • ₹{getPanelEnvironmentRates(selectedPanel, getStandardJobs(), card.isCars24).price.toLocaleString('en-IN')} (Payout ₹{getPanelEnvironmentRates(selectedPanel, getStandardJobs(), card.isCars24).painterPayout})
                     </span>
                   </button>
 

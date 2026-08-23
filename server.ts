@@ -828,6 +828,185 @@ Return valid JSON ONLY.`;
     });
   });
 
+  // Helper: Post-Signup Hook to auto-push new users from auth layer to public.employees
+  async function executePostSignupHook(
+    client: any, 
+    authUser: { id: string; email?: string; user_metadata?: any; raw_user_meta_data?: any }
+  ) {
+    const meta = authUser.user_metadata || authUser.raw_user_meta_data || {};
+    const email = (authUser.email || meta.email || `${authUser.id.slice(0, 8)}@workshop.fixocar.com`).toLowerCase().trim();
+    const empId = meta.employee_id || `emp-${authUser.id.replace(/-/g, '').slice(0, 8)}`;
+    const name = meta.name || meta.full_name || email.split('@')[0] || 'New Staff';
+    const role = meta.role || 'MECHANIC';
+    const phone = meta.phone || '9820011223';
+    const specializedTeam = meta.specialized_team || meta.specializedTeam || 'General';
+    const loginId = meta.login_id || meta.loginId || email.split('@')[0];
+    const employmentType = meta.employment_type || meta.employmentType || 'PAYROLL';
+    const cityId = meta.city_id || meta.cityId || null;
+    const cityName = meta.city_name || meta.cityName || null;
+    const workshopId = meta.workshop_id || meta.workshopId || null;
+    const workshopName = meta.workshop_name || meta.workshopName || null;
+
+    const dbPayload = {
+      id: empId,
+      name,
+      role,
+      phone,
+      email,
+      specialized_team: specializedTeam,
+      status: 'AVAILABLE',
+      active_jobs_count: 0,
+      avatar_url: meta.avatar_url || meta.avatarUrl || null,
+      login_id: loginId,
+      password_hash: meta.password_hash || meta.password || 'password123',
+      base_salary: meta.base_salary || meta.baseSalary || 0,
+      employment_type: employmentType,
+      city_id: cityId,
+      city_name: cityName,
+      workshop_id: workshopId,
+      workshop_name: workshopName,
+      updated_at: new Date().toISOString()
+    };
+
+    if (client) {
+      try {
+        const { error } = await client.from('employees').upsert(dbPayload);
+        if (error) {
+          console.warn('Post-signup hook upsert warning:', error.message);
+        } else {
+          console.log(`[Post-Signup Trigger] Automatically pushed user ${email} (${empId}) into public.employees table`);
+        }
+      } catch (upsertErr: any) {
+        console.warn('Post-signup hook upsert exception:', upsertErr.message);
+      }
+    }
+
+    return {
+      id: empId,
+      name,
+      role,
+      phone,
+      email,
+      specializedTeam,
+      status: 'AVAILABLE',
+      activeJobsCount: 0,
+      avatarUrl: meta.avatar_url || meta.avatarUrl || null,
+      loginId,
+      password: meta.password_hash || meta.password || 'password123',
+      baseSalary: meta.base_salary || meta.baseSalary || 0,
+      employmentType,
+      cityId,
+      cityName,
+      workshopId,
+      workshopName,
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  // Server Hook / Endpoint: Post-Signup Trigger API
+  app.post('/api/supabase/auth/post-signup-hook', async (req, res) => {
+    try {
+      const { user, supabaseUrl, supabaseServiceKey, supabaseAnonKey } = req.body;
+      if (!user || !user.id) {
+        return res.status(400).json({ error: 'Valid user object with ID is required for post-signup hook.' });
+      }
+
+      const client = getSupabaseAdminClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
+      const employee = await executePostSignupHook(client, user);
+
+      return res.json({
+        success: true,
+        message: `Post-signup hook executed: User ${employee.email} successfully pushed to public.employees table`,
+        employee
+      });
+    } catch (err: any) {
+      console.error('Post-signup hook endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Server Endpoint: Signup New User and Trigger Immediate Push to Employees Table
+  app.post('/api/supabase/auth/signup', async (req, res) => {
+    try {
+      const { 
+        email, 
+        password, 
+        name, 
+        role = 'MECHANIC', 
+        phone, 
+        specializedTeam = 'General', 
+        workshopId, 
+        cityName, 
+        supabaseUrl, 
+        supabaseServiceKey, 
+        supabaseAnonKey 
+      } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required for sign up.' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      const client = getSupabaseAdminClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
+
+      let authUser: any = null;
+
+      if (client && client.auth?.admin) {
+        const { data: created, error: createErr } = await client.auth.admin.createUser({
+          email: cleanEmail,
+          password: password.trim(),
+          email_confirm: true,
+          user_metadata: {
+            name: name || cleanEmail.split('@')[0],
+            role,
+            phone: phone || '9820011223',
+            specialized_team: specializedTeam,
+            workshop_id: workshopId,
+            city_name: cityName,
+            login_id: cleanEmail.split('@')[0]
+          }
+        });
+
+        if (createErr) {
+          if (createErr.message?.includes('already') || createErr.status === 422) {
+            const { data: userList } = await client.auth.admin.listUsers();
+            authUser = userList?.users?.find((u: any) => u.email?.toLowerCase() === cleanEmail);
+          } else {
+            return res.status(400).json({ success: false, error: createErr.message });
+          }
+        } else {
+          authUser = created?.user;
+        }
+      }
+
+      if (!authUser) {
+        authUser = {
+          id: `usr-${Date.now().toString().slice(-6)}`,
+          email: cleanEmail,
+          user_metadata: {
+            name: name || cleanEmail.split('@')[0],
+            role,
+            phone: phone || '9820011223',
+            specialized_team: specializedTeam,
+            login_id: cleanEmail.split('@')[0]
+          }
+        };
+      }
+
+      const employee = await executePostSignupHook(client, authUser);
+
+      return res.json({
+        success: true,
+        message: `User signed up and pushed to public.employees table`,
+        user: authUser,
+        employee
+      });
+    } catch (err: any) {
+      console.error('Server auth signup endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Diagnostic utility endpoint to verify if Supabase 'auth.users' is in sync with 'public.employees'
   app.post('/api/supabase/admin/diagnose-sync', async (req, res) => {
     try {
@@ -927,6 +1106,28 @@ Return valid JSON ONLY.`;
             role: emp.role,
             inDatabaseTable: inDb
           });
+        }
+      }
+
+      // Automatically auto-heal & push newly signed-up auth.users into public.employees table if missing
+      if (canQueryAuthUsers && authUsers.length > 0) {
+        const missingInEmployeesTable = authUsers.filter((u: any) => {
+          const uEmail = u.email?.toLowerCase().trim();
+          const uEmpId = u.user_metadata?.employee_id;
+          return !dbEmployees.some((d: any) => d.id === uEmpId || (d.email && d.email.toLowerCase().trim() === uEmail));
+        });
+
+        if (missingInEmployeesTable.length > 0) {
+          let autoPushed = 0;
+          for (const orphan of missingInEmployeesTable) {
+            await executePostSignupHook(client, orphan);
+            autoPushed++;
+          }
+          if (autoPushed > 0) {
+            recommendations.push(`Post-signup trigger auto-pushed ${autoPushed} newly signed-up user(s) into public.employees table.`);
+            const { data: refreshedDb } = await client.from('employees').select('*');
+            if (refreshedDb) dbEmployees = refreshedDb;
+          }
         }
       }
 

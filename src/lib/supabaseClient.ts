@@ -61,6 +61,115 @@ export function clearSupabaseConfig() {
 /**
  * Sync employee profile and login credentials directly to Supabase Auth & Database
  */
+export async function triggerPostSignUpHook(
+  authUser: any
+): Promise<{ success: boolean; employee?: Employee; message?: string }> {
+  const config = getStoredSupabaseConfig();
+  try {
+    const res = await fetch('/api/supabase/auth/post-signup-hook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user: authUser,
+        supabaseUrl: config.supabaseUrl,
+        supabaseServiceKey: config.supabaseServiceKey,
+        supabaseAnonKey: config.supabaseAnonKey
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err: any) {
+    console.warn('Post-signup hook API failed, falling back to client upsert:', err);
+  }
+
+  // Client-side fallback if server endpoint is unreachable
+  const client = getSupabaseClient();
+  if (client && authUser) {
+    const meta = authUser.user_metadata || {};
+    const email = (authUser.email || meta.email || `${authUser.id.slice(0, 8)}@workshop.fixocar.com`).toLowerCase().trim();
+    const empId = meta.employee_id || `emp-${authUser.id.replace(/-/g, '').slice(0, 8)}`;
+    const name = meta.name || meta.full_name || email.split('@')[0] || 'New Staff';
+
+    const empRecord: Employee = {
+      id: empId,
+      name,
+      role: meta.role || 'MECHANIC',
+      phone: meta.phone || '9820011223',
+      email,
+      specializedTeam: meta.specialized_team || 'General',
+      status: 'AVAILABLE',
+      activeJobsCount: 0,
+      avatarUrl: meta.avatar_url,
+      loginId: meta.login_id || email.split('@')[0],
+      password: meta.password_hash || 'password123',
+      baseSalary: meta.base_salary || 0,
+      employmentType: meta.employment_type || 'PAYROLL',
+      cityId: meta.city_id,
+      cityName: meta.city_name,
+      workshopId: meta.workshop_id,
+      workshopName: meta.workshop_name
+    };
+
+    try {
+      await client.from('employees').upsert({
+        id: empRecord.id,
+        name: empRecord.name,
+        role: empRecord.role,
+        phone: empRecord.phone,
+        email: empRecord.email,
+        specialized_team: empRecord.specializedTeam,
+        status: 'AVAILABLE',
+        login_id: empRecord.loginId,
+        employment_type: empRecord.employmentType,
+        updated_at: new Date().toISOString()
+      });
+      return { success: true, employee: empRecord, message: 'Pushed signed-up user into public.employees' };
+    } catch (e: any) {
+      console.warn('Client fallback post-signup upsert warning:', e);
+    }
+  }
+
+  return { success: false, message: 'Could not push signed-up user to employees table' };
+}
+
+export async function signUpAndSyncEmployee(
+  payload: {
+    email: string;
+    password: string;
+    name?: string;
+    role?: string;
+    phone?: string;
+    specializedTeam?: string;
+    workshopId?: string;
+    cityName?: string;
+  }
+): Promise<{ success: boolean; user?: any; employee?: Employee; message?: string; error?: string }> {
+  const config = getStoredSupabaseConfig();
+  try {
+    const res = await fetch('/api/supabase/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        supabaseUrl: config.supabaseUrl,
+        supabaseServiceKey: config.supabaseServiceKey,
+        supabaseAnonKey: config.supabaseAnonKey
+      })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, error: errData.error || 'Signup request failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function syncEmployeeToSupabaseAuth(
   employee: Employee,
   newPassword?: string,
