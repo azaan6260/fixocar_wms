@@ -81,6 +81,10 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [formRetailDenterPayout, setFormRetailDenterPayout] = useState<number>(200);
   const [formCars24PainterPayout, setFormCars24PainterPayout] = useState<number>(800);
   const [formCars24DenterPayout, setFormCars24DenterPayout] = useState<number>(150);
+  
+  // General Contractor Payout for Washing / Service / Mechanical
+  const [formRetailContractorPayout, setFormRetailContractorPayout] = useState<number>(150);
+  const [formCars24ContractorPayout, setFormCars24ContractorPayout] = useState<number>(100);
   const [formContractorPayout, setFormContractorPayout] = useState<number>(950);
   
   const [formHours, setFormHours] = useState<number>(2);
@@ -88,6 +92,55 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
 
   const refreshList = () => {
     setStandardJobs(getStandardJobs());
+  };
+
+  const handleCategoryChange = (cat: TaskCategory) => {
+    setFormCat(cat);
+    const isPaintOrDent = cat === 'PAINT' || cat === 'DENTING';
+    
+    if (!isPaintOrDent) {
+      setFormPanelKey('NONE');
+      setFormIsContract(false); // Default to non-contract for washing/service/mechanical
+      
+      // Auto-set sensible defaults if user selects washing/service/mechanical
+      if (cat === 'WASHING') {
+        if (formTitle.includes('Door') || formTitle.includes('Painting') || !formTitle) {
+          setFormTitle('Full Body Foam Wash & Interior Vacuuming');
+          setFormRetailPrice(600);
+          setFormCars24Price(400);
+          setFormRetailContractorPayout(150);
+          setFormCars24ContractorPayout(100);
+          setFormHours(1);
+          setFormDesc('Complete exterior foam pressure wash, underbody cleaning, tire dressing and interior vacuuming.');
+        }
+      } else if (cat === 'SERVICE') {
+        if (formTitle.includes('Door') || formTitle.includes('Painting') || !formTitle) {
+          setFormTitle('Periodic General Service Package');
+          setFormRetailPrice(2800);
+          setFormCars24Price(2000);
+          setFormRetailContractorPayout(400);
+          setFormCars24ContractorPayout(300);
+          setFormHours(2.5);
+          setFormDesc('Engine oil & filter change, air filter cleaning, coolant top-up & 40-point vehicle checkup.');
+        }
+      } else if (cat === 'MECHANICAL') {
+        if (formTitle.includes('Door') || formTitle.includes('Painting') || !formTitle) {
+          setFormTitle('Front Brake Pads Replacement');
+          setFormRetailPrice(1400);
+          setFormCars24Price(1000);
+          setFormRetailContractorPayout(250);
+          setFormCars24ContractorPayout(180);
+          setFormHours(1.5);
+          setFormDesc('Brake pad removal, rotor inspection, caliper greasing and new pad fitment.');
+        }
+      }
+    } else {
+      setFormIsContract(true);
+      if (formPanelKey === 'NONE') {
+        setFormPanelKey('door_rhs_rear');
+        setFormTitle('Door RHS Rear Painting & Denting');
+      }
+    }
   };
 
   const handleOpenAdd = () => {
@@ -103,6 +156,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormRetailDenterPayout(200);
     setFormCars24PainterPayout(800);
     setFormCars24DenterPayout(150);
+    setFormRetailContractorPayout(1150);
+    setFormCars24ContractorPayout(950);
     setFormContractorPayout(1150);
     setFormHours(3);
     setFormDesc('Full outer panel paint with computerized color match, primer coat & clear coat polish.');
@@ -122,6 +177,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormRetailDenterPayout(job.retailDenterPayout ?? job.denterPayout ?? 200);
     setFormCars24PainterPayout(job.cars24PainterPayout ?? job.painterPayout ?? 800);
     setFormCars24DenterPayout(job.cars24DenterPayout ?? job.denterPayout ?? 150);
+    setFormRetailContractorPayout(job.retailContractorPayout ?? job.contractorPayout ?? 150);
+    setFormCars24ContractorPayout(job.cars24ContractorPayout ?? job.contractorPayout ?? 100);
     setFormContractorPayout(job.contractorPayout || ((job.painterPayout || 0) + (job.denterPayout || 0)));
     setFormHours(job.estimatedHours);
     setFormDesc(job.description || '');
@@ -174,24 +231,29 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     e.preventDefault();
     if (!formTitle.trim()) return;
 
-    const selectedPanel = VEHICLE_PANELS.find(p => p.id === formPanelKey);
+    const isPaintOrDent = formCat === 'PAINT' || formCat === 'DENTING';
+    const selectedPanel = isPaintOrDent ? VEHICLE_PANELS.find(p => p.id === formPanelKey) : undefined;
 
-    const retailPainter = formIsContract ? (Number(formRetailPainterPayout) || 0) : 0;
-    const retailDenter = formIsContract ? (Number(formRetailDenterPayout) || 0) : 0;
-    const retailTotal = retailPainter + retailDenter;
+    const retailPainter = (formIsContract && isPaintOrDent) ? (Number(formRetailPainterPayout) || 0) : 0;
+    const retailDenter = (formIsContract && isPaintOrDent) ? (Number(formRetailDenterPayout) || 0) : 0;
+    const retailTotal = formIsContract
+      ? (isPaintOrDent ? (retailPainter + retailDenter) : (Number(formRetailContractorPayout) || 0))
+      : 0;
 
-    const cars24Painter = formIsContract ? (Number(formCars24PainterPayout) || 0) : 0;
-    const cars24Denter = formIsContract ? (Number(formCars24DenterPayout) || 0) : 0;
-    const cars24Total = cars24Painter + cars24Denter;
+    const cars24Painter = (formIsContract && isPaintOrDent) ? (Number(formCars24PainterPayout) || 0) : 0;
+    const cars24Denter = (formIsContract && isPaintOrDent) ? (Number(formCars24DenterPayout) || 0) : 0;
+    const cars24Total = formIsContract
+      ? (isPaintOrDent ? (cars24Painter + cars24Denter) : (Number(formCars24ContractorPayout) || 0))
+      : 0;
 
-    const generalTotal = formIsContract ? (Number(formContractorPayout) || retailTotal || cars24Total) : 0;
+    const generalTotal = formIsContract ? (retailTotal || cars24Total || Number(formContractorPayout) || 0) : 0;
 
     const jobData: Partial<StandardJob> = {
       title: formTitle.trim(),
       category: formCat,
-      panelKey: formPanelKey !== 'NONE' ? formPanelKey : undefined,
-      panelNameEn: selectedPanel ? selectedPanel.nameEn : undefined,
-      paintScope: formPaintScope,
+      panelKey: (isPaintOrDent && formPanelKey !== 'NONE') ? formPanelKey : undefined,
+      panelNameEn: (isPaintOrDent && selectedPanel) ? selectedPanel.nameEn : undefined,
+      paintScope: isPaintOrDent ? formPaintScope : undefined,
       retailPrice: Number(formRetailPrice) || 0,
       cars24Price: Number(formCars24Price) || 0,
       isContractBasis: formIsContract,
@@ -268,7 +330,7 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-          {['ALL', 'PAINT', 'DENTING', 'MECHANICAL', 'WASHING', 'SUBLET_VENDOR'].map((cat) => (
+          {['ALL', 'PAINT', 'DENTING', 'MECHANICAL', 'SERVICE', 'WASHING', 'DETAILING', 'SUBLET_VENDOR'].map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterCat(cat)}
@@ -278,7 +340,7 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
-              {cat === 'ALL' ? 'All Standard Jobs' : cat}
+              {cat === 'ALL' ? 'ALL JOBS' : cat}
             </button>
           ))}
         </div>
@@ -382,32 +444,34 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                     <span className="flex items-center gap-1 font-extrabold">
                       <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Contract Rates:
                     </span>
-                    <span className="text-[10px] text-slate-500">Painter / Denter</span>
+                    <span className="text-[10px] text-slate-500">
+                      {(job.category === 'PAINT' || job.category === 'DENTING') ? 'Painter / Denter' : 'Technician Payout'}
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold">
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex flex-col">
                       <span className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Retail Contract</span>
                       <span className="font-mono font-black">
-                        ₹{job.retailContractorPayout ?? job.contractorPayout}
+                        ₹{job.retailContractorPayout ?? job.contractorPayout ?? 0}
                       </span>
-                      {(job.retailPainterPayout || job.painterPayout) ? (
+                      {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.retailPainterPayout ?? job.painterPayout ?? 0) > 0 || (job.retailDenterPayout ?? job.denterPayout ?? 0) > 0) && (
                         <span className="text-[9.5px] text-emerald-700 dark:text-emerald-400/80">
-                          P: ₹{job.retailPainterPayout ?? job.painterPayout} | D: ₹{job.retailDenterPayout ?? job.denterPayout}
+                          P: ₹{job.retailPainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.retailDenterPayout ?? job.denterPayout ?? 0}
                         </span>
-                      ) : null}
+                      )}
                     </div>
 
                     <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-300 flex flex-col">
                       <span className="text-[9px] font-extrabold uppercase text-blue-600 dark:text-blue-400">Cars24 Contract</span>
                       <span className="font-mono font-black">
-                        ₹{job.cars24ContractorPayout ?? job.contractorPayout}
+                        ₹{job.cars24ContractorPayout ?? job.contractorPayout ?? 0}
                       </span>
-                      {(job.cars24PainterPayout || job.painterPayout) ? (
+                      {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.cars24PainterPayout ?? job.painterPayout ?? 0) > 0 || (job.cars24DenterPayout ?? job.denterPayout ?? 0) > 0) && (
                         <span className="text-[9.5px] text-blue-700 dark:text-blue-400/80">
-                          P: ₹{job.cars24PainterPayout ?? job.painterPayout} | D: ₹{job.cars24DenterPayout ?? job.denterPayout}
+                          P: ₹{job.cars24PainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.cars24DenterPayout ?? job.denterPayout ?? 0}
                         </span>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 </div>
@@ -464,13 +528,19 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                   </label>
                   <select
                     value={formCat}
-                    onChange={(e) => setFormCat(e.target.value as any)}
+                    onChange={(e) => handleCategoryChange(e.target.value as TaskCategory)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
                   >
                     <option value="PAINT">PAINT</option>
                     <option value="DENTING">DENTING</option>
                     <option value="MECHANICAL">MECHANICAL</option>
-                    <option value="WASHING">WASHING</option>
+                    <option value="SERVICE">SERVICE / MAINTENANCE</option>
+                    <option value="WASHING">WASHING / CLEANING</option>
+                    <option value="DETAILING">DETAILING & COATING</option>
+                    <option value="RUBBING_POLISHING">RUBBING & POLISHING</option>
+                    <option value="ELECTRICAL">ELECTRICAL</option>
+                    <option value="AC_REPAIR">AC REPAIR</option>
+                    <option value="ALIGNMENT_BALANCING">WHEEL ALIGNMENT & BALANCING</option>
                     <option value="SUBLET_VENDOR">SUBLET VENDOR</option>
                   </select>
                 </div>
@@ -490,30 +560,32 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 </div>
               </div>
 
-              {/* Linked Body Panel Selection */}
-              <div className="p-3 bg-blue-500/5 dark:bg-blue-950/20 border border-blue-500/20 rounded-2xl space-y-2">
-                <label className="block font-extrabold text-blue-900 dark:text-blue-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Car className="w-4 h-4 text-blue-500" /> Linked Standard Body Panel
-                  </span>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">Connects with Visual Inspection Diagram</span>
-                </label>
+              {/* Linked Body Panel Selection (Only for Paint / Denting) */}
+              {(formCat === 'PAINT' || formCat === 'DENTING') && (
+                <div className="p-3 bg-blue-500/5 dark:bg-blue-950/20 border border-blue-500/20 rounded-2xl space-y-2">
+                  <label className="block font-extrabold text-blue-900 dark:text-blue-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Car className="w-4 h-4 text-blue-500" /> Linked Standard Body Panel
+                    </span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">Connects with Visual Inspection Diagram</span>
+                  </label>
 
-                <select
-                  value={formPanelKey}
-                  onChange={(e) => handlePanelSelectionChange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-slate-100"
-                >
-                  <option value="NONE">-- None (General Non-Panel Job) --</option>
-                  {VEHICLE_PANELS.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nameEn} ({p.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <select
+                    value={formPanelKey}
+                    onChange={(e) => handlePanelSelectionChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="NONE">-- None (General Non-Panel Job) --</option>
+                    {VEHICLE_PANELS.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nameEn} ({p.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              {/* Paint Scope Option */}
+              {/* Paint Scope Option (Only for Paint / Denting) */}
               {(formCat === 'PAINT' || formCat === 'DENTING') && (
                 <div className="p-3 bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 rounded-2xl space-y-2">
                   <label className="block font-extrabold text-purple-900 dark:text-purple-300 flex items-center justify-between">
@@ -590,7 +662,11 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-extrabold text-amber-900 dark:text-amber-200">Contract Basis Job?</span>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">Set for Denting/Painting jobs allotted to painters/denters on contract payout.</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                      {(formCat === 'PAINT' || formCat === 'DENTING')
+                        ? 'Set for Denting/Painting jobs allotted to painters/denters on contract payout.'
+                        : 'Set for piece-rate jobs allotted to technicians or washers on contract payout.'}
+                    </p>
                   </div>
                   <input
                     type="checkbox"
@@ -602,79 +678,112 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
 
                 {formIsContract && (
                   <div className="space-y-3 pt-2 border-t border-amber-500/20 text-xs">
-                    
-                    {/* Retail Contract Rates Box */}
-                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-2">
-                      <div className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                        <span>🛒 Retail Contract Rates</span>
-                        <span className="font-mono text-xs">Total: ₹{(Number(formRetailPainterPayout) || 0) + (Number(formRetailDenterPayout) || 0)}</span>
-                      </div>
+                    {(formCat === 'PAINT' || formCat === 'DENTING') ? (
+                      <>
+                        {/* Retail Contract Rates Box */}
+                        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-2">
+                          <div className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                            <span>🛒 Retail Contract Rates</span>
+                            <span className="font-mono text-xs">Total: ₹{(Number(formRetailPainterPayout) || 0) + (Number(formRetailDenterPayout) || 0)}</span>
+                          </div>
 
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Retail Painter (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formRetailPainterPayout}
+                                onChange={(e) => setFormRetailPainterPayout(Number(e.target.value) || 0)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Retail Denter (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formRetailDenterPayout}
+                                onChange={(e) => setFormRetailDenterPayout(Number(e.target.value) || 0)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cars24 Contract Rates Box */}
+                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 space-y-2">
+                          <div className="font-extrabold text-blue-800 dark:text-blue-300 flex items-center justify-between">
+                            <span>⚡ Cars24 Fleet Contract Rates</span>
+                            <span className="font-mono text-xs">Total: ₹{(Number(formCars24PainterPayout) || 0) + (Number(formCars24DenterPayout) || 0)}</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Cars24 Painter (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formCars24PainterPayout}
+                                onChange={(e) => setFormCars24PainterPayout(Number(e.target.value) || 0)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                Cars24 Denter (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formCars24DenterPayout}
+                                onChange={(e) => setFormCars24DenterPayout(Number(e.target.value) || 0)}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* Non-Paint / Non-Denting Jobs (e.g. Washing, Service, Mechanical) */
                       <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Retail Painter (₹)
+                        <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30 space-y-1">
+                          <label className="block text-[11px] font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Retail Technician Payout (₹)
                           </label>
                           <input
                             type="number"
                             min="0"
-                            value={formRetailPainterPayout}
-                            onChange={(e) => setFormRetailPainterPayout(Number(e.target.value) || 0)}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
+                            value={formRetailContractorPayout}
+                            onChange={(e) => setFormRetailContractorPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-emerald-700 dark:text-emerald-300"
+                            placeholder="e.g. 150"
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Retail Denter (₹)
+                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 space-y-1">
+                          <label className="block text-[11px] font-bold text-blue-900 dark:text-blue-300 mb-1">
+                            Cars24 Technician Payout (₹)
                           </label>
                           <input
                             type="number"
                             min="0"
-                            value={formRetailDenterPayout}
-                            onChange={(e) => setFormRetailDenterPayout(Number(e.target.value) || 0)}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Cars24 Contract Rates Box */}
-                    <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 space-y-2">
-                      <div className="font-extrabold text-blue-800 dark:text-blue-300 flex items-center justify-between">
-                        <span>⚡ Cars24 Fleet Contract Rates</span>
-                        <span className="font-mono text-xs">Total: ₹{(Number(formCars24PainterPayout) || 0) + (Number(formCars24DenterPayout) || 0)}</span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Cars24 Painter (₹)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formCars24PainterPayout}
-                            onChange={(e) => setFormCars24PainterPayout(Number(e.target.value) || 0)}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Cars24 Denter (₹)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formCars24DenterPayout}
-                            onChange={(e) => setFormCars24DenterPayout(Number(e.target.value) || 0)}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
+                            value={formCars24ContractorPayout}
+                            onChange={(e) => setFormCars24ContractorPayout(Number(e.target.value) || 0)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-blue-700 dark:text-blue-300"
+                            placeholder="e.g. 100"
                           />
                         </div>
                       </div>
-                    </div>
-
+                    )}
                   </div>
                 )}
               </div>

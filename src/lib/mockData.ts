@@ -332,6 +332,45 @@ export const INITIAL_STANDARD_JOBS: StandardJob[] = [
     denterPayout: 250,
     estimatedHours: 4,
     description: 'Bonnet surface dent leveling, high-temperature heat coat and premium clear lacquer finish.'
+  },
+  {
+    id: 'std-foam-wash-vacuum',
+    title: 'Full Body Foam Wash & Interior Vacuuming',
+    category: 'WASHING',
+    retailPrice: 600,
+    cars24Price: 400,
+    isContractBasis: false,
+    retailContractorPayout: 150,
+    cars24ContractorPayout: 100,
+    contractorPayout: 150,
+    estimatedHours: 1,
+    description: 'Complete exterior foam pressure wash, underbody jet spray, tire dressing and interior cabin vacuuming.'
+  },
+  {
+    id: 'std-periodic-service',
+    title: 'Periodic General Service Package',
+    category: 'SERVICE',
+    retailPrice: 2800,
+    cars24Price: 2000,
+    isContractBasis: false,
+    retailContractorPayout: 400,
+    cars24ContractorPayout: 300,
+    contractorPayout: 400,
+    estimatedHours: 2.5,
+    description: 'Engine oil & filter change, air filter cleaning, coolant top-up & 40-point vehicle checkup.'
+  },
+  {
+    id: 'std-front-brake-pads',
+    title: 'Front Brake Pads Replacement',
+    category: 'MECHANICAL',
+    retailPrice: 1400,
+    cars24Price: 1000,
+    isContractBasis: false,
+    retailContractorPayout: 250,
+    cars24ContractorPayout: 180,
+    contractorPayout: 250,
+    estimatedHours: 1.5,
+    description: 'Brake pad removal, rotor inspection, caliper greasing and new pad fitment.'
   }
 ];
 
