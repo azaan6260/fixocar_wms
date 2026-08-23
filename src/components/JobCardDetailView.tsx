@@ -71,9 +71,9 @@ import { AICostEstimatorModal } from './AICostEstimatorModal';
 
 import { TechnicianStepperNav, TechnicianRepairPhase } from './technician/TechnicianStepperNav';
 import { TechnicianInspectionPhase } from './technician/TechnicianInspectionPhase';
+import { TechnicianPartsRequestPhase } from './technician/TechnicianPartsRequestPhase';
 import { TechnicianRepairPhase as TechnicianRepairWorkPhase } from './technician/TechnicianRepairPhase';
 import { TechnicianQualityPhase } from './technician/TechnicianQualityPhase';
-import { TechnicianDispatchPhase } from './technician/TechnicianDispatchPhase';
 
 interface JobCardDetailViewProps {
   card: JobCard;
@@ -104,11 +104,15 @@ export function JobCardDetailView({
   );
 
   // Stepper phase state for technician workflow
+  const totalRequisitionsCount = React.useMemo(() => {
+    return card.tasks.reduce((sum, t) => sum + (t.requisitions?.length || 0), 0);
+  }, [card.tasks]);
+
   const initialPhase: TechnicianRepairPhase = React.useMemo(() => {
-    if (card.status === 'DELIVERED') return 'DISPATCH_HANDOVER';
-    if (card.status === 'READY_FOR_DELIVERY' || card.qcPassed) return 'QUALITY_CHECK';
-    if (card.tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'COMPLETED')) return 'ACTIVE_REPAIR';
-    return 'INSPECTION';
+    if (card.status === 'DELIVERED' || card.status === 'READY_FOR_DELIVERY' || card.qcPassed) return 'QC';
+    if (card.tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'COMPLETED')) return 'REPAIR';
+    if (card.tasks.some(t => t.requisitions && t.requisitions.length > 0)) return 'PARTS_REQUEST';
+    return 'ASSESSMENT';
   }, [card.status, card.qcPassed, card.tasks]);
 
   const [currentPhase, setCurrentPhase] = useState<TechnicianRepairPhase>(initialPhase);
@@ -488,6 +492,7 @@ export function JobCardDetailView({
             onPhaseChange={(phase) => setCurrentPhase(phase)}
             completedTasksCount={completedCount}
             totalTasksCount={card.tasks.length}
+            requisitionsCount={totalRequisitionsCount}
             qcPassed={Boolean(card.qcPassed)}
             isDelivered={isDelivered}
           />
@@ -501,17 +506,30 @@ export function JobCardDetailView({
           {/* 👷 TECHNICIAN STEPPER WORKFLOW */}
           {viewMode === 'TECHNICIAN' && (
             <div>
-              {/* PHASE 1: INSPECTION & AR BODY PANELS */}
-              {currentPhase === 'INSPECTION' && (
+              {/* STEP 1: ASSESSMENT & AR BODY PANELS */}
+              {currentPhase === 'ASSESSMENT' && (
                 <TechnicianInspectionPhase
                   card={card}
-                  onProceedToRepair={() => setCurrentPhase('ACTIVE_REPAIR')}
+                  employees={employees}
+                  vendors={vendors}
+                  currentRole={currentRole}
+                  onProceedToPartsRequest={() => setCurrentPhase('PARTS_REQUEST')}
                   onOpenStandardJobs={() => setIsStandardCatalogOpen(true)}
                 />
               )}
 
-              {/* PHASE 2: ACTIVE REPAIR & PARTS ACTION HUB */}
-              {currentPhase === 'ACTIVE_REPAIR' && (
+              {/* STEP 2: PARTS REQUEST & STORE ISSUES */}
+              {currentPhase === 'PARTS_REQUEST' && (
+                <TechnicianPartsRequestPhase
+                  card={card}
+                  onOpenRequisitionModal={() => setIsReqModalOpen(true)}
+                  onProceedToRepair={() => setCurrentPhase('REPAIR')}
+                  onBackToAssessment={() => setCurrentPhase('ASSESSMENT')}
+                />
+              )}
+
+              {/* STEP 3: REPAIR ACTION HUB & TASK EXECUTION */}
+              {currentPhase === 'REPAIR' && (
                 <TechnicianRepairWorkPhase
                   card={card}
                   employees={employees}
@@ -520,27 +538,18 @@ export function JobCardDetailView({
                   onRequestParts={() => setIsReqModalOpen(true)}
                   onAddNewTask={() => setShowAddTask(true)}
                   onOpenStandardCatalog={() => setIsStandardCatalogOpen(true)}
-                  onProceedToQC={() => setCurrentPhase('QUALITY_CHECK')}
-                  onBackToInspection={() => setCurrentPhase('INSPECTION')}
+                  onProceedToQC={() => setCurrentPhase('QC')}
+                  onBackToPartsRequest={() => setCurrentPhase('PARTS_REQUEST')}
                 />
               )}
 
-              {/* PHASE 3: QUALITY CHECK & PHOTO AUDIT */}
-              {currentPhase === 'QUALITY_CHECK' && (
+              {/* STEP 4: QC AUDIT, PROOF & GATE EXIT HANDOVER */}
+              {currentPhase === 'QC' && (
                 <TechnicianQualityPhase
                   card={card}
                   onOpenQCModal={onOpenQCModal}
-                  onProceedToDispatch={() => setCurrentPhase('DISPATCH_HANDOVER')}
-                  onBackToRepair={() => setCurrentPhase('ACTIVE_REPAIR')}
-                />
-              )}
-
-              {/* PHASE 4: DISPATCH, BILLING & GATE PASS */}
-              {currentPhase === 'DISPATCH_HANDOVER' && (
-                <TechnicianDispatchPhase
-                  card={card}
                   onOpenGateCheckOut={() => setIsGateCheckOutOpen(true)}
-                  onBackToQC={() => setCurrentPhase('QUALITY_CHECK')}
+                  onBackToRepair={() => setCurrentPhase('REPAIR')}
                 />
               )}
             </div>

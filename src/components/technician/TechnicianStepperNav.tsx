@@ -1,22 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   ClipboardCheck, 
+  Boxes, 
   Wrench, 
   ShieldCheck, 
-  Truck, 
   CheckCircle2,
   Volume2,
   VolumeX,
   Sparkles
 } from 'lucide-react';
 
-export type TechnicianRepairPhase = 'INSPECTION' | 'ACTIVE_REPAIR' | 'QUALITY_CHECK' | 'DISPATCH_HANDOVER';
+export type TechnicianRepairPhase = 'ASSESSMENT' | 'PARTS_REQUEST' | 'REPAIR' | 'QC';
 
 interface TechnicianStepperNavProps {
   currentPhase: TechnicianRepairPhase;
   onPhaseChange: (phase: TechnicianRepairPhase) => void;
   completedTasksCount: number;
   totalTasksCount: number;
+  requisitionsCount: number;
   qcPassed: boolean;
   isDelivered: boolean;
 }
@@ -26,6 +27,7 @@ export function TechnicianStepperNav({
   onPhaseChange,
   completedTasksCount,
   totalTasksCount,
+  requisitionsCount,
   qcPassed,
   isDelivered
 }: TechnicianStepperNavProps) {
@@ -42,44 +44,44 @@ export function TechnicianStepperNav({
     badge?: string;
   }[] = [
     {
-      id: 'INSPECTION',
+      id: 'ASSESSMENT',
       stepNumber: 1,
       titleHi: '1. जांच व पैनल',
-      titleEn: 'Inspection & Body',
+      titleEn: 'Assessment',
       icon: ClipboardCheck,
       isCompleted: isRepairDone || completedTasksCount > 0,
-      isActive: currentPhase === 'INSPECTION',
+      isActive: currentPhase === 'ASSESSMENT',
       badge: 'Visual AR'
     },
     {
-      id: 'ACTIVE_REPAIR',
+      id: 'PARTS_REQUEST',
       stepNumber: 2,
-      titleHi: '2. काम व पार्ट्स',
-      titleEn: 'Repair & Parts',
+      titleHi: '2. पार्ट्स मांग',
+      titleEn: 'Parts Request',
+      icon: Boxes,
+      isCompleted: requisitionsCount > 0,
+      isActive: currentPhase === 'PARTS_REQUEST',
+      badge: requisitionsCount > 0 ? `${requisitionsCount} Items` : 'Store'
+    },
+    {
+      id: 'REPAIR',
+      stepNumber: 3,
+      titleHi: '3. मरम्मत व कार्य',
+      titleEn: 'Repair Tasks',
       icon: Wrench,
       isCompleted: isRepairDone,
-      isActive: currentPhase === 'ACTIVE_REPAIR',
+      isActive: currentPhase === 'REPAIR',
       badge: `${completedTasksCount}/${totalTasksCount}`
     },
     {
-      id: 'QUALITY_CHECK',
-      stepNumber: 3,
-      titleHi: '3. क्वालिटी जांच',
-      titleEn: 'QC & Photo Proof',
-      icon: ShieldCheck,
-      isCompleted: Boolean(qcPassed),
-      isActive: currentPhase === 'QUALITY_CHECK',
-      badge: qcPassed ? '✓ Passed' : 'Pending'
-    },
-    {
-      id: 'DISPATCH_HANDOVER',
+      id: 'QC',
       stepNumber: 4,
-      titleHi: '4. डिलीवरी व बिल',
-      titleEn: 'Handover & Gate Pass',
-      icon: Truck,
-      isCompleted: Boolean(isDelivered),
-      isActive: currentPhase === 'DISPATCH_HANDOVER',
-      badge: isDelivered ? '✓ Delivered' : 'Gate Pass'
+      titleHi: '4. क्वालिटी व गेट पास',
+      titleEn: 'QC & Handover',
+      icon: ShieldCheck,
+      isCompleted: Boolean(qcPassed || isDelivered),
+      isActive: currentPhase === 'QC',
+      badge: isDelivered ? '✓ Delivered' : qcPassed ? '✓ Passed' : 'Pending'
     }
   ];
 
@@ -103,7 +105,7 @@ export function TechnicianStepperNav({
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-black text-sm transition-colors ${
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 font-black text-sm transition-colors ${
                     step.isActive
                       ? 'bg-slate-950 text-amber-400 shadow-inner'
                       : step.isCompleted
@@ -114,19 +116,19 @@ export function TechnicianStepperNav({
                   {step.isCompleted && !step.isActive ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : (
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                   )}
                 </div>
 
                 <div className="truncate">
                   <div className="flex items-center gap-1.5 leading-none">
-                    <span className="font-extrabold text-xs truncate">
+                    <span className="font-extrabold text-xs sm:text-sm truncate">
                       {step.titleHi}
                     </span>
                   </div>
                   <span
-                    className={`text-[10px] font-medium block truncate mt-0.5 ${
-                      step.isActive ? 'text-slate-900' : 'text-slate-400'
+                    className={`text-[10px] sm:text-xs font-semibold block truncate mt-0.5 ${
+                      step.isActive ? 'text-slate-950 font-bold' : 'text-slate-400'
                     }`}
                   >
                     {step.titleEn}

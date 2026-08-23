@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
-import { JobCard } from '../../types';
-import { 
-  InteractiveVehicleInspectionChart, 
-  VEHICLE_PANELS 
-} from '../InteractiveVehicleInspectionChart';
+import { JobCard, Employee, Vendor, UserRole } from '../../types';
+import { TechnicianBodyPanelAssessmentChart } from './TechnicianBodyPanelAssessmentChart';
 import { 
   Car, 
   Fuel, 
@@ -16,31 +13,42 @@ import {
   Plus, 
   Sparkles, 
   AlertTriangle,
-  Camera
+  Camera,
+  Hammer,
+  Paintbrush
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
 
 interface TechnicianInspectionPhaseProps {
   card: JobCard;
-  onProceedToRepair: () => void;
+  employees?: Employee[];
+  vendors?: Vendor[];
+  currentRole?: UserRole;
+  onProceedToPartsRequest: () => void;
   onOpenStandardJobs: () => void;
 }
 
 export function TechnicianInspectionPhase({
   card,
-  onProceedToRepair,
+  employees = [],
+  vendors = [],
+  currentRole = 'FLOOR_MANAGER',
+  onProceedToPartsRequest,
   onOpenStandardJobs
 }: TechnicianInspectionPhaseProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [selectedPanels, setSelectedPanels] = useState<string[]>(() => {
-    return card.tasks.map(t => {
-      const matched = VEHICLE_PANELS.find(p => 
-        p.standardJobId === t.standardJobId || 
-        t.title.toLowerCase().includes(p.nameEn.toLowerCase())
-      );
-      return matched ? matched.id : '';
-    }).filter(Boolean);
-  });
+
+  const dentingTasksCount = card.tasks.filter(t => 
+    t.category === 'DENTING' || 
+    t.title.toLowerCase().includes('dent') || 
+    t.title.includes('डेंट')
+  ).length;
+
+  const paintingTasksCount = card.tasks.filter(t => 
+    t.category === 'PAINT' || 
+    t.title.toLowerCase().includes('paint') || 
+    t.title.includes('पेंट')
+  ).length;
 
   const handleVoiceInspectionSummary = () => {
     if (isPlayingAudio) {
@@ -53,9 +61,9 @@ export function TechnicianInspectionPhase({
     const model = `${card.vehicle.make} ${card.vehicle.model}`;
     const fuel = card.vehicle.fuelType || 'पेट्रोल';
     const km = card.vehicle.mileage || '0';
-    const panelCount = selectedPanels.length;
+    const totalTasks = card.tasks.length;
 
-    const speech = `प्रारंभिक जांच रिपोर्ट. गाड़ी नंबर ${reg}, मॉडल ${model}, फ्यूल टाइप ${fuel}, ओडोमीटर ${km} किलोमीटर. इस गाड़ी में कुल ${panelCount} बॉडी पैनल पर काम दर्ज है. मरम्मत शुरू करने के लिए नीचे दिए गए बटन को दबाएं.`;
+    const speech = `प्रारंभिक जांच रिपोर्ट. गाड़ी नंबर ${reg}, मॉडल ${model}, फ्यूल स्तर ${card.vehicle.fuelLevel || '50%'}, ओडोमीटर ${km} किलोमीटर. इस गाड़ी में कुल ${totalTasks} काम दर्ज हैं, जिनमें से ${dentingTasksCount} डेंटिंग और ${paintingTasksCount} पेंटिंग के काम शामिल हैं. बॉडी पैनल चार्ट पर किसी भी पैनल को छूकर जानकारी देखें या नया काम जोड़ें.`;
 
     setIsPlayingAudio(true);
     speakTechnicianPrompt(speech, () => {
@@ -93,7 +101,7 @@ export function TechnicianInspectionPhase({
           </div>
         </div>
 
-        {/* Customer & Floor Manager */}
+        {/* Customer & Contact */}
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-white flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold">
             <Car className="w-5 h-5" />
@@ -105,7 +113,7 @@ export function TechnicianInspectionPhase({
           </div>
         </div>
 
-        {/* Floor Manager & Bay */}
+        {/* Floor Supervisor & Active Bay */}
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-white flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-400 flex items-center justify-center font-bold">
             <ShieldCheck className="w-5 h-5" />
@@ -119,12 +127,23 @@ export function TechnicianInspectionPhase({
 
       </div>
 
-      {/* 2. Interactive SVG AR Body Panel Sketch Diagram */}
+      {/* 2. Interactive SVG Body Panel Chart with Denter/Painter Red Highlight Mode & Repair Logger */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <span>🎨 विजुअल बॉडी पैनल चार्ट (Visual AR Body Chart)</span>
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <span>🎨 विजुअल बॉडी पैनल चार्ट (Visual AR Body Chart)</span>
+            </h3>
+            <span className="hidden sm:inline-flex items-center gap-2 text-xs text-slate-400">
+              <span className="flex items-center gap-1 text-red-400 font-bold">
+                <Hammer className="w-3 h-3" /> {dentingTasksCount} Denting
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1 text-blue-400 font-bold">
+                <Paintbrush className="w-3 h-3" /> {paintingTasksCount} Paint
+              </span>
+            </span>
+          </div>
 
           <button
             type="button"
@@ -140,16 +159,11 @@ export function TechnicianInspectionPhase({
           </button>
         </div>
 
-        <InteractiveVehicleInspectionChart
-          mode="VIEW"
-          isCars24={card.isCars24}
-          vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-          selectedPanelIds={selectedPanels}
-          onPanelToggle={(panelId) => {
-            setSelectedPanels(prev => 
-              prev.includes(panelId) ? prev.filter(p => p !== panelId) : [...prev, panelId]
-            );
-          }}
+        <TechnicianBodyPanelAssessmentChart
+          card={card}
+          employees={employees}
+          vendors={vendors}
+          currentRole={currentRole}
         />
       </div>
 
@@ -164,7 +178,7 @@ export function TechnicianInspectionPhase({
               प्रारंभिक जांच पूरी हुई? (Inspection Verified)
             </h4>
             <p className="text-xs text-slate-300">
-              गाड़ी के सभी पैनल जांच लिए गए हैं। अब रिपेयर और पार्ट्स का काम शुरू करें।
+              गाड़ी के सभी बॉडी पैनल जांच लिए गए हैं। अब रिपेयर और पार्ट्स का काम शुरू करें।
             </p>
           </div>
         </div>
@@ -180,10 +194,10 @@ export function TechnicianInspectionPhase({
 
           <button
             type="button"
-            onClick={onProceedToRepair}
-            className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30 active:scale-95 transition-all w-1/2 sm:w-auto"
+            onClick={onProceedToPartsRequest}
+            className="px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/30 active:scale-95 transition-all w-1/2 sm:w-auto"
           >
-            <span>▶️ काम शुरू करें (Proceed to Repair)</span>
+            <span>2. पार्ट्स रिक्विजिशन (Proceed to Parts Request) ➔</span>
             <ChevronRight className="w-4 h-4 stroke-[3]" />
           </button>
         </div>

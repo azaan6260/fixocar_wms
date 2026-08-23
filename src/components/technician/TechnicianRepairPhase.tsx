@@ -27,7 +27,7 @@ interface TechnicianRepairPhaseProps {
   onAddNewTask: () => void;
   onOpenStandardCatalog: () => void;
   onProceedToQC: () => void;
-  onBackToInspection: () => void;
+  onBackToPartsRequest: () => void;
 }
 
 export function TechnicianRepairPhase({
@@ -39,7 +39,7 @@ export function TechnicianRepairPhase({
   onAddNewTask,
   onOpenStandardCatalog,
   onProceedToQC,
-  onBackToInspection
+  onBackToPartsRequest
 }: TechnicianRepairPhaseProps) {
   // Task Filter
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE_PENDING' | 'COMPLETED' | 'MY_TASKS'>('ALL');
@@ -328,11 +328,11 @@ export function TechnicianRepairPhase({
         
         <button
           type="button"
-          onClick={onBackToInspection}
+          onClick={onBackToPartsRequest}
           className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-2 w-full sm:w-auto justify-center"
         >
           <ChevronLeft className="w-4 h-4" />
-          <span>⬅️ 1. जांच रिपोर्ट पर वापस जाएं</span>
+          <span>⬅️ 2. पार्ट्स रिक्विजिशन पर वापस जाएं</span>
         </button>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -348,8 +348,8 @@ export function TechnicianRepairPhase({
             <ShieldCheck className="w-4 h-4" />
             <span>
               {isAllCompleted
-                ? '🛡️ सब काम पूरा हुआ - क्वालिटी चेक खोलें ➔'
-                : '3. क्वालिटी चेक (QC Phase) पर जाएं ➔'}
+                ? '🛡️ सब काम पूरा हुआ - 4. क्वालिटी चेक (QC) खोलें ➔'
+                : '4. क्वालिटी चेक (QC Phase) पर जाएं ➔'}
             </span>
           </button>
         </div>
