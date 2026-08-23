@@ -1818,15 +1818,45 @@ export function consumeInventoryItemForTask(
 
 export function getStandardJobs(): StandardJob[] {
   const data = localStorage.getItem(STORAGE_KEYS.STANDARD_JOBS);
+  let jobs: StandardJob[] = [];
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
-    return INITIAL_STANDARD_JOBS;
+    jobs = INITIAL_STANDARD_JOBS;
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
+    return jobs;
+  } else {
+    try {
+      jobs = JSON.parse(data);
+    } catch (e) {
+      jobs = INITIAL_STANDARD_JOBS;
+      localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
+      return jobs;
+    }
   }
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return INITIAL_STANDARD_JOBS;
+
+  // Ensure panelKey and panelNameEn are populated for legacy stored jobs if missing
+  let updated = false;
+  const synchronizedJobs = jobs.map(j => {
+    if (!j.panelKey && j.id) {
+      const matchInInitial = INITIAL_STANDARD_JOBS.find(initJ => initJ.id === j.id);
+      if (matchInInitial && matchInInitial.panelKey) {
+        updated = true;
+        return {
+          ...j,
+          panelKey: matchInInitial.panelKey,
+          panelNameEn: j.panelNameEn || matchInInitial.panelNameEn,
+          paintScope: j.paintScope || matchInInitial.paintScope
+        };
+      }
+    }
+    return j;
+  });
+
+  if (updated) {
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(synchronizedJobs));
+    return synchronizedJobs;
   }
+
+  return jobs;
 }
 
 export function saveStandardJobs(jobs: StandardJob[]): void {

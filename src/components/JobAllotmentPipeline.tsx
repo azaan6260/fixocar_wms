@@ -83,16 +83,24 @@ export function JobAllotmentPipeline({
     const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
     if (!panelDef) return;
 
-    // Find matched standard job or fallback
+    // Fetch freshest standard jobs from library
+    const freshJobs = getStandardJobs();
+
+    // Find matched standard job in standardJobs library
     const targetJobId = matchedJobId || panelDef.standardJobId;
-    const stdJob = standardJobs.find(j => j.id === targetJobId || j.panelKey === panelId) || {
+    const stdJob = freshJobs.find(j => 
+      j.id === targetJobId || 
+      (j.panelKey && j.panelKey === panelId) ||
+      (j.panelNameEn && j.panelNameEn.toLowerCase().trim() === panelDef.nameEn.toLowerCase().trim()) ||
+      (j.title && j.title.toLowerCase().includes(panelDef.nameEn.toLowerCase().trim()))
+    ) || {
       id: targetJobId,
       title: `${panelDef.nameEn} (Full Outer Paint)`,
       category: 'PAINT' as TaskCategory,
       panelKey: panelId,
       panelNameEn: panelDef.nameEn,
       retailPrice: panelDef.defaultPrice,
-      cars24Price: isCars24 ? 1350 : panelDef.defaultPrice,
+      cars24Price: isCars24 ? 1350 : Math.round(panelDef.defaultPrice * 0.75),
       isContractBasis: true,
       contractorPayout: 1150,
       painterPayout: isCars24 ? 800 : 950,
@@ -112,7 +120,7 @@ export function JobAllotmentPipeline({
       // Remove from task list
       onTasksChange(selectedTasks.filter(t => t.id !== existingTask.id));
     } else {
-      // Add to task list
+      // Add to task list using rates from standard job library
       const newTask = createUnallocatedTask(stdJob);
       onTasksChange([...selectedTasks, newTask]);
     }

@@ -19,9 +19,21 @@ import {
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { StandardJob } from '../types';
+import { getStandardJobs } from '../lib/storage';
 
 export type DamageSeverity = 'SCRATCH' | 'MINOR_DENT' | 'DEEP_DENT' | 'TEAR_CRACK' | 'REPLACE_REQ';
 export type RepairAction = 'PAINT_ONLY' | 'DENT_AND_PAINT' | 'DENT_ONLY' | 'REPLACEMENT';
+
+export function getMatchingStandardJob(panel: PanelDefinition, standardJobs: StandardJob[]): StandardJob | undefined {
+  if (!panel || !standardJobs || standardJobs.length === 0) return undefined;
+  return standardJobs.find(j => 
+    j.id === panel.standardJobId ||
+    (j.panelKey && j.panelKey === panel.id) ||
+    (j.panelNameEn && j.panelNameEn.toLowerCase().trim() === panel.nameEn.toLowerCase().trim()) ||
+    (j.title && j.title.toLowerCase().includes(panel.nameEn.toLowerCase().trim())) ||
+    (panel.code && j.title.toLowerCase().includes(panel.code.toLowerCase().trim()))
+  );
+}
 
 export interface PanelInspectionItem {
   panelId: string;
@@ -429,6 +441,10 @@ export function InteractiveVehicleInspectionChart({
     }
   };
 
+  const effectiveStandardJobs = useMemo(() => {
+    return availableStandardJobs.length > 0 ? availableStandardJobs : getStandardJobs();
+  }, [availableStandardJobs]);
+
   const selectedCount = useMemo(() => {
     return VEHICLE_PANELS.filter(p => isPanelActive(p.id)).length;
   }, [selectedPanelIds, inspections]);
@@ -436,8 +452,14 @@ export function InteractiveVehicleInspectionChart({
   const estimatedTotalCost = useMemo(() => {
     return VEHICLE_PANELS
       .filter(p => isPanelActive(p.id))
-      .reduce((sum, p) => sum + p.defaultPrice, 0);
-  }, [selectedPanelIds, inspections]);
+      .reduce((sum, p) => {
+        const stdJob = getMatchingStandardJob(p, effectiveStandardJobs);
+        if (stdJob) {
+          return sum + (isCars24 ? (stdJob.cars24Price ?? stdJob.retailPrice) : stdJob.retailPrice);
+        }
+        return sum + (isCars24 ? 1350 : (p.defaultPrice || 1350));
+      }, 0);
+  }, [selectedPanelIds, inspections, effectiveStandardJobs, isCars24]);
 
   return (
     <div className="bg-slate-900 text-white rounded-3xl border border-slate-800 overflow-hidden shadow-2xl flex flex-col">
@@ -695,22 +717,41 @@ export function InteractiveVehicleInspectionChart({
               )}
             </div>
 
-            {(selectedPanelForDetail || activeHoveredPanel) && (
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">स्टैंडर्ड रेट (Standard Rate):</span>
-                  <span className="font-extrabold text-white text-sm">
-                    ₹{((selectedPanelForDetail || activeHoveredPanel)?.defaultPrice || 1350).toLocaleString('en-IN')}
-                  </span>
+            {(() => {
+              const activePanelObj = selectedPanelForDetail || activeHoveredPanel;
+              if (!activePanelObj) return null;
+
+              const matchedStdJob = getMatchingStandardJob(activePanelObj, effectiveStandardJobs);
+              const activePrice = matchedStdJob
+                ? (isCars24 ? (matchedStdJob.cars24Price ?? matchedStdJob.retailPrice) : matchedStdJob.retailPrice)
+                : (isCars24 ? 1350 : (activePanelObj.defaultPrice || 1350));
+
+              const activePainterPayout = matchedStdJob
+                ? (isCars24 ? (matchedStdJob.cars24PainterPayout ?? matchedStdJob.painterPayout ?? 800) : (matchedStdJob.retailPainterPayout ?? matchedStdJob.painterPayout ?? 950))
+                : (isCars24 ? 800 : 950);
+
+              const activeDenterPayout = matchedStdJob
+                ? (isCars24 ? (matchedStdJob.cars24DenterPayout ?? matchedStdJob.denterPayout ?? 150) : (matchedStdJob.retailDenterPayout ?? matchedStdJob.denterPayout ?? 200))
+                : (isCars24 ? 150 : 200);
+
+              return (
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">स्टैंडर्ड रेट (Standard Rate):</span>
+                    <span className="font-extrabold text-amber-400 text-sm flex items-center gap-1.5">
+                      ₹{activePrice.toLocaleString('en-IN')}
+                      {isCars24 && <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">Cars24</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>पेंटर + डेंटर हिस्सा:</span>
+                    <span className="text-amber-300 font-semibold">
+                      ₹{activePainterPayout} (Paint) + ₹{activeDenterPayout} (Dent)
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>पेंटर + डेंटर हिस्सा:</span>
-                  <span className="text-amber-300 font-semibold">
-                    {isCars24 ? '₹800 (Paint) + ₹150 (Dent)' : '₹950 (Paint) + ₹200 (Dent)'}
-                  </span>
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Quick Filter Buttons for Denter & Painter for Fast Tagging */}
@@ -767,34 +808,40 @@ export function InteractiveVehicleInspectionChart({
                   अभी तक कोई पैनल नहीं चुना गया। ऊपर गाड़ी के स्केच पर क्लिक करें।
                 </div>
               ) : (
-                VEHICLE_PANELS.filter(p => isPanelActive(p.id)).map(p => (
-                  <div
-                    key={p.id}
-                    className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
-                        ✓
-                      </span>
-                      <div>
-                        <strong className="text-white block">{p.nameHi}</strong>
-                        <span className="text-[10px] text-slate-400 font-mono">{p.nameEn}</span>
+                VEHICLE_PANELS.filter(p => isPanelActive(p.id)).map(p => {
+                  const stdJob = getMatchingStandardJob(p, effectiveStandardJobs);
+                  const price = stdJob
+                    ? (isCars24 ? (stdJob.cars24Price ?? stdJob.retailPrice) : stdJob.retailPrice)
+                    : (isCars24 ? 1350 : (p.defaultPrice || 1350));
+                  return (
+                    <div
+                      key={p.id}
+                      className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
+                          ✓
+                        </span>
+                        <div>
+                          <strong className="text-white block">{p.nameHi}</strong>
+                          <span className="text-[10px] text-slate-400 font-mono">{p.nameEn}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-bold text-amber-400">₹{price.toLocaleString('en-IN')}</span>
+                        <button
+                          type="button"
+                          onClick={() => handlePanelClick(p)}
+                          className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
+                          title="हटाएं"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-amber-400">₹{p.defaultPrice}</span>
-                      <button
-                        type="button"
-                        onClick={() => handlePanelClick(p)}
-                        className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
-                        title="हटाएं"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
