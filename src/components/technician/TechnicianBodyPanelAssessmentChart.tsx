@@ -57,6 +57,11 @@ export function getPanelWorkAnalysis(panel: PanelDefinition, card: JobCard): Pan
   const pId = panel.id.toLowerCase();
   
   const matchedTasks = card.tasks.filter(t => {
+    // 0. Direct explicit panel key linkage check
+    if (t.panelKey && t.panelKey.toLowerCase() === pId) {
+      return true;
+    }
+
     const tTitle = t.title.toLowerCase();
     const tStd = t.standardJobId || '';
     
@@ -819,7 +824,16 @@ export function TechnicianBodyPanelAssessmentChart({
                     <div className="mt-2 space-y-1.5 text-xs">
                       {activeAnalysis.paintingTasks.map(t => (
                         <div key={t.id} className="p-2 rounded-xl bg-slate-900 border border-red-900/60 space-y-1">
-                          <p className="font-extrabold text-white text-xs truncate">{t.title}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-extrabold text-white text-xs truncate">{t.title}</p>
+                            {t.paintScope && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 shrink-0">
+                                {t.paintScope === 'PARTIAL_TOUCHUP' ? '🎨 Partial' :
+                                 t.paintScope === 'INSIDE_JAMB' ? '🚪 Inside Jamb' :
+                                 t.paintScope === 'FULL_OUTER_AND_INSIDE' ? '🌟 Outer+Inside' : '✨ Full Outer'}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between text-[10px] text-slate-300">
                             <span>👤 {t.assignedToName || 'Assigned Painter'}</span>
                             <span className="font-mono font-bold text-blue-300">₹{t.customerPrice}</span>

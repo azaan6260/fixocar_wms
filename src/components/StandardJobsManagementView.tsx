@@ -1,11 +1,47 @@
 import React, { useState } from 'react';
-import { UserRole, StandardJob, TaskCategory } from '../types';
+import { UserRole, StandardJob, TaskCategory, PaintScope } from '../types';
 import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob } from '../lib/storage';
-import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search, Lock } from 'lucide-react';
+import { VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
+import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search, Lock, Car, Paintbrush, Sparkles } from 'lucide-react';
 
 interface StandardJobsManagementViewProps {
   currentRole: UserRole;
 }
+
+export const PAINT_SCOPE_LABELS: Record<PaintScope, { label: string; desc: string; icon: string; bg: string; text: string; border: string }> = {
+  FULL_OUTER: {
+    label: 'Full Outer Paint',
+    desc: 'Standard 100% exterior panel restoration',
+    icon: '✨',
+    bg: 'bg-emerald-500/10',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/30'
+  },
+  PARTIAL_TOUCHUP: {
+    label: 'Partial Paint / Touch-Up',
+    desc: 'Scratch & partial section spot painting',
+    icon: '🎨',
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-800 dark:text-amber-300',
+    border: 'border-amber-500/30'
+  },
+  INSIDE_JAMB: {
+    label: 'Inside Paint (Door Jamb / Frame)',
+    desc: 'Inner aperture, door frame & jamb painting',
+    icon: '🚪',
+    bg: 'bg-purple-500/10',
+    text: 'text-purple-700 dark:text-purple-300',
+    border: 'border-purple-500/30'
+  },
+  FULL_OUTER_AND_INSIDE: {
+    label: 'Full Outer + Inside Paint',
+    desc: 'Complete exterior and inner jamb restoration',
+    icon: '🌟',
+    bg: 'bg-indigo-500/10',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    border: 'border-indigo-500/30'
+  }
+};
 
 export function StandardJobsManagementView({ currentRole }: StandardJobsManagementViewProps) {
   const canManage = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
@@ -33,6 +69,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
 
   const [formTitle, setFormTitle] = useState('');
   const [formCat, setFormCat] = useState<TaskCategory>('PAINT');
+  const [formPanelKey, setFormPanelKey] = useState<string>('door_rhs_rear');
+  const [formPaintScope, setFormPaintScope] = useState<PaintScope>('FULL_OUTER');
+  
   const [formRetailPrice, setFormRetailPrice] = useState<number>(2500);
   const [formCars24Price, setFormCars24Price] = useState<number>(1800);
   const [formIsContract, setFormIsContract] = useState<boolean>(true);
@@ -53,8 +92,10 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
 
   const handleOpenAdd = () => {
     setEditingJobId(null);
-    setFormTitle('');
+    setFormTitle('Door RHS Rear Painting & Denting');
     setFormCat('PAINT');
+    setFormPanelKey('door_rhs_rear');
+    setFormPaintScope('FULL_OUTER');
     setFormRetailPrice(1800);
     setFormCars24Price(1350);
     setFormIsContract(true);
@@ -64,7 +105,7 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormCars24DenterPayout(150);
     setFormContractorPayout(1150);
     setFormHours(3);
-    setFormDesc('');
+    setFormDesc('Full outer panel paint with computerized color match, primer coat & clear coat polish.');
     setIsModalOpen(true);
   };
 
@@ -72,6 +113,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setEditingJobId(job.id);
     setFormTitle(job.title);
     setFormCat(job.category);
+    setFormPanelKey(job.panelKey || 'NONE');
+    setFormPaintScope(job.paintScope || 'FULL_OUTER');
     setFormRetailPrice(job.retailPrice);
     setFormCars24Price(job.cars24Price);
     setFormIsContract(job.isContractBasis);
@@ -85,6 +128,41 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setIsModalOpen(true);
   };
 
+  const handlePanelSelectionChange = (panelKey: string) => {
+    setFormPanelKey(panelKey);
+    const selectedPanel = VEHICLE_PANELS.find(p => p.id === panelKey);
+    if (selectedPanel) {
+      const scopeText = PAINT_SCOPE_LABELS[formPaintScope].label;
+      setFormTitle(`${selectedPanel.nameEn} (${scopeText})`);
+    } else if (panelKey === 'NONE') {
+      setFormTitle('General Paint Repair');
+    }
+  };
+
+  const handlePaintScopeChange = (scope: PaintScope) => {
+    setFormPaintScope(scope);
+    const selectedPanel = VEHICLE_PANELS.find(p => p.id === formPanelKey);
+    const scopeInfo = PAINT_SCOPE_LABELS[scope];
+    
+    if (selectedPanel) {
+      setFormTitle(`${selectedPanel.nameEn} (${scopeInfo.label})`);
+    }
+
+    // Auto-adjust default multiplier rates for convenience
+    let multiplier = 1.0;
+    if (scope === 'PARTIAL_TOUCHUP') multiplier = 0.6;
+    if (scope === 'INSIDE_JAMB') multiplier = 0.5;
+    if (scope === 'FULL_OUTER_AND_INSIDE') multiplier = 1.35;
+
+    const baseRetail = selectedPanel ? selectedPanel.defaultPrice : 1800;
+    const baseCars24 = 1350;
+
+    setFormRetailPrice(Math.round(baseRetail * multiplier));
+    setFormCars24Price(Math.round(baseCars24 * multiplier));
+    setFormRetailPainterPayout(Math.round(950 * multiplier));
+    setFormCars24PainterPayout(Math.round(800 * multiplier));
+  };
+
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this standard job from the library?')) {
       deleteStandardJob(id);
@@ -95,6 +173,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
+
+    const selectedPanel = VEHICLE_PANELS.find(p => p.id === formPanelKey);
 
     const retailPainter = formIsContract ? (Number(formRetailPainterPayout) || 0) : 0;
     const retailDenter = formIsContract ? (Number(formRetailDenterPayout) || 0) : 0;
@@ -109,6 +189,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     const jobData: Partial<StandardJob> = {
       title: formTitle.trim(),
       category: formCat,
+      panelKey: formPanelKey !== 'NONE' ? formPanelKey : undefined,
+      panelNameEn: selectedPanel ? selectedPanel.nameEn : undefined,
+      paintScope: formPaintScope,
       retailPrice: Number(formRetailPrice) || 0,
       cars24Price: Number(formCars24Price) || 0,
       isContractBasis: formIsContract,
@@ -140,7 +223,9 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
 
   const filtered = standardJobs.filter(j => {
     const matchesSearch = j.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (j.description && j.description.toLowerCase().includes(searchTerm.toLowerCase()));
+                          (j.description && j.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (j.panelNameEn && j.panelNameEn.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (j.panelKey && j.panelKey.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCat = filterCat === 'ALL' || j.category === filterCat;
     return matchesSearch && matchesCat;
   });
@@ -241,8 +326,30 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                 {job.title}
               </h3>
 
+              {/* Linked Body Panel and Paint Scope Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {job.panelNameEn ? (
+                  <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 font-bold text-[10px] flex items-center gap-1">
+                    <Car className="w-3 h-3 text-blue-500" />
+                    {job.panelNameEn}
+                    {job.panelKey && <span className="opacity-60 text-[9px]">[{job.panelKey}]</span>}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium text-[10px]">
+                    General / Multi-panel
+                  </span>
+                )}
+
+                {job.paintScope && PAINT_SCOPE_LABELS[job.paintScope] ? (
+                  <span className={`px-2 py-0.5 rounded-lg border font-bold text-[10px] flex items-center gap-1 ${PAINT_SCOPE_LABELS[job.paintScope].bg} ${PAINT_SCOPE_LABELS[job.paintScope].text} ${PAINT_SCOPE_LABELS[job.paintScope].border}`}>
+                    <span>{PAINT_SCOPE_LABELS[job.paintScope].icon}</span>
+                    {PAINT_SCOPE_LABELS[job.paintScope].label}
+                  </span>
+                ) : null}
+              </div>
+
               {job.description && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">
                   {job.description}
                 </p>
               )}
@@ -382,6 +489,70 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                   />
                 </div>
               </div>
+
+              {/* Linked Body Panel Selection */}
+              <div className="p-3 bg-blue-500/5 dark:bg-blue-950/20 border border-blue-500/20 rounded-2xl space-y-2">
+                <label className="block font-extrabold text-blue-900 dark:text-blue-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Car className="w-4 h-4 text-blue-500" /> Linked Standard Body Panel
+                  </span>
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">Connects with Visual Inspection Diagram</span>
+                </label>
+
+                <select
+                  value={formPanelKey}
+                  onChange={(e) => handlePanelSelectionChange(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-slate-100"
+                >
+                  <option value="NONE">-- None (General Non-Panel Job) --</option>
+                  {VEHICLE_PANELS.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nameEn} ({p.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Paint Scope Option */}
+              {(formCat === 'PAINT' || formCat === 'DENTING') && (
+                <div className="p-3 bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 rounded-2xl space-y-2">
+                  <label className="block font-extrabold text-purple-900 dark:text-purple-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Paintbrush className="w-4 h-4 text-purple-500" /> Paint Finish / Scope Option
+                    </span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-normal">Partial / Inside / Full Paint</span>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(PAINT_SCOPE_LABELS) as PaintScope[]).map((scopeKey) => {
+                      const item = PAINT_SCOPE_LABELS[scopeKey];
+                      const isSelected = formPaintScope === scopeKey;
+                      return (
+                        <button
+                          key={scopeKey}
+                          type="button"
+                          onClick={() => handlePaintScopeChange(scopeKey)}
+                          className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                            isSelected
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-md ring-2 ring-purple-400/50'
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between font-black text-[11px]">
+                            <span className="flex items-center gap-1">
+                              <span>{item.icon}</span> {item.label}
+                            </span>
+                            {isSelected && <Sparkles className="w-3 h-3 text-amber-300 fill-amber-300" />}
+                          </div>
+                          <span className={`text-[9.5px] mt-1 leading-tight ${isSelected ? 'text-purple-100' : 'text-slate-400 dark:text-slate-400'}`}>
+                            {item.desc}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Pricing Grid */}
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">

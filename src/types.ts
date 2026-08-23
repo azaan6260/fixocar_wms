@@ -272,6 +272,8 @@ export type OutsourceStatus =
   | 'RECEIVED_BACK' 
   | 'PAID_SETTLED';
 
+export type PaintScope = 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE';
+
 export interface JobTask {
   id: string;
   jobCardId: string;
@@ -302,6 +304,9 @@ export interface JobTask {
   pairedDenterId?: string;
   pairedDenterName?: string;
   standardJobId?: string;
+  panelKey?: string; // e.g. 'door_rhs_rear', 'hood_bonnet', 'bumper_front'
+  panelNameEn?: string; // e.g. 'Door RHS Rear'
+  paintScope?: PaintScope; // 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE'
   hsnCode?: string;
   gstRate?: number;
   // Outsourced Job fields
@@ -434,6 +439,9 @@ export interface StandardJob {
   id: string;
   title: string;
   category: TaskCategory;
+  panelKey?: string;      // e.g. 'door_rhs_rear', 'hood_bonnet', 'bumper_front'
+  panelNameEn?: string;   // e.g. 'Door RHS Rear'
+  paintScope?: PaintScope; // 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE'
   retailPrice: number;    // Customer price for Retail vehicles
   cars24Price: number;    // B2B Customer price for Cars24 fleet
   isContractBasis: boolean; // True for Denting, Painting, Sublet

@@ -283,6 +283,25 @@ export function TechnicianTaskCard({
           <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
             {task.title}
           </h3>
+
+          {/* Linked Body Panel & Paint Scope Badges */}
+          {(task.panelNameEn || task.paintScope) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {task.panelNameEn && (
+                <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-extrabold text-xs flex items-center gap-1">
+                  🚘 {task.panelNameEn} {task.panelKey && <span className="opacity-60 text-[10px]">[{task.panelKey}]</span>}
+                </span>
+              )}
+              {task.paintScope && (
+                <span className="px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 font-extrabold text-xs flex items-center gap-1">
+                  {task.paintScope === 'PARTIAL_TOUCHUP' ? '🎨 Partial Paint / Touch-Up' :
+                   task.paintScope === 'INSIDE_JAMB' ? '🚪 Inside Paint (Door Jamb)' :
+                   task.paintScope === 'FULL_OUTER_AND_INSIDE' ? '🌟 Full Outer + Inside Paint' : '✨ Full Outer Paint'}
+                </span>
+              )}
+            </div>
+          )}
+
           {vernacular.hindiTitle !== task.title && (
             <p className="text-xs sm:text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <span>{vernacular.icon}</span>
