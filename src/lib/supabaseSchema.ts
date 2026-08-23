@@ -24,7 +24,7 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
     CREATE TYPE task_category AS ENUM (
-      'MECHANICAL', 'DENTING', 'PAINT', 'SUBLET_VENDOR', 'WASHING', 'INSPECTION', 'PARTS'
+      'MECHANICAL', 'DENTING', 'PAINT', 'SUBLET_VENDOR', 'WASHING', 'INSPECTION', 'PARTS', 'ACCESSORIES'
     );
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.vendors (
 );
 
 -- ==========================================
--- 4. STANDARD JOBS & INVENTORY
+-- 4. STANDARD JOBS, CAR MODELS & INVENTORY
 -- ==========================================
 CREATE TABLE IF NOT EXISTS public.standard_jobs (
   id TEXT PRIMARY KEY,
@@ -121,10 +121,34 @@ CREATE TABLE IF NOT EXISTS public.standard_jobs (
   category TEXT NOT NULL,
   hsn_sac_code TEXT DEFAULT '998729',
   default_price NUMERIC(10,2) DEFAULT 0,
+  retail_price NUMERIC(10,2) DEFAULT 0,
+  cars24_price NUMERIC(10,2) DEFAULT 0,
   estimated_hours NUMERIC(4,1) DEFAULT 1.0,
   gst_rate NUMERIC(5,2) DEFAULT 18.0,
-  is_active BOOLEAN DEFAULT true,
+  is_contract_basis BOOLEAN DEFAULT FALSE,
+  painter_payout NUMERIC(10,2) DEFAULT 0,
+  denter_payout NUMERIC(10,2) DEFAULT 0,
+  contractor_payout NUMERIC(10,2) DEFAULT 0,
+  description TEXT,
+  requires_customer_approval BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.car_models (
+  id TEXT PRIMARY KEY,
+  make TEXT NOT NULL,
+  model TEXT NOT NULL,
+  category TEXT NOT NULL,
+  fuel_types JSONB DEFAULT '["Petrol"]'::jsonb,
+  variants JSONB DEFAULT '[]'::jsonb,
+  engine_oil_spec TEXT,
+  coolant_spec TEXT,
+  recommended_psi TEXT,
+  notes TEXT,
+  is_popular BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.inventory_items (
@@ -158,11 +182,14 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   registration_number TEXT NOT NULL,
   vehicle_make TEXT NOT NULL,
   vehicle_model TEXT NOT NULL,
+  vehicle_variant TEXT,
   vehicle_year INT,
   vehicle_color TEXT,
   vehicle_vin TEXT,
+  fuel_type TEXT DEFAULT 'Petrol',
   fuel_level INT DEFAULT 50,
   mileage INT DEFAULT 0,
+  engine_oil_spec TEXT,
   vehicle_photo_url TEXT,
 
   -- Customer Details
@@ -309,6 +336,9 @@ CREATE TABLE IF NOT EXISTS public.vehicle_check_ins (
   workshop_id TEXT,
   make TEXT,
   model TEXT,
+  variant TEXT,
+  fuel_type TEXT DEFAULT 'Petrol',
+  year INT,
   color TEXT,
   fuel_level INT,
   mileage INT,
@@ -422,6 +452,7 @@ ALTER TABLE public.workshops ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.standard_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.car_models ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.job_cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.job_card_history ENABLE ROW LEVEL SECURITY;
@@ -438,6 +469,7 @@ CREATE POLICY "Public full access on workshops" ON public.workshops FOR ALL USIN
 CREATE POLICY "Public full access on employees" ON public.employees FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on vendors" ON public.vendors FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on standard_jobs" ON public.standard_jobs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on car_models" ON public.car_models FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on inventory_items" ON public.inventory_items FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on job_cards" ON public.job_cards FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on job_card_history" ON public.job_card_history FOR ALL USING (true) WITH CHECK (true);
