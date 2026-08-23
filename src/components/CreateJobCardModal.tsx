@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop, FuelType } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
-import { createJobCard, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
+import { createJobCard, getActiveJobCardForRegNo, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
@@ -24,7 +24,8 @@ import {
   Building,
   MapPin,
   Layers,
-  Camera
+  Camera,
+  AlertCircle
 } from 'lucide-react';
 
 interface CreateJobCardModalProps {
@@ -239,6 +240,8 @@ export function CreateJobCardModal({
     setTasks(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const activeDuplicateCard = getActiveJobCardForRegNo(regNo);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!regNo.trim() || !customerName.trim() || !customerPhone.trim()) {
@@ -246,11 +249,17 @@ export function CreateJobCardModal({
       return;
     }
 
+    const formattedRegNo = regNo.toUpperCase().trim();
+    const existingActive = getActiveJobCardForRegNo(formattedRegNo);
+    if (existingActive) {
+      alert(`🚫 Duplicate Job Card Blocked!\nVehicle ${formattedRegNo} already has an active Job Card (${existingActive.id} - Status: ${existingActive.status}).\n\nOnly 1 active job card is allowed per vehicle at a time. Please complete or close the existing card first.`);
+      return;
+    }
+
     const selectedCity = cities.find(c => c.id === selectedCityId);
     const selectedWorkshop = workshops.find(w => w.id === selectedWorkshopId);
 
     // Sync Gate Check-In Record
-    const formattedRegNo = regNo.toUpperCase().trim();
     const existingCheckIns = getVehicleCheckIns();
     let matchingCheckIn = existingCheckIns.find(c => c.registrationNumber === formattedRegNo && c.status !== 'CHECKED_OUT');
 
@@ -543,6 +552,17 @@ export function CreateJobCardModal({
                         <Camera className="w-4 h-4" />
                       </button>
                     </div>
+                    {activeDuplicateCard && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Active Job Card Exists ({activeDuplicateCard.id})</p>
+                          <p className="text-[11px] mt-0.5">
+                            Vehicle <strong className="font-mono">{regNo.toUpperCase()}</strong> already has an active Job Card with status <span className="font-bold underline">{activeDuplicateCard.status}</span>. Only 1 active job card is allowed per vehicle at a time.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1137,16 +1157,30 @@ export function CreateJobCardModal({
                     alert('Please enter Registration Number, Customer Name, and Phone Number.');
                     return;
                   }
+                  if (activeDuplicateCard) {
+                    alert(`🚫 Duplicate Active Job Card Blocked!\nVehicle ${regNo.toUpperCase().trim()} already has active Job Card ${activeDuplicateCard.id} (Status: ${activeDuplicateCard.status}).\n\nOnly 1 active job card is permitted per vehicle.`);
+                    return;
+                  }
                   setStep(2);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md"
+                disabled={Boolean(activeDuplicateCard)}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md ${
+                  activeDuplicateCard 
+                    ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                }`}
               >
                 Continue to Task Allotments →
               </button>
             ) : (
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition-colors shadow-md flex items-center gap-2"
+                disabled={Boolean(activeDuplicateCard)}
+                className={`px-6 py-2.5 rounded-xl font-extrabold text-xs transition-colors shadow-md flex items-center gap-2 ${
+                  activeDuplicateCard
+                    ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Create Job Card

@@ -167,7 +167,54 @@ export function getJobCardById(id: string): JobCard | undefined {
   return getJobCards().find(card => card.id === id);
 }
 
+export function getActiveJobCardForRegNo(registrationNumber: string, excludeJobCardId?: string): JobCard | undefined {
+  if (!registrationNumber || !registrationNumber.trim()) return undefined;
+  const cleanReg = registrationNumber.toUpperCase().trim();
+  const cards = getJobCards();
+  return cards.find(card => 
+    card.vehicle.registrationNumber.toUpperCase().trim() === cleanReg &&
+    card.status !== 'DELIVERED' &&
+    card.status !== 'CLOSED' &&
+    card.id !== excludeJobCardId
+  );
+}
+
+export function deleteJobCard(id: string): boolean {
+  const cards = getJobCards();
+  const cardToDelete = cards.find(c => c.id === id);
+  if (!cardToDelete) return false;
+
+  const updatedCards = cards.filter(c => c.id !== id);
+  saveJobCards(updatedCards);
+
+  // Sync deletion from Supabase if connected
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('job_cards').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Supabase delete error (job_cards):', error);
+      }
+    });
+  }
+
+  dispatchToastNotification({
+    type: 'STATUS_CHANGE',
+    title: `🗑️ Job Card Deleted: ${id}`,
+    message: `Job Card ${id} for vehicle ${cardToDelete.vehicle.registrationNumber} (${cardToDelete.vehicle.make} ${cardToDelete.vehicle.model}) was permanently deleted.`,
+    vehicleReg: cardToDelete.vehicle.registrationNumber,
+    jobCardId: id,
+    customerName: cardToDelete.customer.name,
+  });
+
+  return true;
+}
+
 export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCard {
+  const existingActive = getActiveJobCardForRegNo(newCard.vehicle.registrationNumber);
+  if (existingActive) {
+    throw new Error(`An active Job Card (${existingActive.id}) already exists for vehicle ${newCard.vehicle.registrationNumber}. Close or complete the existing job card before creating a new one.`);
+  }
+
   const cards = getJobCards();
   const nextNum = cards.length + 105;
   const cardId = `JC-2026-${nextNum}`;

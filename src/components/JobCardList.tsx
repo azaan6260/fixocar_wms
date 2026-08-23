@@ -22,8 +22,10 @@ import {
   History,
   Clock,
   Archive,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
+import { deleteJobCard } from '../lib/storage';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
 
@@ -439,6 +441,20 @@ export function JobCardList({
                         <QrCode className="w-4 h-4" />
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`🗑️ Delete Job Card ${card.id}?\n\nVehicle: ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model})\nCustomer: ${card.customer.name}\nStatus: ${card.status}\n\nAre you sure you want to delete this job card? This action cannot be undone.`)) {
+                          deleteJobCard(card.id);
+                        }
+                      }}
+                      className="w-9 h-9 rounded-full bg-rose-500/10 hover:bg-rose-500 text-rose-600 dark:text-rose-400 hover:text-white transition-colors flex items-center justify-center shrink-0 active:scale-95"
+                      title="Delete Job Card"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
 
                     <button
                       type="button"

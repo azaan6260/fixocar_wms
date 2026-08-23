@@ -9,7 +9,8 @@ import {
   getInventoryConsumptionRecords,
   getStandardJobs,
   dispatchToastNotification,
-  reassignAllPaintTasksForJobCard
+  reassignAllPaintTasksForJobCard,
+  deleteJobCard
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
@@ -66,7 +67,8 @@ import {
   AlertTriangle,
   Play,
   HelpCircle,
-  ClipboardCheck
+  ClipboardCheck,
+  Trash2
 } from 'lucide-react';
 
 import { TaskDetailCard } from './TaskDetailCard';
@@ -477,6 +479,22 @@ export function JobCardDetailView({
                 <span>मैनेजर मोड (Full)</span>
               </button>
             </div>
+
+            {/* Delete Job Card Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`🗑️ Delete Job Card ${card.id}?\n\nVehicle: ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model})\nCustomer: ${card.customer.name}\nStatus: ${card.status}\n\nAre you sure you want to permanently delete this job card? This action cannot be undone.`)) {
+                  deleteJobCard(card.id);
+                  onClose();
+                }
+              }}
+              className="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500 text-rose-400 hover:text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Delete this active Job Card"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden md:inline">Delete Job Card</span>
+            </button>
 
             {/* Close modal */}
             <button
