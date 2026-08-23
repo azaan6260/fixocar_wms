@@ -34,6 +34,7 @@ export interface City {
 export interface Workshop {
   id: string;
   name: string;
+  code?: string;
   cityId: string;
   cityName: string;
   address: string;

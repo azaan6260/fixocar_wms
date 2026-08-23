@@ -61,15 +61,22 @@ CREATE TABLE IF NOT EXISTS public.workshops (
   city_id text NOT NULL,
   city_name text NOT NULL,
   name text NOT NULL,
-  code text NOT NULL,
+  code text NOT NULL DEFAULT 'WS',
   address text NOT NULL,
   gstin text,
   phone text,
+  is_cars24_partner boolean DEFAULT false,
+  manager_name text,
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT workshops_pkey PRIMARY KEY (id),
   CONSTRAINT workshops_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id) ON DELETE CASCADE
 );
+
+-- Migrations for existing workshops table
+ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS is_cars24_partner boolean DEFAULT false;
+ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS manager_name text;
+ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS code text DEFAULT 'WS';
 
 -- ==========================================
 -- 3. EMPLOYEES & VENDORS

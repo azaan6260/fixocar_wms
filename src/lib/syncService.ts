@@ -102,12 +102,13 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       const localWorkshops = workshops.map((w: any) => ({
         id: w.id,
         name: w.name,
+        code: w.code || 'WS',
         cityId: w.city_id,
         cityName: w.city_name,
         address: w.address,
         phone: w.phone,
-        isCars24Partner: w.is_cars24_partner,
-        managerName: w.manager_name,
+        isCars24Partner: w.is_cars24_partner ?? false,
+        managerName: w.manager_name || '',
         createdAt: w.created_at
       }));
       saveWorkshops(localWorkshops, true);
@@ -275,16 +276,33 @@ export async function pushLocalDataToSupabase(): Promise<{
 
   // Push Workshops
   for (const w of workshops) {
-    const { error } = await client.from('workshops').upsert({
+    const fullPayload = {
       id: w.id,
       name: w.name,
       city_id: w.cityId,
       city_name: w.cityName,
-      address: w.address,
-      phone: w.phone,
-      is_cars24_partner: w.isCars24Partner,
-      manager_name: w.managerName,
-    });
+      code: w.code || 'WS',
+      address: w.address || '',
+      phone: w.phone || '',
+      is_cars24_partner: w.isCars24Partner ?? false,
+      manager_name: w.managerName || '',
+    };
+    let { error } = await client.from('workshops').upsert(fullPayload);
+
+    if (error && (error.message?.includes('is_cars24_partner') || error.message?.includes('manager_name') || error.message?.includes('schema cache'))) {
+      const fallbackPayload = {
+        id: w.id,
+        name: w.name,
+        city_id: w.cityId,
+        city_name: w.cityName,
+        code: w.code || 'WS',
+        address: w.address || '',
+        phone: w.phone || '',
+      };
+      const res = await client.from('workshops').upsert(fallbackPayload);
+      error = res.error;
+    }
+
     if (error) errors.push(`Workshops table error (${w.name}): ${error.message}`);
     else wPushed++;
   }

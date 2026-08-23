@@ -1369,23 +1369,56 @@ export function saveWorkshops(workshops: Workshop[], skipPush = false) {
     const client = getSupabaseClient();
     if (client) {
       workshops.forEach(ws => {
-        client.from('workshops').upsert({
+        const fullPayload = {
           id: ws.id,
           name: ws.name,
           city_id: ws.cityId,
           city_name: ws.cityName,
-          address: ws.address,
-          phone: ws.phone,
-          is_cars24_partner: ws.isCars24Partner,
-          manager_name: ws.managerName,
-        }).then(({ error }) => {
+          code: ws.code || 'WS',
+          address: ws.address || '',
+          phone: ws.phone || '',
+          is_cars24_partner: ws.isCars24Partner ?? false,
+          manager_name: ws.managerName || '',
+        };
+
+        client.from('workshops').upsert(fullPayload).then(({ error }) => {
           if (error) {
             console.error('Supabase sync error (workshops):', error);
-            dispatchToastNotification({
-              type: 'ESTIMATE_DECLINED',
-              title: `❌ Supabase Sync Error (Workshops)`,
-              message: `Could not sync "${ws.name}" to Supabase: ${error.message}`
-            });
+            
+            // Fallback retry without optional columns if column missing in Supabase schema
+            if (error.message?.includes('is_cars24_partner') || error.message?.includes('manager_name') || error.message?.includes('schema cache')) {
+              const fallbackPayload = {
+                id: ws.id,
+                name: ws.name,
+                city_id: ws.cityId,
+                city_name: ws.cityName,
+                code: ws.code || 'WS',
+                address: ws.address || '',
+                phone: ws.phone || ''
+              };
+
+              client.from('workshops').upsert(fallbackPayload).then(({ error: fallbackErr }) => {
+                if (fallbackErr) {
+                  dispatchToastNotification({
+                    type: 'ESTIMATE_DECLINED',
+                    title: `❌ Supabase Sync Error (Workshops)`,
+                    message: `Could not sync "${ws.name}" to Supabase: ${fallbackErr.message}`
+                  });
+                } else {
+                  dispatchToastNotification({
+                    type: 'ESTIMATE_DECLINED',
+                    title: `⚠️ Workshop Saved (Missing Column)`,
+                    message: `"${ws.name}" saved to Supabase! To save Cars24 status, run SQL script in Database Settings.`
+                  });
+                }
+              });
+            } else {
+              dispatchToastNotification({
+                type: 'ESTIMATE_DECLINED',
+                title: `❌ Supabase Sync Error (Workshops)`,
+                message: `Could not sync "${ws.name}" to Supabase: ${error.message}`
+              });
+            }
           }
         });
       });
