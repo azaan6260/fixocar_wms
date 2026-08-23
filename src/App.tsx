@@ -9,7 +9,7 @@ import {
   getAuthUser,
   logoutAuthUser
 } from './lib/storage';
-import { Camera } from 'lucide-react';
+import { Camera, Wrench, Home } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
 
 import { HeaderNav } from './components/HeaderNav';
@@ -142,6 +142,16 @@ export default function App() {
       setCurrentRole(user.role);
       setActiveTab(getDefaultTabForRole(user.role));
     }
+    // Route enforcement based on user type upon login
+    if (typeof window !== 'undefined') {
+      if (user.userType === 'CUSTOMER') {
+        window.history.pushState({}, '', '/');
+        setRoutePath('/');
+      } else {
+        window.history.pushState({}, '', '/wms');
+        setRoutePath('/wms');
+      }
+    }
   };
 
   // Handle Logout
@@ -175,6 +185,21 @@ export default function App() {
     }
   }, [currentRole, activeTab, authUser]);
 
+  // Enforce strict route separation:
+  // - /wms is strictly for staff/admin & WMS working
+  // - / is strictly for customer portal & customer home
+  useEffect(() => {
+    if (authUser && typeof window !== 'undefined') {
+      if (authUser.userType === 'CUSTOMER' && isWmsRoute) {
+        window.history.replaceState({}, '', '/');
+        setRoutePath('/');
+      } else if (authUser.userType !== 'CUSTOMER' && !isWmsRoute) {
+        window.history.replaceState({}, '', '/wms');
+        setRoutePath('/wms');
+      }
+    }
+  }, [authUser, isWmsRoute]);
+
   const activeCardForDetail = selectedJobCardId ? getJobCardById(selectedJobCardId) : null;
   const activeCardForCustomerPortal = customerPortalCardId ? getJobCardById(customerPortalCardId) : null;
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
@@ -185,15 +210,34 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-950 font-sans flex flex-col justify-center items-center p-4 relative overflow-hidden">
         {/* Background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
 
         <div className="relative z-10 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-xl shadow-blue-500/25 mb-3">
-              <Camera className="w-7 h-7 text-white" />
+          {/* Header Bar Navigation */}
+          <div className="flex items-center justify-between mb-6 px-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Wrench className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-white tracking-tight">FixoCar <span className="text-blue-500">WMS</span></h1>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Workshop Operating System</p>
+              </div>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">FixoCar WMS Portal</h1>
-            <p className="text-xs text-slate-400 mt-1">Authorized Technician, Staff & Super Admin Gateway</p>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/');
+                  setRoutePath('/');
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Home className="w-3.5 h-3.5 text-blue-400" />
+              <span>Customer Site (/)</span>
+            </button>
           </div>
 
           <UnifiedLoginModal
@@ -201,11 +245,18 @@ export default function App() {
             forcedMode="STAFF"
             onClose={() => {
               if (typeof window !== 'undefined') {
-                window.location.href = '/';
+                window.history.pushState({}, '', '/');
+                setRoutePath('/');
               }
             }}
             onLoginSuccess={handleLoginSuccess}
           />
+
+          <div className="mt-4 text-center">
+            <p className="text-xs text-slate-500">
+              This login portal (<span className="font-mono text-slate-400">/wms</span>) is restricted to authorized workshop managers, mechanics, and technicians.
+            </p>
+          </div>
         </div>
       </div>
     );

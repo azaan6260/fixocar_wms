@@ -103,11 +103,26 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
             </div>
           </div>
 
-          {/* Customer Sign In Actions */}
-          <div className="flex items-center gap-3">
+          {/* Customer & WMS Staff Actions */}
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/wms');
+                  window.dispatchEvent(new Event('popstate'));
+                }
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+              title="Workshop Management System Staff Gateway (/wms)"
+            >
+              <Wrench className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">WMS Portal (/wms)</span>
+              <span className="sm:hidden">WMS</span>
+            </button>
+
             <button
               onClick={() => onOpenLogin('CUSTOMER')}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black transition-all shadow-lg shadow-blue-600/30 flex items-center gap-2 cursor-pointer"
+              className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black transition-all shadow-lg shadow-blue-600/30 flex items-center gap-2 cursor-pointer"
             >
               <User className="w-4 h-4" />
               <span>Customer Sign In</span>
@@ -467,6 +482,19 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
           <div className="flex items-center gap-4 text-xs font-medium">
             <button onClick={() => onOpenLogin('CUSTOMER')} className="hover:text-white transition-colors cursor-pointer font-semibold text-blue-400">
               Customer Portal Sign In
+            </button>
+            <span className="text-slate-700">•</span>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.history.pushState({}, '', '/wms');
+                  window.dispatchEvent(new Event('popstate'));
+                }
+              }}
+              className="hover:text-amber-300 transition-colors cursor-pointer font-semibold text-amber-400 flex items-center gap-1"
+            >
+              <Wrench className="w-3.5 h-3.5 text-amber-400" />
+              <span>WMS Staff Login (/wms)</span>
             </button>
             <span className="text-slate-700">•</span>
             <span className="text-slate-500">© 2026 FixoCar Automotive Technologies</span>

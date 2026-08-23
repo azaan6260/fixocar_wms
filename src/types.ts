@@ -196,7 +196,8 @@ export type TaskCategory =
   | 'ACCESSORIES'
   | 'LATHE_WORK'
   | 'ALIGNMENT_BALANCING'
-  | 'TYRE_WORK';
+  | 'TYRE_WORK'
+  | 'SERVICE';
 
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD';
 
