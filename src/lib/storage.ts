@@ -1,7 +1,7 @@
 import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
-import { getSupabaseClient } from './supabaseClient';
+import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
 
 export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>) {
@@ -899,32 +899,9 @@ export function saveEmployees(employees: Employee[], skipPush = false) {
   notifyStoreChange();
 
   if (!skipPush) {
-    const client = getSupabaseClient();
-    if (client) {
-      employees.forEach(emp => {
-        client.from('employees').upsert({
-          id: emp.id,
-          name: emp.name,
-          role: emp.role,
-          phone: emp.phone,
-          email: emp.email,
-          specialized_team: emp.specializedTeam,
-          status: emp.status,
-          active_jobs_count: emp.activeJobsCount,
-          avatar_url: emp.avatarUrl,
-          login_id: emp.loginId,
-          password_hash: emp.password,
-          base_salary: emp.baseSalary,
-          employment_type: emp.employmentType,
-          city_id: emp.cityId,
-          city_name: emp.cityName,
-          workshop_id: emp.workshopId,
-          workshop_name: emp.workshopName
-        }).then(({ error }) => {
-          if (error) console.error('Supabase sync error (employees):', error);
-        });
-      });
-    }
+    employees.forEach(emp => {
+      syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
+    });
   }
 }
 
@@ -935,7 +912,8 @@ export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
     id: `emp-${Date.now().toString().slice(-4)}`
   };
   employees.push(newEmp);
-  saveEmployees(employees);
+  saveEmployees(employees, true);
+  syncEmployeeToSupabaseAuth(newEmp, newEmp.password, 'create');
   return newEmp;
 }
 
@@ -943,14 +921,20 @@ export function updateEmployee(id: string, updates: Partial<Employee>) {
   const employees = getEmployees();
   const index = employees.findIndex(e => e.id === id);
   if (index !== -1) {
-    employees[index] = { ...employees[index], ...updates };
-    saveEmployees(employees);
+    const updatedEmp = { ...employees[index], ...updates };
+    employees[index] = updatedEmp;
+    saveEmployees(employees, true);
+    syncEmployeeToSupabaseAuth(updatedEmp, updatedEmp.password, 'update');
   }
 }
 
 export function deleteEmployee(id: string) {
   const employees = getEmployees();
-  saveEmployees(employees.filter(e => e.id !== id));
+  const emp = employees.find(e => e.id === id);
+  if (emp) {
+    syncEmployeeToSupabaseAuth(emp, undefined, 'delete');
+  }
+  saveEmployees(employees.filter(e => e.id !== id), true);
 }
 
 // 2b. ATTENDANCE STORAGE

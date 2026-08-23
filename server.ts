@@ -2,6 +2,25 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
+
+// Lazy Supabase Admin Client
+function getSupabaseAdminClient(customUrl?: string, customKey?: string) {
+  const url = customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !serviceKey) return null;
+  try {
+    return createClient(url, serviceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to initialize Supabase admin client:', err);
+    return null;
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -788,6 +807,263 @@ Return valid JSON ONLY.`;
       console.error('Gemini Priority Analysis Error:', err);
       const fallback = generateFallbackPrioritySuggestion(req.body.jobContext || {});
       res.json({ success: true, analysis: fallback, isFallback: true, error: err.message });
+    }
+  });
+
+  // ==========================================
+  // SUPABASE AUTHENTICATION & USER MANAGEMENT
+  // ==========================================
+
+  // Check Supabase Auth configuration status
+  app.get('/api/supabase/status', (req, res) => {
+    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const hasServiceKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const hasAnonKey = Boolean(process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+
+    res.json({
+      configured: Boolean(url && (hasServiceKey || hasAnonKey)),
+      hasAdminServiceKey: hasServiceKey,
+      hasAnonKey,
+      supabaseUrl: url ? url.replace(/(https:\/\/[^.]+).*/, '$1.supabase.co') : null
+    });
+  });
+
+  // Sync / Create / Update / Delete User Credential in Supabase Auth & Database
+  app.post('/api/supabase/admin/sync-user', async (req, res) => {
+    try {
+      const { 
+        action = 'update', 
+        employee, 
+        newPassword, 
+        supabaseUrl, 
+        supabaseServiceKey,
+        supabaseAnonKey 
+      } = req.body;
+
+      if (!employee || !employee.id) {
+        return res.status(400).json({ error: 'employee data with valid ID is required' });
+      }
+
+      const client = getSupabaseAdminClient(
+        supabaseUrl, 
+        supabaseServiceKey || supabaseAnonKey
+      );
+
+      const email = (employee.email || `${employee.loginId || employee.id}@workshop.fixocar.com`).trim().toLowerCase();
+      const password = (newPassword || employee.password || 'password123').trim();
+
+      if (!client) {
+        return res.json({
+          success: true,
+          authSynced: false,
+          message: 'Saved in local engine. Note: Connect Supabase in settings to sync live to Supabase Auth.',
+          employee
+        });
+      }
+
+      let authSynced = false;
+      let authUserId: string | null = null;
+      let syncNotes = '';
+
+      // Check if this is a delete action
+      if (action === 'delete') {
+        try {
+          if (client.auth?.admin) {
+            const { data: userList } = await client.auth.admin.listUsers();
+            const existing = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id);
+            if (existing) {
+              await client.auth.admin.deleteUser(existing.id);
+            }
+          }
+          await client.from('employees').delete().eq('id', employee.id);
+          return res.json({ success: true, message: 'Deleted employee from Supabase Auth & Database' });
+        } catch (delErr: any) {
+          console.warn('Supabase delete warning:', delErr.message);
+        }
+      }
+
+      // 1. Try Supabase Auth Admin User creation / password update
+      if (client.auth?.admin) {
+        try {
+          const { data: userList } = await client.auth.admin.listUsers();
+          const existingUser = (userList?.users as any[])?.find(
+            (u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id || u.user_metadata?.login_id === employee.loginId
+          );
+
+          if (existingUser) {
+            // Update existing user in Supabase Auth
+            const updatePayload: any = {
+              user_metadata: {
+                employee_id: employee.id,
+                name: employee.name,
+                role: employee.role,
+                phone: employee.phone,
+                specialized_team: employee.specializedTeam,
+                workshop_id: employee.workshopId,
+                workshop_name: employee.workshopName,
+                city_id: employee.cityId,
+                city_name: employee.cityName,
+                login_id: employee.loginId,
+                employment_type: employee.employmentType
+              }
+            };
+
+            if (password) {
+              updatePayload.password = password;
+            }
+            if (email && email !== existingUser.email) {
+              updatePayload.email = email;
+            }
+
+            const { data: updated, error: updateErr } = await client.auth.admin.updateUserById(
+              existingUser.id,
+              updatePayload
+            );
+
+            if (updateErr) {
+              console.warn('Supabase Auth update error:', updateErr);
+              syncNotes = `Auth update: ${updateErr.message}`;
+            } else {
+              authSynced = true;
+              authUserId = updated?.user?.id || existingUser.id;
+              syncNotes = `Password & profile updated in Supabase Auth for ${email}`;
+            }
+          } else {
+            // Create user in Supabase Auth
+            const { data: created, error: createErr } = await client.auth.admin.createUser({
+              email,
+              password,
+              email_confirm: true,
+              user_metadata: {
+                employee_id: employee.id,
+                name: employee.name,
+                role: employee.role,
+                phone: employee.phone,
+                specialized_team: employee.specializedTeam,
+                workshop_id: employee.workshopId,
+                workshop_name: employee.workshopName,
+                city_id: employee.cityId,
+                city_name: employee.cityName,
+                login_id: employee.loginId,
+                employment_type: employee.employmentType
+              }
+            });
+
+            if (createErr) {
+              console.warn('Supabase Auth create error:', createErr);
+              syncNotes = `Auth create note: ${createErr.message}`;
+            } else {
+              authSynced = true;
+              authUserId = created?.user?.id || null;
+              syncNotes = `New user account created in Supabase Auth (${email})`;
+            }
+          }
+        } catch (authAdminErr: any) {
+          console.warn('Supabase Admin Auth skipped or unauthorized:', authAdminErr.message);
+          syncNotes = `Database synced (Auth requires SUPABASE_SERVICE_ROLE_KEY)`;
+        }
+      }
+
+      // 2. Upsert employee record into public.employees table
+      try {
+        const { error: dbErr } = await client.from('employees').upsert({
+          id: employee.id,
+          name: employee.name,
+          role: employee.role,
+          phone: employee.phone,
+          email,
+          specialized_team: employee.specializedTeam,
+          status: employee.status || 'AVAILABLE',
+          active_jobs_count: employee.activeJobsCount || 0,
+          avatar_url: employee.avatarUrl,
+          login_id: employee.loginId,
+          password_hash: password,
+          base_salary: employee.baseSalary || 0,
+          employment_type: employee.employmentType || 'PAYROLL',
+          city_id: employee.cityId,
+          city_name: employee.cityName,
+          workshop_id: employee.workshopId,
+          workshop_name: employee.workshopName,
+          updated_at: new Date().toISOString()
+        });
+
+        if (dbErr) {
+          console.warn('Supabase employees table upsert warning:', dbErr);
+        }
+      } catch (dbErr: any) {
+        console.warn('Supabase DB upsert error:', dbErr.message);
+      }
+
+      return res.json({
+        success: true,
+        authSynced,
+        authUserId,
+        message: syncNotes || 'Employee credentials synced with Supabase'
+      });
+    } catch (err: any) {
+      console.error('Supabase sync user endpoint failure:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Verify credentials and authenticate against Supabase
+  app.post('/api/supabase/auth/login', async (req, res) => {
+    try {
+      const { identifier, password } = req.body;
+      if (!identifier || !password) {
+        return res.status(400).json({ error: 'identifier and password are required' });
+      }
+
+      const cleanId = identifier.trim().toLowerCase();
+      const cleanPass = password.trim();
+      const client = getSupabaseAdminClient();
+
+      if (client) {
+        // First check in public.employees
+        const { data: employees } = await client.from('employees').select('*');
+        if (employees && employees.length > 0) {
+          const matched = employees.find((e: any) => 
+            (e.login_id && e.login_id.toLowerCase() === cleanId) ||
+            (e.email && e.email.toLowerCase() === cleanId) ||
+            (e.id && e.id.toLowerCase() === cleanId) ||
+            (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
+          );
+
+          if (matched) {
+            const expectedPass = matched.password_hash || matched.password || 'password123';
+            if (cleanPass !== expectedPass) {
+              return res.status(401).json({ success: false, error: 'Incorrect password for this staff account.' });
+            }
+
+            return res.json({
+              success: true,
+              source: 'SUPABASE_DB',
+              user: {
+                id: matched.id,
+                name: matched.name,
+                loginId: matched.login_id || matched.email?.split('@')[0],
+                email: matched.email,
+                phone: matched.phone,
+                role: matched.role,
+                userType: matched.employment_type === 'CONTRACT' ? 'CONTRACTOR' : (matched.role === 'SUPER_ADMIN' || matched.role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE'),
+                employeeId: matched.id,
+                specializedTeam: matched.specialized_team,
+                workshopId: matched.workshop_id,
+                workshopName: matched.workshop_name,
+                cityId: matched.city_id,
+                cityName: matched.city_name,
+                employmentType: matched.employment_type || 'PAYROLL',
+                loggedInAt: new Date().toISOString()
+              }
+            });
+          }
+        }
+      }
+
+      return res.json({ success: false, error: 'No matching user found on Supabase backend' });
+    } catch (err: any) {
+      console.error('Supabase login endpoint error:', err);
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

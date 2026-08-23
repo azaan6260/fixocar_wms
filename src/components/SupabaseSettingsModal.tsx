@@ -23,13 +23,14 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const config = getStoredSupabaseConfig();
   const [url, setUrl] = useState(config.supabaseUrl);
   const [anonKey, setAnonKey] = useState(config.supabaseAnonKey);
+  const [serviceKey, setServiceKey] = useState(config.supabaseServiceKey || '');
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'config' | 'schema'>('config');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    saveSupabaseConfig(url, anonKey);
-    alert('Supabase credentials saved! Connecting to live Supabase database.');
+    saveSupabaseConfig(url, anonKey, serviceKey);
+    alert('Supabase credentials saved! Connecting to live Supabase database & Auth admin sync.');
     onClose();
   };
 
@@ -124,6 +125,20 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
                   value={anonKey}
                   onChange={(e) => setAnonKey(e.target.value)}
                   placeholder="eyJhY2... (Anon public key)"
+                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) - Optional</span>
+                  <span className="text-[10px] text-emerald-500 font-normal">Enables live Auth admin user creation</span>
+                </label>
+                <input
+                  type="password"
+                  value={serviceKey}
+                  onChange={(e) => setServiceKey(e.target.value)}
+                  placeholder="eyJhY2... (Service Role secret key for Auth Admin API)"
                   className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                 />
               </div>

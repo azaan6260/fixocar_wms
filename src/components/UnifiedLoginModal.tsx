@@ -3,7 +3,8 @@ import {
   X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2
 } from 'lucide-react';
 import { AuthUser } from '../types';
-import { authenticateUser, INITIAL_CITIES } from '../lib/storage';
+import { authenticateUser, saveAuthUser, INITIAL_CITIES } from '../lib/storage';
+import { authenticateViaSupabase } from '../lib/supabaseClient';
 
 interface UnifiedLoginModalProps {
   isOpen: boolean;
@@ -45,7 +46,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
       setError(activeTab === 'STAFF' ? 'Please enter your Work Login ID or Email' : 'Please enter your Mobile Number or Email ID');
@@ -60,25 +61,38 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     setIsLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      const result = authenticateUser(
-        identifier, 
-        password,
-        {
-          isCustomerLogin: activeTab === 'CUSTOMER',
-          customerName: customerName.trim() || undefined,
-          city: selectedCity
-        }
-      );
-      
-      setIsLoading(false);
-      if (result.success && result.user) {
-        onLoginSuccess(result.user);
-        onClose();
-      } else {
-        setError(result.error || 'Authentication failed. Please verify your credentials.');
+    let result = authenticateUser(
+      identifier, 
+      password,
+      {
+        isCustomerLogin: activeTab === 'CUSTOMER',
+        customerName: customerName.trim() || undefined,
+        city: selectedCity
       }
-    }, 250);
+    );
+
+    // If staff auth failed or not found locally, check directly with Supabase
+    if (!result.success && activeTab === 'STAFF') {
+      try {
+        const supaRes = await authenticateViaSupabase(identifier, password);
+        if (supaRes.success && supaRes.user) {
+          saveAuthUser(supaRes.user);
+          result = { success: true, user: supaRes.user };
+        } else if (supaRes.error) {
+          result = { success: false, error: supaRes.error };
+        }
+      } catch (supaErr) {
+        console.warn('Supabase remote login check warning:', supaErr);
+      }
+    }
+
+    setIsLoading(false);
+    if (result.success && result.user) {
+      onLoginSuccess(result.user);
+      onClose();
+    } else {
+      setError(result.error || 'Authentication failed. Please verify your credentials.');
+    }
   };
 
   return (
