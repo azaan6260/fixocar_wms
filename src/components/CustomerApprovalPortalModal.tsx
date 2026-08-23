@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { JobCard } from '../types';
 import { respondToCustomerApproval } from '../lib/storage';
+import { FuelTypeBadge } from './FuelTypeBadge';
 import { 
   X, 
   CheckCircle2, 
@@ -59,13 +60,21 @@ export function CustomerApprovalPortalModal({
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-600/30">
+            <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-600/30 shrink-0">
               <Car className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold font-mono tracking-tight">
-                {card.vehicle.registrationNumber} • {card.vehicle.make} {card.vehicle.model}
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-extrabold font-mono tracking-tight">
+                  {card.vehicle.registrationNumber} • {card.vehicle.make} {card.vehicle.model}
+                </h1>
+                {card.vehicle.variant && (
+                  <span className="text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 font-bold border border-slate-700">
+                    {card.vehicle.variant}
+                  </span>
+                )}
+                <FuelTypeBadge fuelType={card.vehicle.fuelType} size="sm" />
+              </div>
               <p className="text-xs text-slate-300 mt-0.5">
                 Hello {card.customer.name}, please review discovered repair items for your vehicle.
               </p>

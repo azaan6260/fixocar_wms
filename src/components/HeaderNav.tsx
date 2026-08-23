@@ -34,7 +34,8 @@ import {
   ShoppingBag,
   Wallet,
   Camera,
-  Settings
+  Settings,
+  Car
 } from 'lucide-react';
 
 import { NotificationDrawer } from './NotificationDrawer';
@@ -131,6 +132,7 @@ export function HeaderNav({
   ];
 
   const row2Items = [
+    { id: 'car-models', label: '🚗 Car Models & Variants', icon: Car },
     { id: 'role-workspace', label: t('nav.myRoleTasks'), icon: UserCheck },
     { id: 'outsourced-jobs', label: 'Outsourced Jobs', icon: ExternalLink },
     { id: 'customer-portal', label: t('nav.customerPortal'), icon: Sparkles },

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop } from '../types';
+import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop, FuelType } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
 import { createJobCard, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
+import { CarModelSelector } from './CarModelSelector';
+import { FuelTypeBadge } from './FuelTypeBadge';
 import { 
   X, 
   Car, 
@@ -58,6 +60,8 @@ export function CreateJobCardModal({
   const [regNo, setRegNo] = useState(prefilledRegNum || '');
   const [make, setMake] = useState('Toyota');
   const [model, setModel] = useState('Corolla Altis');
+  const [variant, setVariant] = useState('');
+  const [fuelType, setFuelType] = useState<FuelType>('Petrol');
   const [year, setYear] = useState(2022);
   const [color, setColor] = useState('Metallic Silver');
   const [vin, setVin] = useState('');
@@ -255,6 +259,8 @@ export function CreateJobCardModal({
         registrationNumber: formattedRegNo,
         make,
         model,
+        variant: variant.trim() || undefined,
+        fuelType,
         color,
         fuelLevel: Number(fuelLevel),
         mileage: Number(mileage),
@@ -284,6 +290,8 @@ export function CreateJobCardModal({
         registrationNumber: formattedRegNo,
         make,
         model,
+        variant: variant.trim() || undefined,
+        fuelType,
         year: Number(year),
         color,
         vin,
@@ -476,14 +484,30 @@ export function CreateJobCardModal({
               </div>
               
               {/* Vehicle Section */}
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-3">
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Car className="w-4 h-4 text-amber-500" />
-                  Vehicle Inspection & Diagnostics
+                  Vehicle Make, Model, Variant & Powertrain Details
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
+                {/* Make, Model, Variant & Fuel Type Selector */}
+                <div className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
+                  <CarModelSelector
+                    make={make}
+                    model={model}
+                    variant={variant}
+                    fuelType={fuelType}
+                    onMakeChange={setMake}
+                    onModelChange={setModel}
+                    onVariantChange={setVariant}
+                    onFuelTypeChange={setFuelType}
+                    required
+                  />
+                </div>
+
+                {/* License Plate, Year, Color, VIN, Fuel Level & Mileage */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-1">
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Registration Number <span className="text-rose-500">*</span>
@@ -494,7 +518,7 @@ export function CreateJobCardModal({
                         className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
                       >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>Scan Camera</span>
+                        <span>Scan</span>
                       </button>
                     </div>
                     <div className="relative">
@@ -504,7 +528,7 @@ export function CreateJobCardModal({
                         value={regNo}
                         onChange={(e) => setRegNo(e.target.value)}
                         placeholder="e.g. MH02CB8811"
-                        className="w-full px-3 py-2 text-xs font-mono font-bold uppercase rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 pr-9"
+                        className="w-full px-3 py-2 text-xs font-mono font-bold uppercase rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 pr-9"
                       />
                       <button
                         type="button"
@@ -518,44 +542,22 @@ export function CreateJobCardModal({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Make</label>
-                    <input
-                      type="text"
-                      value={make}
-                      onChange={(e) => setMake(e.target.value)}
-                      placeholder="e.g. BMW, Toyota, Honda"
-                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Model</label>
-                    <input
-                      type="text"
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      placeholder="e.g. 330i, Camry, Civic"
-                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Year</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mfg Year</label>
                     <input
                       type="number"
                       value={year}
                       onChange={(e) => setYear(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Color</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vehicle Color</label>
                     <input
                       type="text"
                       value={color}
                       onChange={(e) => setColor(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                     />
                   </div>
 
@@ -566,17 +568,17 @@ export function CreateJobCardModal({
                       value={vin}
                       onChange={(e) => setVin(e.target.value)}
                       placeholder="Optional VIN"
-                      className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                      className="w-full px-3 py-2 text-xs font-mono rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
                   <div>
                     <div className="flex items-center justify-between text-xs font-semibold mb-1">
                       <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
                         <Fuel className="w-3.5 h-3.5 text-amber-500" />
-                        Fuel Level ({fuelLevel}%)
+                        Fuel Gauge Level ({fuelLevel}%)
                       </span>
                     </div>
                     <input
@@ -600,7 +602,7 @@ export function CreateJobCardModal({
                       type="number"
                       value={mileage}
                       onChange={(e) => setMileage(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                     />
                   </div>
                 </div>
@@ -694,6 +696,25 @@ export function CreateJobCardModal({
           {step === 2 && (
             <div className="p-6 space-y-6 max-h-[72vh] overflow-y-auto">
               
+              {/* Vehicle Context Banner */}
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="px-2 py-0.5 rounded font-mono font-black text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700">
+                    {regNo || 'REG-PENDING'}
+                  </span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">
+                    {make} {model} {variant ? `• ${variant}` : ''}
+                  </span>
+                  <FuelTypeBadge fuelType={fuelType} size="sm" />
+                  <span className="text-slate-500 dark:text-slate-400">
+                    ({year} • {color})
+                  </span>
+                </div>
+                <div className="text-slate-600 dark:text-slate-300 font-medium">
+                  Customer: <span className="font-bold text-slate-900 dark:text-slate-100">{customerName || 'Counter Customer'}</span> ({customerPhone || 'N/A'})
+                </div>
+              </div>
+
               {/* Job Allotment Mode Selector */}
               <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">

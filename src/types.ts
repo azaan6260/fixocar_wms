@@ -303,10 +303,30 @@ export interface QCCheckitem {
   notes?: string;
 }
 
+export type FuelType = 'Petrol' | 'Diesel' | 'CNG' | 'EV' | 'Hybrid' | 'LPG';
+
+export interface CarModelRecord {
+  id: string;
+  make: string;
+  model: string;
+  category: 'Hatchback' | 'Sedan' | 'Compact SUV' | 'SUV' | 'MUV' | 'Luxury' | 'EV' | 'Commercial';
+  variants: string[];
+  fuelTypes: FuelType[];
+  engineDisplacement?: string;
+  engineOilSpec?: string;
+  coolantSpec?: string;
+  recommendedPsi?: string;
+  isPopular?: boolean;
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface Vehicle {
   registrationNumber: string;
   make: string;
   model: string;
+  variant?: string;
+  fuelType?: FuelType | string;
   year: number;
   color: string;
   vin?: string;
@@ -340,9 +360,10 @@ export interface CustomerVehicleRecord {
   registrationNumber: string;
   make: string;
   model: string;
+  variant?: string;
   year: number;
   color: string;
-  fuelType: 'Petrol' | 'Diesel' | 'CNG' | 'EV' | 'Hybrid';
+  fuelType: FuelType;
   mileage: number;
   vin?: string;
   notes?: string;
@@ -501,6 +522,8 @@ export interface VehicleCheckIn {
   registrationNumber: string; // e.g. "MH02CB9988"
   make: string;
   model: string;
+  variant?: string;
+  fuelType?: FuelType | string;
   color?: string;
   fuelLevel?: number;
   mileage?: number;
@@ -646,6 +669,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'gate-pass',
       'daily-huddle',
       'workshops',
+      'car-models',
       'job-cards',
       'job-cards-history',
       'status-pipeline',

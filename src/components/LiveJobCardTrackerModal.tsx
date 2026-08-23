@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { JobCard, DeliveryRecord, UserRole } from '../types';
 import { addJobCardComment, getDeliveries, getJobCards } from '../lib/storage';
+import { FuelTypeBadge } from './FuelTypeBadge';
 import { 
   X, 
   QrCode, 
@@ -425,14 +426,23 @@ export function LiveJobCardTrackerModal({
                       {activeCard.serviceType.replace(/_/g, ' ')}
                     </span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Car className="w-5 h-5 text-amber-500" />
-                    {activeCard.vehicle.make} {activeCard.vehicle.model} ({activeCard.vehicle.color})
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                    <Car className="w-5 h-5 text-amber-500 shrink-0" />
+                    <span>{activeCard.vehicle.make} {activeCard.vehicle.model}</span>
+                    {activeCard.vehicle.variant && (
+                      <span className="text-xs px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold">
+                        {activeCard.vehicle.variant}
+                      </span>
+                    )}
+                    <span className="text-sm font-normal text-slate-400">
+                      ({activeCard.vehicle.color})
+                    </span>
                   </h3>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-600 dark:text-slate-300 pt-1">
                     <span className="font-mono bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded font-bold border border-amber-500/20">
                       {activeCard.vehicle.registrationNumber}
                     </span>
+                    <FuelTypeBadge fuelType={activeCard.vehicle.fuelType} size="sm" />
                     <span className="flex items-center gap-1">
                       <User className="w-3.5 h-3.5 text-slate-400" /> {activeCard.customer.name}
                     </span>

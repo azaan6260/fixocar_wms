@@ -8,7 +8,8 @@ import {
   IndianCity, 
   INDIAN_CITIES,
   UserRole,
-  JobTask
+  JobTask,
+  FuelType
 } from '../types';
 import { 
   getCustomerSession, 
@@ -59,6 +60,8 @@ import {
 } from 'lucide-react';
 
 import { GSTInvoiceView } from './GSTInvoiceView';
+import { FuelTypeBadge } from './FuelTypeBadge';
+import { CarModelSelector } from './CarModelSelector';
 
 interface CustomerPortalProps {
   currentRole: UserRole;
@@ -101,11 +104,12 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
   
   // Vehicle Form State
   const [vehReg, setVehReg] = useState('');
-  const [vehMake, setVehMake] = useState('');
-  const [vehModel, setVehModel] = useState('');
+  const [vehMake, setVehMake] = useState('Honda');
+  const [vehModel, setVehModel] = useState('City');
+  const [vehVariant, setVehVariant] = useState('ZX');
   const [vehYear, setVehYear] = useState<number>(2022);
-  const [vehColor, setVehColor] = useState('');
-  const [vehFuel, setVehFuel] = useState<'Petrol' | 'Diesel' | 'CNG' | 'EV' | 'Hybrid'>('Petrol');
+  const [vehColor, setVehColor] = useState('Pearl White');
+  const [vehFuel, setVehFuel] = useState<FuelType>('Petrol');
   const [vehMileage, setVehMileage] = useState<number>(35000);
   const [vehVin, setVehVin] = useState('');
   const [vehNotes, setVehNotes] = useState('');
@@ -219,6 +223,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
     setVehReg('');
     setVehMake('Honda');
     setVehModel('City');
+    setVehVariant('ZX');
     setVehYear(2022);
     setVehColor('Pearl White');
     setVehFuel('Petrol');
@@ -234,6 +239,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
     setVehReg(v.registrationNumber);
     setVehMake(v.make);
     setVehModel(v.model);
+    setVehVariant(v.variant || '');
     setVehYear(v.year);
     setVehColor(v.color);
     setVehFuel(v.fuelType);
@@ -257,6 +263,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
         registrationNumber: regUpper,
         make: vehMake.trim(),
         model: vehModel.trim(),
+        variant: vehVariant.trim() || undefined,
         year: Number(vehYear) || 2022,
         color: vehColor.trim() || 'White',
         fuelType: vehFuel,
@@ -270,6 +277,7 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
         registrationNumber: regUpper,
         make: vehMake.trim(),
         model: vehModel.trim(),
+        variant: vehVariant.trim() || undefined,
         year: Number(vehYear) || 2022,
         color: vehColor.trim() || 'White',
         fuelType: vehFuel,
@@ -1154,11 +1162,19 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                         <div>
-                          <span className="font-mono text-sm font-black text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 inline-block mb-1">
-                            {v.registrationNumber}
-                          </span>
-                          <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 leading-snug">
-                            {v.make} {v.model}
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="font-mono text-sm font-black text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 inline-block">
+                              {v.registrationNumber}
+                            </span>
+                            <FuelTypeBadge fuelType={v.fuelType} size="sm" />
+                          </div>
+                          <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 leading-snug flex items-center gap-2 flex-wrap">
+                            <span>{v.make} {v.model}</span>
+                            {v.variant && (
+                              <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
+                                {v.variant}
+                              </span>
+                            )}
                           </h3>
                         </div>
 
@@ -1716,27 +1732,18 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Make / Brand *</label>
-                  <input
-                    type="text"
-                    required
-                    value={vehMake}
-                    onChange={(e) => setVehMake(e.target.value)}
-                    placeholder="e.g. Honda, Maruti, Hyundai"
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Model Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={vehModel}
-                    onChange={(e) => setVehModel(e.target.value)}
-                    placeholder="e.g. City 1.5 i-VTEC, Swift"
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                <div className="sm:col-span-2">
+                  <CarModelSelector
+                    selectedMake={vehMake}
+                    selectedModel={vehModel}
+                    selectedVariant={vehVariant}
+                    selectedFuelType={vehFuel}
+                    onChange={(selection) => {
+                      setVehMake(selection.make);
+                      setVehModel(selection.model);
+                      if (selection.variant) setVehVariant(selection.variant);
+                      if (selection.fuelType) setVehFuel(selection.fuelType);
+                    }}
                   />
                 </div>
 

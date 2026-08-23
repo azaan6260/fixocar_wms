@@ -1,5 +1,6 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
+import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient } from './supabaseClient';
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
 
@@ -71,6 +72,7 @@ const STORAGE_KEYS = {
   CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v1',
   VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v1',
   WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v1',
+  CAR_MODELS: 'fixocar_car_models_v1',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -2172,4 +2174,83 @@ export function deleteWorkshopExpense(id: string): boolean {
   saveWorkshopExpenses(filtered);
   return true;
 }
+
+// ----------------------------------------------------
+// CAR MODELS, VARIANTS & FUEL TYPES MASTER CATALOG
+// ----------------------------------------------------
+export function getCarModels(): CarModelRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.CAR_MODELS);
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(INITIAL_CAR_MODELS));
+    return INITIAL_CAR_MODELS;
+  }
+  try {
+    const parsed = JSON.parse(local);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(INITIAL_CAR_MODELS));
+      return INITIAL_CAR_MODELS;
+    }
+    return parsed;
+  } catch {
+    return INITIAL_CAR_MODELS;
+  }
+}
+
+export function saveCarModels(models: CarModelRecord[]): void {
+  localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(models));
+  notifyStoreChange();
+}
+
+export function addCarModel(modelData: Omit<CarModelRecord, 'id' | 'createdAt'>): CarModelRecord {
+  const models = getCarModels();
+  const newModel: CarModelRecord = {
+    ...modelData,
+    id: `model-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    createdAt: new Date().toISOString()
+  };
+  models.unshift(newModel);
+  saveCarModels(models);
+  return newModel;
+}
+
+export function updateCarModel(id: string, updates: Partial<CarModelRecord>): CarModelRecord | null {
+  const models = getCarModels();
+  const idx = models.findIndex(m => m.id === id);
+  if (idx === -1) return null;
+  models[idx] = { ...models[idx], ...updates };
+  saveCarModels(models);
+  return models[idx];
+}
+
+export function deleteCarModel(id: string): boolean {
+  const models = getCarModels();
+  const filtered = models.filter(m => m.id !== id);
+  if (filtered.length === models.length) return false;
+  saveCarModels(filtered);
+  return true;
+}
+
+export function getCarMakes(): string[] {
+  const models = getCarModels();
+  const makesSet = new Set<string>();
+  models.forEach(m => {
+    if (m.make) makesSet.add(m.make.trim());
+  });
+  return Array.from(makesSet).sort();
+}
+
+export function getModelsByMake(make: string): CarModelRecord[] {
+  const models = getCarModels();
+  if (!make) return models;
+  return models.filter(m => m.make.toLowerCase() === make.toLowerCase());
+}
+
+export function findCarModel(make: string, model: string): CarModelRecord | undefined {
+  const models = getCarModels();
+  return models.find(m => 
+    m.make.toLowerCase() === make.trim().toLowerCase() && 
+    (m.model.toLowerCase() === model.trim().toLowerCase() || model.trim().toLowerCase().startsWith(m.model.toLowerCase()))
+  );
+}
+
 

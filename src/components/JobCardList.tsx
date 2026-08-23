@@ -25,6 +25,7 @@ import {
   Check
 } from 'lucide-react';
 import { PartRequisitionModal } from './PartRequisitionModal';
+import { FuelTypeBadge } from './FuelTypeBadge';
 
 interface JobCardListProps {
   jobCards: JobCard[];
@@ -79,6 +80,8 @@ export function JobCardList({
       card.vehicle.registrationNumber.toLowerCase().includes(searchLower) ||
       card.vehicle.make.toLowerCase().includes(searchLower) ||
       card.vehicle.model.toLowerCase().includes(searchLower) ||
+      (card.vehicle.variant && card.vehicle.variant.toLowerCase().includes(searchLower)) ||
+      (card.vehicle.fuelType && card.vehicle.fuelType.toLowerCase().includes(searchLower)) ||
       card.customer.name.toLowerCase().includes(searchLower) ||
       card.customer.phone.includes(searchLower) ||
       (card.cityName && card.cityName.toLowerCase().includes(searchLower)) ||
@@ -309,11 +312,20 @@ export function JobCardList({
                       <Car className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">
-                        {card.vehicle.registrationNumber}
-                      </h2>
-                      <p className="text-xs font-extrabold text-slate-700 dark:text-slate-300 truncate">
-                        {card.vehicle.make} {card.vehicle.model} ({card.vehicle.year})
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">
+                          {card.vehicle.registrationNumber}
+                        </h2>
+                        <FuelTypeBadge fuelType={card.vehicle.fuelType} size="sm" />
+                      </div>
+                      <p className="text-xs font-extrabold text-slate-700 dark:text-slate-300 truncate flex items-center gap-1 flex-wrap">
+                        <span>{card.vehicle.make} {card.vehicle.model}</span>
+                        {card.vehicle.variant && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border border-slate-200 dark:border-slate-700">
+                            {card.vehicle.variant}
+                          </span>
+                        )}
+                        <span className="text-slate-400 font-normal">({card.vehicle.year})</span>
                       </p>
                       <p className="text-[11px] text-slate-500 font-medium truncate">
                         Color: {card.vehicle.color} • {card.vehicle.mileage.toLocaleString('en-IN')} km

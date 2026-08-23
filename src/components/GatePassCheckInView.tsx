@@ -22,15 +22,19 @@ import {
   Flame,
   Gauge
 } from 'lucide-react';
-import { VehicleCheckIn, CheckInStatus } from '../types';
+import { VehicleCheckIn, CheckInStatus, FuelType } from '../types';
 import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
+import { CarModelSelector } from './CarModelSelector';
+import { FuelTypeBadge } from './FuelTypeBadge';
 
 interface GatePassCheckInViewProps {
   onOpenCreateJobCardWithPrefill?: (prefill: {
     regNo: string;
     make: string;
     model: string;
+    variant?: string;
+    fuelType?: FuelType;
     color?: string;
     customerName: string;
     customerPhone: string;
@@ -63,7 +67,9 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [regNo, setRegNo] = useState('');
   const [make, setMake] = useState('Maruti Suzuki');
-  const [model, setModel] = useState('Swift VXi');
+  const [model, setModel] = useState('Swift');
+  const [variant, setVariant] = useState('VXi');
+  const [fuelType, setFuelType] = useState<FuelType>('Petrol');
   const [color, setColor] = useState('Arctic White');
   const [fuelLevel, setFuelLevel] = useState(50);
   const [mileage, setMileage] = useState(35000);
@@ -103,6 +109,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
       registrationNumber: regNo.toUpperCase().trim(),
       make,
       model,
+      variant: variant.trim() || undefined,
+      fuelType,
       color,
       fuelLevel,
       mileage,
@@ -126,7 +134,9 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const resetForm = () => {
     setRegNo('');
     setMake('Maruti Suzuki');
-    setModel('Swift VXi');
+    setModel('Swift');
+    setVariant('VXi');
+    setFuelType('Petrol');
     setColor('Arctic White');
     setFuelLevel(50);
     setMileage(35000);
@@ -433,12 +443,25 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                       )}
                     </div>
 
-                    <div className="space-y-0.5">
-                      <span className="bg-amber-500 text-slate-950 font-mono text-sm font-black px-2.5 py-0.5 rounded-lg inline-block border border-amber-400">
-                        {item.registrationNumber}
-                      </span>
-                      <h3 className="text-white font-black text-base drop-shadow-xs">
-                        {item.make} {item.model} {item.color ? `(${item.color})` : ''}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="bg-amber-500 text-slate-950 font-mono text-sm font-black px-2.5 py-0.5 rounded-lg inline-block border border-amber-400">
+                          {item.registrationNumber}
+                        </span>
+                        <FuelTypeBadge fuelType={item.fuelType} size="sm" />
+                      </div>
+                      <h3 className="text-white font-black text-base drop-shadow-xs flex items-center gap-1.5 flex-wrap">
+                        <span>{item.make} {item.model}</span>
+                        {item.variant && (
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-white/20 text-white font-semibold">
+                            {item.variant}
+                          </span>
+                        )}
+                        {item.color && (
+                          <span className="text-xs text-slate-300 font-normal">
+                            ({item.color})
+                          </span>
+                        )}
                       </h3>
                     </div>
                   </div>
@@ -533,6 +556,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                             regNo: item.registrationNumber,
                             make: item.make,
                             model: item.model,
+                            variant: item.variant,
+                            fuelType: item.fuelType,
                             color: item.color,
                             customerName: item.customerName,
                             customerPhone: item.customerPhone,
@@ -675,59 +700,78 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
               </div>
 
               {/* Vehicle Specs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block">Registration No *</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsScannerOpen(true)}
-                      className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Scan Camera</span>
-                    </button>
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
+                  2. Vehicle Make, Model, Variant & Powertrain
+                </span>
+
+                <CarModelSelector
+                  make={make}
+                  model={model}
+                  variant={variant}
+                  fuelType={fuelType}
+                  onMakeChange={setMake}
+                  onModelChange={setModel}
+                  onVariantChange={setVariant}
+                  onFuelTypeChange={setFuelType}
+                  required
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block">Registration No *</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsScannerOpen(true)}
+                        className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Scan</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="e.g. MH02CB8811"
+                        value={regNo}
+                        onChange={(e) => setRegNo(e.target.value)}
+                        required
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-black text-sm uppercase pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsScannerOpen(true)}
+                        title="Scan license plate with live camera"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                      >
+                        <Camera className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Vehicle Color</label>
                     <input
                       type="text"
-                      placeholder="e.g. MH02CB8811"
-                      value={regNo}
-                      onChange={(e) => setRegNo(e.target.value)}
-                      required
-                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-black text-sm uppercase pr-9"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      placeholder="e.g. Arctic White"
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setIsScannerOpen(true)}
-                      title="Scan license plate with live camera"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
-                    >
-                      <Camera className="w-4 h-4" />
-                    </button>
                   </div>
-                </div>
 
-                <div>
-                  <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Make *</label>
-                  <input
-                    type="text"
-                    value={make}
-                    onChange={(e) => setMake(e.target.value)}
-                    required
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Model *</label>
-                  <input
-                    type="text"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    required
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
-                  />
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Fuel Gauge ({fuelLevel}%)</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={fuelLevel}
+                      onChange={(e) => setFuelLevel(Number(e.target.value))}
+                      className="w-full mt-2 accent-amber-500"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -735,7 +779,7 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
               <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3">
                 <span className="text-amber-800 dark:text-amber-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
                   <UserCheck className="w-3.5 h-3.5 text-amber-500" />
-                  2. Arrival Driver & Photo Verification
+                  3. Arrival Driver & Photo Verification
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

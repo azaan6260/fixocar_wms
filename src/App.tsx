@@ -37,6 +37,7 @@ import { OutsourcedJobsView } from './components/OutsourcedJobsView';
 import { PartOrderBasketView } from './components/PartOrderBasketView';
 import { InvoiceManagementView } from './components/InvoiceManagementView';
 import { AccountingAndExpensesView } from './components/AccountingAndExpensesView';
+import { CarModelsManagementView } from './components/CarModelsManagementView';
 import { ToastContainer } from './components/ToastContainer';
 
 export default function App() {
@@ -373,6 +374,10 @@ export default function App() {
 
         {activeTab === 'employees' && (
           <EmployeeManagementView currentRole={currentRole} />
+        )}
+
+        {activeTab === 'car-models' && (
+          <CarModelsManagementView currentRole={currentRole} />
         )}
 
       </main>
