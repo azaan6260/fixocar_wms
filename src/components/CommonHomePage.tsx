@@ -103,15 +103,8 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
             </div>
           </div>
 
-          {/* Sign In & Access Actions */}
+          {/* Customer Sign In Actions */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => onOpenLogin('STAFF')}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold border border-slate-800 transition-all cursor-pointer"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-slate-400" />
-              Staff Login
-            </button>
             <button
               onClick={() => onOpenLogin('CUSTOMER')}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black transition-all shadow-lg shadow-blue-600/30 flex items-center gap-2 cursor-pointer"
@@ -169,27 +162,6 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
                 </button>
               </form>
 
-              {/* Sample Number Plates Quick Links */}
-              <div className="mt-3 px-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span className="font-semibold text-slate-400">Try demo cars:</span>
-                {['MH-02-CB-9988', 'KA-01-MJ-8821', 'DL-01-AB-1234'].map((plate) => (
-                  <button
-                    key={plate}
-                    type="button"
-                    onClick={() => {
-                      setSearchReg(plate);
-                      const clean = plate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                      const found = jobCards.find(c => c.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().includes(clean));
-                      setTrackedCard(found || null);
-                      setSearchError(null);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-blue-500/50 text-slate-300 hover:text-white font-mono text-[11px] transition-colors"
-                  >
-                    {plate}
-                  </button>
-                ))}
-              </div>
-
               {/* Search Error */}
               {searchError && (
                 <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
@@ -224,8 +196,8 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
                       <p className="text-white font-bold truncate mt-0.5">{trackedCard.packageName || trackedCard.serviceType}</p>
                     </div>
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/60">
-                      <p className="text-slate-400 text-[10px] uppercase font-bold">Floor Manager</p>
-                      <p className="text-white font-bold truncate mt-0.5">{trackedCard.floorManagerName || 'Marcus Vance'}</p>
+                      <p className="text-slate-400 text-[10px] uppercase font-bold">Service Supervisor</p>
+                      <p className="text-white font-bold truncate mt-0.5">{trackedCard.floorManagerName || 'Service Supervisor'}</p>
                     </div>
                     <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/60">
                       <p className="text-slate-400 text-[10px] uppercase font-bold">Tasks Progress</p>
@@ -248,7 +220,7 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
                       className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <span>Sign In to Customer Portal</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -446,37 +418,37 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-left">
               <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase mb-2">
-                <MapPin className="w-3.5 h-3.5" /> Mumbai Central Hub
+                <MapPin className="w-3.5 h-3.5" /> Multi-Brand Service Hub
               </div>
-              <h3 className="text-base font-extrabold text-white">FixoCar Central Hub - Andheri</h3>
-              <p className="text-xs text-slate-400 mt-1">Bay 12, Marol Industrial Area, Andheri East, Mumbai</p>
+              <h3 className="text-base font-extrabold text-white">Full Mechanical & Engine Overhaul Bay</h3>
+              <p className="text-xs text-slate-400 mt-1">Computerized OBD-II diagnostics, laser alignment, and synthetic fluid flushing stations.</p>
               <div className="mt-4 flex items-center justify-between text-xs text-slate-300 pt-3 border-t border-slate-800">
-                <span>Manager: Marcus Vance</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Active</span>
+                <span className="text-slate-400">Capacity: 12 Active Bays</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Operational</span>
               </div>
             </div>
 
             <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-left">
               <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase mb-2">
-                <MapPin className="w-3.5 h-3.5" /> Delhi NCR Fleet Bay
+                <MapPin className="w-3.5 h-3.5" /> Body & Collision Center
               </div>
-              <h3 className="text-base font-extrabold text-white">FixoCar Fleet Bay - Okhla</h3>
-              <p className="text-xs text-slate-400 mt-1">Phase III, Okhla Industrial Estate, New Delhi</p>
+              <h3 className="text-base font-extrabold text-white">Precision Denting & Heated Paint Booth</h3>
+              <p className="text-xs text-slate-400 mt-1">Dust-free negative pressure bake booths with computerized OEM color spectrometer matching.</p>
               <div className="mt-4 flex items-center justify-between text-xs text-slate-300 pt-3 border-t border-slate-800">
-                <span>Manager: Vikram Mehta</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Active</span>
+                <span className="text-slate-400">Capacity: 6 Paint Booths</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Operational</span>
               </div>
             </div>
 
             <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-left">
               <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase mb-2">
-                <MapPin className="w-3.5 h-3.5" /> Bengaluru Hub
+                <MapPin className="w-3.5 h-3.5" /> Detailing & Logistics Hub
               </div>
-              <h3 className="text-base font-extrabold text-white">FixoCar Express - Whitefield</h3>
-              <p className="text-xs text-slate-400 mt-1">ITPL Main Rd, Hoodi, Bengaluru</p>
+              <h3 className="text-base font-extrabold text-white">Eco Steam Detailing & Doorstep Valet</h3>
+              <p className="text-xs text-slate-400 mt-1">Hot steam interior extraction, 9H ceramic coating bays, and live GPS valet dispatch tracking.</p>
               <div className="mt-4 flex items-center justify-between text-xs text-slate-300 pt-3 border-t border-slate-800">
-                <span>Manager: Anil Kumar</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Active</span>
+                <span className="text-slate-400">Doorstep Pickup & Drop</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">Operational</span>
               </div>
             </div>
           </div>
@@ -493,13 +465,11 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
           </div>
 
           <div className="flex items-center gap-4 text-xs font-medium">
-            <button onClick={() => onOpenLogin('CUSTOMER')} className="hover:text-white transition-colors cursor-pointer">
-              Customer Sign In
+            <button onClick={() => onOpenLogin('CUSTOMER')} className="hover:text-white transition-colors cursor-pointer font-semibold text-blue-400">
+              Customer Portal Sign In
             </button>
-            <span className="text-slate-700">|</span>
-            <button onClick={() => onOpenLogin('STAFF')} className="hover:text-white transition-colors cursor-pointer">
-              Technician & Staff Portal
-            </button>
+            <span className="text-slate-700">•</span>
+            <span className="text-slate-500">© 2026 FixoCar Automotive Technologies</span>
           </div>
         </div>
       </footer>

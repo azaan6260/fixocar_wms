@@ -51,11 +51,33 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [loginModalInitialTab, setLoginModalInitialTab] = useState<'STAFF' | 'CUSTOMER'>('CUSTOMER');
 
+  // Route tracking (/wms vs /)
+  const [routePath, setRoutePath] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname.toLowerCase() + window.location.hash.toLowerCase() + window.location.search.toLowerCase();
+    }
+    return '/';
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoutePath(window.location.pathname.toLowerCase() + window.location.hash.toLowerCase() + window.location.search.toLowerCase());
+    };
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, []);
+
+  const isWmsRoute = routePath.includes('wms');
+
   // WMS Role & Tab State
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
     const user = getAuthUser();
     if (user && user.role) return user.role;
-    return 'SUPER_ADMIN';
+    return 'MECHANIC';
   });
 
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -158,25 +180,54 @@ export default function App() {
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
   const activeCardForQR = qrModalCardId ? getJobCardById(qrModalCardId) : null;
 
-  // VIEW 1: NOT AUTHENTICATED -> COMMON HOME PAGE FOR ALL USERS
+  // VIEW 1A: NOT AUTHENTICATED & NAVIGATED TO /wms -> DEDICATED STAFF & ADMIN LOGIN
+  if (!authUser && isWmsRoute) {
+    return (
+      <div className="min-h-screen bg-slate-950 font-sans flex flex-col justify-center items-center p-4 relative overflow-hidden">
+        {/* Background glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
+
+        <div className="relative z-10 w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-xl shadow-blue-500/25 mb-3">
+              <Camera className="w-7 h-7 text-white" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">FixoCar WMS Portal</h1>
+            <p className="text-xs text-slate-400 mt-1">Authorized Technician, Staff & Super Admin Gateway</p>
+          </div>
+
+          <UnifiedLoginModal
+            isOpen={true}
+            forcedMode="STAFF"
+            onClose={() => {
+              if (typeof window !== 'undefined') {
+                window.location.href = '/';
+              }
+            }}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // VIEW 1B: NOT AUTHENTICATED -> COMMON HOME PAGE FOR CUSTOMERS
   if (!authUser) {
     return (
       <div className="min-h-screen bg-slate-950 font-sans">
         <CommonHomePage
-          onOpenLogin={(tab) => {
-            setLoginModalInitialTab(tab || 'CUSTOMER');
+          onOpenLogin={() => {
             setIsLoginModalOpen(true);
           }}
           onBookService={() => {
-            setLoginModalInitialTab('CUSTOMER');
             setIsLoginModalOpen(true);
           }}
         />
 
-        {/* Global Unified Authentication Modal */}
+        {/* Customer Authentication Modal */}
         <UnifiedLoginModal
           isOpen={isLoginModalOpen}
-          initialTab={loginModalInitialTab}
+          forcedMode="CUSTOMER"
           onClose={() => setIsLoginModalOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />

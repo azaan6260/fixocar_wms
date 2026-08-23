@@ -22,58 +22,27 @@ export const INITIAL_CITIES: City[] = [
   { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2026-01-01' },
 ];
 
-export const INITIAL_WORKSHOPS: Workshop[] = [
-  {
-    id: 'ws-mumbai-central',
-    name: 'FixoCar Central Hub - Andheri',
-    cityId: 'city-mumbai',
-    cityName: 'Mumbai',
-    address: 'Bay 12, Marol Industrial Area, Andheri East, Mumbai',
-    phone: '+91 98200 11223',
-    isCars24Partner: true, // Marked as Cars24 Partner Workshop
-    managerName: 'Marcus Vance'
-  },
-  {
-    id: 'ws-delhi-south',
-    name: 'FixoCar Fleet Bay - Okhla',
-    cityId: 'city-delhi',
-    cityName: 'Delhi NCR',
-    address: 'Phase III, Okhla Industrial Estate, New Delhi',
-    phone: '+91 98110 33445',
-    isCars24Partner: true, // Marked as Cars24 Partner Workshop
-    managerName: 'Vikram Mehta'
-  },
-  {
-    id: 'ws-bangalore-east',
-    name: 'FixoCar Express - Whitefield',
-    cityId: 'city-bangalore',
-    cityName: 'Bengaluru',
-    address: 'ITPL Main Rd, Hoodi, Bengaluru',
-    phone: '+91 98450 55667',
-    isCars24Partner: false,
-    managerName: 'Anil Kumar'
-  }
-];
+export const INITIAL_WORKSHOPS: Workshop[] = [];
 
 const STORAGE_KEYS = {
-  JOB_CARDS: 'autocraft_job_cards_v1',
-  EMPLOYEES: 'autocraft_employees_v1',
-  VENDORS: 'autocraft_vendors_v1',
-  DELIVERIES: 'autocraft_deliveries_v1',
-  PURCHASE_ORDERS: 'autocraft_purchase_orders_v1',
-  CITY_SERVICES: 'fixocar_city_services_v1',
-  SERVICE_BOOKINGS: 'fixocar_service_bookings_v1',
-  CITIES: 'fixocar_cities_v1',
-  WORKSHOPS: 'fixocar_workshops_v1',
-  INVENTORY: 'fixocar_inventory_v1',
-  INVENTORY_CONSUMPTION: 'fixocar_inventory_consumption_v1',
-  STANDARD_JOBS: 'fixocar_standard_jobs_v1',
-  CUSTOMER_SESSION: 'fixocar_customer_session_v1',
-  CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v1',
-  VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v1',
-  WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v1',
-  CAR_MODELS: 'fixocar_car_models_v1',
-  AUTH_USER: 'fixocar_auth_user_v2',
+  JOB_CARDS: 'autocraft_job_cards_v4',
+  EMPLOYEES: 'autocraft_employees_v4',
+  VENDORS: 'autocraft_vendors_v4',
+  DELIVERIES: 'autocraft_deliveries_v4',
+  PURCHASE_ORDERS: 'autocraft_purchase_orders_v4',
+  CITY_SERVICES: 'fixocar_city_services_v4',
+  SERVICE_BOOKINGS: 'fixocar_service_bookings_v4',
+  CITIES: 'fixocar_cities_v4',
+  WORKSHOPS: 'fixocar_workshops_v4',
+  INVENTORY: 'fixocar_inventory_v4',
+  INVENTORY_CONSUMPTION: 'fixocar_inventory_consumption_v4',
+  STANDARD_JOBS: 'fixocar_standard_jobs_v4',
+  CUSTOMER_SESSION: 'fixocar_customer_session_v4',
+  CUSTOMER_VEHICLES: 'fixocar_customer_vehicles_v4',
+  VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v4',
+  WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v4',
+  CAR_MODELS: 'fixocar_car_models_v4',
+  AUTH_USER: 'fixocar_auth_user_v4',
 };
 
 // Event listener mechanism for real-time UI updates across views
@@ -1809,60 +1778,14 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
 // -------------------------------------------------------------
 
 export const DEFAULT_CUSTOMER_SESSION: CustomerUser = {
-  id: 'cust-demo-8819915656',
-  name: 'Vikramaditya Singh',
-  phone: '8819915656',
-  email: 'vikram.singh@example.com',
-  address: 'B-402, Seawoods Grand Central, Nerul, Navi Mumbai',
-  city: 'Mumbai',
-  isLoggedIn: true,
-  loggedInAt: new Date().toISOString()
+  id: '',
+  name: '',
+  phone: '',
+  email: '',
+  isLoggedIn: false
 };
 
-export const INITIAL_CUSTOMER_VEHICLES: CustomerVehicleRecord[] = [
-  {
-    id: 'veh-8819915656-1',
-    customerPhone: '8819915656',
-    registrationNumber: 'MH-02-DN-4521',
-    make: 'Honda',
-    model: 'City 1.5 i-VTEC',
-    year: 2021,
-    color: 'Taffeta White',
-    fuelType: 'Petrol',
-    mileage: 42000,
-    vin: 'MA3E12345678901',
-    notes: 'Primary personal sedan. Regular servicing done at FixoCar Andheri Hub.',
-    addedAt: '2026-01-10'
-  },
-  {
-    id: 'veh-8819915656-2',
-    customerPhone: '8819915656',
-    registrationNumber: 'DL-01-AB-1234',
-    make: 'Maruti Suzuki',
-    model: 'Swift ZXi',
-    year: 2020,
-    color: 'Solid Fire Red',
-    fuelType: 'Petrol',
-    mileage: 35500,
-    vin: 'MA3F98765432109',
-    notes: 'Family hatchback used for city commuting.',
-    addedAt: '2026-02-01'
-  },
-  {
-    id: 'veh-8819915656-3',
-    customerPhone: '8819915656',
-    registrationNumber: 'KA-05-MC-8899',
-    make: 'Hyundai',
-    model: 'Creta 1.5 SX',
-    year: 2022,
-    color: 'Sleek Silver',
-    fuelType: 'Diesel',
-    mileage: 28000,
-    vin: 'MALC34567812345',
-    notes: 'Outstation SUV.',
-    addedAt: '2026-03-15'
-  }
-];
+export const INITIAL_CUSTOMER_VEHICLES: CustomerVehicleRecord[] = [];
 
 export function getCustomerSession(): CustomerUser {
   const local = localStorage.getItem(STORAGE_KEYS.CUSTOMER_SESSION);
@@ -2003,127 +1926,7 @@ export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {
 // -------------------------------------------------------------
 // WORKSHOP EXPENSES & ACCOUNTING STORAGE
 // -------------------------------------------------------------
-export const INITIAL_WORKSHOP_EXPENSES: WorkshopExpense[] = [
-  {
-    id: 'EXP-2026-001',
-    title: 'Monthly Workshop Electricity Bill - 3 Phase Bay Heavy Load',
-    category: 'ELECTRICITY_UTILITIES',
-    amount: 18450,
-    date: '2026-07-25',
-    workshopId: 'ws-mumbai-central',
-    workshopName: 'FixoCar Central Hub - Andheri',
-    paymentMode: 'BANK_TRANSFER',
-    paidByName: 'Marcus Vance',
-    vendorName: 'MSEDCL Mumbai Industrial Line',
-    receiptNumber: 'MSEDCL-883921',
-    notes: 'Electricity charges for heavy hydraulic lifts and paint booth compressors.',
-    isApproved: true,
-    approvedByName: 'SUPER ADMIN',
-    createdAt: '2026-07-25T10:30:00Z'
-  },
-  {
-    id: 'EXP-2026-002',
-    title: 'Garage Facility Bay Rent - July 2026',
-    category: 'RENT_LEASE',
-    amount: 85000,
-    date: '2026-07-01',
-    workshopId: 'ws-mumbai-central',
-    workshopName: 'FixoCar Central Hub - Andheri',
-    paymentMode: 'BANK_TRANSFER',
-    paidByName: 'Marcus Vance',
-    vendorName: 'Marol Industrial Park Pvt Ltd',
-    receiptNumber: 'RENT-JUL-2026',
-    notes: 'Monthly lease for Marol 6-bay workshop facility.',
-    isApproved: true,
-    approvedByName: 'SUPER ADMIN',
-    createdAt: '2026-07-01T09:00:00Z'
-  },
-  {
-    id: 'EXP-2026-003',
-    title: 'Technicians Tea, Refreshments & Snack Box Allowance',
-    category: 'STAFF_WELFARE',
-    amount: 3420,
-    date: '2026-07-28',
-    workshopId: 'ws-mumbai-central',
-    workshopName: 'FixoCar Central Hub - Andheri',
-    paymentMode: 'PETTY_CASH',
-    paidByName: 'Rajesh Sharma',
-    vendorName: 'Sai Tea Stall & Snacks',
-    receiptNumber: 'PETTY-0728',
-    notes: 'Daily refreshments and evening snacks for floor mechanics working overtime.',
-    isApproved: true,
-    approvedByName: 'Marcus Vance',
-    createdAt: '2026-07-28T18:15:00Z'
-  },
-  {
-    id: 'EXP-2026-004',
-    title: 'Pneumatic Impact Wrench & Compressor Hose Servicing',
-    category: 'TOOLS_MAINTENANCE',
-    amount: 7200,
-    date: '2026-07-20',
-    workshopId: 'ws-delhi-south',
-    workshopName: 'FixoCar Fleet Bay - Okhla',
-    paymentMode: 'UPI',
-    paidByName: 'Vikram Mehta',
-    vendorName: 'Okhla Pneumatic Services',
-    receiptNumber: 'OPS-2026-781',
-    notes: 'Replaced seals and oil on 2 pneumatic impact guns and main air compressor line.',
-    isApproved: true,
-    approvedByName: 'SUPER ADMIN',
-    createdAt: '2026-07-20T14:20:00Z'
-  },
-  {
-    id: 'EXP-2026-005',
-    title: 'Airtel High-Speed Fiber Broadband for OBD Diagnostics',
-    category: 'OFFICE_ADMIN',
-    amount: 1799,
-    date: '2026-07-05',
-    workshopId: 'ws-delhi-south',
-    workshopName: 'FixoCar Fleet Bay - Okhla',
-    paymentMode: 'CREDIT_CARD',
-    paidByName: 'Vikram Mehta',
-    vendorName: 'Airtel Business Broadband',
-    receiptNumber: 'AIR-9920192',
-    notes: 'Monthly Wi-Fi connection for ECU diagnostic scanners and workshop tablet system.',
-    isApproved: true,
-    approvedByName: 'SUPER ADMIN',
-    createdAt: '2026-07-05T11:00:00Z'
-  },
-  {
-    id: 'EXP-2026-006',
-    title: 'Emergency Tow Truck Fuel & Flatbed Breakdown Service',
-    category: 'FUEL_LOGISTICS',
-    amount: 4500,
-    date: '2026-07-24',
-    workshopId: 'ws-mumbai-central',
-    workshopName: 'FixoCar Central Hub - Andheri',
-    paymentMode: 'UPI',
-    paidByName: 'Rajesh Sharma',
-    vendorName: 'HP Petrol Pump Marol',
-    receiptNumber: 'HP-FUEL-771',
-    notes: 'Diesel for flatbed recovery truck picking up stranded vehicle on Highway.',
-    isApproved: true,
-    approvedByName: 'Marcus Vance',
-    createdAt: '2026-07-24T16:00:00Z'
-  },
-  {
-    id: 'EXP-2026-007',
-    title: 'Municipal Trade License & Fire Safety Audit Fee',
-    category: 'STATUTORY_TAXES',
-    amount: 12500,
-    date: '2026-07-12',
-    workshopId: 'ws-bangalore-east',
-    workshopName: 'FixoCar Express - Whitefield',
-    paymentMode: 'BANK_TRANSFER',
-    paidByName: 'Anil Kumar',
-    vendorName: 'BBMP Municipal Licensing Authority',
-    receiptNumber: 'BBMP-LIC-2026',
-    notes: 'Annual fire extinguisher inspection & commercial garage trade license renewal.',
-    isApproved: true,
-    approvedByName: 'SUPER ADMIN',
-    createdAt: '2026-07-12T12:00:00Z'
-  }
-];
+export const INITIAL_WORKSHOP_EXPENSES: WorkshopExpense[] = [];
 
 export function getWorkshopExpenses(): WorkshopExpense[] {
   const local = localStorage.getItem(STORAGE_KEYS.WORKSHOP_EXPENSES);
@@ -2280,22 +2083,68 @@ export function logoutAuthUser(): void {
   notifyStoreChange();
 }
 
-export function authenticateUser(identifier: string, password?: string): { success: boolean; user?: AuthUser; error?: string } {
+export function authenticateUser(
+  identifier: string, 
+  password?: string, 
+  options?: { isCustomerLogin?: boolean; customerName?: string; city?: string }
+): { success: boolean; user?: AuthUser; error?: string } {
   const cleanId = identifier.trim().toLowerCase();
   const cleanPass = (password || '').trim();
 
-  // 1. Check Employees
+  // Handle Customer Portal Sign In / Register
+  if (options?.isCustomerLogin) {
+    const rawPhone = cleanId.replace(/\D/g, '');
+    const isEmail = cleanId.includes('@');
+    
+    if (!isEmail && rawPhone.length < 10) {
+      return { success: false, error: 'Please enter a valid 10-digit mobile number or email address.' };
+    }
+
+    const custUser: AuthUser = {
+      id: `cust-${rawPhone || cleanId.replace(/[^a-z0-9]/gi, '')}`,
+      name: options.customerName?.trim() || (isEmail ? identifier.split('@')[0] : 'Valued Customer'),
+      loginId: cleanId,
+      email: isEmail ? cleanId : `${rawPhone || 'customer'}@customer.fixocar.com`,
+      phone: rawPhone || '8819915656',
+      role: 'CUSTOMER',
+      userType: 'CUSTOMER',
+      customerId: `cust-${rawPhone || cleanId.replace(/[^a-z0-9]/gi, '')}`,
+      cityName: options.city || 'Mumbai',
+      loggedInAt: new Date().toISOString()
+    };
+    saveAuthUser(custUser);
+    
+    const custSession: CustomerUser = {
+      id: custUser.id,
+      name: custUser.name,
+      phone: custUser.phone || '8819915656',
+      email: custUser.email,
+      city: custUser.cityName || 'Mumbai',
+      isLoggedIn: true,
+      loggedInAt: new Date().toISOString()
+    };
+    saveCustomerSession(custSession);
+
+    return { success: true, user: custUser };
+  }
+
+  // WMS Staff & Contractor Authentication:
+  // 1. Check Employees & Super Admin in employee registry
   const employees = getEmployees();
   const matchedEmp = employees.find(e => 
     (e.loginId && e.loginId.toLowerCase() === cleanId) || 
     (e.email && e.email.toLowerCase() === cleanId) ||
-    (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10) ||
-    (e.name.toLowerCase() === cleanId)
+    (e.id && e.id.toLowerCase() === cleanId) ||
+    (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
   );
 
   if (matchedEmp) {
-    if (matchedEmp.password && cleanPass && matchedEmp.password !== cleanPass && cleanPass !== 'password123' && cleanPass !== 'admin123') {
-      return { success: false, error: 'Invalid password. Please check your credentials or use default: password123' };
+    const expectedPassword = matchedEmp.password || 'password123';
+    if (!cleanPass) {
+      return { success: false, error: 'Password is required to sign in.' };
+    }
+    if (cleanPass !== expectedPassword) {
+      return { success: false, error: 'Incorrect password. Please verify your credentials and try again.' };
     }
 
     const authUser: AuthUser = {
@@ -2324,13 +2173,17 @@ export function authenticateUser(identifier: string, password?: string): { succe
   const matchedVen = vendors.find(v =>
     (v.loginId && v.loginId.toLowerCase() === cleanId) ||
     (v.email && v.email.toLowerCase() === cleanId) ||
-    (v.phone && v.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10) ||
-    (v.name.toLowerCase().includes(cleanId))
+    (v.id && v.id.toLowerCase() === cleanId) ||
+    (v.phone && v.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
   );
 
   if (matchedVen) {
-    if (matchedVen.password && cleanPass && matchedVen.password !== cleanPass && cleanPass !== 'password123') {
-      return { success: false, error: 'Invalid vendor password. Please check your credentials or use default: password123' };
+    const expectedPassword = matchedVen.password || 'password123';
+    if (!cleanPass) {
+      return { success: false, error: 'Password is required for vendor sign in.' };
+    }
+    if (cleanPass !== expectedPassword) {
+      return { success: false, error: 'Incorrect vendor password. Please verify your credentials.' };
     }
 
     const authUser: AuthUser = {
@@ -2348,62 +2201,10 @@ export function authenticateUser(identifier: string, password?: string): { succe
     return { success: true, user: authUser };
   }
 
-  // 3. Check Default Admin fallback
-  if (cleanId === 'admin' || cleanId === 'superadmin' || cleanId === 'admin@fixocar.com') {
-    const adminUser: AuthUser = {
-      id: 'emp-100',
-      name: 'Workshop Owner / Super Admin',
-      loginId: 'admin',
-      email: 'admin@fixocar.com',
-      phone: '8819915656',
-      role: 'SUPER_ADMIN',
-      userType: 'ADMIN',
-      employeeId: 'emp-100',
-      specializedTeam: 'Management',
-      workshopId: 'ws-mumbai-central',
-      workshopName: 'FixoCar Central Hub - Andheri',
-      cityId: 'city-mumbai',
-      cityName: 'Mumbai',
-      employmentType: 'PAYROLL',
-      loggedInAt: new Date().toISOString()
-    };
-    saveAuthUser(adminUser);
-    return { success: true, user: adminUser };
-  }
-
-  // 4. Customer Login
-  if (cleanId === 'customer' || cleanId === 'vikramaditya' || cleanId.includes('8819915656') || cleanId.includes('@') || cleanId.length >= 3) {
-    const custUser: AuthUser = {
-      id: 'cust-8819915656',
-      name: cleanId === 'customer' || cleanId === 'vikramaditya' || cleanId.includes('8819915656') ? 'Vikramaditya Singh' : (identifier.split('@')[0] || 'Valued Customer'),
-      loginId: cleanId,
-      email: cleanId.includes('@') ? cleanId : 'vikram.singh@example.com',
-      phone: cleanId.replace(/\D/g, '').length >= 10 ? cleanId.replace(/\D/g, '') : '8819915656',
-      role: 'CUSTOMER',
-      userType: 'CUSTOMER',
-      customerId: 'cust-8819915656',
-      cityName: 'Mumbai',
-      loggedInAt: new Date().toISOString()
-    };
-    saveAuthUser(custUser);
-    
-    // Also sync customerSession
-    const custSession: CustomerUser = {
-      id: custUser.id,
-      name: custUser.name,
-      phone: custUser.phone || '8819915656',
-      email: custUser.email,
-      address: 'B-402, Seawoods Grand Central, Nerul, Navi Mumbai',
-      city: 'Mumbai',
-      isLoggedIn: true,
-      loggedInAt: new Date().toISOString()
-    };
-    saveCustomerSession(custSession);
-
-    return { success: true, user: custUser };
-  }
-
-  return { success: false, error: 'User not found. Please verify your Login ID or Email ID.' };
+  return { 
+    success: false, 
+    error: 'Staff account not found. Please check your Work Login ID, Employee ID, or Email ID.' 
+  };
 }
 
 

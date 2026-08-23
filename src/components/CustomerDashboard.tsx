@@ -48,15 +48,15 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   // Booking Form State
   const [bookReg, setBookReg] = useState('');
   const [bookServiceTitle, setBookServiceTitle] = useState('Comprehensive Periodic Service');
-  const [bookDate, setBookDate] = useState('2026-08-25');
+  const [bookDate, setBookDate] = useState('');
   const [bookTime, setBookTime] = useState('10:00 AM');
   const [bookPickup, setBookPickup] = useState(true);
-  const [bookAddress, setBookAddress] = useState('B-402, Seawoods Grand Central, Nerul, Navi Mumbai');
+  const [bookAddress, setBookAddress] = useState('');
 
   const refreshData = () => {
     const user = getAuthUser();
     setAuthUser(user);
-    const phone = user?.phone || '8819915656';
+    const phone = user?.phone || '';
     setVehicles(getCustomerVehicles(phone));
     setJobCards(getJobCards());
     setCityServices(getCityServices());
@@ -70,7 +70,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   }, []);
 
   // Filter job cards for this customer
-  const customerPhoneQuery = authUser?.phone ? authUser.phone.replace(/\D/g, '') : '8819915656';
+  const customerPhoneQuery = authUser?.phone ? authUser.phone.replace(/\D/g, '') : '';
   const customerVehRegs = vehicles.map(v => v.registrationNumber.toUpperCase());
 
   const myJobCards = jobCards.filter(card => {
