@@ -3,6 +3,57 @@ import { getStandardJobs } from './storage';
 import { VEHICLE_PANELS, PanelDefinition } from '../components/InteractiveVehicleInspectionChart';
 
 /**
+ * Safely maps any job task or title string to its correct visual vehicle panel definition.
+ * Specifically handles the distinction between 'boot_floor' (Dicky Boot Floor Underbody)
+ * and 'boot_trunk' (Dicky Door / Boot Lid) so they are never confused.
+ */
+export function matchTaskToPanelDef(task: { title: string; panelKey?: string; standardJobId?: string }): PanelDefinition | undefined {
+  if (task.panelKey) {
+    const found = VEHICLE_PANELS.find(p => p.id === task.panelKey);
+    if (found) return found;
+  }
+
+  if (task.standardJobId) {
+    const found = VEHICLE_PANELS.find(p => p.standardJobId === task.standardJobId);
+    if (found) return found;
+  }
+
+  const titleLower = task.title.toLowerCase();
+
+  // Dicky Boot Floor / Underbody Panel Check
+  if (titleLower.includes('floor') || titleLower.includes('underbody') || titleLower.includes('फर्श') || titleLower.includes('अंडरबॉडी')) {
+    return VEHICLE_PANELS.find(p => p.id === 'boot_floor');
+  }
+
+  // Dicky Outer Door / Boot Lid Check (Must NOT contain floor/underbody)
+  if (titleLower.includes('boot') || titleLower.includes('trunk') || titleLower.includes('tailgate') || titleLower.includes('डिक्की') || titleLower.includes('बूट')) {
+    return VEHICLE_PANELS.find(p => p.id === 'boot_trunk');
+  }
+
+  if (titleLower.includes('bonnet') || titleLower.includes('hood') || titleLower.includes('बोनट')) {
+    return VEHICLE_PANELS.find(p => p.id === 'hood_bonnet');
+  }
+
+  if (titleLower.includes('front bumper') || (titleLower.includes('bumper') && titleLower.includes('front'))) {
+    return VEHICLE_PANELS.find(p => p.id === 'bumper_front');
+  }
+
+  if (titleLower.includes('rear bumper') || (titleLower.includes('bumper') && titleLower.includes('rear'))) {
+    return VEHICLE_PANELS.find(p => p.id === 'bumper_rear');
+  }
+
+  if (titleLower.includes('roof') || titleLower.includes('छत')) {
+    return VEHICLE_PANELS.find(p => p.id === 'roof');
+  }
+
+  // Fallback match against panel nameEn or code
+  return VEHICLE_PANELS.find(p => 
+    titleLower.includes(p.nameEn.toLowerCase()) ||
+    titleLower.includes(p.id.replace(/_/g, ' '))
+  );
+}
+
+/**
  * Maps a visual panel ID (e.g. 'hood_bonnet', 'bumper_front', 'fender_lhs') 
  * or panel definition object to its corresponding StandardJob from the standard_jobs table/store.
  */

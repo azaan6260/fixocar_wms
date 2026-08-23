@@ -85,8 +85,21 @@ export function getPanelWorkAnalysis(panel: PanelDefinition, card: JobCard): Pan
     if (pId === 'quarter_panel_lhs' && (tTitle.includes('quarter') && (tTitle.includes('lhs') || tTitle.includes('left') || tTitle.includes('बायां')))) return true;
     if (pId === 'quarter_panel_rhs' && (tTitle.includes('quarter') && (tTitle.includes('rhs') || tTitle.includes('right') || tTitle.includes('दायां')))) return true;
     if (pId === 'roof' && (tTitle.includes('roof') || tTitle.includes('छत') || tTitle.includes('रूफ'))) return true;
-    if (pId === 'boot_trunk' && (tTitle.includes('boot') || tTitle.includes('trunk') || tTitle.includes('tailgate') || tTitle.includes('डिक्की') || tTitle.includes('बूट'))) return true;
-    if (pId === 'boot_floor' && (tTitle.includes('floor') || tTitle.includes('underbody') || tTitle.includes('फर्श') || tTitle.includes('अंडरबॉडी'))) return true;
+    
+    // BOOT LID / DICKY DOOR (OUTER PANEL)
+    if (pId === 'boot_trunk') {
+      if (tTitle.includes('floor') || tTitle.includes('underbody') || tTitle.includes('फर्श') || tTitle.includes('अंडरबॉडी')) {
+        return false;
+      }
+      if (tTitle.includes('boot') || tTitle.includes('trunk') || tTitle.includes('tailgate') || tTitle.includes('डिक्की') || tTitle.includes('बूट')) return true;
+    }
+
+    // BOOT FLOOR / DICKY BOOT FLOOR (INTERNAL UNDERBODY PANEL)
+    if (pId === 'boot_floor') {
+      if (tTitle.includes('floor') || tTitle.includes('underbody') || tTitle.includes('फर्श') || tTitle.includes('अंडरबॉडी')) return true;
+      if ((tTitle.includes('boot') || tTitle.includes('trunk') || tTitle.includes('डिक्की')) && tTitle.includes('floor')) return true;
+    }
+
     if (pId === 'windshield_front' && (tTitle.includes('front windshield') || tTitle.includes('front glass') || tTitle.includes('आगे का शीशा'))) return true;
     if (pId === 'windshield_rear' && (tTitle.includes('rear windshield') || tTitle.includes('rear glass') || tTitle.includes('पीछे का शीशा'))) return true;
     
@@ -729,6 +742,20 @@ export function TechnicianBodyPanelAssessmentChart({
                   <p className="text-xs text-slate-300 font-mono">
                     {selectedPanel.nameEn}
                   </p>
+
+                  {selectedPanel.id === 'boot_trunk' && (
+                    <div className="mt-2 px-2.5 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/40 text-sky-200 text-xs font-bold flex items-center gap-1.5">
+                      <span>🚗</span>
+                      <span>OUTER BODY PANEL: Dicky Door / Boot Tailgate Lid</span>
+                    </div>
+                  )}
+
+                  {selectedPanel.id === 'boot_floor' && (
+                    <div className="mt-2 px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center gap-1.5">
+                      <span>🛡️</span>
+                      <span>INTERNAL UNDERBODY PANEL: Dicky Boot Floor / Spare Wheel Well</span>
+                    </div>
+                  )}
                 </div>
 
                 <button

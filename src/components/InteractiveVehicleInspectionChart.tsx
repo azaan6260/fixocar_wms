@@ -304,16 +304,34 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
   {
     id: 'boot_trunk',
     code: 'BOOT',
-    nameEn: 'Boot Lid / Tailgate',
-    nameHi: 'डिक्की / बूट लिड (Boot Lid / Trunk)',
+    nameEn: 'Boot Lid / Dicky Door (Outer Panel)',
+    nameHi: 'डिक्की का दरवाजा / बूट लिड (Dicky Door)',
     standardJobId: 'std-boot-trunk-full',
     view: 'TOP',
     svgShape: {
       type: 'path',
-      d: 'M 166 335 C 200 338, 240 338, 274 335 L 282 380 C 240 384, 200 384, 158 380 Z'
+      d: 'M 166 332 C 200 335, 240 335, 274 332 L 280 358 C 240 361, 200 361, 160 358 Z'
     },
-    labelPos: { x: 220, y: 358 },
+    labelPos: { x: 220, y: 345 },
     defaultPrice: 1350
+  },
+  {
+    id: 'boot_floor',
+    code: 'B-FLR',
+    nameEn: 'Dicky Boot Floor / Underbody (Internal Panel)',
+    nameHi: 'डिक्की का फर्श (Dicky Boot Floor)',
+    standardJobId: 'std-boot-floor-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 172,
+      y: 362,
+      width: 96,
+      height: 18,
+      rx: 4
+    },
+    labelPos: { x: 220, y: 371 },
+    defaultPrice: 300
   },
   {
     id: 'bumper_rear',
@@ -324,28 +342,10 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     view: 'TOP',
     svgShape: {
       type: 'path',
-      d: 'M 140 395 C 180 408, 260 408, 300 395 C 308 390, 312 375, 304 375 C 260 386, 180 386, 136 375 C 128 375, 132 390, 140 395 Z'
+      d: 'M 140 398 C 180 410, 260 410, 300 398 C 308 393, 312 384, 304 384 C 260 393, 180 393, 136 384 C 128 384, 132 393, 140 398 Z'
     },
-    labelPos: { x: 220, y: 395 },
+    labelPos: { x: 220, y: 397 },
     defaultPrice: 1350
-  },
-  {
-    id: 'boot_floor',
-    code: 'FLOOR',
-    nameEn: 'Trunk Floor / Underbody',
-    nameHi: 'डिक्की का फर्श (Boot Floor)',
-    standardJobId: 'std-boot-floor-full',
-    view: 'TOP',
-    svgShape: {
-      type: 'rect',
-      x: 185,
-      y: 345,
-      width: 70,
-      height: 25,
-      rx: 4
-    },
-    labelPos: { x: 220, y: 358 },
-    defaultPrice: 300
   }
 ];
 

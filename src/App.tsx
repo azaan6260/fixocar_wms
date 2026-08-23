@@ -343,7 +343,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'huddle' && (
+        {(activeTab === 'huddle' || activeTab === 'daily-huddle') && (
           <DailyHuddleView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -354,7 +354,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'gatepass' && (
+        {(activeTab === 'gatepass' || activeTab === 'gate-pass') && (
           <GatePassCheckInView
             onOpenCreateJobCardWithPrefill={(prefill) => {
               setCreateModalPrefill(prefill.regNo);
@@ -363,7 +363,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'jobs' && (
+        {(activeTab === 'jobs' || activeTab === 'job-cards' || activeTab === 'job-cards-history') && (
           <JobCardList
             jobCards={jobCards}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
@@ -371,6 +371,7 @@ export default function App() {
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
             onOpenQRModal={(id) => setQrModalCardId(id)}
+            initialSection={activeTab === 'job-cards-history' ? 'HISTORY' : 'ACTIVE'}
           />
         )}
 
@@ -388,7 +389,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'pipeline' && (
+        {(activeTab === 'pipeline' || activeTab === 'status-pipeline') && (
           <VehicleStatusPipelineView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -418,7 +419,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'accounting' && (
+        {(activeTab === 'accounting' || activeTab === 'accounting-expenses') && (
           <AccountingAndExpensesView currentRole={currentRole} />
         )}
 
@@ -455,6 +456,10 @@ export default function App() {
 
         {activeTab === 'car-models' && (
           <CarModelsManagementView currentRole={currentRole} />
+        )}
+
+        {activeTab === 'customer-portal' && (
+          <CustomerDashboard onLogout={handleLogout} />
         )}
 
       </main>

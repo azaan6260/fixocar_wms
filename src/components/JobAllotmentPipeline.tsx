@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
-import { mapPanelToStandardJob } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, matchTaskToPanelDef } from '../lib/panelMappingHelper';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
@@ -488,20 +488,8 @@ export function JobAllotmentPipeline({
               mode="INTERACTIVE_SELECT"
               isCars24={isCars24}
               selectedPanelIds={selectedTasks.map(t => {
-                // 1. Direct panelKey match
-                if (t.panelKey) return t.panelKey;
-
-                // 2. Match standardJobId against VEHICLE_PANELS
-                const matchedByJobId = VEHICLE_PANELS.find(p => p.standardJobId === t.standardJobId);
-                if (matchedByJobId) return matchedByJobId.id;
-
-                // 3. Match title or code against VEHICLE_PANELS
-                const matchedByTitle = VEHICLE_PANELS.find(p => 
-                  t.title.toLowerCase().includes(p.nameEn.toLowerCase()) ||
-                  t.title.toLowerCase().includes(p.id.replace(/_/g, ' ')) ||
-                  (p.code && t.title.toLowerCase().includes(p.code.toLowerCase()))
-                );
-                return matchedByTitle ? matchedByTitle.id : '';
+                const matchedDef = matchTaskToPanelDef(t);
+                return matchedDef ? matchedDef.id : '';
               }).filter(Boolean)}
               onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}

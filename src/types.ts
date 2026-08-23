@@ -685,13 +685,24 @@ export interface WorkshopExpense {
   createdAt: string;
 }
 
+export function normalizeTabId(tabId: string): string {
+  if (tabId === 'huddle' || tabId === 'daily-huddle') return 'daily-huddle';
+  if (tabId === 'gatepass' || tabId === 'gate-pass') return 'gate-pass';
+  if (tabId === 'jobs' || tabId === 'job-cards') return 'job-cards';
+  if (tabId === 'pipeline' || tabId === 'status-pipeline') return 'status-pipeline';
+  if (tabId === 'accounting' || tabId === 'accounting-expenses') return 'accounting-expenses';
+  return tabId;
+}
+
 export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
     return true;
   }
 
+  const normalized = normalizeTabId(tabId);
+
   // Standard Jobs Library is strictly restricted to Administrators and hidden from Employee accounts
-  if (tabId === 'standard-jobs') {
+  if (normalized === 'standard-jobs') {
     return false;
   }
 
@@ -710,7 +721,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'role-workspace',
       'outsourced-jobs',
       'deliveries'
-    ].includes(tabId);
+    ].includes(normalized);
   }
 
   if (role === 'MECHANIC' || role === 'DENTER' || role === 'PAINTER') {
@@ -721,7 +732,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'status-pipeline',
       'daily-huddle',
       'gate-pass'
-    ].includes(tabId);
+    ].includes(normalized);
   }
 
   if (role === 'DELIVERY_BOY') {
@@ -729,7 +740,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'deliveries',
       'gate-pass',
       'role-workspace'
-    ].includes(tabId);
+    ].includes(normalized);
   }
 
   if (role === 'VENDOR') {
@@ -738,14 +749,14 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
       'part-basket',
       'vendors',
       'role-workspace'
-    ].includes(tabId);
+    ].includes(normalized);
   }
 
   if (role === 'CUSTOMER') {
     return [
       'customer-portal',
       'gate-pass'
-    ].includes(tabId);
+    ].includes(normalized);
   }
 
   return true;
