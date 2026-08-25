@@ -104,20 +104,26 @@ export function JobAllotmentPipeline({
       estimatedHours: 4
     };
 
-    // Check if task already exists in selectedTasks
-    const existingTask = selectedTasks.find(t => 
+    // Check if task(s) already exist in selectedTasks for this panel
+    const existingTasks = selectedTasks.filter(t => 
       (t.panelKey && t.panelKey === panelId) ||
-      t.standardJobId === stdJob.id || 
-      t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()) ||
-      (panelDef.code && t.title.toLowerCase().includes(panelDef.code.toLowerCase()))
+      matchTaskToPanelDef(t)?.id === panelId ||
+      (stdJob && t.standardJobId === stdJob.id) ||
+      (panelDef.standardJobId && t.standardJobId === panelDef.standardJobId) ||
+      (panelDef.cars24StandardJobId && t.standardJobId === panelDef.cars24StandardJobId)
     );
 
-    if (existingTask) {
-      // Remove from task list
-      onTasksChange(selectedTasks.filter(t => t.id !== existingTask.id));
+    if (existingTasks.length > 0) {
+      // Panel was already selected -> Clicked again -> Remove from task list
+      const idsToRemove = new Set(existingTasks.map(t => t.id));
+      onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
     } else {
-      // Add to task list using rates from standard job library
-      const newTask = createUnallocatedTask(stdJob);
+      // Panel was not selected -> Clicked -> Add to task list
+      const newTask = createUnallocatedTask({
+        ...stdJob,
+        panelKey: panelId,
+        panelNameEn: panelDef.nameEn
+      });
       onTasksChange([...selectedTasks, newTask]);
     }
   };
@@ -200,7 +206,9 @@ export function JobAllotmentPipeline({
         isContractBasis: stdJob.isContractBasis,
         painterPayout: painterPayout,
         denterPayout: denterPayout,
-        standardJobId: stdJob.id
+        standardJobId: stdJob.id,
+        panelKey: stdJob.panelKey,
+        panelNameEn: stdJob.panelNameEn
       };
     }
   };
@@ -487,10 +495,10 @@ export function JobAllotmentPipeline({
             <InteractiveVehicleInspectionChart
               mode="INTERACTIVE_SELECT"
               isCars24={isCars24}
-              selectedPanelIds={selectedTasks.map(t => {
+              selectedPanelIds={Array.from(new Set(selectedTasks.map(t => {
                 const matchedDef = matchTaskToPanelDef(t);
-                return matchedDef ? matchedDef.id : '';
-              }).filter(Boolean)}
+                return matchedDef ? matchedDef.id : (t.panelKey || '');
+              }).filter(Boolean)))}
               onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}
             />
