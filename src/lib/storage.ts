@@ -15,12 +15,7 @@ export function dispatchToastNotification(notification: Omit<ToastNotification, 
   window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: fullNotification }));
 }
 
-export const INITIAL_CITIES: City[] = [
-  { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2026-01-01' },
-  { id: 'city-delhi', name: 'Delhi NCR', state: 'Delhi', createdAt: '2026-01-01' },
-  { id: 'city-bangalore', name: 'Bengaluru', state: 'Karnataka', createdAt: '2026-01-01' },
-  { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2026-01-01' },
-];
+export const INITIAL_CITIES: City[] = [];
 
 export const INITIAL_WORKSHOPS: Workshop[] = [];
 
@@ -64,18 +59,14 @@ function notifyStoreChange() {
 export function getJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(INITIAL_JOB_CARDS));
-    return INITIAL_JOB_CARDS;
+    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify([]));
+    return [];
   }
   try {
     const parsed = JSON.parse(local);
-    if (Array.isArray(parsed) && parsed.length === 0 && INITIAL_JOB_CARDS.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(INITIAL_JOB_CARDS));
-      return INITIAL_JOB_CARDS;
-    }
-    return parsed;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return INITIAL_JOB_CARDS;
+    return [];
   }
 }
 
@@ -998,11 +989,9 @@ export function addPartToTask(
 // 2. EMPLOYEES STORAGE
 export function getEmployees(): Employee[] {
   const local = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
-  let list: Employee[];
-  if (local === null) {
-    list = INITIAL_EMPLOYEES;
-  } else {
-    try { list = JSON.parse(local); } catch { list = INITIAL_EMPLOYEES; }
+  let list: Employee[] = [];
+  if (local !== null) {
+    try { list = JSON.parse(local); } catch { list = []; }
   }
 
   // Ensure default employmentType for denters/painters (CONTRACT) vs others (PAYROLL)
@@ -1017,7 +1006,7 @@ export function getEmployees(): Employee[] {
     return emp;
   });
 
-  if (local === null || updated) {
+  if (updated) {
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(migrated));
   }
   return migrated;
@@ -1194,11 +1183,11 @@ export function updateSalaryStatus(id: string, status: 'PENDING' | 'TRANSFERRED'
 // 3. VENDORS STORAGE
 export function getVendors(): Vendor[] {
   const local = localStorage.getItem(STORAGE_KEYS.VENDORS);
-  if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(INITIAL_VENDORS));
-    return INITIAL_VENDORS;
+  if (!local) {
+    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify([]));
+    return [];
   }
-  try { return JSON.parse(local); } catch { return INITIAL_VENDORS; }
+  try { return JSON.parse(local); } catch { return []; }
 }
 
 export function saveVendors(vendors: Vendor[], skipPush = false) {
@@ -1282,10 +1271,10 @@ export function deleteVendor(id: string) {
 export function getDeliveries(): DeliveryRecord[] {
   const local = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(INITIAL_DELIVERIES));
-    return INITIAL_DELIVERIES;
+    localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify([]));
+    return [];
   }
-  try { return JSON.parse(local); } catch { return INITIAL_DELIVERIES; }
+  try { return JSON.parse(local); } catch { return []; }
 }
 
 export function saveDeliveries(deliveries: DeliveryRecord[]) {
@@ -1341,10 +1330,10 @@ export function updateDeliveryStatus(
 export function getPurchaseOrders(): PurchaseOrder[] {
   const local = localStorage.getItem(STORAGE_KEYS.PURCHASE_ORDERS);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(INITIAL_PURCHASE_ORDERS));
-    return INITIAL_PURCHASE_ORDERS;
+    localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify([]));
+    return [];
   }
-  try { return JSON.parse(local); } catch { return INITIAL_PURCHASE_ORDERS; }
+  try { return JSON.parse(local); } catch { return []; }
 }
 
 export function createPurchaseOrder(po: Omit<PurchaseOrder, 'id' | 'createdAt'>): PurchaseOrder {
@@ -1373,13 +1362,13 @@ export function createPurchaseOrder(po: Omit<PurchaseOrder, 'id' | 'createdAt'>)
 export function getCityServices(): CityServiceOffering[] {
   const local = localStorage.getItem(STORAGE_KEYS.CITY_SERVICES);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.CITY_SERVICES, JSON.stringify(INITIAL_CITY_SERVICES));
-    return INITIAL_CITY_SERVICES;
+    localStorage.setItem(STORAGE_KEYS.CITY_SERVICES, JSON.stringify([]));
+    return [];
   }
   try {
     return JSON.parse(local);
   } catch {
-    return INITIAL_CITY_SERVICES;
+    return [];
   }
 }
 
@@ -1412,13 +1401,13 @@ export function addCityService(service: Omit<CityServiceOffering, 'id'>): CitySe
 export function getServiceBookings(): ServiceBookingRequest[] {
   const local = localStorage.getItem(STORAGE_KEYS.SERVICE_BOOKINGS);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.SERVICE_BOOKINGS, JSON.stringify(INITIAL_SERVICE_BOOKINGS));
-    return INITIAL_SERVICE_BOOKINGS;
+    localStorage.setItem(STORAGE_KEYS.SERVICE_BOOKINGS, JSON.stringify([]));
+    return [];
   }
   try {
     return JSON.parse(local);
   } catch {
-    return INITIAL_SERVICE_BOOKINGS;
+    return [];
   }
 }
 
@@ -1529,13 +1518,13 @@ export function clearAllDemoData() {
 export function getCities(): City[] {
   const local = localStorage.getItem(STORAGE_KEYS.CITIES);
   if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(INITIAL_CITIES));
-    return INITIAL_CITIES;
+    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify([]));
+    return [];
   }
   try {
     return JSON.parse(local);
   } catch {
-    return INITIAL_CITIES;
+    return [];
   }
 }
 
@@ -1617,13 +1606,13 @@ export function deleteCity(id: string) {
 export function getWorkshops(): Workshop[] {
   const local = localStorage.getItem(STORAGE_KEYS.WORKSHOPS);
   if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(INITIAL_WORKSHOPS));
-    return INITIAL_WORKSHOPS;
+    localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify([]));
+    return [];
   }
   try {
     return JSON.parse(local);
   } catch {
-    return INITIAL_WORKSHOPS;
+    return [];
   }
 }
 
@@ -1751,13 +1740,13 @@ export function deleteWorkshop(id: string) {
 export function getInventoryItems(): InventoryItem[] {
   const local = localStorage.getItem(STORAGE_KEYS.INVENTORY);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(INITIAL_INVENTORY_ITEMS));
-    return INITIAL_INVENTORY_ITEMS;
+    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify([]));
+    return [];
   }
   try {
     return JSON.parse(local);
   } catch {
-    return INITIAL_INVENTORY_ITEMS;
+    return [];
   }
 }
 
@@ -1906,50 +1895,49 @@ export function consumeInventoryItemForTask(
 
 export function getStandardJobs(): StandardJob[] {
   const data = localStorage.getItem(STORAGE_KEYS.STANDARD_JOBS);
-  let jobs: StandardJob[] = [];
   if (!data) {
-    jobs = INITIAL_STANDARD_JOBS;
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
-    return jobs;
-  } else {
-    try {
-      jobs = JSON.parse(data);
-    } catch (e) {
-      jobs = INITIAL_STANDARD_JOBS;
-      localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
-      return jobs;
-    }
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify([]));
+    return [];
   }
-
-  // Ensure panelKey and panelNameEn are populated for legacy stored jobs if missing
-  let updated = false;
-  const synchronizedJobs = jobs.map(j => {
-    if (!j.panelKey && j.id) {
-      const matchInInitial = INITIAL_STANDARD_JOBS.find(initJ => initJ.id === j.id);
-      if (matchInInitial && matchInInitial.panelKey) {
-        updated = true;
-        return {
-          ...j,
-          panelKey: matchInInitial.panelKey,
-          panelNameEn: j.panelNameEn || matchInInitial.panelNameEn,
-          paintScope: j.paintScope || matchInInitial.paintScope
-        };
-      }
-    }
-    return j;
-  });
-
-  if (updated) {
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(synchronizedJobs));
-    return synchronizedJobs;
+  try {
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
-
-  return jobs;
 }
 
-export function saveStandardJobs(jobs: StandardJob[]): void {
+export function saveStandardJobs(jobs: StandardJob[], skipPush = false): void {
   localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      jobs.forEach(j => {
+        client.from('standard_jobs').upsert({
+          id: j.id,
+          title: j.title,
+          category: j.category,
+          hsn_sac_code: j.hsnSacCode || '998729',
+          default_price: j.retailPrice || 0,
+          retail_price: j.retailPrice || 0,
+          cars24_price: j.cars24Price || 0,
+          is_contract_basis: j.isContractBasis || false,
+          painter_payout: j.painterPayout || j.retailPainterPayout || 0,
+          denter_payout: j.denterPayout || j.retailDenterPayout || 0,
+          contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
+          estimated_hours: j.estimatedHours || 1.0,
+          description: j.description || '',
+          requires_customer_approval: j.requiresCustomerApproval || false,
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Supabase sync error (standard_jobs):', error);
+          }
+        });
+      });
+    }
+  }
 }
 
 export function addStandardJob(job: Omit<StandardJob, 'id'>): StandardJob {
@@ -1975,6 +1963,15 @@ export function deleteStandardJob(id: string): void {
   const jobs = getStandardJobs();
   const filtered = jobs.filter(j => j.id !== id);
   saveStandardJobs(filtered);
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('standard_jobs').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Supabase delete error (standard_jobs):', error);
+      }
+    });
+  }
 }
 
 export function addStandardJobToJobCard(
@@ -2235,18 +2232,14 @@ export function deleteCustomerVehicle(id: string): void {
 export function getVehicleCheckIns(): VehicleCheckIn[] {
   const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
   if (!local) {
-    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(INITIAL_VEHICLE_CHECKINS));
-    return INITIAL_VEHICLE_CHECKINS;
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify([]));
+    return [];
   }
   try {
     const parsed = JSON.parse(local);
-    if (Array.isArray(parsed) && parsed.length === 0 && INITIAL_VEHICLE_CHECKINS.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(INITIAL_VEHICLE_CHECKINS));
-      return INITIAL_VEHICLE_CHECKINS;
-    }
-    return parsed;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return INITIAL_VEHICLE_CHECKINS;
+    return [];
   }
 }
 
@@ -2347,25 +2340,46 @@ export function deleteWorkshopExpense(id: string): boolean {
 // ----------------------------------------------------
 export function getCarModels(): CarModelRecord[] {
   const local = localStorage.getItem(STORAGE_KEYS.CAR_MODELS);
-  if (!local) {
+  if (local === null) {
     localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(INITIAL_CAR_MODELS));
     return INITIAL_CAR_MODELS;
   }
   try {
     const parsed = JSON.parse(local);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(INITIAL_CAR_MODELS));
-      return INITIAL_CAR_MODELS;
-    }
-    return parsed;
+    return Array.isArray(parsed) ? parsed : INITIAL_CAR_MODELS;
   } catch {
     return INITIAL_CAR_MODELS;
   }
 }
 
-export function saveCarModels(models: CarModelRecord[]): void {
+export function saveCarModels(models: CarModelRecord[], skipPush = false): void {
   localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(models));
   notifyStoreChange();
+
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      models.forEach(model => {
+        client.from('car_models').upsert({
+          id: model.id,
+          make: model.make,
+          model: model.model,
+          category: model.category,
+          fuel_types: model.fuelTypes,
+          variants: model.variants || [],
+          engine_oil_spec: model.engineOilSpec || '',
+          coolant_spec: model.coolantSpec || '',
+          recommended_psi: model.recommendedPsi || '',
+          notes: model.notes || '',
+          updated_at: new Date().toISOString()
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Supabase sync error (car_models):', error);
+          }
+        });
+      });
+    }
+  }
 }
 
 export function addCarModel(modelData: Omit<CarModelRecord, 'id' | 'createdAt'>): CarModelRecord {
@@ -2394,6 +2408,15 @@ export function deleteCarModel(id: string): boolean {
   const filtered = models.filter(m => m.id !== id);
   if (filtered.length === models.length) return false;
   saveCarModels(filtered);
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('car_models').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        console.error('Supabase delete error (car_models):', error);
+      }
+    });
+  }
   return true;
 }
 

@@ -459,6 +459,8 @@ export interface StandardJob {
   painterPayout?: number;   // Specific payout to Painter
   denterPayout?: number;    // Specific payout to Denter
   estimatedHours: number;
+  hsnSacCode?: string;
+  requiresCustomerApproval?: boolean;
   description?: string;
 }
 

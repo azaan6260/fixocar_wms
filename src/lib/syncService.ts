@@ -6,9 +6,11 @@ import {
   getWorkshops, saveWorkshops,
   getJobCards, saveJobCards,
   getVehicleCheckIns, saveVehicleCheckIns,
+  getCarModels, saveCarModels,
+  getStandardJobs, saveStandardJobs,
   dispatchToastNotification
 } from './storage';
-import { JobCard, JobTask, VehicleCheckIn } from '../types';
+import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -281,6 +283,62 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       }
     }
 
+    // 7. CAR MODELS & VARIANTS
+    const { data: carModels, error: cmErr } = await client.from('car_models').select('*');
+    if (cmErr) {
+      if (cmErr.code === '42P01') missingTables.push('car_models');
+    } else if (carModels !== null) {
+      if (carModels.length > 0) {
+        const localModels: CarModelRecord[] = carModels.map((m: any) => ({
+          id: m.id,
+          make: m.make,
+          model: m.model,
+          category: m.category || 'HATCHBACK',
+          fuelTypes: Array.isArray(m.fuel_types) ? m.fuel_types : ['Petrol', 'Diesel'],
+          variants: Array.isArray(m.variants) ? m.variants : [],
+          engineOilSpec: m.engine_oil_spec || '',
+          coolantSpec: m.coolant_spec || '',
+          recommendedPsi: m.recommended_psi || '',
+          notes: m.notes || '',
+          createdAt: m.created_at || new Date().toISOString()
+        }));
+        saveCarModels(localModels, true);
+      } else {
+        // Supabase table empty -> push local car models to Supabase
+        const currentModels = getCarModels();
+        saveCarModels(currentModels, false);
+      }
+    }
+
+    // 8. STANDARD JOBS
+    const { data: stdJobs, error: sjErr } = await client.from('standard_jobs').select('*');
+    if (sjErr) {
+      if (sjErr.code === '42P01') missingTables.push('standard_jobs');
+    } else if (stdJobs !== null) {
+      if (stdJobs.length > 0) {
+        const localStdJobs: StandardJob[] = stdJobs.map((j: any) => ({
+          id: j.id,
+          title: j.title,
+          category: j.category || 'REPAIR',
+          hsnSacCode: j.hsn_sac_code || '998729',
+          retailPrice: j.retail_price || j.default_price || 0,
+          cars24Price: j.cars24_price || j.default_price || 0,
+          isContractBasis: j.is_contract_basis ?? false,
+          painterPayout: j.painter_payout || 0,
+          denterPayout: j.denter_payout || 0,
+          contractorPayout: j.contractor_payout || 0,
+          estimatedHours: j.estimated_hours || 1.0,
+          description: j.description || '',
+          requiresCustomerApproval: j.requires_customer_approval ?? false
+        }));
+        saveStandardJobs(localStdJobs, true);
+      } else {
+        // Supabase table empty -> push local standard jobs to Supabase
+        const currentStdJobs = getStandardJobs();
+        saveStandardJobs(currentStdJobs, false);
+      }
+    }
+
     if (missingTables.length > 0) {
       dispatchToastNotification({
         type: 'ESTIMATE_DECLINED',
@@ -484,12 +542,57 @@ export async function pushLocalDataToSupabase(): Promise<{
     else vciPushed++;
   }
 
+  // Push Car Models & Variants
+  const carModelsList = getCarModels();
+  let cmPushed = 0;
+  for (const m of carModelsList) {
+    const { error } = await client.from('car_models').upsert({
+      id: m.id,
+      make: m.make,
+      model: m.model,
+      category: m.category,
+      fuel_types: m.fuelTypes,
+      variants: m.variants || [],
+      engine_oil_spec: m.engineOilSpec || '',
+      coolant_spec: m.coolantSpec || '',
+      recommended_psi: m.recommendedPsi || '',
+      notes: m.notes || '',
+      updated_at: new Date().toISOString()
+    });
+    if (error) errors.push(`Car Models table error (${m.make} ${m.model}): ${error.message}`);
+    else cmPushed++;
+  }
+
+  // Push Standard Jobs
+  const stdJobsList = getStandardJobs();
+  let sjPushed = 0;
+  for (const j of stdJobsList) {
+    const { error } = await client.from('standard_jobs').upsert({
+      id: j.id,
+      title: j.title,
+      category: j.category,
+      hsn_sac_code: j.hsnSacCode || '998729',
+      default_price: j.retailPrice || 0,
+      retail_price: j.retailPrice || 0,
+      cars24_price: j.cars24Price || 0,
+      is_contract_basis: j.isContractBasis || false,
+      painter_payout: j.painterPayout || j.retailPainterPayout || 0,
+      denter_payout: j.denterPayout || j.retailDenterPayout || 0,
+      contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
+      estimated_hours: j.estimatedHours || 1.0,
+      description: j.description || '',
+      requires_customer_approval: j.requiresCustomerApproval || false,
+    });
+    if (error) errors.push(`Standard Jobs table error (${j.title}): ${error.message}`);
+    else sjPushed++;
+  }
+
   const isSuccess = errors.length === 0;
   return {
     success: isSuccess,
     message: isSuccess
-      ? `Successfully pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees, ${vPushed} vendors, ${jcPushed} job cards, ${vciPushed} gate pass check-ins to Supabase database!`
-      : `Pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees (${errors.length} failed). Please check if tables exist.`,
+      ? `Successfully pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees, ${vPushed} vendors, ${jcPushed} job cards, ${vciPushed} gate pass check-ins, ${cmPushed} car models, ${sjPushed} standard jobs to Supabase database!`
+      : `Pushed ${cPushed} cities, ${wPushed} workshops, ${ePushed} employees, ${cmPushed} car models (${errors.length} failed). Please check if tables exist.`,
     details: { cities: cPushed, workshops: wPushed, employees: ePushed, vendors: vPushed, jobCards: jcPushed },
     errors
   };
