@@ -8,47 +8,88 @@ import { VEHICLE_PANELS, PanelDefinition } from '../components/InteractiveVehicl
  * and 'boot_trunk' (Dicky Door / Boot Lid) so they are never confused.
  */
 export function matchTaskToPanelDef(task: { title: string; panelKey?: string; standardJobId?: string }): PanelDefinition | undefined {
+  if (!task) return undefined;
+
+  // 1. Direct panelKey match
   if (task.panelKey) {
     const found = VEHICLE_PANELS.find(p => p.id === task.panelKey);
     if (found) return found;
   }
 
+  // 2. Standard Job ID match
   if (task.standardJobId) {
-    const found = VEHICLE_PANELS.find(p => p.standardJobId === task.standardJobId);
+    const found = VEHICLE_PANELS.find(p => p.standardJobId === task.standardJobId || p.cars24StandardJobId === task.standardJobId);
     if (found) return found;
   }
 
-  const titleLower = task.title.toLowerCase();
+  const titleLower = (task.title || '').toLowerCase();
+  const cleanTitle = titleLower.replace(/[^a-z0-9]/g, ' ');
 
-  // Dicky Boot Floor / Underbody Panel Check
-  if (titleLower.includes('floor') || titleLower.includes('underbody') || titleLower.includes('फर्श') || titleLower.includes('अंडरबॉडी')) {
+  // 3. Dicky Boot Floor / Underbody Panel Check
+  if (cleanTitle.includes('floor') || cleanTitle.includes('underbody') || cleanTitle.includes('फर्श') || cleanTitle.includes('अंडरबॉडी')) {
     return VEHICLE_PANELS.find(p => p.id === 'boot_floor');
   }
 
-  // Dicky Outer Door / Boot Lid Check (Must NOT contain floor/underbody)
-  if (titleLower.includes('boot') || titleLower.includes('trunk') || titleLower.includes('tailgate') || titleLower.includes('डिक्की') || titleLower.includes('बूट')) {
+  // 4. Dicky Outer Door / Boot Lid Check
+  if (cleanTitle.includes('boot') || cleanTitle.includes('trunk') || cleanTitle.includes('tailgate') || cleanTitle.includes('डिक्की') || cleanTitle.includes('बूट')) {
     return VEHICLE_PANELS.find(p => p.id === 'boot_trunk');
   }
 
-  if (titleLower.includes('bonnet') || titleLower.includes('hood') || titleLower.includes('बोनट')) {
+  if (cleanTitle.includes('bonnet') || cleanTitle.includes('hood') || cleanTitle.includes('बोनट')) {
     return VEHICLE_PANELS.find(p => p.id === 'hood_bonnet');
   }
 
-  if (titleLower.includes('front bumper') || (titleLower.includes('bumper') && titleLower.includes('front'))) {
+  if (cleanTitle.includes('front bumper') || (cleanTitle.includes('bumper') && cleanTitle.includes('front'))) {
     return VEHICLE_PANELS.find(p => p.id === 'bumper_front');
   }
 
-  if (titleLower.includes('rear bumper') || (titleLower.includes('bumper') && titleLower.includes('rear'))) {
+  if (cleanTitle.includes('rear bumper') || (cleanTitle.includes('bumper') && cleanTitle.includes('rear'))) {
     return VEHICLE_PANELS.find(p => p.id === 'bumper_rear');
   }
 
-  if (titleLower.includes('roof') || titleLower.includes('छत')) {
+  if (cleanTitle.includes('roof') || cleanTitle.includes('छत')) {
     return VEHICLE_PANELS.find(p => p.id === 'roof');
   }
 
-  // Fallback match against panel nameEn or code
+  // 5. LHS vs RHS Side Panels matching
+  const isLHS = cleanTitle.includes('lhs') || cleanTitle.includes('left') || cleanTitle.includes('बायां');
+  const isRHS = cleanTitle.includes('rhs') || cleanTitle.includes('right') || cleanTitle.includes('दायां');
+
+  if (cleanTitle.includes('fender')) {
+    if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'fender_lhs');
+    if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'fender_rhs');
+  }
+
+  if (cleanTitle.includes('running board') || cleanTitle.includes('sill')) {
+    if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'running_board_lhs');
+    if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'running_board_rhs');
+  }
+
+  if (cleanTitle.includes('quarter')) {
+    if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_lhs');
+    if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_rhs');
+  }
+
+  if (cleanTitle.includes('door')) {
+    const isFront = cleanTitle.includes('front') || cleanTitle.includes('fr') || cleanTitle.includes('अगला');
+    const isRear = cleanTitle.includes('rear') || cleanTitle.includes('rr') || cleanTitle.includes('पिछला');
+    if (isLHS && isFront) return VEHICLE_PANELS.find(p => p.id === 'door_lhs_front');
+    if (isLHS && isRear) return VEHICLE_PANELS.find(p => p.id === 'door_lhs_rear');
+    if (isRHS && isFront) return VEHICLE_PANELS.find(p => p.id === 'door_rhs_front');
+    if (isRHS && isRear) return VEHICLE_PANELS.find(p => p.id === 'door_rhs_rear');
+  }
+
+  if (cleanTitle.includes('windshield') || cleanTitle.includes('glass')) {
+    const isFront = cleanTitle.includes('front') || cleanTitle.includes('fr');
+    const isRear = cleanTitle.includes('rear') || cleanTitle.includes('rr');
+    if (isFront) return VEHICLE_PANELS.find(p => p.id === 'windshield_front');
+    if (isRear) return VEHICLE_PANELS.find(p => p.id === 'windshield_rear');
+  }
+
+  // Fallback match against panel nameEn, code, or id
   return VEHICLE_PANELS.find(p => 
     titleLower.includes(p.nameEn.toLowerCase()) ||
+    titleLower.includes(p.code.toLowerCase()) ||
     titleLower.includes(p.id.replace(/_/g, ' '))
   );
 }

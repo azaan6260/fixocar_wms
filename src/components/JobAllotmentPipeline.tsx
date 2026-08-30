@@ -141,7 +141,13 @@ export function JobAllotmentPipeline({
 
   // Check if a standard job is currently on the job card
   const isJobSelected = (stdJobId: string) => {
-    return selectedTasks.some(t => t.standardJobId === stdJobId);
+    const stdJob = standardJobs.find(j => j.id === stdJobId);
+    const matchedPanel = stdJob ? matchTaskToPanelDef(stdJob) : undefined;
+
+    return selectedTasks.some(t => 
+      t.standardJobId === stdJobId ||
+      (matchedPanel && (t.panelKey === matchedPanel.id || matchTaskToPanelDef(t)?.id === matchedPanel.id))
+    );
   };
 
   // Toggle staged selection for batch addition
@@ -167,6 +173,10 @@ export function JobAllotmentPipeline({
       ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
       : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
 
+    const matchedPanelDef = matchTaskToPanelDef(stdJob);
+    const resolvedPanelKey = stdJob.panelKey || matchedPanelDef?.id;
+    const resolvedPanelNameEn = stdJob.panelNameEn || matchedPanelDef?.nameEn;
+
     if (stdJob.category === 'PAINT') {
       return {
         id: `task-paint-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -185,8 +195,8 @@ export function JobAllotmentPipeline({
         pairedDenterId: undefined, // Unallocated initially
         pairedDenterName: undefined,
         standardJobId: stdJob.id,
-        panelKey: stdJob.panelKey,
-        panelNameEn: stdJob.panelNameEn,
+        panelKey: resolvedPanelKey,
+        panelNameEn: resolvedPanelNameEn,
         paintScope: stdJob.paintScope,
       };
     } else {
@@ -207,8 +217,8 @@ export function JobAllotmentPipeline({
         painterPayout: painterPayout,
         denterPayout: denterPayout,
         standardJobId: stdJob.id,
-        panelKey: stdJob.panelKey,
-        panelNameEn: stdJob.panelNameEn
+        panelKey: resolvedPanelKey,
+        panelNameEn: resolvedPanelNameEn
       };
     }
   };
@@ -315,7 +325,11 @@ export function JobAllotmentPipeline({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onTasksChange(selectedTasks.filter(t => t.standardJobId !== job.id));
+                          const matchedPanel = matchTaskToPanelDef(job);
+                          onTasksChange(selectedTasks.filter(t => 
+                            t.standardJobId !== job.id && 
+                            (!matchedPanel || (t.panelKey !== matchedPanel.id && matchTaskToPanelDef(t)?.id !== matchedPanel.id))
+                          ));
                         }}
                         className="text-rose-600 dark:text-rose-400 font-bold hover:underline text-[11px]"
                       >
