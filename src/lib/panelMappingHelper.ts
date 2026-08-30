@@ -127,6 +127,28 @@ export function mapPanelToStandardJob(
   return matchedJob;
 }
 
+/**
+ * Helper to check if Partial Paint scope is permitted for a panel.
+ * Fenders and Running Boards are strictly prohibited from Partial Paint per workshop rules.
+ */
+export function isPartialPaintAllowedForPanel(panelIdOrName?: string): boolean {
+  if (!panelIdOrName) return true;
+  const p = panelIdOrName.toLowerCase();
+  if (
+    p.includes('fender') || 
+    p.includes('running_board') || 
+    p.includes('running board') || 
+    p.includes('sill') ||
+    p === 'fender_lhs' ||
+    p === 'fender_rhs' ||
+    p === 'running_board_lhs' ||
+    p === 'running_board_rhs'
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export interface PanelEnvironmentRates {
   standardJob?: StandardJob;
   price: number;
@@ -146,26 +168,48 @@ export interface PanelEnvironmentRates {
 /**
  * Fetches the correct, environment-specific rates (Retail vs. Cars24) by matching
  * the panel's unique identifier against the 'standard_jobs' database table / store.
+ * Supports paintScope ('FULL_OUTER', 'PARTIAL_TOUCHUP', 'INSIDE_JAMB', 'FULL_OUTER_AND_INSIDE').
  */
 export function getPanelEnvironmentRates(
   panelIdOrPanel: string | PanelDefinition,
   standardJobs?: StandardJob[],
-  isCars24: boolean = false
+  isCars24: boolean = false,
+  scope?: string
 ): PanelEnvironmentRates {
   const matchedJob = mapPanelToStandardJob(panelIdOrPanel, standardJobs);
+  const panelId = typeof panelIdOrPanel === 'string' ? panelIdOrPanel : panelIdOrPanel?.id;
+  const isPartialAllowed = isPartialPaintAllowedForPanel(panelId);
+  const activeScope = (scope === 'PARTIAL_TOUCHUP' && !isPartialAllowed) ? 'FULL_OUTER' : (scope || 'FULL_OUTER');
+
+  let multiplier = 1.0;
+  if (activeScope === 'PARTIAL_TOUCHUP') multiplier = 0.6;
+  else if (activeScope === 'INSIDE_JAMB') multiplier = 0.5;
+  else if (activeScope === 'FULL_OUTER_AND_INSIDE') multiplier = 1.35;
 
   if (matchedJob) {
-    const retailPrice = matchedJob.retailPrice ?? 2000;
-    const cars24Price = matchedJob.cars24Price ?? 1350;
+    let retailPrice = matchedJob.retailPrice ?? 2000;
+    let cars24Price = matchedJob.cars24Price ?? 1350;
+
+    if (activeScope === 'PARTIAL_TOUCHUP') {
+      retailPrice = matchedJob.retailPartialPrice ?? Math.round(retailPrice * 0.6);
+      cars24Price = matchedJob.cars24PartialPrice ?? Math.round(cars24Price * 0.6);
+    } else if (activeScope === 'INSIDE_JAMB') {
+      retailPrice = matchedJob.retailInsidePrice ?? Math.round(retailPrice * 0.5);
+      cars24Price = matchedJob.cars24InsidePrice ?? Math.round(cars24Price * 0.5);
+    } else if (activeScope === 'FULL_OUTER_AND_INSIDE') {
+      retailPrice = matchedJob.retailFullOuterInsidePrice ?? Math.round(retailPrice * 1.35);
+      cars24Price = matchedJob.cars24FullOuterInsidePrice ?? Math.round(cars24Price * 1.35);
+    }
+
     const activePrice = isCars24 ? cars24Price : retailPrice;
 
-    const retailPainterPayout = matchedJob.retailPainterPayout ?? matchedJob.painterPayout ?? 950;
-    const retailDenterPayout = matchedJob.retailDenterPayout ?? matchedJob.denterPayout ?? 200;
-    const retailContractorPayout = matchedJob.retailContractorPayout ?? (retailPainterPayout + retailDenterPayout);
+    const retailPainterPayout = Math.round((matchedJob.retailPainterPayout ?? matchedJob.painterPayout ?? 950) * multiplier);
+    const retailDenterPayout = Math.round((matchedJob.retailDenterPayout ?? matchedJob.denterPayout ?? 200) * multiplier);
+    const retailContractorPayout = matchedJob.retailContractorPayout ? Math.round(matchedJob.retailContractorPayout * multiplier) : (retailPainterPayout + retailDenterPayout);
 
-    const cars24PainterPayout = matchedJob.cars24PainterPayout ?? 800;
-    const cars24DenterPayout = matchedJob.cars24DenterPayout ?? 150;
-    const cars24ContractorPayout = matchedJob.cars24ContractorPayout ?? (cars24PainterPayout + cars24DenterPayout);
+    const cars24PainterPayout = Math.round((matchedJob.cars24PainterPayout ?? 800) * multiplier);
+    const cars24DenterPayout = Math.round((matchedJob.cars24DenterPayout ?? 150) * multiplier);
+    const cars24ContractorPayout = matchedJob.cars24ContractorPayout ? Math.round(matchedJob.cars24ContractorPayout * multiplier) : (cars24PainterPayout + cars24DenterPayout);
 
     const painterPayout = isCars24 ? cars24PainterPayout : retailPainterPayout;
     const denterPayout = isCars24 ? cars24DenterPayout : retailDenterPayout;
@@ -189,19 +233,22 @@ export function getPanelEnvironmentRates(
   }
 
   // Fallback if no matching standard job in table yet
-  const defaultBasePrice = isCars24 ? 1350 : 2000;
+  const baseRetail = Math.round(2000 * multiplier);
+  const baseCars24 = Math.round(1350 * multiplier);
+  const defaultBasePrice = isCars24 ? baseCars24 : baseRetail;
+
   return {
     price: defaultBasePrice,
-    retailPrice: 2000,
-    cars24Price: 1350,
-    retailPainterPayout: 950,
-    retailDenterPayout: 200,
-    retailContractorPayout: 1150,
-    cars24PainterPayout: 800,
-    cars24DenterPayout: 150,
-    cars24ContractorPayout: 950,
-    painterPayout: isCars24 ? 800 : 950,
-    denterPayout: isCars24 ? 150 : 200,
-    contractorPayout: isCars24 ? 950 : 1150,
+    retailPrice: baseRetail,
+    cars24Price: baseCars24,
+    retailPainterPayout: Math.round(950 * multiplier),
+    retailDenterPayout: Math.round(200 * multiplier),
+    retailContractorPayout: Math.round(1150 * multiplier),
+    cars24PainterPayout: Math.round(800 * multiplier),
+    cars24DenterPayout: Math.round(150 * multiplier),
+    cars24ContractorPayout: Math.round(950 * multiplier),
+    painterPayout: isCars24 ? Math.round(800 * multiplier) : Math.round(950 * multiplier),
+    denterPayout: isCars24 ? Math.round(150 * multiplier) : Math.round(200 * multiplier),
+    contractorPayout: isCars24 ? Math.round(950 * multiplier) : Math.round(1150 * multiplier),
   };
 }

@@ -53,15 +53,21 @@ export function StandardJobsCatalogModal({
     });
 
     // 2. Determine newly added tasks
-    const currentStdJobIds = new Set(existingTasks.map(t => t.standardJobId).filter(Boolean));
-    const newTasks = updatedTasks.filter(t => t.standardJobId && !currentStdJobIds.has(t.standardJobId));
+    const existingTaskIds = new Set(existingTasks.map(t => t.id));
+    const existingPanelKeys = new Set(existingTasks.map(t => t.panelKey || matchTaskToPanelDef(t)?.id).filter(Boolean));
+
+    const newTasks = updatedTasks.filter(t => 
+      !existingTaskIds.has(t.id) && 
+      (!t.panelKey || !existingPanelKeys.has(t.panelKey))
+    );
 
     if (newTasks.length > 0) {
       newTasks.forEach(newTask => {
-        if (newTask.standardJobId) {
+        const stdId = newTask.standardJobId || newTask.panelKey;
+        if (stdId) {
           addStandardJobToJobCard(
             card.id, 
-            newTask.standardJobId, 
+            stdId, 
             newTask.assignedToId,
             newTask.category === 'DENTING' ? newTask.assignedToId : undefined
           );

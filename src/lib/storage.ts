@@ -1910,14 +1910,16 @@ export function consumeInventoryItemForTask(
 export function getStandardJobs(): StandardJob[] {
   const data = localStorage.getItem(STORAGE_KEYS.STANDARD_JOBS);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify([]));
-    return [];
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
+    return INITIAL_STANDARD_JOBS;
   }
   try {
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
+    return INITIAL_STANDARD_JOBS;
   } catch {
-    return [];
+    return INITIAL_STANDARD_JOBS;
   }
 }
 
@@ -2000,7 +2002,10 @@ export function addStandardJobToJobCard(
 
   const card = cards[cardIndex];
   const stdJobs = getStandardJobs();
-  const stdJob = stdJobs.find(j => j.id === standardJobId);
+  let stdJob = stdJobs.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId));
+  if (!stdJob) {
+    stdJob = INITIAL_STANDARD_JOBS.find(j => j.id === standardJobId || j.panelKey === standardJobId);
+  }
   if (!stdJob) return null;
 
   // Dual pricing check: Cars24 B2B vs Retail

@@ -443,8 +443,14 @@ export interface StandardJob {
   panelKey?: string;      // e.g. 'door_rhs_rear', 'hood_bonnet', 'bumper_front'
   panelNameEn?: string;   // e.g. 'Door RHS Rear'
   paintScope?: PaintScope; // 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE'
-  retailPrice: number;    // Customer price for Retail vehicles
-  cars24Price: number;    // B2B Customer price for Cars24 fleet
+  retailPrice: number;    // Customer price for Retail vehicles (Full Outer)
+  cars24Price: number;    // B2B Customer price for Cars24 fleet (Full Outer)
+  retailPartialPrice?: number;   // Partial paint price for Retail
+  cars24PartialPrice?: number;   // Partial paint price for Cars24
+  retailInsidePrice?: number;    // Inside paint price for Retail
+  cars24InsidePrice?: number;    // Inside paint price for Cars24
+  retailFullOuterInsidePrice?: number; // Full Outer + Inside paint price for Retail
+  cars24FullOuterInsidePrice?: number; // Full Outer + Inside paint price for Cars24
   isContractBasis: boolean; // True for Denting, Painting, Sublet
   // Retail Contract Rates
   retailPainterPayout?: number;  // Painter payout for Retail vehicles

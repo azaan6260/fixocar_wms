@@ -74,6 +74,15 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   
   const [formRetailPrice, setFormRetailPrice] = useState<number>(2500);
   const [formCars24Price, setFormCars24Price] = useState<number>(1800);
+
+  // Paint scope pricing states
+  const [formRetailPartialPrice, setFormRetailPartialPrice] = useState<number>(1200);
+  const [formCars24PartialPrice, setFormCars24PartialPrice] = useState<number>(800);
+  const [formRetailInsidePrice, setFormRetailInsidePrice] = useState<number>(1000);
+  const [formCars24InsidePrice, setFormCars24InsidePrice] = useState<number>(675);
+  const [formRetailFullOuterInsidePrice, setFormRetailFullOuterInsidePrice] = useState<number>(2700);
+  const [formCars24FullOuterInsidePrice, setFormCars24FullOuterInsidePrice] = useState<number>(1800);
+
   const [formIsContract, setFormIsContract] = useState<boolean>(true);
   
   // Dual Contract Payout state: Retail vs Cars24
@@ -172,6 +181,12 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     setFormPaintScope(job.paintScope || 'FULL_OUTER');
     setFormRetailPrice(job.retailPrice);
     setFormCars24Price(job.cars24Price);
+    setFormRetailPartialPrice(job.retailPartialPrice ?? Math.round(job.retailPrice * 0.6));
+    setFormCars24PartialPrice(job.cars24PartialPrice ?? Math.round(job.cars24Price * 0.6));
+    setFormRetailInsidePrice(job.retailInsidePrice ?? Math.round(job.retailPrice * 0.5));
+    setFormCars24InsidePrice(job.cars24InsidePrice ?? Math.round(job.cars24Price * 0.5));
+    setFormRetailFullOuterInsidePrice(job.retailFullOuterInsidePrice ?? Math.round(job.retailPrice * 1.35));
+    setFormCars24FullOuterInsidePrice(job.cars24FullOuterInsidePrice ?? Math.round(job.cars24Price * 1.35));
     setFormIsContract(job.isContractBasis);
     setFormRetailPainterPayout(job.retailPainterPayout ?? job.painterPayout ?? 950);
     setFormRetailDenterPayout(job.retailDenterPayout ?? job.denterPayout ?? 200);
@@ -256,6 +271,12 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
       paintScope: isPaintOrDent ? formPaintScope : undefined,
       retailPrice: Number(formRetailPrice) || 0,
       cars24Price: Number(formCars24Price) || 0,
+      retailPartialPrice: isPaintOrDent ? Number(formRetailPartialPrice) || 0 : undefined,
+      cars24PartialPrice: isPaintOrDent ? Number(formCars24PartialPrice) || 0 : undefined,
+      retailInsidePrice: isPaintOrDent ? Number(formRetailInsidePrice) || 0 : undefined,
+      cars24InsidePrice: isPaintOrDent ? Number(formCars24InsidePrice) || 0 : undefined,
+      retailFullOuterInsidePrice: isPaintOrDent ? Number(formRetailFullOuterInsidePrice) || 0 : undefined,
+      cars24FullOuterInsidePrice: isPaintOrDent ? Number(formCars24FullOuterInsidePrice) || 0 : undefined,
       isContractBasis: formIsContract,
       // Retail contract rates
       retailPainterPayout: retailPainter,
@@ -627,34 +648,133 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
               )}
 
               {/* Pricing Grid */}
-              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                <div>
-                  <label className="block font-bold text-emerald-700 dark:text-emerald-400 mb-1">
-                    Retail Customer Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={formRetailPrice}
-                    onChange={(e) => setFormRetailPrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
-                  />
+              <div className="space-y-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs flex items-center justify-between">
+                  <span>Standard Full Outer Paint Rates</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-emerald-700 dark:text-emerald-400 mb-1">
+                      Retail Full Outer Price (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={formRetailPrice}
+                      onChange={(e) => setFormRetailPrice(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-blue-700 dark:text-blue-400 mb-1">
+                      Cars24 Full Outer Rate (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={formCars24Price}
+                      onChange={(e) => setFormCars24Price(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-blue-700 dark:text-blue-400 mb-1">
-                    Cars24 B2B Rate (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={formCars24Price}
-                    onChange={(e) => setFormCars24Price(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
-                  />
-                </div>
+                {(formCat === 'PAINT' || formCat === 'DENTING') && (
+                  <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="font-extrabold text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+                      <span>🎨 Partial Paint Rates</span>
+                      {(formPanelKey.includes('fender') || formPanelKey.includes('running_board')) && (
+                        <span className="text-[10px] text-rose-500 font-bold">Partial Paint disallowed for Fenders & Running Boards</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Retail Partial Paint (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formRetailPartialPrice}
+                          onChange={(e) => setFormRetailPartialPrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Cars24 Partial Paint (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formCars24PartialPrice}
+                          onChange={(e) => setFormCars24PartialPrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="font-extrabold text-purple-800 dark:text-purple-300 text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+                      🚪 Inside Paint (Door Jamb / Aperture) & Full Outer + Inside Rates
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Retail Inside Paint (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formRetailInsidePrice}
+                          onChange={(e) => setFormRetailInsidePrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Cars24 Inside Paint (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formCars24InsidePrice}
+                          onChange={(e) => setFormCars24InsidePrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Retail Full Outer + Inside (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formRetailFullOuterInsidePrice}
+                          onChange={(e) => setFormRetailFullOuterInsidePrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 text-[11px] mb-1">
+                          Cars24 Full Outer + Inside (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formCars24FullOuterInsidePrice}
+                          onChange={(e) => setFormCars24FullOuterInsidePrice(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Contract Basis & Contractor Payout */}

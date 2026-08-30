@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
-import { mapPanelToStandardJob, matchTaskToPanelDef } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, matchTaskToPanelDef, getPanelEnvironmentRates, isPartialPaintAllowedForPanel } from '../lib/panelMappingHelper';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
@@ -79,28 +79,38 @@ export function JobAllotmentPipeline({
   const [paintViewMode, setPaintViewMode] = useState<'VISUAL_SKETCH' | 'GRID_LIST'>('VISUAL_SKETCH');
 
   // Helper to handle panel toggles from interactive visual sketch chart
-  const handlePanelChartToggle = (panelId: string, matchedJobId?: string) => {
+  const handlePanelChartToggle = (panelId: string, matchedJobId?: string, scope?: PaintScope) => {
     // Find panel definition
     const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
     if (!panelDef) return;
 
     // Fetch freshest standard jobs from library
     const freshJobs = getStandardJobs();
+    const isPartialAllowed = isPartialPaintAllowedForPanel(panelId);
+    const effectiveScope: PaintScope = (scope === 'PARTIAL_TOUCHUP' && !isPartialAllowed) ? 'FULL_OUTER' : (scope || 'FULL_OUTER');
 
-    // Find matched standard job in standardJobs library
-    const matchedStdJob = mapPanelToStandardJob(panelDef, freshJobs);
-    const stdJob = matchedStdJob || {
-      id: matchedJobId || panelDef.standardJobId,
-      title: `${panelDef.nameEn} (Full Outer Paint)`,
+    const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, effectiveScope);
+
+    const scopeTitleMap: Record<PaintScope, string> = {
+      FULL_OUTER: 'Full Outer Paint',
+      PARTIAL_TOUCHUP: 'Partial Paint',
+      INSIDE_JAMB: 'Inside Paint',
+      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
+    };
+
+    const stdJob = {
+      id: matchedJobId || rates.standardJob?.id || panelDef.standardJobId,
+      title: `${panelDef.nameEn} (${scopeTitleMap[effectiveScope]})`,
       category: 'PAINT' as TaskCategory,
       panelKey: panelId,
       panelNameEn: panelDef.nameEn,
-      retailPrice: 2000,
-      cars24Price: 1350,
+      paintScope: effectiveScope,
+      retailPrice: rates.retailPrice,
+      cars24Price: rates.cars24Price,
       isContractBasis: true,
-      contractorPayout: isCars24 ? 950 : 1150,
-      painterPayout: isCars24 ? 800 : 950,
-      denterPayout: isCars24 ? 150 : 200,
+      contractorPayout: rates.contractorPayout,
+      painterPayout: rates.painterPayout,
+      denterPayout: rates.denterPayout,
       estimatedHours: 4
     };
 
@@ -115,11 +125,31 @@ export function JobAllotmentPipeline({
     );
 
     if (existingTasks.length > 0) {
-      // Panel was already selected -> Clicked again -> Remove from task list
-      const idsToRemove = new Set(existingTasks.map(t => t.id));
-      onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
+      if (scope && existingTasks[0].paintScope !== effectiveScope) {
+        // Change paintScope & rates of existing task
+        const updatedTasks = selectedTasks.map(t => {
+          if (existingTasks.some(et => et.id === t.id)) {
+            return {
+              ...t,
+              title: `${panelDef.nameEn} (${scopeTitleMap[effectiveScope]})`,
+              paintScope: effectiveScope,
+              customerPrice: rates.price,
+              painterPayout: rates.painterPayout,
+              denterPayout: rates.denterPayout,
+              contractorPayout: rates.contractorPayout,
+              estimatedCost: rates.contractorPayout
+            };
+          }
+          return t;
+        });
+        onTasksChange(updatedTasks);
+      } else {
+        // Panel was already selected with same scope -> Clicked again -> Deselect/Remove
+        const idsToRemove = new Set(existingTasks.map(t => t.id));
+        onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
+      }
     } else {
-      // Panel was not selected -> Clicked -> Add to task list
+      // Panel was not selected -> Add to task list
       const newTask = createUnallocatedTask({
         ...stdJob,
         panelKey: panelId,

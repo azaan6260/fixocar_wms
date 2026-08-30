@@ -18,9 +18,9 @@ import {
   Check
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
-import { StandardJob } from '../types';
+import { StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
-import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, getPanelEnvironmentRates, isPartialPaintAllowedForPanel } from '../lib/panelMappingHelper';
 
 export type DamageSeverity = 'SCRATCH' | 'MINOR_DENT' | 'DEEP_DENT' | 'TEAR_CRACK' | 'REPLACE_REQ';
 export type RepairAction = 'PAINT_ONLY' | 'DENT_AND_PAINT' | 'DENT_ONLY' | 'REPLACEMENT';
@@ -40,6 +40,7 @@ export interface PanelInspectionItem {
   notes?: string;
   photoUrl?: string;
   matchedStandardJobId?: string;
+  paintScope?: PaintScope;
   selected?: boolean;
 }
 
@@ -47,7 +48,7 @@ export interface InteractiveVehicleInspectionChartProps {
   mode?: 'VIEW' | 'INTERACTIVE_SELECT' | 'INSPECTION_RECORD';
   isCars24?: boolean;
   selectedPanelIds?: string[];
-  onPanelToggle?: (panelId: string, matchedJobId?: string) => void;
+  onPanelToggle?: (panelId: string, matchedJobId?: string, paintScope?: PaintScope) => void;
   inspections?: Record<string, PanelInspectionItem>;
   onInspectionChange?: (inspections: Record<string, PanelInspectionItem>) => void;
   availableStandardJobs?: StandardJob[];
@@ -809,35 +810,89 @@ export function InteractiveVehicleInspectionChart({
                 </div>
               ) : (
                 VEHICLE_PANELS.filter(p => isPanelActive(p.id)).map(p => {
-                  const stdJob = getMatchingStandardJob(p, effectiveStandardJobs);
-                  const price = stdJob
-                    ? (isCars24 ? (stdJob.cars24Price ?? stdJob.retailPrice) : stdJob.retailPrice)
-                    : (isCars24 ? 1350 : (p.defaultPrice || 1350));
+                  const inspection = inspections[p.id];
+                  const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
+                  const isPartialAllowed = isPartialPaintAllowedForPanel(p.id);
+
+                  const rates = getPanelEnvironmentRates(p, effectiveStandardJobs, isCars24, currentScope);
+                  const price = rates.price;
+
                   return (
                     <div
                       key={p.id}
-                      className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs"
+                      className="p-3 rounded-xl bg-slate-800 border border-slate-700 space-y-2 text-xs"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
-                          ✓
-                        </span>
-                        <div>
-                          <strong className="text-white block">{p.nameHi}</strong>
-                          <span className="text-[10px] text-slate-400 font-mono">{p.nameEn}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
+                            ✓
+                          </span>
+                          <div>
+                            <strong className="text-white block">{p.nameHi}</strong>
+                            <span className="text-[10px] text-slate-400 font-mono">{p.nameEn}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="font-mono font-bold text-amber-400 block text-xs">₹{price.toLocaleString('en-IN')}</span>
+                            <span className="text-[9px] text-slate-400 font-medium">{isCars24 ? 'Cars24 Rate' : 'Retail Rate'}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handlePanelClick(p)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
+                            title="हटाएं"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-amber-400">₹{price.toLocaleString('en-IN')}</span>
-                        <button
-                          type="button"
-                          onClick={() => handlePanelClick(p)}
-                          className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
-                          title="हटाएं"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Paint Scope Selection Chips */}
+                      <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] font-bold text-slate-400 mr-1">Paint Scope:</span>
+                        {[
+                          { id: 'FULL_OUTER', label: 'Full Outer', icon: '✨' },
+                          { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint', icon: '🎨', disabled: !isPartialAllowed },
+                          { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
+                          { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
+                        ].map(s => {
+                          const active = currentScope === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              disabled={s.disabled}
+                              title={s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label}
+                              onClick={() => {
+                                if (s.disabled) return;
+                                if (onPanelToggle) {
+                                  onPanelToggle(p.id, p.standardJobId, s.id as PaintScope);
+                                }
+                                if (onInspectionChange) {
+                                  onInspectionChange({
+                                    ...inspections,
+                                    [p.id]: {
+                                      ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                      paintScope: s.id as PaintScope
+                                    }
+                                  });
+                                }
+                              }}
+                              className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
+                                s.disabled
+                                  ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'
+                                  : active
+                                  ? 'bg-amber-400 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
+                                  : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-400/60'
+                              }`}
+                            >
+                              <span>{s.icon}</span>
+                              <span>{s.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   );
