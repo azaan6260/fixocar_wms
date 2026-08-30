@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { JobCard, StandardJob, Employee, Vendor, TaskCategory, SpecializedTeam } from '../types';
-import { getStandardJobs, addStandardJobToJobCard, getEmployees, getVendors } from '../lib/storage';
+import { getStandardJobs, addStandardJobToJobCard, getEmployees, getVendors, deleteJobCardTask, isCars24JobCard } from '../lib/storage';
+import { matchTaskToPanelDef } from '../lib/panelMappingHelper';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { Zap, CheckCircle2, X, Tag, ShieldCheck, Plus, Trash2 } from 'lucide-react';
 
@@ -17,10 +18,11 @@ export function StandardJobsCatalogModal({
   onClose,
   onJobAdded
 }: StandardJobsCatalogModalProps) {
-  if (!isOpen) return null;
+  if (!isOpen || !card) return null;
 
   const employees = getEmployees();
   const vendors = getVendors();
+  const isCars24 = isCars24JobCard(card);
 
   // Convert existing job card tasks into pipeline format for syncing
   const existingTasks: AllocatedTaskItem[] = (card.tasks || []).map(t => ({
@@ -37,11 +39,20 @@ export function StandardJobsCatalogModal({
     isContractBasis: t.isContractBasis,
     painterPayout: t.painterPayout,
     denterPayout: t.denterPayout,
-    standardJobId: t.standardJobId
+    standardJobId: t.standardJobId,
+    panelKey: t.panelKey || matchTaskToPanelDef(t)?.id,
+    panelNameEn: t.panelNameEn || matchTaskToPanelDef(t)?.nameEn
   }));
 
   const handleTasksPipelineChange = (updatedTasks: AllocatedTaskItem[]) => {
-    // Determine newly added tasks
+    // 1. Handle removed tasks
+    const updatedIds = new Set(updatedTasks.map(t => t.id));
+    const removedTasks = existingTasks.filter(t => !updatedIds.has(t.id));
+    removedTasks.forEach(removed => {
+      deleteJobCardTask(card.id, removed.id);
+    });
+
+    // 2. Determine newly added tasks
     const currentStdJobIds = new Set(existingTasks.map(t => t.standardJobId).filter(Boolean));
     const newTasks = updatedTasks.filter(t => t.standardJobId && !currentStdJobIds.has(t.standardJobId));
 
@@ -56,6 +67,9 @@ export function StandardJobsCatalogModal({
           );
         }
       });
+    }
+
+    if (onJobAdded || removedTasks.length > 0 || newTasks.length > 0) {
       if (onJobAdded) onJobAdded();
     }
   };
@@ -79,7 +93,7 @@ export function StandardJobsCatalogModal({
                 <span>•</span>
                 <span className="font-semibold text-slate-200">{card.vehicle.registrationNumber} ({card.vehicle.make} {card.vehicle.model})</span>
                 <span>•</span>
-                {card.isCars24 ? (
+                {isCars24 ? (
                   <span className="px-2 py-0.5 rounded-full bg-orange-500/30 text-orange-300 border border-orange-400/40 font-black text-[10px] flex items-center gap-1 uppercase tracking-wide">
                     <ShieldCheck className="w-3 h-3 text-orange-400" /> Cars24 Fleet Partner
                   </span>
@@ -103,7 +117,7 @@ export function StandardJobsCatalogModal({
         {/* Pipeline Body Container */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           <JobAllotmentPipeline
-            isCars24={Boolean(card.isCars24)}
+            isCars24={isCars24}
             cars24RefNo={card.cars24RefNo}
             employees={employees}
             vendors={vendors}
@@ -115,7 +129,7 @@ export function StandardJobsCatalogModal({
         {/* Modal Footer */}
         <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
           <span>
-            {card.isCars24 
+            {isCars24 
               ? '⚡ Panel paint selections create linked Painter + Denter tasks automatically per Cars24 agreement.' 
               : '🛒 Standard jobs added reflect in active Job Card bill and floor manager assignments.'}
           </span>

@@ -56,6 +56,16 @@ function notifyStoreChange() {
 }
 
 // 1. JOB CARDS STORAGE
+export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
+  if (!card) return false;
+  return Boolean(
+    card.isCars24 || 
+    (card.cars24RefNo && card.cars24RefNo.trim().length > 0) || 
+    (card.customer?.name && card.customer.name.toLowerCase().includes('cars24')) ||
+    (card.packageName && card.packageName.toLowerCase().includes('cars24'))
+  );
+}
+
 export function getJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
   if (!local) {
@@ -64,7 +74,11 @@ export function getJobCards(): JobCard[] {
   }
   try {
     const parsed = JSON.parse(local);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(c => ({
+      ...c,
+      isCars24: isCars24JobCard(c)
+    }));
   } catch {
     return [];
   }
@@ -1990,20 +2004,21 @@ export function addStandardJobToJobCard(
   if (!stdJob) return null;
 
   // Dual pricing check: Cars24 B2B vs Retail
-  const customerPrice = card.isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
+  const isCars24 = isCars24JobCard(card);
+  const customerPrice = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
   const employees = getEmployees();
   const vendorList = getVendors();
 
   // Dual contract pricing check: Cars24 vs Retail
-  const painterPayout = card.isCars24
+  const painterPayout = isCars24
     ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
     : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 950);
 
-  const denterPayout = card.isCars24
+  const denterPayout = isCars24
     ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
     : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200);
 
-  const contractorPayout = card.isCars24
+  const contractorPayout = isCars24
     ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
     : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
 

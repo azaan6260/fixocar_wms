@@ -110,7 +110,8 @@ export function JobAllotmentPipeline({
       matchTaskToPanelDef(t)?.id === panelId ||
       (stdJob && t.standardJobId === stdJob.id) ||
       (panelDef.standardJobId && t.standardJobId === panelDef.standardJobId) ||
-      (panelDef.cars24StandardJobId && t.standardJobId === panelDef.cars24StandardJobId)
+      (panelDef.cars24StandardJobId && t.standardJobId === panelDef.cars24StandardJobId) ||
+      (t.title && panelDef.nameEn && t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()))
     );
 
     if (existingTasks.length > 0) {

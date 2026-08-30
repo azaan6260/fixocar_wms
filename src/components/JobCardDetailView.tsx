@@ -10,7 +10,9 @@ import {
   getStandardJobs,
   dispatchToastNotification,
   reassignAllPaintTasksForJobCard,
-  deleteJobCard
+  deleteJobCard,
+  deleteJobCardTask,
+  isCars24JobCard
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
@@ -106,6 +108,7 @@ export function JobCardDetailView({
   onOpenQRModal,
 }: JobCardDetailViewProps) {
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
+  const isCars24 = isCars24JobCard(card);
   
   // Default to technician mode for a technician-first experience
   const [viewMode, setViewMode] = useState<'TECHNICIAN' | 'MANAGER'>(
@@ -416,7 +419,7 @@ export function JobCardDetailView({
                     {card.vehicle.variant}
                   </span>
                 )}
-                {card.isCars24 && (
+                {isCars24 && (
                   <span className="bg-orange-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
                     ⚡ Cars24
                   </span>
@@ -522,7 +525,7 @@ export function JobCardDetailView({
             isDelivered={isDelivered}
             vehicleReg={card.vehicle.registrationNumber}
             vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-            isCars24={card.isCars24}
+            isCars24={isCars24}
           />
         )}
 
@@ -703,7 +706,7 @@ export function JobCardDetailView({
                       paintTasks={card.tasks.filter(t => t.category === 'PAINT')}
                       employees={employees}
                       vehicleReg={card.vehicle.registrationNumber}
-                      isCars24={card.isCars24}
+                      isCars24={isCars24}
                       onApplyBatchAllotment={(pId, pName, dId, dName) => {
                         reassignAllPaintTasksForJobCard(card.id, pId, pName, dId, dName);
                         dispatchToastNotification({
@@ -748,6 +751,16 @@ export function JobCardDetailView({
                         vendors={vendors}
                         currentRole={currentRole}
                         onTaskStatusChange={(taskId, status) => updateTaskStatus(card.id, taskId, status)}
+                        onRemoveTask={(taskId) => {
+                          deleteJobCardTask(card.id, taskId);
+                          dispatchToastNotification({
+                            type: 'JOB_CARD_CREATED',
+                            title: 'Job Removed',
+                            message: `Removed task from ${card.vehicle.registrationNumber}.`,
+                            vehicleReg: card.vehicle.registrationNumber,
+                            jobCardId: card.id
+                          });
+                        }}
                       />
                     ))}
                   </div>
@@ -779,15 +792,34 @@ export function JobCardDetailView({
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => respondToCustomerApproval(card.id, task.id, true)}
-                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => respondToCustomerApproval(card.id, task.id, false, 'Declined')}
-                            className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold"
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
                           >
                             Decline
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
+                                deleteJobCardTask(card.id, task.id);
+                                dispatchToastNotification({
+                                  type: 'JOB_CARD_CREATED',
+                                  title: 'Task Removed',
+                                  message: `Removed ${task.title} from ${card.vehicle.registrationNumber}.`,
+                                  vehicleReg: card.vehicle.registrationNumber,
+                                  jobCardId: card.id
+                                });
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            title="Remove task from job card"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Remove
                           </button>
                         </div>
                       </div>
@@ -969,7 +1001,7 @@ export function JobCardDetailView({
 
       {/* 1-Click Standard Jobs Catalog Modal */}
       <StandardJobsCatalogModal
-        card={card}
+        card={{ ...card, isCars24 }}
         isOpen={isStandardCatalogOpen}
         onClose={() => setIsStandardCatalogOpen(false)}
       />

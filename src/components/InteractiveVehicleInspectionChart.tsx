@@ -410,7 +410,7 @@ export function InteractiveVehicleInspectionChart({
   };
 
   const handlePanelClick = (panel: PanelDefinition) => {
-    setSelectedPanelForDetail(panel);
+    setSelectedPanelForDetail(prev => prev?.id === panel.id ? null : panel);
 
     const wasActive = isPanelActive(panel.id);
 

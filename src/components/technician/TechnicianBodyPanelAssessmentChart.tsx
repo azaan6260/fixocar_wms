@@ -25,7 +25,7 @@ import {
   Tag
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
-import { updateJobCard, addRequisitionToTask, dispatchToastNotification, getStandardJobs } from '../../lib/storage';
+import { updateJobCard, addRequisitionToTask, dispatchToastNotification, getStandardJobs, deleteJobCardTask, isCars24JobCard } from '../../lib/storage';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../../lib/panelMappingHelper';
 
 export type BodyViewFilter = 'ALL_ASSIGNED' | 'DENTER' | 'PAINTER' | 'INSPECTION';
@@ -159,6 +159,8 @@ export function TechnicianBodyPanelAssessmentChart({
   vendors = [],
   currentRole = 'FLOOR_MANAGER'
 }: TechnicianBodyPanelAssessmentChartProps) {
+  const isCars24 = isCars24JobCard(card);
+
   // Determine default filter based on active role
   const defaultFilter: BodyViewFilter = useMemo(() => {
     if (currentRole === 'DENTER') return 'DENTER';
@@ -207,7 +209,7 @@ export function TechnicianBodyPanelAssessmentChart({
     const availablePainter = employees.find(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
 
     const standardJobs = getStandardJobs();
-    const envRates = getPanelEnvironmentRates(panel, standardJobs, card.isCars24);
+    const envRates = getPanelEnvironmentRates(panel, standardJobs, isCars24);
     const activeStdJob = envRates.standardJob;
     const stdJobId = activeStdJob?.id || panel.standardJobId;
 
@@ -268,7 +270,7 @@ export function TechnicianBodyPanelAssessmentChart({
       dispatchToastNotification({
         type: 'SUCCESS',
         title: `✅ काम दर्ज हुआ (${panel.nameEn})`,
-        message: `${tasksToAdd.length} नया रिपेयर कार्य ${card.vehicle.registrationNumber} के लिए सफलतापूर्वक जोड़ा गया। (${card.isCars24 ? 'Cars24 Rate' : 'Retail Rate'}: ₹${envRates.price.toLocaleString('en-IN')})`,
+        message: `${tasksToAdd.length} नया रिपेयर कार्य ${card.vehicle.registrationNumber} के लिए सफलतापूर्वक जोड़ा गया। (${isCars24 ? 'Cars24 Rate' : 'Retail Rate'}: ₹${envRates.price.toLocaleString('en-IN')})`,
         vehicleReg: card.vehicle.registrationNumber,
         jobCardId: card.id
       });
@@ -621,7 +623,7 @@ export function TechnicianBodyPanelAssessmentChart({
                     opacity={opacity}
                     onMouseEnter={() => setHoveredPanel(panel)}
                     onMouseLeave={() => setHoveredPanel(null)}
-                    onClick={() => setSelectedPanel(panel)}
+                    onClick={() => setSelectedPanel(prev => prev?.id === panel.id ? null : panel)}
                   >
                     {panel.svgShape.type === 'path' && (
                       <path
@@ -815,13 +817,35 @@ export function TechnicianBodyPanelAssessmentChart({
                             }`}>
                               {t.status}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleTaskStatus(t.id, t.status)}
-                              className="text-[10px] font-bold text-amber-400 hover:underline"
-                            >
-                              स्थिति बदलें ➔
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTaskStatus(t.id, t.status)}
+                                className="text-[10px] font-bold text-amber-400 hover:underline"
+                              >
+                                स्थिति बदलें ➔
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Remove "${t.title}" from this panel?`)) {
+                                    deleteJobCardTask(card.id, t.id);
+                                    dispatchToastNotification({
+                                      type: 'SUCCESS',
+                                      title: 'Task Removed',
+                                      message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
+                                      vehicleReg: card.vehicle.registrationNumber,
+                                      jobCardId: card.id
+                                    });
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
+                                title="Remove job"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -881,13 +905,35 @@ export function TechnicianBodyPanelAssessmentChart({
                             }`}>
                               {t.status}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleTaskStatus(t.id, t.status)}
-                              className="text-[10px] font-bold text-amber-400 hover:underline"
-                            >
-                              स्थिति बदलें ➔
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTaskStatus(t.id, t.status)}
+                                className="text-[10px] font-bold text-amber-400 hover:underline"
+                              >
+                                स्थिति बदलें ➔
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Remove "${t.title}" from this panel?`)) {
+                                    deleteJobCardTask(card.id, t.id);
+                                    dispatchToastNotification({
+                                      type: 'SUCCESS',
+                                      title: 'Task Removed',
+                                      message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
+                                      vehicleReg: card.vehicle.registrationNumber,
+                                      jobCardId: card.id
+                                    });
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
+                                title="Remove job"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}

@@ -48,6 +48,7 @@ interface TaskDetailCardProps {
   vendors: Vendor[];
   currentRole: UserRole;
   onTaskStatusChange?: (taskId: string, status: TaskStatus) => void;
+  onRemoveTask?: (taskId: string) => void;
 }
 
 export function TaskDetailCard({
@@ -56,7 +57,8 @@ export function TaskDetailCard({
   employees,
   vendors,
   currentRole,
-  onTaskStatusChange
+  onTaskStatusChange,
+  onRemoveTask
 }: TaskDetailCardProps) {
   const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
 
@@ -154,7 +156,11 @@ export function TaskDetailCard({
 
   const handleDeleteTaskSubmit = () => {
     if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
-      deleteJobCardTask(card.id, task.id);
+      if (onRemoveTask) {
+        onRemoveTask(task.id);
+      } else {
+        deleteJobCardTask(card.id, task.id);
+      }
     }
   };
   const handleReallotSubmit = (e: React.FormEvent) => {
@@ -376,7 +382,7 @@ export function TaskDetailCard({
           </div>
         </div>
 
-        {/* Status Toggles */}
+        {/* Status Toggles & Remove Action */}
         <div className="flex items-center gap-1.5 shrink-0">
           {(['PENDING', 'IN_PROGRESS', 'COMPLETED'] as TaskStatus[]).map((st) => (
             <button
@@ -393,6 +399,16 @@ export function TaskDetailCard({
               {st === 'IN_PROGRESS' ? 'In Progress' : st === 'COMPLETED' ? 'Completed' : 'Pending'}
             </button>
           ))}
+
+          <button
+            type="button"
+            onClick={handleDeleteTaskSubmit}
+            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1 shadow-xs shrink-0"
+            title="Remove job from card"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Remove</span>
+          </button>
         </div>
       </div>
 
