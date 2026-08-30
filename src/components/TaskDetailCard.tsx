@@ -320,7 +320,7 @@ export function TaskDetailCard({
               </div>
             )}
 
-            {/* Re-allot & Edit Job Buttons for Managers/Admin */}
+            {/* Re-allot, Edit Job & Delete Buttons for Managers/Admin */}
             {isManager && (
               <>
                 <button
@@ -349,6 +349,16 @@ export function TaskDetailCard({
                 >
                   <Edit className="w-3 h-3" />
                   {isEditingTask ? 'Cancel Edit' : 'Edit Job & Payouts'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDeleteTaskSubmit}
+                  className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-900/50 flex items-center gap-1 transition-colors"
+                  title="Delete job from job card"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Delete Job</span>
                 </button>
               </>
             )}

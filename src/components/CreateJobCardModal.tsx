@@ -1115,9 +1115,11 @@ export function CreateJobCardModal({
                           <button
                             type="button"
                             onClick={() => handleRemoveTask(idx)}
-                            className="p-1 text-rose-500 hover:bg-rose-500/10 rounded-md"
+                            className="px-2 py-1 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 border border-rose-200 dark:border-rose-900/50 rounded-lg flex items-center gap-1 font-bold text-xs transition-colors"
+                            title="Remove job from card"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Delete</span>
                           </button>
                         </div>
                       </div>

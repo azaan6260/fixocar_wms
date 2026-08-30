@@ -403,11 +403,16 @@ export function InteractiveVehicleInspectionChart({
   };
 
   const isPanelActive = (panelId: string) => {
+    if (mode === 'INTERACTIVE_SELECT') {
+      return selectedPanelIds.includes(panelId);
+    }
     return selectedPanelIds.includes(panelId) || Boolean(inspections[panelId]?.selected);
   };
 
   const handlePanelClick = (panel: PanelDefinition) => {
     setSelectedPanelForDetail(panel);
+
+    const wasActive = isPanelActive(panel.id);
 
     if (onPanelToggle) {
       onPanelToggle(panel.id, panel.standardJobId);
@@ -426,9 +431,9 @@ export function InteractiveVehicleInspectionChart({
         ...inspections,
         [panel.id]: {
           ...current,
-          selected: !current.selected,
-          damageType: current.selected ? undefined : activeSeverity,
-          actionRequired: current.selected ? undefined : activeRepairAction,
+          selected: !wasActive,
+          damageType: !wasActive ? activeSeverity : undefined,
+          actionRequired: !wasActive ? activeRepairAction : undefined,
           matchedStandardJobId: panel.standardJobId
         }
       };
