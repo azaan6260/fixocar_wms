@@ -40,15 +40,54 @@ export function getSupabaseClient(): SupabaseClient | null {
   return supabaseInstance;
 }
 
+export async function fetchServerSupabaseConfig(): Promise<{
+  configured: boolean;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  supabaseServiceKey: string;
+}> {
+  try {
+    const res = await fetch('/api/supabase/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.configured && data.supabaseUrl) {
+        localStorage.setItem(STORAGE_KEY_URL, data.supabaseUrl.trim());
+        if (data.supabaseAnonKey) localStorage.setItem(STORAGE_KEY_ANON, data.supabaseAnonKey.trim());
+        if (data.supabaseServiceKey) localStorage.setItem(STORAGE_KEY_SERVICE_ROLE, data.supabaseServiceKey.trim());
+        supabaseInstance = null;
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch server Supabase config:', err);
+  }
+  return getStoredSupabaseConfig() as any;
+}
+
 export function saveSupabaseConfig(url: string, anonKey: string, serviceKey?: string) {
-  localStorage.setItem(STORAGE_KEY_URL, url.trim());
-  localStorage.setItem(STORAGE_KEY_ANON, anonKey.trim());
-  if (serviceKey) {
-    localStorage.setItem(STORAGE_KEY_SERVICE_ROLE, serviceKey.trim());
+  const cleanUrl = url.trim();
+  const cleanAnon = anonKey.trim();
+  const cleanService = serviceKey ? serviceKey.trim() : '';
+
+  localStorage.setItem(STORAGE_KEY_URL, cleanUrl);
+  localStorage.setItem(STORAGE_KEY_ANON, cleanAnon);
+  if (cleanService) {
+    localStorage.setItem(STORAGE_KEY_SERVICE_ROLE, cleanService);
   } else {
     localStorage.removeItem(STORAGE_KEY_SERVICE_ROLE);
   }
   supabaseInstance = null; // reset instance so next get creates fresh client
+
+  // Sync to backend server globally so mobile & laptop share credentials
+  fetch('/api/supabase/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      supabaseUrl: cleanUrl,
+      supabaseAnonKey: cleanAnon,
+      supabaseServiceKey: cleanService
+    })
+  }).catch(err => console.warn('Failed to sync Supabase config to server:', err));
 }
 
 export function clearSupabaseConfig() {
@@ -56,6 +95,16 @@ export function clearSupabaseConfig() {
   localStorage.removeItem(STORAGE_KEY_ANON);
   localStorage.removeItem(STORAGE_KEY_SERVICE_ROLE);
   supabaseInstance = null;
+
+  fetch('/api/supabase/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      supabaseUrl: '',
+      supabaseAnonKey: '',
+      supabaseServiceKey: ''
+    })
+  }).catch(err => console.warn('Failed to clear Supabase config on server:', err));
 }
 
 /**

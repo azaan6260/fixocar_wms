@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import { AuthUser } from '../types';
 import { authenticateUser, saveAuthUser, INITIAL_CITIES } from '../lib/storage';
-import { authenticateViaSupabase } from '../lib/supabaseClient';
+import { authenticateViaSupabase, fetchServerSupabaseConfig, getStoredSupabaseConfig } from '../lib/supabaseClient';
+import { syncFromSupabase } from '../lib/syncService';
 import { 
   getSavedBiometricBinding, 
   authenticateWithBiometrics, 
@@ -94,6 +95,9 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     setIsLoading(true);
     setError(null);
 
+    // Ensure mobile has the latest server Supabase configuration
+    await fetchServerSupabaseConfig();
+
     let result = authenticateUser(
       identifier, 
       password,
@@ -111,6 +115,8 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         if (supaRes.success && supaRes.user) {
           saveAuthUser(supaRes.user);
           result = { success: true, user: supaRes.user };
+          // Trigger immediate data pull from Supabase for cities, workshops, job cards, employees
+          syncFromSupabase().catch(() => {});
         } else if (supaRes.error) {
           result = { success: false, error: supaRes.error };
         }

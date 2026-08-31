@@ -1,11 +1,65 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
+// Server-side persistent Supabase config file path
+const CONFIG_FILE_PATH = path.join(process.cwd(), '.supabase_config.json');
+
+function loadPersistedSupabaseConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      const content = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+      const data = JSON.parse(content);
+      if (data.supabaseUrl) {
+        process.env.SUPABASE_URL = data.supabaseUrl;
+        process.env.VITE_SUPABASE_URL = data.supabaseUrl;
+      }
+      if (data.supabaseServiceKey) {
+        process.env.SUPABASE_SERVICE_ROLE_KEY = data.supabaseServiceKey;
+      }
+      if (data.supabaseAnonKey) {
+        process.env.VITE_SUPABASE_ANON_KEY = data.supabaseAnonKey;
+      }
+      return data;
+    }
+  } catch (err) {
+    console.warn('Could not load persisted supabase config:', err);
+  }
+  return null;
+}
+
+function savePersistedSupabaseConfig(url: string, anonKey: string, serviceKey?: string) {
+  try {
+    const configData = {
+      supabaseUrl: url.trim(),
+      supabaseAnonKey: anonKey.trim(),
+      supabaseServiceKey: serviceKey ? serviceKey.trim() : ''
+    };
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(configData, null, 2), 'utf-8');
+
+    if (configData.supabaseUrl) {
+      process.env.SUPABASE_URL = configData.supabaseUrl;
+      process.env.VITE_SUPABASE_URL = configData.supabaseUrl;
+    }
+    if (configData.supabaseServiceKey) {
+      process.env.SUPABASE_SERVICE_ROLE_KEY = configData.supabaseServiceKey;
+    }
+    if (configData.supabaseAnonKey) {
+      process.env.VITE_SUPABASE_ANON_KEY = configData.supabaseAnonKey;
+    }
+    return configData;
+  } catch (err) {
+    console.warn('Could not save persisted supabase config:', err);
+    return null;
+  }
+}
+
 // Lazy Supabase Admin Client
 function getSupabaseAdminClient(customUrl?: string, customKey?: string) {
+  loadPersistedSupabaseConfig();
   const url = customUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceKey = customKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !serviceKey) return null;
@@ -816,15 +870,42 @@ Return valid JSON ONLY.`;
 
   // Check Supabase Auth configuration status
   app.get('/api/supabase/status', (req, res) => {
-    const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const hasServiceKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-    const hasAnonKey = Boolean(process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+    const persisted = loadPersistedSupabaseConfig() || {};
+    const url = persisted.supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const hasServiceKey = Boolean(persisted.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const hasAnonKey = Boolean(persisted.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
 
     res.json({
       configured: Boolean(url && (hasServiceKey || hasAnonKey)),
       hasAdminServiceKey: hasServiceKey,
       hasAnonKey,
       supabaseUrl: url ? url.replace(/(https:\/\/[^.]+).*/, '$1.supabase.co') : null
+    });
+  });
+
+  // GET server-stored Supabase credentials for all connected devices
+  app.get('/api/supabase/config', (req, res) => {
+    const persisted = loadPersistedSupabaseConfig() || {};
+    const url = persisted.supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+    const anonKey = persisted.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const serviceKey = persisted.supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+    res.json({
+      configured: Boolean(url && (anonKey || serviceKey)),
+      supabaseUrl: url,
+      supabaseAnonKey: anonKey,
+      supabaseServiceKey: serviceKey
+    });
+  });
+
+  // POST update server-stored Supabase credentials globally
+  app.post('/api/supabase/config', (req, res) => {
+    const { supabaseUrl = '', supabaseAnonKey = '', supabaseServiceKey = '' } = req.body;
+    const saved = savePersistedSupabaseConfig(supabaseUrl, supabaseAnonKey, supabaseServiceKey);
+    res.json({
+      success: true,
+      configured: Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey)),
+      config: saved
     });
   });
 
@@ -1341,58 +1422,115 @@ Return valid JSON ONLY.`;
   // Verify credentials and authenticate against Supabase
   app.post('/api/supabase/auth/login', async (req, res) => {
     try {
-      const { identifier, password } = req.body;
+      const { identifier, password, supabaseUrl, supabaseServiceKey, supabaseAnonKey } = req.body;
       if (!identifier || !password) {
         return res.status(400).json({ error: 'identifier and password are required' });
       }
 
       const cleanId = identifier.trim().toLowerCase();
       const cleanPass = password.trim();
-      const client = getSupabaseAdminClient();
+      const client = getSupabaseAdminClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
-      if (client) {
-        // First check in public.employees
-        const { data: employees } = await client.from('employees').select('*');
-        if (employees && employees.length > 0) {
-          const matched = employees.find((e: any) => 
-            (e.login_id && e.login_id.toLowerCase() === cleanId) ||
-            (e.email && e.email.toLowerCase() === cleanId) ||
-            (e.id && e.id.toLowerCase() === cleanId) ||
-            (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
-          );
+      if (!client) {
+        return res.status(400).json({ success: false, error: 'Supabase URL & Key not configured on backend server.' });
+      }
 
-          if (matched) {
-            const expectedPass = matched.password_hash || matched.password || 'password123';
-            if (cleanPass !== expectedPass) {
-              return res.status(401).json({ success: false, error: 'Incorrect password for this staff account.' });
+      // 1. First check in public.employees table
+      const { data: employees } = await client.from('employees').select('*');
+      if (employees && employees.length > 0) {
+        const matched = employees.find((e: any) => 
+          (e.login_id && e.login_id.toLowerCase() === cleanId) ||
+          (e.email && e.email.toLowerCase() === cleanId) ||
+          (e.id && e.id.toLowerCase() === cleanId) ||
+          (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
+        );
+
+        if (matched) {
+          const expectedPass = matched.password_hash || matched.password || 'password123';
+          let isPasswordValid = (cleanPass === expectedPass);
+
+          // If plain text didn't match, test with Supabase Auth API
+          if (!isPasswordValid && matched.email) {
+            try {
+              const { data: authData, error: authErr } = await client.auth.signInWithPassword({
+                email: matched.email,
+                password: cleanPass
+              });
+              if (authData?.user && !authErr) {
+                isPasswordValid = true;
+              }
+            } catch (err) {
+              // Ignore auth API error and rely on invalid password result
             }
+          }
 
+          if (!isPasswordValid) {
+            return res.status(401).json({ success: false, error: 'Incorrect password for this staff account.' });
+          }
+
+          return res.json({
+            success: true,
+            source: 'SUPABASE_DB',
+            user: {
+              id: matched.id,
+              name: matched.name,
+              loginId: matched.login_id || matched.email?.split('@')[0],
+              email: matched.email,
+              phone: matched.phone,
+              role: matched.role,
+              userType: matched.employment_type === 'CONTRACT' ? 'CONTRACTOR' : (matched.role === 'SUPER_ADMIN' || matched.role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE'),
+              employeeId: matched.id,
+              specializedTeam: matched.specialized_team,
+              workshopId: matched.workshop_id,
+              workshopName: matched.workshop_name,
+              cityId: matched.city_id,
+              cityName: matched.city_name,
+              employmentType: matched.employment_type || 'PAYROLL',
+              loggedInAt: new Date().toISOString()
+            }
+          });
+        }
+      }
+
+      // 2. Fallback: Check Supabase Auth directly if cleanId looks like an email
+      if (cleanId.includes('@')) {
+        try {
+          const { data: authData, error: authErr } = await client.auth.signInWithPassword({
+            email: cleanId,
+            password: cleanPass
+          });
+
+          if (authData?.user && !authErr) {
+            const meta = authData.user.user_metadata || {};
+            const role = meta.role || 'ADMIN';
             return res.json({
               success: true,
-              source: 'SUPABASE_DB',
+              source: 'SUPABASE_AUTH',
               user: {
-                id: matched.id,
-                name: matched.name,
-                loginId: matched.login_id || matched.email?.split('@')[0],
-                email: matched.email,
-                phone: matched.phone,
-                role: matched.role,
-                userType: matched.employment_type === 'CONTRACT' ? 'CONTRACTOR' : (matched.role === 'SUPER_ADMIN' || matched.role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE'),
-                employeeId: matched.id,
-                specializedTeam: matched.specialized_team,
-                workshopId: matched.workshop_id,
-                workshopName: matched.workshop_name,
-                cityId: matched.city_id,
-                cityName: matched.city_name,
-                employmentType: matched.employment_type || 'PAYROLL',
+                id: meta.employee_id || `emp-${authData.user.id.slice(0, 8)}`,
+                name: meta.name || meta.full_name || cleanId.split('@')[0],
+                loginId: meta.login_id || cleanId.split('@')[0],
+                email: cleanId,
+                phone: meta.phone || '9820011223',
+                role: role,
+                userType: role === 'SUPER_ADMIN' || role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE',
+                employeeId: meta.employee_id || `emp-${authData.user.id.slice(0, 8)}`,
+                specializedTeam: meta.specialized_team || 'Management',
+                workshopId: meta.workshop_id || null,
+                workshopName: meta.workshop_name || null,
+                cityId: meta.city_id || null,
+                cityName: meta.city_name || null,
+                employmentType: meta.employment_type || 'PAYROLL',
                 loggedInAt: new Date().toISOString()
               }
             });
           }
+        } catch (authErr) {
+          // Ignore
         }
       }
 
-      return res.json({ success: false, error: 'No matching user found on Supabase backend' });
+      return res.json({ success: false, error: 'No matching staff account found on Supabase database or Auth' });
     } catch (err: any) {
       console.error('Supabase login endpoint error:', err);
       return res.status(500).json({ success: false, error: err.message });

@@ -11,6 +11,7 @@ import {
 } from './lib/storage';
 import { Camera, Wrench, Home } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
+import { fetchServerSupabaseConfig } from './lib/supabaseClient';
 
 import { HeaderNav } from './components/HeaderNav';
 import { DashboardOverview } from './components/DashboardOverview';
@@ -160,9 +161,13 @@ export default function App() {
     setAuthUser(null);
   };
 
-  // Subscribe to storage updates
+  // Subscribe to storage updates & sync from Supabase on startup
   useEffect(() => {
-    syncFromSupabase();
+    const initializeGlobalSync = async () => {
+      await fetchServerSupabaseConfig();
+      await syncFromSupabase();
+    };
+    initializeGlobalSync();
 
     const unsubscribe = subscribeToStore(() => {
       setJobCards(getJobCards());
