@@ -298,11 +298,19 @@ export async function authenticateViaSupabase(
 ): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
   if (!password) return { success: false, error: 'Password required' };
   
+  const config = getStoredSupabaseConfig();
+
   try {
     const res = await fetch('/api/supabase/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password })
+      body: JSON.stringify({
+        identifier,
+        password,
+        supabaseUrl: config.supabaseUrl,
+        supabaseServiceKey: config.supabaseServiceKey,
+        supabaseAnonKey: config.supabaseAnonKey
+      })
     });
 
     if (res.ok) {

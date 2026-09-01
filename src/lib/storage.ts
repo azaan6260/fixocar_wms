@@ -2463,28 +2463,76 @@ export function findCarModel(make: string, model: string): CarModelRecord | unde
   );
 }
 
+function getCookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookieValue(name: string, value: string, days = 30) {
+  if (typeof document === 'undefined') return;
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function deleteCookieValue(name: string) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
 // 18. AUTHENTICATION & RBAC SESSIONS
 export function getAuthUser(): AuthUser | null {
-  const local = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
-  if (!local) return null;
+  if (typeof window === 'undefined') return null;
+  
+  let raw: string | null = null;
   try {
-    return JSON.parse(local);
+    raw = localStorage.getItem(STORAGE_KEYS.AUTH_USER);
+  } catch {
+    // Mobile privacy mode or restricted localStorage
+  }
+  
+  if (!raw) {
+    try {
+      raw = sessionStorage.getItem(STORAGE_KEYS.AUTH_USER);
+    } catch {
+      // Ignore
+    }
+  }
+  
+  if (!raw) {
+    raw = getCookieValue(STORAGE_KEYS.AUTH_USER);
+  }
+
+  if (!raw) return null;
+
+  try {
+    const user = JSON.parse(raw);
+    try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, raw); } catch {}
+    try { sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, raw); } catch {}
+    setCookieValue(STORAGE_KEYS.AUTH_USER, raw);
+    return user;
   } catch {
     return null;
   }
 }
 
 export function saveAuthUser(user: AuthUser | null): void {
+  if (typeof window === 'undefined') return;
   if (user) {
-    localStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
+    const str = JSON.stringify(user);
+    try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
+    try { sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
+    setCookieValue(STORAGE_KEYS.AUTH_USER, str);
   } else {
-    localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+    try { localStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
+    try { sessionStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
+    deleteCookieValue(STORAGE_KEYS.AUTH_USER);
   }
   notifyStoreChange();
 }
 
 export function logoutAuthUser(): void {
-  localStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+  saveAuthUser(null);
   logoutCustomerSession();
   notifyStoreChange();
 }
