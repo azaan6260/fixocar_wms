@@ -1014,6 +1014,12 @@ export function getEmployees(): Employee[] {
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
   }
 
+  // Remove stale mock sample employees if present
+  if (list.some(e => e.id === 'emp-mech1' || e.id === 'emp-mgr1')) {
+    list = list.filter(e => e.id !== 'emp-mech1' && e.id !== 'emp-mgr1');
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
+  }
+
   // Ensure default employmentType for denters/painters (CONTRACT) vs others (PAYROLL)
   let updated = false;
   const migrated = list.map(emp => {

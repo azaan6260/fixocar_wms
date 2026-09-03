@@ -24,35 +24,7 @@ export const DEFAULT_SUPER_ADMIN: Employee = {
 };
 
 export const INITIAL_EMPLOYEES: Employee[] = [
-  DEFAULT_SUPER_ADMIN,
-  {
-    id: 'emp-mech1',
-    name: 'Rajesh Kumar',
-    role: 'MECHANIC',
-    phone: '9820011224',
-    email: 'mech1@workshop.fixocar.com',
-    specializedTeam: 'Mechanical',
-    status: 'AVAILABLE',
-    activeJobsCount: 0,
-    loginId: 'mech1',
-    password: 'password123',
-    baseSalary: 35000,
-    employmentType: 'PAYROLL'
-  },
-  {
-    id: 'emp-mgr1',
-    name: 'Amit Sharma',
-    role: 'FLOOR_MANAGER',
-    phone: '9820011225',
-    email: 'mgr1@workshop.fixocar.com',
-    specializedTeam: 'Management',
-    status: 'AVAILABLE',
-    activeJobsCount: 0,
-    loginId: 'mgr1',
-    password: 'password123',
-    baseSalary: 55000,
-    employmentType: 'PAYROLL'
-  }
+  DEFAULT_SUPER_ADMIN
 ];
 
 export const INITIAL_VENDORS: Vendor[] = [];

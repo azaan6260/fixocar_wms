@@ -118,8 +118,6 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         if (supaRes.success && supaRes.user) {
           saveAuthUser(supaRes.user);
           result = { success: true, user: supaRes.user };
-          // Trigger immediate data pull from Supabase for cities, workshops, job cards, employees
-          syncFromSupabase().catch(() => {});
         } else if (supaRes.error) {
           result = { success: false, error: supaRes.error };
         }
@@ -128,15 +126,23 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
       }
     }
 
-    setIsLoading(false);
     if (result.success && result.user) {
+      // Always pull live database records (employees, job cards, check-ins, workshops, etc.) from Supabase on sign-in
+      try {
+        await syncFromSupabase();
+      } catch (syncErr) {
+        console.warn('Post-login database sync warning:', syncErr);
+      }
+
       // Register biometric binding automatically if staff user logged in on mobile/tablet
       if (activeTab === 'STAFF') {
         registerBiometricForUser(result.user).catch(() => {});
       }
+      setIsLoading(false);
       onLoginSuccess(result.user);
       onClose();
     } else {
+      setIsLoading(false);
       setError(result.error || 'Authentication failed. Please verify your credentials.');
     }
   };
