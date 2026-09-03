@@ -79,7 +79,13 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
       const allStaff = getEmployees();
       const res = await syncAllEmployeesToSupabase(allStaff);
       setIsSyncingAll(false);
-      setSyncResult(`Successfully synced ${res.synced} / ${res.total} staff users to Supabase database & Auth!`);
+      
+      let summary = `Database (public.employees): ${res.dbSynced}/${res.total} | Auth (auth.users): ${res.authSynced}/${res.total}`;
+      if (res.authSynced === 0) {
+        summary += ` (Paste your 'service_role' key above to populate Authentication -> Users)`;
+      }
+      setSyncResult(summary);
+      
       // Re-run diagnostic after sync
       handleRunDiagnostics();
     } catch (err: any) {
@@ -195,8 +201,8 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) - Recommended</span>
-                  <span className="text-[10px] text-emerald-500 font-normal">Enables live Auth Admin API</span>
+                  <span>Supabase Service Role Key (SUPABASE_SERVICE_ROLE_KEY) - Required for Auth</span>
+                  <span className="text-[10px] text-emerald-500 font-normal">Populates Auth -&gt; Users</span>
                 </label>
                 <input
                   type="password"
@@ -205,6 +211,9 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
                   placeholder="eyJhY2... (Service Role secret key to populate Auth -> Users panel)"
                   className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                 />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Find this in <strong>Supabase Dashboard -&gt; Project Settings -&gt; API -&gt; Project API keys -&gt; service_role (secret)</strong>.
+                </p>
               </div>
 
               {/* Step-by-Step Diagnostic & Sync Box */}

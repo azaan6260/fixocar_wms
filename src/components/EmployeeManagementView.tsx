@@ -212,7 +212,7 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                       try {
                         const res = await syncAllEmployeesToSupabase(employees);
                         setIsSyncingSupabase(false);
-                        setSupabaseSyncNotice(`Synced ${res.synced} / ${res.total} staff to Supabase database & Auth.`);
+                        setSupabaseSyncNotice(`Synced ${res.dbSynced} to Database Table & ${res.authSynced} to Supabase Auth (${res.total} total staff).`);
                         setTimeout(() => setSupabaseSyncNotice(null), 5000);
                       } catch (err: any) {
                         setIsSyncingSupabase(false);

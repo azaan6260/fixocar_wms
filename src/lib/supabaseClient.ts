@@ -334,23 +334,29 @@ export async function authenticateViaSupabase(
  */
 export async function syncAllEmployeesToSupabase(
   employees: Employee[]
-): Promise<{ total: number; synced: number; messages: string[] }> {
-  let synced = 0;
+): Promise<{ total: number; dbSynced: number; authSynced: number; messages: string[] }> {
+  let dbSynced = 0;
+  let authSynced = 0;
   const messages: string[] = [];
 
   for (const emp of employees) {
     try {
       const res = await syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
       if (res.success) {
-        synced++;
-        if (res.message) messages.push(`${emp.name}: ${res.message}`);
+        dbSynced++;
+      }
+      if (res.authSynced) {
+        authSynced++;
+      }
+      if (res.message) {
+        messages.push(`${emp.name}: ${res.message}`);
       }
     } catch (err: any) {
       messages.push(`${emp.name}: Failed (${err.message})`);
     }
   }
 
-  return { total: employees.length, synced, messages };
+  return { total: employees.length, dbSynced, authSynced, messages };
 }
 
 export interface SupabaseSyncDiagnostic {

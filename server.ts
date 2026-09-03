@@ -1257,13 +1257,27 @@ Return valid JSON ONLY.`;
         return res.status(400).json({ error: 'employee data with valid ID is required' });
       }
 
+      const activeUrl = supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      const activeServiceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const activeAnonKey = supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY;
+
+      const hasServiceKey = Boolean(activeServiceKey && activeServiceKey.length > 20 && activeServiceKey !== activeAnonKey);
+
+      // Create admin client if service key exists, or standard client
       const client = getSupabaseAdminClient(
-        supabaseUrl, 
-        supabaseServiceKey || supabaseAnonKey
+        activeUrl, 
+        hasServiceKey ? activeServiceKey : (activeAnonKey || activeServiceKey)
       );
 
-      const email = (employee.email || `${employee.loginId || employee.id}@workshop.fixocar.com`).trim().toLowerCase();
-      const password = (newPassword || employee.password || 'password123').trim();
+      // Sanitize email and password for Supabase Auth requirements
+      const rawId = (employee.loginId || employee.id || 'user').toString().replace(/[^a-zA-Z0-9._-]/g, '');
+      const email = (employee.email && employee.email.includes('@') ? employee.email : `${rawId}@workshop.fixocar.com`).trim().toLowerCase();
+      
+      let rawPass = (newPassword || employee.password || 'password123').toString().trim();
+      if (rawPass.length < 6) {
+        rawPass = rawPass.padEnd(6, '0');
+      }
+      const password = rawPass;
 
       if (!client) {
         return res.json({
@@ -1281,7 +1295,7 @@ Return valid JSON ONLY.`;
       // Check if this is a delete action
       if (action === 'delete') {
         try {
-          if (client.auth?.admin) {
+          if (hasServiceKey && client.auth?.admin) {
             const { data: userList } = await client.auth.admin.listUsers();
             const existing = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id);
             if (existing) {
@@ -1295,11 +1309,12 @@ Return valid JSON ONLY.`;
         }
       }
 
-      // 1. Try Supabase Auth Admin User creation / password update
-      if (client.auth?.admin) {
+      // 1. Try Supabase Auth Admin User creation / password update if service role key is configured
+      if (hasServiceKey && client.auth?.admin) {
         try {
-          const { data: userList } = await client.auth.admin.listUsers();
-          const existingUser = (userList?.users as any[])?.find(
+          const { data: userList, error: listErr } = await client.auth.admin.listUsers();
+          const usersArray = (userList?.users as any[]) || [];
+          const existingUser = usersArray.find(
             (u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id || u.user_metadata?.login_id === employee.loginId
           );
 
@@ -1339,7 +1354,7 @@ Return valid JSON ONLY.`;
             } else {
               authSynced = true;
               authUserId = updated?.user?.id || existingUser.id;
-              syncNotes = `Password & profile updated in Supabase Auth for ${email}`;
+              syncNotes = `Password & profile updated in Supabase Auth (${email})`;
             }
           } else {
             // Create user in Supabase Auth
@@ -1364,7 +1379,7 @@ Return valid JSON ONLY.`;
 
             if (createErr) {
               console.warn('Supabase Auth create error:', createErr);
-              syncNotes = `Auth create note: ${createErr.message}`;
+              syncNotes = `Auth create error: ${createErr.message}`;
             } else {
               authSynced = true;
               authUserId = created?.user?.id || null;
@@ -1373,8 +1388,10 @@ Return valid JSON ONLY.`;
           }
         } catch (authAdminErr: any) {
           console.warn('Supabase Admin Auth skipped or unauthorized:', authAdminErr.message);
-          syncNotes = `Database synced (Auth requires SUPABASE_SERVICE_ROLE_KEY)`;
+          syncNotes = `Auth skipped: ${authAdminErr.message}`;
         }
+      } else if (!hasServiceKey) {
+        syncNotes = 'Database table updated. (Note: Supabase Authentication -> Users requires Service Role Key)';
       }
 
       // 2. Upsert employee record into public.employees table
