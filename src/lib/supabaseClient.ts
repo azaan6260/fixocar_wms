@@ -49,8 +49,8 @@ export async function fetchServerSupabaseConfig(): Promise<{
   try {
     const res = await fetch('/api/supabase/config');
     if (res.ok) {
-      const data = await res.json();
-      if (data.configured && data.supabaseUrl) {
+      const data = await res.json().catch(() => null);
+      if (data && data.configured && data.supabaseUrl) {
         localStorage.setItem(STORAGE_KEY_URL, data.supabaseUrl.trim());
         if (data.supabaseAnonKey) localStorage.setItem(STORAGE_KEY_ANON, data.supabaseAnonKey.trim());
         if (data.supabaseServiceKey) localStorage.setItem(STORAGE_KEY_SERVICE_ROLE, data.supabaseServiceKey.trim());
@@ -80,7 +80,7 @@ export async function saveSupabaseConfig(url: string, anonKey: string, serviceKe
 
   // Sync to backend server globally so mobile & laptop share credentials
   try {
-    await fetch('/api/supabase/config', {
+    const res = await fetch('/api/supabase/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -89,6 +89,9 @@ export async function saveSupabaseConfig(url: string, anonKey: string, serviceKe
         supabaseServiceKey: cleanService
       })
     });
+    if (res.ok) {
+      await res.json().catch(() => null);
+    }
   } catch (err) {
     console.warn('Failed to sync Supabase config to server:', err);
   }
@@ -131,8 +134,8 @@ export async function triggerPostSignUpHook(
     });
 
     if (res.ok) {
-      const data = await res.json();
-      return data;
+      const data = await res.json().catch(() => null);
+      if (data) return data;
     }
   } catch (err: any) {
     console.warn('Post-signup hook API failed, falling back to client upsert:', err);
@@ -214,7 +217,8 @@ export async function signUpAndSyncEmployee(
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json().catch(() => null);
+      if (data) return data;
     }
     const errData = await res.json().catch(() => ({}));
     return { success: false, error: errData.error || 'Signup request failed' };
@@ -244,25 +248,93 @@ export async function syncEmployeeToSupabaseAuth(
       })
     });
 
-    const data = await res.json();
-    if (data && (data.message || data.error)) {
-      return {
-        success: Boolean(data.success),
-        authSynced: Boolean(data.authSynced),
-        message: data.message || data.error
-      };
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && (data.message || data.error || data.success !== undefined)) {
+        return {
+          success: Boolean(data.success),
+          authSynced: Boolean(data.authSynced),
+          message: data.message || data.error
+        };
+      }
     }
   } catch (err: any) {
     console.warn('Server sync endpoint exception:', err);
   }
 
-  // Client-side fallback to update public.employees table directly
+  // Client-side fallback to sync public.employees table and Supabase Auth directly
+  let clientAuthSynced = false;
+  let authNote = '';
+
+  const hasServiceRoleKey = Boolean(config.supabaseServiceKey && config.supabaseServiceKey.length > 20);
+
+  if (config.supabaseUrl && hasServiceRoleKey) {
+    try {
+      const adminClient = createClient(config.supabaseUrl, config.supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
+
+      const email = (employee.email && employee.email.includes('@'))
+        ? employee.email.trim().toLowerCase()
+        : `${(employee.loginId || employee.id).toLowerCase()}@workshop.fixocar.com`;
+
+      const rawPassword = newPassword || employee.password || 'password123';
+      const formattedPassword = rawPassword.length < 6 ? rawPassword.padEnd(6, '0') : rawPassword;
+
+      if (action === 'delete') {
+        const { data: userList } = await adminClient.auth.admin.listUsers();
+        const existing = userList?.users?.find((u: any) => u.email === email);
+        if (existing) {
+          await adminClient.auth.admin.deleteUser(existing.id);
+          clientAuthSynced = true;
+          authNote = ' (Auth account deleted)';
+        }
+      } else {
+        const { data: userList } = await adminClient.auth.admin.listUsers();
+        const existing = userList?.users?.find((u: any) => u.email === email);
+
+        if (existing) {
+          const { error: updateErr } = await adminClient.auth.admin.updateUserById(existing.id, {
+            email,
+            password: formattedPassword,
+            user_metadata: {
+              name: employee.name,
+              role: employee.role,
+              login_id: employee.loginId || employee.id
+            }
+          });
+          if (!updateErr) {
+            clientAuthSynced = true;
+            authNote = ' (Auth account updated)';
+          }
+        } else {
+          const { error: createErr } = await adminClient.auth.admin.createUser({
+            email,
+            password: formattedPassword,
+            email_confirm: true,
+            user_metadata: {
+              name: employee.name,
+              role: employee.role,
+              login_id: employee.loginId || employee.id
+            }
+          });
+          if (!createErr) {
+            clientAuthSynced = true;
+            authNote = ' (Auth account created)';
+          }
+        }
+      }
+    } catch (adminErr: any) {
+      console.warn('Direct client Auth admin sync failed:', adminErr);
+    }
+  }
+
   const client = getSupabaseClient();
   if (client) {
     try {
       if (action === 'delete') {
         await client.from('employees').delete().eq('id', employee.id);
-        return { success: true, authSynced: false, message: 'Deleted from public.employees table (Server endpoint offline)' };
+        return { success: true, authSynced: clientAuthSynced, message: `Deleted from public.employees${authNote}` };
       }
 
       const { error } = await client.from('employees').upsert({
@@ -287,7 +359,7 @@ export async function syncEmployeeToSupabaseAuth(
       });
 
       if (!error) {
-        return { success: true, authSynced: false, message: 'Saved to public.employees table (Server Auth sync offline)' };
+        return { success: true, authSynced: clientAuthSynced, message: `Saved to public.employees table${authNote}` };
       }
     } catch (clientErr: any) {
       console.warn('Client Supabase upsert error:', clientErr);
@@ -308,6 +380,7 @@ export async function authenticateViaSupabase(
   
   const config = getStoredSupabaseConfig();
 
+  // Try server endpoint first
   try {
     const res = await fetch('/api/supabase/auth/login', {
       method: 'POST',
@@ -322,16 +395,72 @@ export async function authenticateViaSupabase(
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.user) {
+      const data = await res.json().catch(() => null);
+      if (data && data.success && data.user) {
         return { success: true, user: data.user };
       }
-      if (data.error) {
+      if (data && data.error) {
         return { success: false, error: data.error };
       }
     }
   } catch (err: any) {
-    console.warn('Supabase login API error, checking local store:', err);
+    console.warn('Supabase login API error, checking client direct connection:', err);
+  }
+
+  // Client-side direct authentication fallback
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const formattedEmail = identifier.includes('@')
+        ? identifier.trim().toLowerCase()
+        : `${identifier.trim().toLowerCase()}@workshop.fixocar.com`;
+
+      const formattedPassword = password.length < 6 ? password.padEnd(6, '0') : password;
+
+      // Attempt Supabase Auth sign in directly
+      const { data: authData, error: authError } = await client.auth.signInWithPassword({
+        email: formattedEmail,
+        password: formattedPassword
+      });
+
+      if (!authError && authData.user) {
+        const metadata = authData.user.user_metadata || {};
+        return {
+          success: true,
+          user: {
+            id: authData.user.id,
+            name: metadata.name || identifier,
+            loginId: metadata.login_id || identifier,
+            email: authData.user.email || formattedEmail,
+            role: metadata.role || 'TECHNICIAN',
+            userType: 'EMPLOYEE'
+          }
+        };
+      }
+
+      // Check public.employees table fallback
+      const { data: empData } = await client
+        .from('employees')
+        .select('*')
+        .or(`login_id.eq.${identifier},email.eq.${identifier}`)
+        .single();
+
+      if (empData && (empData.password_hash === password || empData.password_hash === formattedPassword)) {
+        return {
+          success: true,
+          user: {
+            id: empData.id,
+            name: empData.name,
+            loginId: empData.login_id || identifier,
+            email: empData.email || formattedEmail,
+            role: empData.role || 'TECHNICIAN',
+            userType: 'EMPLOYEE'
+          }
+        };
+      }
+    } catch (clientAuthErr: any) {
+      console.warn('Client direct authentication exception:', clientAuthErr);
+    }
   }
 
   return { success: false, error: 'User not verified against Supabase' };

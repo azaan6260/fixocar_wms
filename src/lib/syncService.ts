@@ -703,8 +703,8 @@ export async function checkAuthServiceConnection(): Promise<AuthDiagnosticReport
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data.success || data.isConfigured) {
+      const data = await res.json().catch(() => null);
+      if (data && (data.success || data.isConfigured)) {
         authServiceAvailable = true;
         details.push('✅ Connection test to Supabase API successful.');
       }
