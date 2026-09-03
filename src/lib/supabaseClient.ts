@@ -64,7 +64,7 @@ export async function fetchServerSupabaseConfig(): Promise<{
   return getStoredSupabaseConfig() as any;
 }
 
-export function saveSupabaseConfig(url: string, anonKey: string, serviceKey?: string) {
+export async function saveSupabaseConfig(url: string, anonKey: string, serviceKey?: string) {
   const cleanUrl = url.trim();
   const cleanAnon = anonKey.trim();
   const cleanService = serviceKey ? serviceKey.trim() : '';
@@ -79,15 +79,19 @@ export function saveSupabaseConfig(url: string, anonKey: string, serviceKey?: st
   supabaseInstance = null; // reset instance so next get creates fresh client
 
   // Sync to backend server globally so mobile & laptop share credentials
-  fetch('/api/supabase/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      supabaseUrl: cleanUrl,
-      supabaseAnonKey: cleanAnon,
-      supabaseServiceKey: cleanService
-    })
-  }).catch(err => console.warn('Failed to sync Supabase config to server:', err));
+  try {
+    await fetch('/api/supabase/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supabaseUrl: cleanUrl,
+        supabaseAnonKey: cleanAnon,
+        supabaseServiceKey: cleanService
+      })
+    });
+  } catch (err) {
+    console.warn('Failed to sync Supabase config to server:', err);
+  }
 }
 
 export function clearSupabaseConfig() {
@@ -240,12 +244,16 @@ export async function syncEmployeeToSupabaseAuth(
       })
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return data;
+    const data = await res.json();
+    if (data && (data.message || data.error)) {
+      return {
+        success: Boolean(data.success),
+        authSynced: Boolean(data.authSynced),
+        message: data.message || data.error
+      };
     }
   } catch (err: any) {
-    console.warn('Server sync endpoint error, attempting client-side direct upsert:', err);
+    console.warn('Server sync endpoint exception:', err);
   }
 
   // Client-side fallback to update public.employees table directly
@@ -254,7 +262,7 @@ export async function syncEmployeeToSupabaseAuth(
     try {
       if (action === 'delete') {
         await client.from('employees').delete().eq('id', employee.id);
-        return { success: true, message: 'Deleted employee from Supabase database' };
+        return { success: true, authSynced: false, message: 'Deleted from public.employees table (Server endpoint offline)' };
       }
 
       const { error } = await client.from('employees').upsert({
@@ -279,14 +287,14 @@ export async function syncEmployeeToSupabaseAuth(
       });
 
       if (!error) {
-        return { success: true, message: 'Saved to Supabase database' };
+        return { success: true, authSynced: false, message: 'Saved to public.employees table (Server Auth sync offline)' };
       }
     } catch (clientErr: any) {
       console.warn('Client Supabase upsert error:', clientErr);
     }
   }
 
-  return { success: true, message: 'Saved locally' };
+  return { success: false, authSynced: false, message: 'Failed to sync employee' };
 }
 
 /**

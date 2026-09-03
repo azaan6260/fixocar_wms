@@ -72,7 +72,7 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   };
 
   const handleBulkSync = async () => {
-    saveSupabaseConfig(url, anonKey, serviceKey);
+    await saveSupabaseConfig(url, anonKey, serviceKey);
     setIsSyncingAll(true);
     setSyncResult(null);
     setSyncLogs([]);

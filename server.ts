@@ -57,6 +57,20 @@ function savePersistedSupabaseConfig(url: string, anonKey: string, serviceKey?: 
   }
 }
 
+function getJwtRole(token?: string): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.trim().split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+      return payload.role || null;
+    }
+  } catch (e) {
+    // ignore JWT parse errors
+  }
+  return null;
+}
+
 // Lazy Supabase Admin Client
 function getSupabaseAdminClient(customUrl?: string, customKey?: string) {
   loadPersistedSupabaseConfig();
@@ -1261,6 +1275,9 @@ Return valid JSON ONLY.`;
       const activeServiceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
       const activeAnonKey = supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY;
 
+      const serviceKeyRole = getJwtRole(activeServiceKey);
+      const anonKeyRole = getJwtRole(activeAnonKey);
+
       const keyToUse = activeServiceKey || activeAnonKey;
       const hasKey = Boolean(keyToUse && keyToUse.length > 10);
 
@@ -1293,10 +1310,17 @@ Return valid JSON ONLY.`;
       let authUserId: string | null = null;
       let syncNotes = '';
 
+      // Check if user accidentally pasted anon key in service_role box
+      if (activeServiceKey && serviceKeyRole === 'anon') {
+        syncNotes = '⚠️ Auth Error: You pasted the public "anon" key into the Service Role Key box! Please paste the secret "service_role" key from Supabase Dashboard -> Project Settings -> API.';
+      } else if (!activeServiceKey) {
+        syncNotes = '⚠️ Auth Skipped: Service Role Key is empty. Go to Configure Supabase and paste your secret service_role key.';
+      }
+
       // Check if this is a delete action
       if (action === 'delete') {
         try {
-          if (hasKey && client.auth?.admin) {
+          if (hasKey && client.auth?.admin && serviceKeyRole === 'service_role') {
             const { data: userList } = await client.auth.admin.listUsers();
             const existing = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id);
             if (existing) {
@@ -1310,13 +1334,17 @@ Return valid JSON ONLY.`;
         }
       }
 
-      // 1. Try Supabase Auth Admin User creation / password update
-      if (hasKey && client.auth?.admin) {
+      // 1. Try Supabase Auth Admin User creation / password update if we have a valid client
+      if (hasKey && client.auth?.admin && !syncNotes) {
         try {
           const { data: userList, error: listErr } = await client.auth.admin.listUsers();
           
-          if (listErr && (listErr.message?.includes('JWT') || listErr.message?.includes('apiKey') || listErr.message?.includes('unauthorized') || listErr.status === 401)) {
-            syncNotes = 'Auth error: Invalid Service Role Key. Please paste your secret service_role key (not the public anon key).';
+          if (listErr) {
+            if (listErr.message?.includes('JWT') || listErr.message?.includes('apiKey') || listErr.message?.includes('unauthorized') || listErr.status === 401) {
+              syncNotes = 'Auth error: Invalid Service Role Key. Please paste your secret service_role key (not the public anon key).';
+            } else {
+              syncNotes = `Auth error listing users: ${listErr.message}`;
+            }
           } else {
             const usersArray = (userList?.users as any[]) || [];
             const existingUser = usersArray.find(
