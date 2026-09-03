@@ -5,6 +5,7 @@ import { ShieldCheck, Wrench, Hammer, Palette, Truck, Building2, User, UserCheck
 interface RoleBadgeProps {
   role: UserRole;
   showIcon?: boolean;
+  hideLabelOnMobile?: boolean;
   className?: string;
 }
 
@@ -20,14 +21,14 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; text: st
   CUSTOMER: { label: 'Vehicle Owner', bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700', icon: User },
 };
 
-export function RoleBadge({ role, showIcon = true, className = '' }: RoleBadgeProps) {
+export function RoleBadge({ role, showIcon = true, hideLabelOnMobile = false, className = '' }: RoleBadgeProps) {
   const config = ROLE_CONFIG[role] || ROLE_CONFIG.MECHANIC;
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${config.bg} ${config.text} ${config.border} ${className}`}>
-      {showIcon && <Icon className="w-3.5 h-3.5" />}
-      {config.label}
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-xs font-semibold border ${config.bg} ${config.text} ${config.border} ${className}`}>
+      {showIcon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+      <span className={hideLabelOnMobile ? "hidden sm:inline" : ""}>{config.label}</span>
     </span>
   );
 }
