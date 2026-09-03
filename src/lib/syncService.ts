@@ -1,4 +1,5 @@
-import { getSupabaseClient } from './supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient, getStoredSupabaseConfig, fetchServerSupabaseConfig } from './supabaseClient';
 import { 
   getEmployees, saveEmployees,
   getVendors, saveVendors,
@@ -596,4 +597,206 @@ export async function pushLocalDataToSupabase(): Promise<{
     details: { cities: cPushed, workshops: wPushed, employees: ePushed, vendors: vPushed, jobCards: jcPushed },
     errors
   };
+}
+
+export interface AuthDiagnosticReport {
+  timestamp: string;
+  isConfigured: boolean;
+  supabaseUrl: string | null;
+  hasServiceRoleKey: boolean;
+  serviceKeyRole: 'service_role' | 'anon' | 'unknown' | 'none';
+  authServiceAvailable: boolean;
+  canWriteToAuthUsers: boolean;
+  userCountInAuthUsers: number | null;
+  details: string[];
+  recommendations: string[];
+}
+
+/**
+ * Diagnostic tool function that checks the connection to Supabase specifically for authentication service availability.
+ * Verifies whether the 'service_role' key has sufficient permissions to write to the 'auth.users' table,
+ * logs a detailed diagnostic report to the console, and returns the report.
+ */
+export async function checkAuthServiceConnection(): Promise<AuthDiagnosticReport> {
+  const timestamp = new Date().toISOString();
+  const details: string[] = [];
+  const recommendations: string[] = [];
+
+  // 1. Fetch current configuration
+  const serverConfig = await fetchServerSupabaseConfig().catch(() => null);
+  const localConfig = getStoredSupabaseConfig();
+
+  const supabaseUrl = serverConfig?.supabaseUrl || localConfig.supabaseUrl || null;
+  const supabaseAnonKey = serverConfig?.supabaseAnonKey || localConfig.supabaseAnonKey || '';
+  const supabaseServiceKey = serverConfig?.supabaseServiceKey || localConfig.supabaseServiceKey || '';
+
+  details.push(`[${timestamp}] Starting Supabase Authentication Service Diagnostic...`);
+
+  if (!supabaseUrl) {
+    details.push('❌ Supabase URL is missing or not configured.');
+    recommendations.push('Configure your Supabase Project URL in the Database Settings modal.');
+
+    const report: AuthDiagnosticReport = {
+      timestamp,
+      isConfigured: false,
+      supabaseUrl: null,
+      hasServiceRoleKey: false,
+      serviceKeyRole: 'none',
+      authServiceAvailable: false,
+      canWriteToAuthUsers: false,
+      userCountInAuthUsers: null,
+      details,
+      recommendations
+    };
+
+    logConsoleReport(report);
+    return report;
+  }
+
+  details.push(`✅ Supabase Endpoint URL: ${supabaseUrl}`);
+
+  // Helper to parse JWT role
+  const parseJwtRole = (key: string): 'service_role' | 'anon' | 'unknown' | 'none' => {
+    if (!key) return 'none';
+    try {
+      const parts = key.trim().split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.role === 'service_role') return 'service_role';
+        if (payload.role === 'anon') return 'anon';
+      }
+    } catch {
+      return 'unknown';
+    }
+    return 'unknown';
+  };
+
+  const serviceKeyRole = parseJwtRole(supabaseServiceKey);
+  const hasServiceRoleKey = Boolean(supabaseServiceKey && supabaseServiceKey.length > 20);
+
+  if (!hasServiceRoleKey) {
+    details.push('⚠️ Service Role Key is missing. Standard anon key cannot manage auth.users directly.');
+    recommendations.push('Paste your secret service_role key into Database Settings to grant auth.users write permissions.');
+  } else if (serviceKeyRole === 'anon') {
+    details.push('❌ Misconfiguration: You pasted the public "anon" key into the Service Role Key field!');
+    recommendations.push('Replace the key in the Service Role Key field with your secret "service_role" key from Supabase Project Settings -> API.');
+  } else if (serviceKeyRole === 'service_role') {
+    details.push('✅ Valid JWT "service_role" key detected.');
+  } else {
+    details.push(`ℹ️ Service Key detected (JWT role: ${serviceKeyRole}).`);
+  }
+
+  let authServiceAvailable = false;
+  let canWriteToAuthUsers = false;
+  let userCountInAuthUsers: number | null = null;
+
+  // 2. Test server-side diagnostic endpoint
+  try {
+    const res = await fetch('/api/supabase/admin/diagnose-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supabaseUrl,
+        supabaseServiceKey,
+        supabaseAnonKey
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success || data.isConfigured) {
+        authServiceAvailable = true;
+        details.push('✅ Connection test to Supabase API successful.');
+      }
+    }
+  } catch (err: any) {
+    details.push(`⚠️ Backend diagnostic check failed: ${err.message}`);
+  }
+
+  // 3. Test direct client Auth Admin API permissions (to verify writing to auth.users)
+  const keyToUseForAdmin = serviceKeyRole === 'service_role' ? supabaseServiceKey : (supabaseServiceKey || supabaseAnonKey);
+  if (keyToUseForAdmin && supabaseUrl) {
+    try {
+      const adminClient = createClient(supabaseUrl, keyToUseForAdmin, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
+
+      if (adminClient.auth?.admin) {
+        const { data: userList, error: listErr } = await adminClient.auth.admin.listUsers();
+
+        if (!listErr && userList) {
+          authServiceAvailable = true;
+          canWriteToAuthUsers = serviceKeyRole === 'service_role' || serviceKeyRole === 'unknown';
+          userCountInAuthUsers = userList.users ? userList.users.length : 0;
+
+          details.push(`✅ Auth Admin Service is ONLINE and accessible.`);
+          if (canWriteToAuthUsers) {
+            details.push(`✅ Service Role Key PERMISSION GRANTED: Sufficient permissions verified to create, update, and write to 'auth.users' table.`);
+            details.push(`📊 Current registered accounts in 'auth.users': ${userCountInAuthUsers}`);
+          } else {
+            details.push(`⚠️ Auth listing succeeded but key is not a service_role key. Write operations to auth.users may fail.`);
+          }
+        } else if (listErr) {
+          if (listErr.message?.includes('JWT') || listErr.message?.includes('apiKey') || listErr.status === 401) {
+            details.push(`❌ Service Role Key Permission DENIED: ${listErr.message}`);
+            recommendations.push('The provided Service Role Key is invalid or unauthorized. Copy the secret service_role key from Supabase Project Settings -> API.');
+          } else {
+            details.push(`❌ Auth Service query failed: ${listErr.message}`);
+            recommendations.push(`Check Supabase Auth service status and permissions: ${listErr.message}`);
+          }
+        }
+      }
+    } catch (adminErr: any) {
+      details.push(`❌ Exception testing Auth Admin API: ${adminErr.message}`);
+    }
+  }
+
+  if (!canWriteToAuthUsers && recommendations.length === 0) {
+    recommendations.push('Ensure the service_role key is configured and that Email Auth is enabled in Supabase Dashboard.');
+  }
+
+  const report: AuthDiagnosticReport = {
+    timestamp,
+    isConfigured: true,
+    supabaseUrl,
+    hasServiceRoleKey,
+    serviceKeyRole,
+    authServiceAvailable,
+    canWriteToAuthUsers,
+    userCountInAuthUsers,
+    details,
+    recommendations
+  };
+
+  logConsoleReport(report);
+  return report;
+}
+
+function logConsoleReport(report: AuthDiagnosticReport) {
+  console.group('%c 🔐 Supabase Auth Service Diagnostic Report', 'background: #0f172a; color: #38bdf8; font-weight: bold; padding: 6px 12px; border-radius: 6px;');
+  console.log(`%cTimestamp:%c ${report.timestamp}`, 'font-weight: bold', 'color: #94a3b8');
+  console.log(`%cSupabase URL:%c ${report.supabaseUrl || 'N/A'}`, 'font-weight: bold', 'color: #cbd5e1');
+  console.log(`%cService Role Key:%c ${report.hasServiceRoleKey ? `Present (${report.serviceKeyRole})` : 'Missing'}`, 'font-weight: bold', report.hasServiceRoleKey && report.serviceKeyRole === 'service_role' ? 'color: #4ade80' : 'color: #f87171');
+  console.log(`%cAuth Service Status:%c ${report.authServiceAvailable ? 'ONLINE ✅' : 'OFFLINE / UNREACHABLE ❌'}`, 'font-weight: bold', report.authServiceAvailable ? 'color: #4ade80' : 'color: #f87171');
+  console.log(`%cWrite Permission ('auth.users'):%c ${report.canWriteToAuthUsers ? 'GRANTED ✅' : 'DENIED ❌'}`, 'font-weight: bold', report.canWriteToAuthUsers ? 'color: #4ade80' : 'color: #f87171');
+  if (report.userCountInAuthUsers !== null) {
+    console.log(`%cTotal Registered Auth Users:%c ${report.userCountInAuthUsers}`, 'font-weight: bold', 'color: #a78bfa');
+  }
+
+  console.group('%c Diagnostic Log Details:', 'color: #38bdf8; font-weight: bold');
+  report.details.forEach(line => console.log(line));
+  console.groupEnd();
+
+  if (report.recommendations.length > 0) {
+    console.group('%c Recommendations / Required Actions:', 'color: #fbbf24; font-weight: bold');
+    report.recommendations.forEach(rec => console.log(`• ${rec}`));
+    console.groupEnd();
+  }
+
+  console.groupEnd();
+}
+
+// Bind to window for instant dev console invocation
+if (typeof window !== 'undefined') {
+  (window as any).checkAuthServiceConnection = checkAuthServiceConnection;
 }
