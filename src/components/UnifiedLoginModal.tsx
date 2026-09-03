@@ -82,12 +82,15 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (!cleanId) {
       setError(activeTab === 'STAFF' ? 'Please enter your Work Login ID or Email' : 'Please enter your Mobile Number or Email ID');
       return;
     }
 
-    if (activeTab === 'STAFF' && !password.trim()) {
+    if (activeTab === 'STAFF' && !cleanPass) {
       setError('Password is required for staff & admin sign-in.');
       return;
     }
@@ -99,8 +102,8 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     await fetchServerSupabaseConfig();
 
     let result = authenticateUser(
-      identifier, 
-      password,
+      cleanId, 
+      cleanPass,
       {
         isCustomerLogin: activeTab === 'CUSTOMER',
         customerName: customerName.trim() || undefined,
@@ -111,7 +114,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     // If staff auth failed or not found locally, check directly with Supabase
     if (!result.success && activeTab === 'STAFF') {
       try {
-        const supaRes = await authenticateViaSupabase(identifier, password);
+        const supaRes = await authenticateViaSupabase(cleanId, cleanPass);
         if (supaRes.success && supaRes.user) {
           saveAuthUser(supaRes.user);
           result = { success: true, user: supaRes.user };
@@ -304,6 +307,9 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                       placeholder="e.g. admin or employee login ID"
                       required
                       autoFocus
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                     />
                   </div>
@@ -330,7 +336,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
                 <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span>Super Admin login: Work ID <span className="text-white font-mono font-bold">admin</span> | Password <span className="text-white font-mono font-bold">password123</span></span>
+                  <span>Super Admin login: Work ID <span className="text-white font-mono font-bold">admin</span> | Password <span className="text-white font-mono font-bold">123456</span> or <span className="text-white font-mono font-bold">password123</span></span>
                 </div>
               </>
             ) : (

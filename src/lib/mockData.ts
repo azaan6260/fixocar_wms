@@ -8,7 +8,52 @@ export const INITIAL_CITY_SERVICES: CityServiceOffering[] = [];
 
 export const INITIAL_SERVICE_BOOKINGS: ServiceBookingRequest[] = [];
 
-export const INITIAL_EMPLOYEES: Employee[] = [];
+export const DEFAULT_SUPER_ADMIN: Employee = {
+  id: 'emp-admin',
+  name: 'Super Admin',
+  role: 'SUPER_ADMIN',
+  phone: '9820011223',
+  email: 'admin@workshop.fixocar.com',
+  specializedTeam: 'Management',
+  status: 'AVAILABLE',
+  activeJobsCount: 0,
+  loginId: 'admin',
+  password: 'password123',
+  baseSalary: 120000,
+  employmentType: 'PAYROLL'
+};
+
+export const INITIAL_EMPLOYEES: Employee[] = [
+  DEFAULT_SUPER_ADMIN,
+  {
+    id: 'emp-mech1',
+    name: 'Rajesh Kumar',
+    role: 'MECHANIC',
+    phone: '9820011224',
+    email: 'mech1@workshop.fixocar.com',
+    specializedTeam: 'Mechanical',
+    status: 'AVAILABLE',
+    activeJobsCount: 0,
+    loginId: 'mech1',
+    password: 'password123',
+    baseSalary: 35000,
+    employmentType: 'PAYROLL'
+  },
+  {
+    id: 'emp-mgr1',
+    name: 'Amit Sharma',
+    role: 'FLOOR_MANAGER',
+    phone: '9820011225',
+    email: 'mgr1@workshop.fixocar.com',
+    specializedTeam: 'Management',
+    status: 'AVAILABLE',
+    activeJobsCount: 0,
+    loginId: 'mgr1',
+    password: 'password123',
+    baseSalary: 55000,
+    employmentType: 'PAYROLL'
+  }
+];
 
 export const INITIAL_VENDORS: Vendor[] = [];
 
