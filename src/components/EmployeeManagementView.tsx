@@ -4,7 +4,7 @@ import {
   getEmployees, createEmployee, updateEmployee, deleteEmployee,
   getAttendances, createAttendance,
   getSalaries, createSalaryRecord, updateSalaryStatus,
-  getWorkshops
+  getWorkshops, subscribeToStore
 } from '../lib/storage';
 import { syncAllEmployeesToSupabase } from '../lib/supabaseClient';
 import { SupabaseSettingsModal } from './SupabaseSettingsModal';
@@ -46,6 +46,8 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
 
   useEffect(() => {
     refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
   }, []);
 
   const refreshData = () => {

@@ -31,7 +31,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   if (!supabaseInstance) {
     try {
-      supabaseInstance = createClient(config.supabaseUrl, config.supabaseAnonKey || config.supabaseServiceKey);
+      supabaseInstance = createClient(config.supabaseUrl, config.supabaseServiceKey || config.supabaseAnonKey);
     } catch (err) {
       console.warn('Failed to initialize Supabase client:', err);
       return null;

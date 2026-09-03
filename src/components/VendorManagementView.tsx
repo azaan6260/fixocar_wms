@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Vendor, PurchaseOrder } from '../types';
-import { getVendors, createVendor, getPurchaseOrders, createPurchaseOrder, saveVendors } from '../lib/storage';
+import { getVendors, createVendor, getPurchaseOrders, createPurchaseOrder, saveVendors, subscribeToStore } from '../lib/storage';
 import { 
   Building2, 
   Plus, 
@@ -39,6 +39,12 @@ export function VendorManagementView() {
     setVendors(getVendors());
     setPurchaseOrders(getPurchaseOrders());
   };
+
+  useEffect(() => {
+    refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
+  }, []);
 
   const handleAddVendor = (e: React.FormEvent) => {
     e.preventDefault();

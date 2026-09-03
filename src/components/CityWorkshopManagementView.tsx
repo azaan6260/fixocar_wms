@@ -4,7 +4,7 @@ import {
   getCities, addCity, deleteCity,
   getWorkshops, addWorkshop, updateWorkshop, deleteWorkshop,
   getEmployees, updateEmployee,
-  clearAllDemoData, resetToDefaultMockData
+  clearAllDemoData, resetToDefaultMockData, subscribeToStore
 } from '../lib/storage';
 import { syncFromSupabase, pushLocalDataToSupabase } from '../lib/syncService';
 import { 
@@ -46,6 +46,8 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
   useEffect(() => {
     refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
   }, []);
 
   const refreshData = () => {

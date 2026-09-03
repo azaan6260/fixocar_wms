@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserRole, StandardJob, TaskCategory, PaintScope } from '../types';
-import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob } from '../lib/storage';
+import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob, subscribeToStore } from '../lib/storage';
 import { VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search, Lock, Car, Paintbrush, Sparkles } from 'lucide-react';
 
@@ -60,6 +60,15 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     );
   }
   const [standardJobs, setStandardJobs] = useState<StandardJob[]>(() => getStandardJobs());
+
+  useEffect(() => {
+    const refreshData = () => {
+      setStandardJobs(getStandardJobs());
+    };
+    refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCat, setFilterCat] = useState<string>('ALL');
 

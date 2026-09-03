@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Car, 
   UserCheck, 
@@ -23,7 +23,7 @@ import {
   Gauge
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType } from '../types';
-import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
+import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, subscribeToStore } from '../lib/storage';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -57,6 +57,15 @@ const SAMPLE_DRIVER_CAR_PHOTOS = [
 
 export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJobCard }: GatePassCheckInViewProps) {
   const [checkIns, setCheckIns] = useState<VehicleCheckIn[]>(() => getVehicleCheckIns());
+
+  useEffect(() => {
+    const refreshData = () => {
+      setCheckIns(getVehicleCheckIns());
+    };
+    refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
+  }, []);
   const [activeFilter, setActiveFilter] = useState<'IN_WORKSHOP' | 'IDLE_PI' | 'ACTIVE_REPAIR' | 'READY_DISPATCH' | 'CHECKED_OUT'>('IN_WORKSHOP');
   const [searchTerm, setSearchTerm] = useState('');
   

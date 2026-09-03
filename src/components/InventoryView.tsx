@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InventoryItem, InventoryCategory, UserRole, Vendor } from '../types';
 import { 
   getInventoryItems, 
@@ -7,7 +7,8 @@ import {
   restockInventoryItem, 
   deleteInventoryItem,
   getInventoryConsumptionRecords,
-  getVendors
+  getVendors,
+  subscribeToStore
 } from '../lib/storage';
 import { 
   Package, 
@@ -40,6 +41,16 @@ export function InventoryView({ currentRole, vendors = [] }: InventoryViewProps)
 
   const [items, setItems] = useState<InventoryItem[]>(() => getInventoryItems());
   const [consumptionLogs, setConsumptionLogs] = useState(() => getInventoryConsumptionRecords());
+
+  useEffect(() => {
+    const refreshData = () => {
+      setItems(getInventoryItems());
+      setConsumptionLogs(getInventoryConsumptionRecords());
+    };
+    refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => { unsubscribe(); };
+  }, []);
   const [activeTab, setActiveTab] = useState<'STOCK' | 'LOGS'>('STOCK');
 
   // Search & Filter state

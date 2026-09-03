@@ -57,28 +57,36 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (empErr.code === '42P01') missingTables.push('employees');
       errors.push(`Employees table error: ${empErr.message}`);
     } else if (employees !== null) {
-      const local = employees.map((e: any) => ({
-        id: e.id,
-        name: e.name,
-        role: e.role,
-        phone: e.phone,
-        email: e.email || '',
-        specializedTeam: e.specialized_team,
-        status: e.status,
-        avatarUrl: e.avatar_url,
-        activeJobsCount: e.active_jobs_count || 0,
-        loginId: e.login_id,
-        password: e.password_hash || e.password,
-        baseSalary: e.base_salary,
-        createdAt: e.created_at,
-        employmentType: e.employment_type || 'PAYROLL',
-        cityId: e.city_id,
-        cityName: e.city_name,
-        workshopId: e.workshop_id,
-        workshopName: e.workshop_name
-      }));
-      saveEmployees(local, true);
-      employeesSynced = local.length;
+      if (employees.length > 0) {
+        const local = employees.map((e: any) => ({
+          id: e.id,
+          name: e.name,
+          role: e.role,
+          phone: e.phone,
+          email: e.email || '',
+          specializedTeam: e.specialized_team,
+          status: e.status,
+          avatarUrl: e.avatar_url,
+          activeJobsCount: e.active_jobs_count || 0,
+          loginId: e.login_id,
+          password: e.password_hash || e.password,
+          baseSalary: e.base_salary,
+          createdAt: e.created_at,
+          employmentType: e.employment_type || 'PAYROLL',
+          cityId: e.city_id,
+          cityName: e.city_name,
+          workshopId: e.workshop_id,
+          workshopName: e.workshop_name
+        }));
+        saveEmployees(local, true);
+        employeesSynced = local.length;
+      } else {
+        const localCurrent = getEmployees();
+        if (localCurrent.length > 0) {
+          saveEmployees(localCurrent, false);
+          employeesSynced = localCurrent.length;
+        }
+      }
     }
 
     // 2. CITIES
@@ -87,14 +95,22 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (cityErr.code === '42P01') missingTables.push('cities');
       errors.push(`Cities table error: ${cityErr.message}`);
     } else if (cities !== null) {
-      const localCities = cities.map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        state: c.state || '',
-        createdAt: c.created_at || new Date().toISOString().split('T')[0]
-      }));
-      saveCities(localCities, true);
-      citiesSynced = localCities.length;
+      if (cities.length > 0) {
+        const localCities = cities.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          state: c.state || '',
+          createdAt: c.created_at || new Date().toISOString().split('T')[0]
+        }));
+        saveCities(localCities, true);
+        citiesSynced = localCities.length;
+      } else {
+        const localCurrent = getCities();
+        if (localCurrent.length > 0) {
+          saveCities(localCurrent, false);
+          citiesSynced = localCurrent.length;
+        }
+      }
     }
 
     // 3. WORKSHOPS
@@ -103,20 +119,28 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (wsErr.code === '42P01') missingTables.push('workshops');
       errors.push(`Workshops table error: ${wsErr.message}`);
     } else if (workshops !== null) {
-      const localWorkshops = workshops.map((w: any) => ({
-        id: w.id,
-        name: w.name,
-        code: w.code || 'WS',
-        cityId: w.city_id,
-        cityName: w.city_name,
-        address: w.address,
-        phone: w.phone,
-        isCars24Partner: w.is_cars24_partner ?? false,
-        managerName: w.manager_name || '',
-        createdAt: w.created_at
-      }));
-      saveWorkshops(localWorkshops, true);
-      workshopsSynced = localWorkshops.length;
+      if (workshops.length > 0) {
+        const localWorkshops = workshops.map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          code: w.code || 'WS',
+          cityId: w.city_id,
+          cityName: w.city_name,
+          address: w.address,
+          phone: w.phone,
+          isCars24Partner: w.is_cars24_partner ?? false,
+          managerName: w.manager_name || '',
+          createdAt: w.created_at
+        }));
+        saveWorkshops(localWorkshops, true);
+        workshopsSynced = localWorkshops.length;
+      } else {
+        const localCurrent = getWorkshops();
+        if (localCurrent.length > 0) {
+          saveWorkshops(localCurrent, false);
+          workshopsSynced = localCurrent.length;
+        }
+      }
     }
 
     // 4. VENDORS
@@ -125,20 +149,28 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (venErr.code === '42P01') missingTables.push('vendors');
       errors.push(`Vendors table error: ${venErr.message}`);
     } else if (vendors !== null) {
-      const localVendors = vendors.map((v: any) => ({
-        id: v.id,
-        name: v.name,
-        category: v.category,
-        contactPerson: v.contact_person,
-        phone: v.phone,
-        email: v.email,
-        address: v.address,
-        outstandingBalance: v.outstanding_balance,
-        rating: v.rating,
-        createdAt: v.created_at
-      }));
-      saveVendors(localVendors, true);
-      vendorsSynced = localVendors.length;
+      if (vendors.length > 0) {
+        const localVendors = vendors.map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          category: v.category,
+          contactPerson: v.contact_person,
+          phone: v.phone,
+          email: v.email,
+          address: v.address,
+          outstandingBalance: v.outstanding_balance,
+          rating: v.rating,
+          createdAt: v.created_at
+        }));
+        saveVendors(localVendors, true);
+        vendorsSynced = localVendors.length;
+      } else {
+        const localCurrent = getVendors();
+        if (localCurrent.length > 0) {
+          saveVendors(localCurrent, false);
+          vendorsSynced = localCurrent.length;
+        }
+      }
     }
 
     // 5. JOB CARDS & TASKS
