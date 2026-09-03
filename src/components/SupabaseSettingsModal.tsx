@@ -44,6 +44,7 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const [activeTab, setActiveTab] = useState<'config' | 'diagnostic' | 'schema'>('config');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncLogs, setSyncLogs] = useState<string[]>([]);
 
   // Diagnostic state
   const [isDiagnosing, setIsDiagnosing] = useState(false);
@@ -74,6 +75,7 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
     saveSupabaseConfig(url, anonKey, serviceKey);
     setIsSyncingAll(true);
     setSyncResult(null);
+    setSyncLogs([]);
 
     try {
       const allStaff = getEmployees();
@@ -85,6 +87,9 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
         summary += ` (Paste your 'service_role' key above to populate Authentication -> Users)`;
       }
       setSyncResult(summary);
+      if (res.messages && res.messages.length > 0) {
+        setSyncLogs(res.messages);
+      }
       
       // Re-run diagnostic after sync
       handleRunDiagnostics();
@@ -264,6 +269,17 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">{syncResult}</span>
                   )}
                 </div>
+
+                {syncLogs.length > 0 && (
+                  <div className="mt-3 p-2.5 rounded-lg bg-slate-900 text-slate-200 font-mono text-[10px] space-y-1 max-h-32 overflow-y-auto border border-slate-800">
+                    <div className="font-sans font-bold text-[11px] text-amber-400 mb-1">Detailed Sync Status per Staff Member:</div>
+                    {syncLogs.map((log, idx) => (
+                      <div key={idx} className="leading-tight text-slate-300">
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">

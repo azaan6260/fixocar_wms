@@ -1261,12 +1261,13 @@ Return valid JSON ONLY.`;
       const activeServiceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY;
       const activeAnonKey = supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY;
 
-      const hasServiceKey = Boolean(activeServiceKey && activeServiceKey.length > 20 && activeServiceKey !== activeAnonKey);
+      const keyToUse = activeServiceKey || activeAnonKey;
+      const hasKey = Boolean(keyToUse && keyToUse.length > 10);
 
-      // Create admin client if service key exists, or standard client
+      // Create admin client if key exists
       const client = getSupabaseAdminClient(
         activeUrl, 
-        hasServiceKey ? activeServiceKey : (activeAnonKey || activeServiceKey)
+        keyToUse
       );
 
       // Sanitize email and password for Supabase Auth requirements
@@ -1295,7 +1296,7 @@ Return valid JSON ONLY.`;
       // Check if this is a delete action
       if (action === 'delete') {
         try {
-          if (hasServiceKey && client.auth?.admin) {
+          if (hasKey && client.auth?.admin) {
             const { data: userList } = await client.auth.admin.listUsers();
             const existing = (userList?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id);
             if (existing) {
@@ -1309,89 +1310,101 @@ Return valid JSON ONLY.`;
         }
       }
 
-      // 1. Try Supabase Auth Admin User creation / password update if service role key is configured
-      if (hasServiceKey && client.auth?.admin) {
+      // 1. Try Supabase Auth Admin User creation / password update
+      if (hasKey && client.auth?.admin) {
         try {
           const { data: userList, error: listErr } = await client.auth.admin.listUsers();
-          const usersArray = (userList?.users as any[]) || [];
-          const existingUser = usersArray.find(
-            (u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id || u.user_metadata?.login_id === employee.loginId
-          );
-
-          if (existingUser) {
-            // Update existing user in Supabase Auth
-            const updatePayload: any = {
-              user_metadata: {
-                employee_id: employee.id,
-                name: employee.name,
-                role: employee.role,
-                phone: employee.phone,
-                specialized_team: employee.specializedTeam,
-                workshop_id: employee.workshopId,
-                workshop_name: employee.workshopName,
-                city_id: employee.cityId,
-                city_name: employee.cityName,
-                login_id: employee.loginId,
-                employment_type: employee.employmentType
-              }
-            };
-
-            if (password) {
-              updatePayload.password = password;
-            }
-            if (email && email !== existingUser.email) {
-              updatePayload.email = email;
-            }
-
-            const { data: updated, error: updateErr } = await client.auth.admin.updateUserById(
-              existingUser.id,
-              updatePayload
+          
+          if (listErr && (listErr.message?.includes('JWT') || listErr.message?.includes('apiKey') || listErr.message?.includes('unauthorized') || listErr.status === 401)) {
+            syncNotes = 'Auth error: Invalid Service Role Key. Please paste your secret service_role key (not the public anon key).';
+          } else {
+            const usersArray = (userList?.users as any[]) || [];
+            const existingUser = usersArray.find(
+              (u: any) => u.email?.toLowerCase() === email || u.user_metadata?.employee_id === employee.id || u.user_metadata?.login_id === employee.loginId
             );
 
-            if (updateErr) {
-              console.warn('Supabase Auth update error:', updateErr);
-              syncNotes = `Auth update: ${updateErr.message}`;
-            } else {
-              authSynced = true;
-              authUserId = updated?.user?.id || existingUser.id;
-              syncNotes = `Password & profile updated in Supabase Auth (${email})`;
-            }
-          } else {
-            // Create user in Supabase Auth
-            const { data: created, error: createErr } = await client.auth.admin.createUser({
-              email,
-              password,
-              email_confirm: true,
-              user_metadata: {
-                employee_id: employee.id,
-                name: employee.name,
-                role: employee.role,
-                phone: employee.phone,
-                specialized_team: employee.specializedTeam,
-                workshop_id: employee.workshopId,
-                workshop_name: employee.workshopName,
-                city_id: employee.cityId,
-                city_name: employee.cityName,
-                login_id: employee.loginId,
-                employment_type: employee.employmentType
-              }
-            });
+            if (existingUser) {
+              // Update existing user in Supabase Auth
+              const updatePayload: any = {
+                user_metadata: {
+                  employee_id: employee.id,
+                  name: employee.name,
+                  role: employee.role,
+                  phone: employee.phone,
+                  specialized_team: employee.specializedTeam,
+                  workshop_id: employee.workshopId,
+                  workshop_name: employee.workshopName,
+                  city_id: employee.cityId,
+                  city_name: employee.cityName,
+                  login_id: employee.loginId,
+                  employment_type: employee.employmentType
+                }
+              };
 
-            if (createErr) {
-              console.warn('Supabase Auth create error:', createErr);
-              syncNotes = `Auth create error: ${createErr.message}`;
+              if (password) {
+                updatePayload.password = password;
+              }
+              if (email && email !== existingUser.email) {
+                updatePayload.email = email;
+              }
+
+              const { data: updated, error: updateErr } = await client.auth.admin.updateUserById(
+                existingUser.id,
+                updatePayload
+              );
+
+              if (updateErr) {
+                console.warn('Supabase Auth update error:', updateErr);
+                syncNotes = `Auth update error: ${updateErr.message}`;
+              } else {
+                authSynced = true;
+                authUserId = updated?.user?.id || existingUser.id;
+                syncNotes = `Updated user in Supabase Auth (${email})`;
+              }
             } else {
-              authSynced = true;
-              authUserId = created?.user?.id || null;
-              syncNotes = `New user account created in Supabase Auth (${email})`;
+              // Create user in Supabase Auth
+              const { data: created, error: createErr } = await client.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: {
+                  employee_id: employee.id,
+                  name: employee.name,
+                  role: employee.role,
+                  phone: employee.phone,
+                  specialized_team: employee.specializedTeam,
+                  workshop_id: employee.workshopId,
+                  workshop_name: employee.workshopName,
+                  city_id: employee.cityId,
+                  city_name: employee.cityName,
+                  login_id: employee.loginId,
+                  employment_type: employee.employmentType
+                }
+              });
+
+              if (createErr) {
+                console.warn('Supabase Auth create error:', createErr);
+                if (createErr.message?.includes('already registered') || createErr.status === 422) {
+                  authSynced = true;
+                  syncNotes = `User already exists in Supabase Auth (${email})`;
+                } else if (createErr.message?.includes('JWT') || createErr.status === 401) {
+                  syncNotes = 'Auth error: The Service Role Key provided is invalid or unauthorized. Paste your secret service_role key from Supabase Project Settings -> API.';
+                } else {
+                  syncNotes = `Auth create error: ${createErr.message}`;
+                }
+              } else {
+                authSynced = true;
+                authUserId = created?.user?.id || null;
+                syncNotes = `Created new user in Supabase Auth (${email})`;
+              }
             }
           }
         } catch (authAdminErr: any) {
-          console.warn('Supabase Admin Auth skipped or unauthorized:', authAdminErr.message);
-          syncNotes = `Auth skipped: ${authAdminErr.message}`;
+          console.warn('Supabase Admin Auth exception:', authAdminErr.message);
+          syncNotes = `Auth failed: ${authAdminErr.message}`;
         }
-      } else if (!hasServiceKey) {
-        syncNotes = 'Database table updated. (Note: Supabase Authentication -> Users requires Service Role Key)';
+      } else {
+        syncNotes = 'Database table updated. (Provide Service Role Key to sync to Auth -> Users)';
       }
 
       // 2. Upsert employee record into public.employees table
