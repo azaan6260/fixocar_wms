@@ -2504,14 +2504,6 @@ export function getAuthUser(): AuthUser | null {
   }
   
   if (!raw) {
-    try {
-      raw = sessionStorage.getItem(STORAGE_KEYS.AUTH_USER);
-    } catch {
-      // Ignore
-    }
-  }
-  
-  if (!raw) {
     raw = getCookieValue(STORAGE_KEYS.AUTH_USER);
   }
 
@@ -2520,7 +2512,6 @@ export function getAuthUser(): AuthUser | null {
   try {
     const user = JSON.parse(raw);
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, raw); } catch {}
-    try { sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, raw); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, raw);
     return user;
   } catch {
@@ -2533,11 +2524,9 @@ export function saveAuthUser(user: AuthUser | null): void {
   if (user) {
     const str = JSON.stringify(user);
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
-    try { sessionStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, str);
   } else {
     try { localStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
-    try { sessionStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
     deleteCookieValue(STORAGE_KEYS.AUTH_USER);
   }
   notifyStoreChange();
