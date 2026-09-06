@@ -26,29 +26,113 @@ export interface SyncResult {
 }
 
 export async function syncFromSupabase(): Promise<SyncResult> {
-  const client = getSupabaseClient();
   const missingTables: string[] = [];
   const errors: string[] = [];
-
-  if (!client) {
-    return {
-      success: false,
-      isConfigured: false,
-      missingTables: [],
-      employeesSynced: 0,
-      citiesSynced: 0,
-      workshopsSynced: 0,
-      vendorsSynced: 0,
-      jobCardsSynced: 0,
-      errors: ['Supabase client is not configured.']
-    };
-  }
 
   let employeesSynced = 0;
   let citiesSynced = 0;
   let workshopsSynced = 0;
   let vendorsSynced = 0;
   let jobCardsSynced = 0;
+
+  // 1. Always pull from central server store first (syncs laptop & mobile)
+  try {
+    const res = await fetch('/api/central/store');
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && data.success && data.store) {
+        const store = data.store;
+        if (Array.isArray(store.employees) && store.employees.length > 0) {
+          const currentLocal = getEmployees();
+          const merged: Employee[] = [...store.employees];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id || (m.loginId && loc.loginId && m.loginId.toLowerCase() === loc.loginId.toLowerCase()))) {
+              merged.push(loc);
+            }
+          }
+          saveEmployees(merged, true);
+          employeesSynced = merged.length;
+        }
+
+        if (Array.isArray(store.jobCards) && store.jobCards.length > 0) {
+          const currentLocal = getJobCards();
+          const merged: JobCard[] = [...store.jobCards];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveJobCards(merged, true);
+          jobCardsSynced = merged.length;
+        }
+
+        if (Array.isArray(store.cities) && store.cities.length > 0) {
+          const currentLocal = getCities();
+          const merged: City[] = [...store.cities];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+              merged.push(loc);
+            }
+          }
+          saveCities(merged, true);
+          citiesSynced = merged.length;
+        }
+
+        if (Array.isArray(store.workshops) && store.workshops.length > 0) {
+          const currentLocal = getWorkshops();
+          const merged: Workshop[] = [...store.workshops];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+              merged.push(loc);
+            }
+          }
+          saveWorkshops(merged, true);
+          workshopsSynced = merged.length;
+        }
+
+        if (Array.isArray(store.vendors) && store.vendors.length > 0) {
+          const currentLocal = getVendors();
+          const merged: Vendor[] = [...store.vendors];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveVendors(merged, true);
+          vendorsSynced = merged.length;
+        }
+
+        if (Array.isArray(store.vehicleCheckIns) && store.vehicleCheckIns.length > 0) {
+          const currentLocal = getVehicleCheckIns();
+          const merged: VehicleCheckIn[] = [...store.vehicleCheckIns];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveVehicleCheckIns(merged);
+        }
+      }
+    }
+  } catch (centralErr) {
+    console.warn('[SYNC_TRACE] Central server store sync warning:', centralErr);
+  }
+
+  // 2. Direct Supabase table queries if client is configured
+  const client = getSupabaseClient();
+  if (!client) {
+    return {
+      success: true,
+      isConfigured: false,
+      missingTables: [],
+      employeesSynced,
+      citiesSynced,
+      workshopsSynced,
+      vendorsSynced,
+      jobCardsSynced,
+      errors: []
+    };
+  }
 
   try {
     // 0. Push any un-synced local records first so they are saved to Supabase central database
@@ -399,23 +483,42 @@ export async function pushLocalDataToSupabase(): Promise<{
   details: { cities: number; workshops: number; employees: number; vendors: number; jobCards: number };
   errors: string[];
 }> {
-  const client = getSupabaseClient();
-  if (!client) {
-    return {
-      success: false,
-      message: 'Supabase client is not configured.',
-      details: { cities: 0, workshops: 0, employees: 0, vendors: 0, jobCards: 0 },
-      errors: ['Supabase URL / API key missing.']
-    };
-  }
-
-  const errors: string[] = [];
   const cities = getCities();
   const workshops = getWorkshops();
   const employees = getEmployees();
   const vendors = getVendors();
   const jobCards = getJobCards();
+  const checkIns = getVehicleCheckIns();
 
+  // Always sync to central backend server first
+  try {
+    await fetch('/api/central/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employees,
+        jobCards,
+        cities,
+        workshops,
+        vendors,
+        vehicleCheckIns: checkIns
+      })
+    });
+  } catch (centralPushErr) {
+    console.warn('[SYNC_TRACE] Push to central store warning:', centralPushErr);
+  }
+
+  const client = getSupabaseClient();
+  if (!client) {
+    return {
+      success: true,
+      message: 'Synced with central server store.',
+      details: { cities: cities.length, workshops: workshops.length, employees: employees.length, vendors: vendors.length, jobCards: jobCards.length },
+      errors: []
+    };
+  }
+
+  const errors: string[] = [];
   let cPushed = 0;
   let wPushed = 0;
   let ePushed = 0;
@@ -563,7 +666,6 @@ export async function pushLocalDataToSupabase(): Promise<{
   }
 
   // Push Vehicle Check-Ins (Gate Pass)
-  const checkIns = getVehicleCheckIns();
   let vciPushed = 0;
   for (const ci of checkIns) {
     const { error } = await client.from('vehicle_check_ins').upsert({

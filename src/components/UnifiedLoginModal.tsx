@@ -105,19 +105,36 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
       let result: { success: boolean; user?: AuthUser; error?: string } = { success: false };
 
       if (activeTab === 'STAFF') {
-        // Step 1: Try server authentication against Supabase DB & Auth
+        // Step 1: Try central server authentication endpoint first
         try {
-          const supaRes = await authenticateViaSupabase(cleanId, cleanPass);
-          if (supaRes.success && supaRes.user) {
-            result = { success: true, user: supaRes.user };
-          } else if (supaRes.error) {
-            console.warn('[LOGIN_FLOW] Supabase auth response error:', supaRes.error);
+          const centralRes = await fetch('/api/central/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: cleanId, password: cleanPass })
+          });
+          if (centralRes.ok) {
+            const data = await centralRes.json().catch(() => null);
+            if (data && data.success && data.user) {
+              result = { success: true, user: data.user };
+            }
           }
-        } catch (supaErr) {
-          console.warn('[LOGIN_FLOW] Supabase auth exception:', supaErr);
+        } catch (cErr) {
+          console.warn('[LOGIN_FLOW] Central auth exception:', cErr);
         }
 
-        // Step 2: Fallback to local user database if remote check didn't match
+        // Step 2: Try direct Supabase auth
+        if (!result.success) {
+          try {
+            const supaRes = await authenticateViaSupabase(cleanId, cleanPass);
+            if (supaRes.success && supaRes.user) {
+              result = { success: true, user: supaRes.user };
+            }
+          } catch (supaErr) {
+            console.warn('[LOGIN_FLOW] Supabase auth exception:', supaErr);
+          }
+        }
+
+        // Step 3: Fallback to local user store
         if (!result.success) {
           result = authenticateUser(cleanId, cleanPass, { isCustomerLogin: false });
         }
@@ -133,7 +150,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
       if (result.success && result.user) {
         saveAuthUser(result.user);
 
-        // Step 3: Automatically sync & load full central database
+        // Step 4: Automatically sync & load full central database across devices
         try {
           await syncFromSupabase();
         } catch (syncErr) {
@@ -142,11 +159,6 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
         // Re-save session after sync to ensure full user attributes are retained
         saveAuthUser(result.user);
-
-        // Register biometric binding automatically if staff user logged in on mobile/tablet
-        if (activeTab === 'STAFF') {
-          registerBiometricForUser(result.user).catch(() => {});
-        }
 
         setIsLoading(false);
         onLoginSuccess(result.user);

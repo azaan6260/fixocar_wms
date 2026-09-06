@@ -55,6 +55,15 @@ function notifyStoreChange() {
   listeners.forEach(fn => fn());
 }
 
+function notifyCentralServer(key: string, data: any) {
+  if (typeof window === 'undefined') return;
+  fetch('/api/central/store', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [key]: data })
+  }).catch(() => {});
+}
+
 // 1. JOB CARDS STORAGE
 export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
   if (!card) return false;
@@ -87,6 +96,7 @@ export function getJobCards(): JobCard[] {
 export function saveJobCards(cards: JobCard[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
   notifyStoreChange();
+  notifyCentralServer('jobCards', cards);
 
   // Async sync to Supabase if connected
   const client = getSupabaseClient();
@@ -1049,6 +1059,7 @@ export function getEmployees(): Employee[] {
 export function saveEmployees(employees: Employee[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
   notifyStoreChange();
+  notifyCentralServer('employees', employees);
 
   const client = getSupabaseClient();
   if (client) {
