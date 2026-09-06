@@ -98,95 +98,66 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     setIsLoading(true);
     setError(null);
 
-    // Ensure mobile has the latest server Supabase configuration
-    await fetchServerSupabaseConfig();
+    try {
+      // Ensure mobile has the latest server Supabase configuration
+      await fetchServerSupabaseConfig();
 
-    let result = authenticateUser(
-      cleanId, 
-      cleanPass,
-      {
-        isCustomerLogin: activeTab === 'CUSTOMER',
-        customerName: customerName.trim() || undefined,
-        city: selectedCity
-      }
-    );
+      let result: { success: boolean; user?: AuthUser; error?: string } = { success: false };
 
-    // If staff auth failed or not found locally, check directly with Supabase
-    if (!result.success && activeTab === 'STAFF') {
-      try {
-        const supaRes = await authenticateViaSupabase(cleanId, cleanPass);
-        if (supaRes.success && supaRes.user) {
-          saveAuthUser(supaRes.user);
-          result = { success: true, user: supaRes.user };
-
-          // Upsert verified user into local employees cache so mobile app state is fully aware
-          const currentEmps = getEmployees();
-          const existingIdx = currentEmps.findIndex(e => 
-            e.id === supaRes.user?.id || 
-            (e.loginId && e.loginId.toLowerCase() === supaRes.user?.loginId?.toLowerCase()) ||
-            (e.email && e.email.toLowerCase() === supaRes.user?.email?.toLowerCase())
-          );
-          if (existingIdx >= 0) {
-            currentEmps[existingIdx] = {
-              ...currentEmps[existingIdx],
-              name: supaRes.user.name || currentEmps[existingIdx].name,
-              role: supaRes.user.role || currentEmps[existingIdx].role,
-              loginId: supaRes.user.loginId || currentEmps[existingIdx].loginId,
-              email: supaRes.user.email || currentEmps[existingIdx].email,
-              phone: supaRes.user.phone || currentEmps[existingIdx].phone,
-              workshopId: supaRes.user.workshopId || currentEmps[existingIdx].workshopId,
-              workshopName: supaRes.user.workshopName || currentEmps[existingIdx].workshopName,
-              cityId: supaRes.user.cityId || currentEmps[existingIdx].cityId,
-              cityName: supaRes.user.cityName || currentEmps[existingIdx].cityName
-            };
-            saveEmployees(currentEmps, true);
-          } else {
-            const newEmpRecord = {
-              id: supaRes.user.id || `emp-${Date.now()}`,
-              name: supaRes.user.name,
-              role: supaRes.user.role,
-              phone: supaRes.user.phone || '9820011223',
-              email: supaRes.user.email || '',
-              specializedTeam: supaRes.user.specializedTeam || 'Management',
-              status: 'AVAILABLE' as const,
-              activeJobsCount: 0,
-              loginId: supaRes.user.loginId || cleanId,
-              password: cleanPass,
-              baseSalary: 60000,
-              employmentType: supaRes.user.employmentType || 'PAYROLL',
-              cityId: supaRes.user.cityId,
-              cityName: supaRes.user.cityName,
-              workshopId: supaRes.user.workshopId,
-              workshopName: supaRes.user.workshopName
-            };
-            saveEmployees([...currentEmps, newEmpRecord], true);
-          }
-        } else if (supaRes.error) {
-          result = { success: false, error: supaRes.error };
-        }
-      } catch (supaErr) {
-        console.warn('Supabase remote login check warning:', supaErr);
-      }
-    }
-
-    if (result.success && result.user) {
-      // Always pull live database records (employees, job cards, check-ins, workshops, etc.) from Supabase on sign-in
-      try {
-        await syncFromSupabase();
-      } catch (syncErr) {
-        console.warn('Post-login database sync warning:', syncErr);
-      }
-
-      // Register biometric binding automatically if staff user logged in on mobile/tablet
       if (activeTab === 'STAFF') {
-        registerBiometricForUser(result.user).catch(() => {});
+        // Step 1: Try server authentication against Supabase DB & Auth
+        try {
+          const supaRes = await authenticateViaSupabase(cleanId, cleanPass);
+          if (supaRes.success && supaRes.user) {
+            result = { success: true, user: supaRes.user };
+          } else if (supaRes.error) {
+            console.warn('[LOGIN_FLOW] Supabase auth response error:', supaRes.error);
+          }
+        } catch (supaErr) {
+          console.warn('[LOGIN_FLOW] Supabase auth exception:', supaErr);
+        }
+
+        // Step 2: Fallback to local user database if remote check didn't match
+        if (!result.success) {
+          result = authenticateUser(cleanId, cleanPass, { isCustomerLogin: false });
+        }
+      } else {
+        // Customer login
+        result = authenticateUser(cleanId, cleanPass, {
+          isCustomerLogin: true,
+          customerName: customerName.trim() || undefined,
+          city: selectedCity
+        });
       }
+
+      if (result.success && result.user) {
+        saveAuthUser(result.user);
+
+        // Step 3: Automatically sync & load full central database
+        try {
+          await syncFromSupabase();
+        } catch (syncErr) {
+          console.warn('[LOGIN_FLOW] Central database sync warning:', syncErr);
+        }
+
+        // Re-save session after sync to ensure full user attributes are retained
+        saveAuthUser(result.user);
+
+        // Register biometric binding automatically if staff user logged in on mobile/tablet
+        if (activeTab === 'STAFF') {
+          registerBiometricForUser(result.user).catch(() => {});
+        }
+
+        setIsLoading(false);
+        onLoginSuccess(result.user);
+        onClose();
+      } else {
+        setIsLoading(false);
+        setError(result.error || 'Authentication failed. Please verify your credentials.');
+      }
+    } catch (err: any) {
       setIsLoading(false);
-      onLoginSuccess(result.user);
-      onClose();
-    } else {
-      setIsLoading(false);
-      setError(result.error || 'Authentication failed. Please verify your credentials.');
+      setError('An unexpected login error occurred. Please try again.');
     }
   };
 

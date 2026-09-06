@@ -51,6 +51,13 @@ export async function syncFromSupabase(): Promise<SyncResult> {
   let jobCardsSynced = 0;
 
   try {
+    // 0. Push any un-synced local records first so they are saved to Supabase central database
+    try {
+      await pushLocalDataToSupabase();
+    } catch (pushFirstErr) {
+      console.warn('[SYNC_TRACE] Initial pushLocalDataToSupabase warning:', pushFirstErr);
+    }
+
     // 1. EMPLOYEES
     const { data: employees, error: empErr } = await client.from('employees').select('*');
     if (empErr) {
@@ -461,7 +468,7 @@ export async function pushLocalDataToSupabase(): Promise<{
 
   // Push Employees
   for (const e of employees) {
-    const { error } = await client.from('employees').upsert({
+    let { error } = await client.from('employees').upsert({
       id: e.id,
       name: e.name,
       role: e.role,
@@ -472,15 +479,36 @@ export async function pushLocalDataToSupabase(): Promise<{
       active_jobs_count: e.activeJobsCount || 0,
       avatar_url: e.avatarUrl,
       login_id: e.loginId,
-      password_hash: e.password || 'password123',
+      password_hash: e.password || '123456',
       base_salary: e.baseSalary || 0,
       employment_type: e.employmentType || 'PAYROLL',
-      city_id: e.cityId,
-      city_name: e.cityName,
-      workshop_id: e.workshopId,
-      workshop_name: e.workshopName,
+      city_id: e.cityId || null,
+      city_name: e.cityName || null,
+      workshop_id: e.workshopId || null,
+      workshop_name: e.workshopName || null,
       updated_at: new Date().toISOString()
     });
+
+    if (error && (error.message?.includes('foreign key') || error.message?.includes('fk_employees') || error.message?.includes('schema cache'))) {
+      const fb = await client.from('employees').upsert({
+        id: e.id,
+        name: e.name,
+        role: e.role,
+        phone: e.phone,
+        email: e.email || `${e.id}@workshop.fixocar.com`,
+        specialized_team: e.specializedTeam,
+        status: e.status || 'AVAILABLE',
+        active_jobs_count: e.activeJobsCount || 0,
+        avatar_url: e.avatarUrl,
+        login_id: e.loginId,
+        password_hash: e.password || '123456',
+        base_salary: e.baseSalary || 0,
+        employment_type: e.employmentType || 'PAYROLL',
+        updated_at: new Date().toISOString()
+      });
+      error = fb.error;
+    }
+
     if (error) errors.push(`Employees table error (${e.name}): ${error.message}`);
     else ePushed++;
   }

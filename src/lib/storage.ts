@@ -88,10 +88,9 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
   notifyStoreChange();
 
-  if (!skipPush) {
-    // Async sync to Supabase if connected
-    const client = getSupabaseClient();
-    if (client) {
+  // Async sync to Supabase if connected
+  const client = getSupabaseClient();
+  if (client) {
       cards.forEach(card => {
         client.from('job_cards').upsert({
           id: card.id,
@@ -165,7 +164,6 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
         }
       });
     }
-  }
 }
 
 export function getJobCardById(id: string): JobCard | undefined {
@@ -1052,51 +1050,62 @@ export function saveEmployees(employees: Employee[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
   notifyStoreChange();
 
-  if (!skipPush) {
-    const client = getSupabaseClient();
-    if (client) {
-      employees.forEach(emp => {
-        const payload = {
-          id: emp.id,
-          name: emp.name,
-          role: emp.role,
-          phone: emp.phone,
-          email: emp.email || `${emp.id}@workshop.fixocar.com`,
-          specialized_team: emp.specializedTeam,
-          status: emp.status || 'AVAILABLE',
-          active_jobs_count: emp.activeJobsCount || 0,
-          avatar_url: emp.avatarUrl,
-          login_id: emp.loginId,
-          password_hash: emp.password || 'password123',
-          base_salary: emp.baseSalary || 0,
-          employment_type: emp.employmentType || 'PAYROLL',
-          city_id: emp.cityId,
-          city_name: emp.cityName,
-          workshop_id: emp.workshopId,
-          workshop_name: emp.workshopName,
-          updated_at: new Date().toISOString()
-        };
+  const client = getSupabaseClient();
+  if (client) {
+    employees.forEach(emp => {
+      const fullPayload = {
+        id: emp.id,
+        name: emp.name,
+        role: emp.role,
+        phone: emp.phone,
+        email: emp.email || `${emp.id}@workshop.fixocar.com`,
+        specialized_team: emp.specializedTeam,
+        status: emp.status || 'AVAILABLE',
+        active_jobs_count: emp.activeJobsCount || 0,
+        avatar_url: emp.avatarUrl,
+        login_id: emp.loginId,
+        password_hash: emp.password || '123456',
+        base_salary: emp.baseSalary || 0,
+        employment_type: emp.employmentType || 'PAYROLL',
+        city_id: emp.cityId || null,
+        city_name: emp.cityName || null,
+        workshop_id: emp.workshopId || null,
+        workshop_name: emp.workshopName || null,
+        updated_at: new Date().toISOString()
+      };
 
-        client.from('employees').upsert(payload).then(({ error }) => {
-          if (error) {
-            console.error('Supabase sync error (employees):', error);
-            dispatchToastNotification({
-              type: 'ESTIMATE_DECLINED',
-              title: `❌ Supabase Sync Error (Employee)`,
-              message: `Could not sync "${emp.name}" to Supabase: ${error.message}`
-            });
+      client.from('employees').upsert(fullPayload).then(async ({ error }) => {
+        if (error) {
+          // If foreign key constraint or schema issue, retry with core fields to guarantee record reaches Supabase
+          if (error.message?.includes('foreign key') || error.message?.includes('fk_employees') || error.message?.includes('schema cache')) {
+            const fallbackPayload = {
+              id: emp.id,
+              name: emp.name,
+              role: emp.role,
+              phone: emp.phone,
+              email: emp.email || `${emp.id}@workshop.fixocar.com`,
+              specialized_team: emp.specializedTeam,
+              status: emp.status || 'AVAILABLE',
+              active_jobs_count: emp.activeJobsCount || 0,
+              avatar_url: emp.avatarUrl,
+              login_id: emp.loginId,
+              password_hash: emp.password || '123456',
+              base_salary: emp.baseSalary || 0,
+              employment_type: emp.employmentType || 'PAYROLL',
+              updated_at: new Date().toISOString()
+            };
+            const { error: fbErr } = await client.from('employees').upsert(fallbackPayload);
+            if (fbErr) {
+              console.error('Supabase fallback sync error (employees):', fbErr);
+            }
           } else {
-            dispatchToastNotification({
-              type: 'ESTIMATE_APPROVED',
-              title: `✅ Saved to Supabase Database`,
-              message: `Employee "${emp.name}" saved to Supabase database successfully.`
-            });
+            console.error('Supabase sync error (employees):', error);
           }
-        });
-
-        syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
+        }
       });
-    }
+
+      syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
+    });
   }
 }
 
