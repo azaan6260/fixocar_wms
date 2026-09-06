@@ -1023,18 +1023,12 @@ export function getEmployees(): Employee[] {
   }
 
   // Ensure DEFAULT_SUPER_ADMIN and TAIFUR_EMPLOYEE are always present
-  if (!list.some(e => e.id === 'emp-admin' || (e.loginId && e.loginId.toLowerCase() === 'admin'))) {
+  if (!list.some(e => e.id === 'emp-admin' || e.email === 'admin@fixocar.com' || (e.loginId && e.loginId.toLowerCase() === 'admin@fixocar.com') || (e.loginId && e.loginId.toLowerCase() === 'admin'))) {
     list.unshift(DEFAULT_SUPER_ADMIN);
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
   }
-  if (!list.some(e => e.id === 'emp-taifur' || (e.loginId && e.loginId.toLowerCase() === 'taifur'))) {
+  if (!list.some(e => e.id === 'emp-taifur' || e.email === 'taifur@fixocar.com' || (e.loginId && e.loginId.toLowerCase() === 'taifur@fixocar.com') || (e.loginId && e.loginId.toLowerCase() === 'taifur'))) {
     list.push(TAIFUR_EMPLOYEE);
-    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
-  }
-
-  // Remove stale mock sample employees if present
-  if (list.some(e => e.id === 'emp-mech1' || e.id === 'emp-mgr1')) {
-    list = list.filter(e => e.id !== 'emp-mech1' && e.id !== 'emp-mgr1');
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
   }
 

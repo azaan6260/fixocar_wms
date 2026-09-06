@@ -44,12 +44,19 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         const store = data.store;
         if (Array.isArray(store.employees) && store.employees.length > 0) {
           const currentLocal = getEmployees();
-          const merged: Employee[] = [...store.employees];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id || (m.loginId && loc.loginId && m.loginId.toLowerCase() === loc.loginId.toLowerCase()))) {
-              merged.push(loc);
+          const empMap = new Map<string, Employee>();
+          
+          for (const sEmp of store.employees) {
+            const key = (sEmp.id || sEmp.email || sEmp.loginId || sEmp.name || '').toLowerCase().trim();
+            if (key) empMap.set(key, sEmp);
+          }
+          for (const lEmp of currentLocal) {
+            const key = (lEmp.id || lEmp.email || lEmp.loginId || lEmp.name || '').toLowerCase().trim();
+            if (key && !empMap.has(key)) {
+              empMap.set(key, lEmp);
             }
           }
+          const merged = Array.from(empMap.values());
           saveEmployees(merged, true);
           employeesSynced = merged.length;
         }
@@ -169,14 +176,21 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         workshopName: e.workshop_name
       }));
 
-      // Merge remote with local employees so no records are lost
+      // Merge remote Supabase DB employees with local employees so no records are lost
       const currentLocal = getEmployees();
-      const mergedEmployees: Employee[] = [...supaEmployees];
-      for (const loc of currentLocal) {
-        if (!mergedEmployees.some(m => m.id === loc.id || (m.loginId && loc.loginId && m.loginId.toLowerCase() === loc.loginId.toLowerCase()))) {
-          mergedEmployees.push(loc);
+      const empMap = new Map<string, Employee>();
+
+      for (const sEmp of supaEmployees) {
+        const key = (sEmp.id || sEmp.email || sEmp.loginId || sEmp.name || '').toLowerCase().trim();
+        if (key) empMap.set(key, sEmp);
+      }
+      for (const lEmp of currentLocal) {
+        const key = (lEmp.id || lEmp.email || lEmp.loginId || lEmp.name || '').toLowerCase().trim();
+        if (key && !empMap.has(key)) {
+          empMap.set(key, lEmp);
         }
       }
+      const mergedEmployees = Array.from(empMap.values());
       saveEmployees(mergedEmployees, true);
       employeesSynced = mergedEmployees.length;
     }

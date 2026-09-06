@@ -7,6 +7,7 @@ import {
   getWorkshops, subscribeToStore
 } from '../lib/storage';
 import { syncAllEmployeesToSupabase } from '../lib/supabaseClient';
+import { syncFromSupabase } from '../lib/syncService';
 import { SupabaseSettingsModal } from './SupabaseSettingsModal';
 import { 
   Users, UserPlus, Save, Trash2, Edit2, Key, CheckCircle, 
@@ -46,6 +47,7 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
 
   useEffect(() => {
     refreshData();
+    syncFromSupabase().then(() => refreshData()).catch(() => {});
     const unsubscribe = subscribeToStore(refreshData);
     return () => { unsubscribe(); };
   }, []);

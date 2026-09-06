@@ -195,17 +195,28 @@ function saveCentralStore(store: CentralStoreData) {
 function mergeArrayItems<T>(existingList: T[], incomingList: T[], getKey: (item: T) => string): T[] {
   if (!Array.isArray(incomingList) || incomingList.length === 0) return existingList;
   const map = new Map<string, T>();
+  let autoCounter = 0;
+
   for (const item of existingList) {
-    const k = getKey(item);
-    if (k) map.set(k.toLowerCase(), item);
-  }
-  for (const item of incomingList) {
-    const k = getKey(item);
-    if (k) {
-      const existing = map.get(k.toLowerCase());
-      map.set(k.toLowerCase(), existing ? { ...existing, ...item } : item);
+    if (!item) continue;
+    let k = getKey(item);
+    if (!k || typeof k !== 'string' || !k.trim()) {
+      k = `auto_key_${++autoCounter}`;
     }
+    map.set(k.toLowerCase().trim(), item);
   }
+
+  for (const item of incomingList) {
+    if (!item) continue;
+    let k = getKey(item);
+    if (!k || typeof k !== 'string' || !k.trim()) {
+      k = `auto_key_${++autoCounter}`;
+    }
+    const cleanKey = k.toLowerCase().trim();
+    const existing = map.get(cleanKey);
+    map.set(cleanKey, existing ? { ...existing, ...item } : item);
+  }
+
   return Array.from(map.values());
 }
 
@@ -1029,7 +1040,7 @@ Return valid JSON ONLY.`;
               workshopId: e.workshop_id,
               workshopName: e.workshop_name
             }));
-            store.employees = mergeArrayItems(store.employees, mappedEmps, e => e.id);
+            store.employees = mergeArrayItems(store.employees, mappedEmps, e => e.id || e.email || e.loginId || e.name);
           }
 
           const { data: supaCards } = await client.from('job_cards').select('*');
@@ -1055,7 +1066,7 @@ Return valid JSON ONLY.`;
       const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels } = req.body;
 
       if (Array.isArray(employees) && employees.length > 0) {
-        currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.loginId);
+        currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.email || e.loginId || e.name);
       }
       if (Array.isArray(jobCards) && jobCards.length > 0) {
         currentStore.jobCards = mergeArrayItems(currentStore.jobCards, jobCards, j => j.id);
