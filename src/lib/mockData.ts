@@ -18,13 +18,29 @@ export const DEFAULT_SUPER_ADMIN: Employee = {
   status: 'AVAILABLE',
   activeJobsCount: 0,
   loginId: 'admin',
-  password: 'password123',
+  password: '123456',
   baseSalary: 120000,
   employmentType: 'PAYROLL'
 };
 
+export const TAIFUR_EMPLOYEE: Employee = {
+  id: 'emp-taifur',
+  name: 'Taifur',
+  role: 'ADMIN',
+  phone: '9820011224',
+  email: 'taifur@workshop.fixocar.com',
+  specializedTeam: 'Management',
+  status: 'AVAILABLE',
+  activeJobsCount: 0,
+  loginId: 'taifur',
+  password: '123456',
+  baseSalary: 80000,
+  employmentType: 'PAYROLL'
+};
+
 export const INITIAL_EMPLOYEES: Employee[] = [
-  DEFAULT_SUPER_ADMIN
+  DEFAULT_SUPER_ADMIN,
+  TAIFUR_EMPLOYEE
 ];
 
 export const INITIAL_VENDORS: Vendor[] = [];

@@ -11,7 +11,7 @@ import {
   getStandardJobs, saveStandardJobs,
   dispatchToastNotification
 } from './storage';
-import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob } from '../types';
+import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -57,36 +57,37 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (empErr.code === '42P01') missingTables.push('employees');
       errors.push(`Employees table error: ${empErr.message}`);
     } else if (employees !== null) {
-      if (employees.length > 0) {
-        const local = employees.map((e: any) => ({
-          id: e.id,
-          name: e.name,
-          role: e.role,
-          phone: e.phone,
-          email: e.email || '',
-          specializedTeam: e.specialized_team,
-          status: e.status,
-          avatarUrl: e.avatar_url,
-          activeJobsCount: e.active_jobs_count || 0,
-          loginId: e.login_id,
-          password: e.password_hash || e.password,
-          baseSalary: e.base_salary,
-          createdAt: e.created_at,
-          employmentType: e.employment_type || 'PAYROLL',
-          cityId: e.city_id,
-          cityName: e.city_name,
-          workshopId: e.workshop_id,
-          workshopName: e.workshop_name
-        }));
-        saveEmployees(local, true);
-        employeesSynced = local.length;
-      } else {
-        const localCurrent = getEmployees();
-        if (localCurrent.length > 0) {
-          saveEmployees(localCurrent, false);
-          employeesSynced = localCurrent.length;
+      const supaEmployees: Employee[] = employees.map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        role: e.role,
+        phone: e.phone,
+        email: e.email || '',
+        specializedTeam: e.specialized_team,
+        status: e.status,
+        avatarUrl: e.avatar_url,
+        activeJobsCount: e.active_jobs_count || 0,
+        loginId: e.login_id,
+        password: e.password_hash || e.password,
+        baseSalary: e.base_salary,
+        createdAt: e.created_at,
+        employmentType: e.employment_type || 'PAYROLL',
+        cityId: e.city_id,
+        cityName: e.city_name,
+        workshopId: e.workshop_id,
+        workshopName: e.workshop_name
+      }));
+
+      // Merge remote with local employees so no records are lost
+      const currentLocal = getEmployees();
+      const mergedEmployees: Employee[] = [...supaEmployees];
+      for (const loc of currentLocal) {
+        if (!mergedEmployees.some(m => m.id === loc.id || (m.loginId && loc.loginId && m.loginId.toLowerCase() === loc.loginId.toLowerCase()))) {
+          mergedEmployees.push(loc);
         }
       }
+      saveEmployees(mergedEmployees, true);
+      employeesSynced = mergedEmployees.length;
     }
 
     // 2. CITIES
@@ -95,22 +96,22 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (cityErr.code === '42P01') missingTables.push('cities');
       errors.push(`Cities table error: ${cityErr.message}`);
     } else if (cities !== null) {
-      if (cities.length > 0) {
-        const localCities = cities.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          state: c.state || '',
-          createdAt: c.created_at || new Date().toISOString().split('T')[0]
-        }));
-        saveCities(localCities, true);
-        citiesSynced = localCities.length;
-      } else {
-        const localCurrent = getCities();
-        if (localCurrent.length > 0) {
-          saveCities(localCurrent, false);
-          citiesSynced = localCurrent.length;
+      const supaCities: City[] = cities.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        state: c.state || '',
+        createdAt: c.created_at || new Date().toISOString().split('T')[0]
+      }));
+
+      const currentLocal = getCities();
+      const mergedCities: City[] = [...supaCities];
+      for (const loc of currentLocal) {
+        if (!mergedCities.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+          mergedCities.push(loc);
         }
       }
+      saveCities(mergedCities, true);
+      citiesSynced = mergedCities.length;
     }
 
     // 3. WORKSHOPS
@@ -119,28 +120,28 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (wsErr.code === '42P01') missingTables.push('workshops');
       errors.push(`Workshops table error: ${wsErr.message}`);
     } else if (workshops !== null) {
-      if (workshops.length > 0) {
-        const localWorkshops = workshops.map((w: any) => ({
-          id: w.id,
-          name: w.name,
-          code: w.code || 'WS',
-          cityId: w.city_id,
-          cityName: w.city_name,
-          address: w.address,
-          phone: w.phone,
-          isCars24Partner: w.is_cars24_partner ?? false,
-          managerName: w.manager_name || '',
-          createdAt: w.created_at
-        }));
-        saveWorkshops(localWorkshops, true);
-        workshopsSynced = localWorkshops.length;
-      } else {
-        const localCurrent = getWorkshops();
-        if (localCurrent.length > 0) {
-          saveWorkshops(localCurrent, false);
-          workshopsSynced = localCurrent.length;
+      const supaWorkshops: Workshop[] = workshops.map((w: any) => ({
+        id: w.id,
+        name: w.name,
+        code: w.code || 'WS',
+        cityId: w.city_id,
+        cityName: w.city_name,
+        address: w.address,
+        phone: w.phone,
+        isCars24Partner: w.is_cars24_partner ?? false,
+        managerName: w.manager_name || '',
+        createdAt: w.created_at
+      }));
+
+      const currentLocal = getWorkshops();
+      const mergedWorkshops: Workshop[] = [...supaWorkshops];
+      for (const loc of currentLocal) {
+        if (!mergedWorkshops.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+          mergedWorkshops.push(loc);
         }
       }
+      saveWorkshops(mergedWorkshops, true);
+      workshopsSynced = mergedWorkshops.length;
     }
 
     // 4. VENDORS
@@ -149,28 +150,28 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (venErr.code === '42P01') missingTables.push('vendors');
       errors.push(`Vendors table error: ${venErr.message}`);
     } else if (vendors !== null) {
-      if (vendors.length > 0) {
-        const localVendors = vendors.map((v: any) => ({
-          id: v.id,
-          name: v.name,
-          category: v.category,
-          contactPerson: v.contact_person,
-          phone: v.phone,
-          email: v.email,
-          address: v.address,
-          outstandingBalance: v.outstanding_balance,
-          rating: v.rating,
-          createdAt: v.created_at
-        }));
-        saveVendors(localVendors, true);
-        vendorsSynced = localVendors.length;
-      } else {
-        const localCurrent = getVendors();
-        if (localCurrent.length > 0) {
-          saveVendors(localCurrent, false);
-          vendorsSynced = localCurrent.length;
+      const supaVendors: Vendor[] = vendors.map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        category: v.category,
+        contactPerson: v.contact_person,
+        phone: v.phone,
+        email: v.email,
+        address: v.address,
+        outstandingBalance: v.outstanding_balance,
+        rating: v.rating,
+        createdAt: v.created_at
+      }));
+
+      const currentLocal = getVendors();
+      const mergedVendors: Vendor[] = [...supaVendors];
+      for (const loc of currentLocal) {
+        if (!mergedVendors.some(m => m.id === loc.id)) {
+          mergedVendors.push(loc);
         }
       }
+      saveVendors(mergedVendors, true);
+      vendorsSynced = mergedVendors.length;
     }
 
     // 5. JOB CARDS & TASKS
@@ -180,77 +181,76 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       if (jcErr.code === '42P01') missingTables.push('job_cards');
       errors.push(`Job cards table error: ${jcErr.message}`);
     } else if (jobCards !== null) {
-      if (jobCards.length > 0) {
-        const localCards = jobCards.map((c: any): JobCard => {
-          const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
-            id: t.id,
-            jobCardId: t.job_card_id,
-            title: t.title || t.description || 'Task', 
-            category: t.category || 'REPAIR',
-            assignedToId: t.assigned_to_id || t.assigned_to,
-            assignedToName: t.assigned_to_name,
-            assignedType: t.assigned_type || 'EMPLOYEE',
-            estimatedCost: t.estimated_cost || 0,
-            customerPrice: t.customer_price || t.estimated_cost || 0,
-            status: t.status || 'PENDING',
-            requiresCustomerApproval: t.requires_customer_approval || false,
-            isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
-            rejectionReason: t.rejection_reason,
-            notes: t.notes || t.description,
-            completedAt: t.completed_at,
-            isAdditionalWork: t.is_additional_work,
-            additionalWorkRequestedBy: t.additional_work_requested_by,
-            additionalWorkRequestedAt: t.additional_work_requested_at,
-            approvalStatus: t.approval_status
-          }));
+      const supaCards = jobCards.map((c: any): JobCard => {
+        const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
+          id: t.id,
+          jobCardId: t.job_card_id,
+          title: t.title || t.description || 'Task', 
+          category: t.category || 'REPAIR',
+          assignedToId: t.assigned_to_id || t.assigned_to,
+          assignedToName: t.assigned_to_name,
+          assignedType: t.assigned_type || 'EMPLOYEE',
+          estimatedCost: t.estimated_cost || 0,
+          customerPrice: t.customer_price || t.estimated_cost || 0,
+          status: t.status || 'PENDING',
+          requiresCustomerApproval: t.requires_customer_approval || false,
+          isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
+          rejectionReason: t.rejection_reason,
+          notes: t.notes || t.description,
+          completedAt: t.completed_at,
+          isAdditionalWork: t.is_additional_work,
+          additionalWorkRequestedBy: t.additional_work_requested_by,
+          additionalWorkRequestedAt: t.additional_work_requested_at,
+          approvalStatus: t.approval_status
+        }));
 
-          return {
-            id: c.id,
-            vehicle: {
-              registrationNumber: c.registration_number,
-              make: c.vehicle_make,
-              model: c.vehicle_model,
-              year: c.vehicle_year,
-              color: c.vehicle_color,
-              vin: c.vehicle_vin,
-              fuelLevel: c.fuel_level,
-              mileage: c.mileage
-            },
-            customer: {
-              id: c.customer_id || `cust-${c.id}`,
-              name: c.customer_name,
-              phone: c.customer_phone,
-              email: c.customer_email,
-              address: c.customer_address
-            },
-            status: c.status,
-            serviceType: c.service_type,
-            packageName: c.package_name,
-            floorManagerId: c.floor_manager_id,
-            pickupRequested: c.pickup_requested,
-            deliveryRequested: c.delivery_requested,
-            discount: c.discount,
-            taxRate: c.tax_rate,
-            advancePaid: c.advance_paid,
-            qcPassed: c.qc_passed,
-            qcNotes: c.qc_notes,
-            tasks,
-            createdAt: c.created_at,
-            estimatedCompletionDate: c.estimated_completion_date,
-            qcChecklist: []
-          };
-        });
+        return {
+          id: c.id,
+          vehicle: {
+            registrationNumber: c.registration_number,
+            make: c.vehicle_make,
+            model: c.vehicle_model,
+            year: c.vehicle_year,
+            color: c.vehicle_color,
+            vin: c.vehicle_vin,
+            fuelLevel: c.fuel_level,
+            mileage: c.mileage
+          },
+          customer: {
+            id: c.customer_id || `cust-${c.id}`,
+            name: c.customer_name,
+            phone: c.customer_phone,
+            email: c.customer_email,
+            address: c.customer_address
+          },
+          status: c.status,
+          serviceType: c.service_type,
+          packageName: c.package_name,
+          floorManagerId: c.floor_manager_id,
+          pickupRequested: c.pickup_requested,
+          deliveryRequested: c.delivery_requested,
+          discount: c.discount,
+          taxRate: c.tax_rate,
+          advancePaid: c.advance_paid,
+          qcPassed: c.qc_passed,
+          qcNotes: c.qc_notes,
+          tasks,
+          createdAt: c.created_at,
+          estimatedCompletionDate: c.estimated_completion_date,
+          qcChecklist: []
+        };
+      });
 
-        saveJobCards(localCards, true);
-        jobCardsSynced = localCards.length;
-      } else {
-        // Supabase job_cards table is empty. Push local job cards to seed database
-        const localCurrent = getJobCards();
-        if (localCurrent.length > 0) {
-          saveJobCards(localCurrent, false); // triggers push to Supabase
-          jobCardsSynced = localCurrent.length;
+      const currentLocal = getJobCards();
+      const mergedCards = [...supaCards];
+      for (const loc of currentLocal) {
+        if (!mergedCards.some(m => m.id === loc.id)) {
+          mergedCards.push(loc);
         }
       }
+
+      saveJobCards(mergedCards, true);
+      jobCardsSynced = mergedCards.length;
     }
 
     // 6. VEHICLE CHECK-INS (GATE PASS)
@@ -258,62 +258,42 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (vciErr) {
       if (vciErr.code === '42P01') missingTables.push('vehicle_check_ins');
     } else if (vehicleCheckIns !== null) {
-      if (vehicleCheckIns.length > 0) {
-        const localCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => ({
-          id: v.id,
-          registrationNumber: v.registration_number,
-          make: v.make || 'Vehicle',
-          model: v.model || '',
-          variant: v.variant,
-          fuelType: v.fuel_type || 'Petrol',
-          color: v.color || 'White',
-          fuelLevel: v.fuel_level || 50,
-          mileage: v.mileage || 10000,
-          isCars24: v.is_cars24 ?? false,
-          cars24RefNo: v.cars24_ref_no,
-          customerName: v.customer_name || 'Customer',
-          customerPhone: v.customer_phone || '',
-          checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
-          checkedInByName: v.check_in_driver_name || 'Security',
-          checkInDriverName: v.check_in_driver_name || 'Driver',
-          checkInDriverPhone: v.check_in_driver_phone || '',
-          checkInPhotoWithDriverUrl: v.driver_photo_url,
-          checkInNotes: v.check_in_notes,
-          status: v.status || 'CHECKED_IN',
-          jobCardId: v.job_card_id,
-          checkedOutAt: v.check_out_time,
-          checkOutDriverName: v.check_out_driver_name,
-          checkOutDriverPhone: v.check_out_driver_phone,
-          checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url
-        }));
-        saveVehicleCheckIns(localCheckIns);
-      } else {
-        // Supabase table empty -> push local check-ins to Supabase
-        const currentCheckIns = getVehicleCheckIns();
-        for (const ci of currentCheckIns) {
-          await client.from('vehicle_check_ins').upsert({
-            id: ci.id,
-            registration_number: ci.registrationNumber,
-            make: ci.make,
-            model: ci.model,
-            variant: ci.variant,
-            fuel_type: ci.fuelType,
-            color: ci.color,
-            fuel_level: ci.fuelLevel,
-            mileage: ci.mileage,
-            is_cars24: ci.isCars24,
-            cars24_ref_no: ci.cars24RefNo,
-            customer_name: ci.customerName,
-            customer_phone: ci.customerPhone,
-            check_in_driver_name: ci.checkInDriverName,
-            check_in_driver_phone: ci.checkInDriverPhone,
-            driver_photo_url: ci.checkInPhotoWithDriverUrl,
-            check_in_notes: ci.checkInNotes,
-            status: ci.status,
-            job_card_id: ci.jobCardId
-          });
+      const supaCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => ({
+        id: v.id,
+        registrationNumber: v.registration_number,
+        make: v.make || 'Vehicle',
+        model: v.model || '',
+        variant: v.variant,
+        fuelType: v.fuel_type || 'Petrol',
+        color: v.color || 'White',
+        fuelLevel: v.fuel_level || 50,
+        mileage: v.mileage || 10000,
+        isCars24: v.is_cars24 ?? false,
+        cars24RefNo: v.cars24_ref_no,
+        customerName: v.customer_name || 'Customer',
+        customerPhone: v.customer_phone || '',
+        checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
+        checkedInByName: v.check_in_driver_name || 'Security',
+        checkInDriverName: v.check_in_driver_name || 'Driver',
+        checkInDriverPhone: v.check_in_driver_phone || '',
+        checkInPhotoWithDriverUrl: v.driver_photo_url,
+        checkInNotes: v.check_in_notes,
+        status: v.status || 'CHECKED_IN',
+        jobCardId: v.job_card_id,
+        checkedOutAt: v.check_out_time,
+        checkOutDriverName: v.check_out_driver_name,
+        checkOutDriverPhone: v.check_out_driver_phone,
+        checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url
+      }));
+
+      const currentCheckIns = getVehicleCheckIns();
+      const mergedCheckIns = [...supaCheckIns];
+      for (const loc of currentCheckIns) {
+        if (!mergedCheckIns.some(m => m.id === loc.id)) {
+          mergedCheckIns.push(loc);
         }
       }
+      saveVehicleCheckIns(mergedCheckIns);
     }
 
     // 7. CAR MODELS & VARIANTS
@@ -321,26 +301,28 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (cmErr) {
       if (cmErr.code === '42P01') missingTables.push('car_models');
     } else if (carModels !== null) {
-      if (carModels.length > 0) {
-        const localModels: CarModelRecord[] = carModels.map((m: any) => ({
-          id: m.id,
-          make: m.make,
-          model: m.model,
-          category: m.category || 'HATCHBACK',
-          fuelTypes: Array.isArray(m.fuel_types) ? m.fuel_types : ['Petrol', 'Diesel'],
-          variants: Array.isArray(m.variants) ? m.variants : [],
-          engineOilSpec: m.engine_oil_spec || '',
-          coolantSpec: m.coolant_spec || '',
-          recommendedPsi: m.recommended_psi || '',
-          notes: m.notes || '',
-          createdAt: m.created_at || new Date().toISOString()
-        }));
-        saveCarModels(localModels, true);
-      } else {
-        // Supabase table empty -> push local car models to Supabase
-        const currentModels = getCarModels();
-        saveCarModels(currentModels, false);
+      const supaModels: CarModelRecord[] = carModels.map((m: any) => ({
+        id: m.id,
+        make: m.make,
+        model: m.model,
+        category: m.category || 'HATCHBACK',
+        fuelTypes: Array.isArray(m.fuel_types) ? m.fuel_types : ['Petrol', 'Diesel'],
+        variants: Array.isArray(m.variants) ? m.variants : [],
+        engineOilSpec: m.engine_oil_spec || '',
+        coolantSpec: m.coolant_spec || '',
+        recommendedPsi: m.recommended_psi || '',
+        notes: m.notes || '',
+        createdAt: m.created_at || new Date().toISOString()
+      }));
+
+      const currentModels = getCarModels();
+      const mergedModels = [...supaModels];
+      for (const loc of currentModels) {
+        if (!mergedModels.some(m => m.id === loc.id || (m.make === loc.make && m.model === loc.model))) {
+          mergedModels.push(loc);
+        }
       }
+      saveCarModels(mergedModels, true);
     }
 
     // 8. STANDARD JOBS
@@ -348,29 +330,36 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (sjErr) {
       if (sjErr.code === '42P01') missingTables.push('standard_jobs');
     } else if (stdJobs !== null) {
-      if (stdJobs.length > 0) {
-        const localStdJobs: StandardJob[] = stdJobs.map((j: any) => ({
-          id: j.id,
-          title: j.title,
-          category: j.category || 'REPAIR',
-          hsnSacCode: j.hsn_sac_code || '998729',
-          retailPrice: j.retail_price || j.default_price || 0,
-          cars24Price: j.cars24_price || j.default_price || 0,
-          isContractBasis: j.is_contract_basis ?? false,
-          painterPayout: j.painter_payout || 0,
-          denterPayout: j.denter_payout || 0,
-          contractorPayout: j.contractor_payout || 0,
-          estimatedHours: j.estimated_hours || 1.0,
-          description: j.description || '',
-          requiresCustomerApproval: j.requires_customer_approval ?? false
-        }));
-        saveStandardJobs(localStdJobs, true);
-      } else {
-        // Supabase table empty -> push local standard jobs to Supabase
-        const currentStdJobs = getStandardJobs();
-        saveStandardJobs(currentStdJobs, false);
+      const supaStdJobs: StandardJob[] = stdJobs.map((j: any) => ({
+        id: j.id,
+        title: j.title,
+        category: j.category || 'REPAIR',
+        hsnSacCode: j.hsn_sac_code || '998729',
+        retailPrice: j.retail_price || j.default_price || 0,
+        cars24Price: j.cars24_price || j.default_price || 0,
+        isContractBasis: j.is_contract_basis ?? false,
+        painterPayout: j.painter_payout || 0,
+        denterPayout: j.denter_payout || 0,
+        contractorPayout: j.contractor_payout || 0,
+        estimatedHours: j.estimated_hours || 1.0,
+        description: j.description || '',
+        requiresCustomerApproval: j.requires_customer_approval ?? false
+      }));
+
+      const currentStdJobs = getStandardJobs();
+      const mergedStdJobs = [...supaStdJobs];
+      for (const loc of currentStdJobs) {
+        if (!mergedStdJobs.some(m => m.id === loc.id)) {
+          mergedStdJobs.push(loc);
+        }
       }
+      saveStandardJobs(mergedStdJobs, true);
     }
+
+    // Automatically push merged dataset back to Supabase in background
+    pushLocalDataToSupabase().catch(pushErr => {
+      console.warn('[SYNC_TRACE] Background pushLocalDataToSupabase error after sync:', pushErr);
+    });
 
     if (missingTables.length > 0) {
       dispatchToastNotification({
@@ -379,7 +368,6 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         message: `Database tables missing: ${missingTables.join(', ')}. Run the SQL migration script from Database Settings.`
       });
     }
-
   } catch (err: any) {
     console.error('Initial sync failed', err);
     errors.push(err.message || String(err));

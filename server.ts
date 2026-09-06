@@ -1518,6 +1518,29 @@ Return valid JSON ONLY.`;
         });
       }
 
+      // Special fallback for Taifur credentials
+      if ((cleanId === 'taifur' || cleanId === 'emp-taifur' || cleanId === 'taifur@workshop.fixocar.com') && 
+          ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
+        console.log('[AUTH_TRACE] Taifur fallback matched on server.');
+        return res.json({
+          success: true,
+          source: 'TAIFUR_DEFAULT',
+          user: {
+            id: 'emp-taifur',
+            name: 'Taifur',
+            loginId: 'taifur',
+            email: 'taifur@workshop.fixocar.com',
+            phone: '9820011224',
+            role: 'ADMIN',
+            userType: 'ADMIN',
+            employeeId: 'emp-taifur',
+            specializedTeam: 'Management',
+            employmentType: 'PAYROLL',
+            loggedInAt: new Date().toISOString()
+          }
+        });
+      }
+
       // 1. First check in public.employees table
       const { data: employees, error: empDbErr } = await client.from('employees').select('*');
       if (empDbErr) {

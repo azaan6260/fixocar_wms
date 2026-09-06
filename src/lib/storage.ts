@@ -1,5 +1,5 @@
 import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS } from './mockData';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
@@ -1008,9 +1008,19 @@ export function getEmployees(): Employee[] {
     try { list = JSON.parse(local); } catch { list = []; }
   }
 
-  // If local list is empty, initialize default seed employees (including Super Admin)
+  // If local list is empty, initialize default seed employees (including Super Admin & Taifur)
   if (list.length === 0 && INITIAL_EMPLOYEES.length > 0) {
     list = [...INITIAL_EMPLOYEES];
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
+  }
+
+  // Ensure DEFAULT_SUPER_ADMIN and TAIFUR_EMPLOYEE are always present
+  if (!list.some(e => e.id === 'emp-admin' || (e.loginId && e.loginId.toLowerCase() === 'admin'))) {
+    list.unshift(DEFAULT_SUPER_ADMIN);
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
+  }
+  if (!list.some(e => e.id === 'emp-taifur' || (e.loginId && e.loginId.toLowerCase() === 'taifur'))) {
+    list.push(TAIFUR_EMPLOYEE);
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(list));
   }
 
@@ -2642,6 +2652,30 @@ export function authenticateUser(
         employmentType: 'PAYROLL'
       };
       if (!employees.some(e => e.id === 'emp-admin' || e.loginId === 'admin')) {
+        saveEmployees([...employees, matchedEmp], true);
+      }
+    }
+  }
+
+  // Fallback for Taifur login if taifur user not found in local array
+  if (!matchedEmp && (cleanId === 'taifur' || cleanId === 'emp-taifur' || cleanId === 'taifur@workshop.fixocar.com')) {
+    if (['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
+      console.log('[AUTH_TRACE] Taifur fallback matched default Admin credentials.');
+      matchedEmp = {
+        id: 'emp-taifur',
+        name: 'Taifur',
+        role: 'ADMIN',
+        phone: '9820011224',
+        email: 'taifur@workshop.fixocar.com',
+        specializedTeam: 'Management',
+        status: 'AVAILABLE',
+        activeJobsCount: 0,
+        loginId: 'taifur',
+        password: cleanPass,
+        baseSalary: 80000,
+        employmentType: 'PAYROLL'
+      };
+      if (!employees.some(e => e.id === 'emp-taifur' || e.loginId === 'taifur')) {
         saveEmployees([...employees, matchedEmp], true);
       }
     }

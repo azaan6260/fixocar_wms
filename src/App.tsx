@@ -138,6 +138,9 @@ export default function App() {
   // Handle Login Success
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);
+    setJobCards(getJobCards());
+    setEmployees(getEmployees());
+    setVendors(getVendors());
     setIsLoginModalOpen(false);
     if (user.role) {
       setCurrentRole(user.role);
