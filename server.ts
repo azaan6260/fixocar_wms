@@ -1101,6 +1101,13 @@ Return valid JSON ONLY.`;
                 advancePaid: c.advance_paid,
                 qcPassed: c.qc_passed,
                 qcNotes: c.qc_notes,
+                cityId: c.city_id,
+                cityName: c.city_name,
+                workshopId: c.workshop_id,
+                workshopName: c.workshop_name,
+                floorManagerName: c.floor_manager_name,
+                isCars24: c.is_cars24,
+                cars24RefNo: c.cars24_ref_no,
                 tasks,
                 createdAt: c.created_at,
                 estimatedCompletionDate: c.estimated_completion_date,
@@ -1219,6 +1226,10 @@ Return valid JSON ONLY.`;
               password_hash: emp.password || '123456',
               base_salary: emp.baseSalary || 0,
               employment_type: emp.employmentType || 'PAYROLL',
+              city_id: emp.cityId || null,
+              city_name: emp.cityName || null,
+              workshop_id: emp.workshopId || null,
+              workshop_name: emp.workshopName || null,
               updated_at: new Date().toISOString()
             }).then(() => {}, () => {});
           }
@@ -1243,6 +1254,13 @@ Return valid JSON ONLY.`;
               service_type: card.serviceType,
               package_name: card.packageName,
               floor_manager_id: card.floorManagerId,
+              floor_manager_name: card.floorManagerName,
+              city_id: card.cityId || null,
+              city_name: card.cityName || null,
+              workshop_id: card.workshopId || null,
+              workshop_name: card.workshopName || null,
+              is_cars24: card.isCars24 || false,
+              cars24_ref_no: card.cars24RefNo || null,
               pickup_requested: card.pickupRequested,
               delivery_requested: card.deliveryRequested,
               discount: card.discount,
@@ -1251,6 +1269,29 @@ Return valid JSON ONLY.`;
               qc_passed: card.qcPassed,
               qc_notes: card.qcNotes
             }).then(() => {}, () => {});
+
+            if (Array.isArray(card.tasks) && card.tasks.length > 0) {
+              for (const t of card.tasks) {
+                client.from('job_tasks').upsert({
+                  id: t.id,
+                  job_card_id: card.id,
+                  title: t.title || t.notes || 'Task',
+                  category: t.category || 'REPAIR',
+                  assigned_to_id: t.assignedToId || null,
+                  assigned_to_name: t.assignedToName || null,
+                  assigned_type: t.assignedType || 'EMPLOYEE',
+                  estimated_cost: t.estimatedCost || 0,
+                  customer_price: t.customerPrice || t.estimatedCost || 0,
+                  status: t.status || 'PENDING',
+                  requires_customer_approval: t.requiresCustomerApproval || false,
+                  is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
+                  rejection_reason: t.rejectionReason || null,
+                  notes: t.notes || null,
+                  completed_at: t.completedAt || null,
+                  updated_at: new Date().toISOString()
+                }).then(() => {}, () => {});
+              }
+            }
           }
         }
       }
@@ -1276,19 +1317,24 @@ Return valid JSON ONLY.`;
       // 1. Super Admin email logins (admin@fixocar.com, admin@workshop.fixocar.com, or admin)
       if (['admin@fixocar.com', 'admin@workshop.fixocar.com', 'admin', 'emp-admin'].includes(cleanId) &&
           (!cleanPass || ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass))) {
+        const empInStore = store.employees.find((e: any) => e.id === 'emp-admin' || e.email === 'admin@fixocar.com' || e.loginId === 'admin');
         return res.json({
           success: true,
           user: {
             id: 'emp-admin',
-            name: 'Super Admin',
+            name: empInStore?.name || 'Super Admin',
             loginId: 'admin@fixocar.com',
             email: 'admin@fixocar.com',
-            phone: '9820011223',
+            phone: empInStore?.phone || '9820011223',
             role: 'SUPER_ADMIN',
             userType: 'ADMIN',
             employeeId: 'emp-admin',
-            specializedTeam: 'Management',
-            employmentType: 'PAYROLL',
+            specializedTeam: empInStore?.specializedTeam || 'Management',
+            employmentType: empInStore?.employmentType || 'PAYROLL',
+            workshopId: empInStore?.workshopId,
+            workshopName: empInStore?.workshopName,
+            cityId: empInStore?.cityId,
+            cityName: empInStore?.cityName,
             loggedInAt: new Date().toISOString()
           }
         });
@@ -1297,19 +1343,24 @@ Return valid JSON ONLY.`;
       // 2. Taifur Admin email logins (taifur@fixocar.com, taifur@workshop.fixocar.com, or taifur)
       if (['taifur@fixocar.com', 'taifur@workshop.fixocar.com', 'taifur', 'emp-taifur'].includes(cleanId) &&
           (!cleanPass || ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass))) {
+        const empInStore = store.employees.find((e: any) => e.id === 'emp-taifur' || e.email === 'taifur@fixocar.com' || e.loginId === 'taifur');
         return res.json({
           success: true,
           user: {
             id: 'emp-taifur',
-            name: 'Taifur',
+            name: empInStore?.name || 'Taifur',
             loginId: 'taifur@fixocar.com',
             email: 'taifur@fixocar.com',
-            phone: '9820011224',
+            phone: empInStore?.phone || '9820011224',
             role: 'ADMIN',
             userType: 'ADMIN',
             employeeId: 'emp-taifur',
-            specializedTeam: 'Management',
-            employmentType: 'PAYROLL',
+            specializedTeam: empInStore?.specializedTeam || 'Management',
+            employmentType: empInStore?.employmentType || 'PAYROLL',
+            workshopId: empInStore?.workshopId,
+            workshopName: empInStore?.workshopName,
+            cityId: empInStore?.cityId,
+            cityName: empInStore?.cityName,
             loggedInAt: new Date().toISOString()
           }
         });

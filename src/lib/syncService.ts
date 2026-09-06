@@ -339,6 +339,13 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           advancePaid: c.advance_paid,
           qcPassed: c.qc_passed,
           qcNotes: c.qc_notes,
+          cityId: c.city_id,
+          cityName: c.city_name,
+          workshopId: c.workshop_id,
+          workshopName: c.workshop_name,
+          floorManagerName: c.floor_manager_name,
+          isCars24: c.is_cars24,
+          cars24RefNo: c.cars24_ref_no,
           tasks,
           createdAt: c.created_at,
           estimatedCompletionDate: c.estimated_completion_date,
@@ -621,6 +628,10 @@ export async function pushLocalDataToSupabase(): Promise<{
         password_hash: e.password || '123456',
         base_salary: e.baseSalary || 0,
         employment_type: e.employmentType || 'PAYROLL',
+        city_id: e.cityId || null,
+        city_name: e.cityName || null,
+        workshop_id: e.workshopId || null,
+        workshop_name: e.workshopName || null,
         updated_at: new Date().toISOString()
       });
       error = fb.error;
@@ -647,7 +658,7 @@ export async function pushLocalDataToSupabase(): Promise<{
     else vPushed++;
   }
 
-  // Push Job Cards
+  // Push Job Cards & Tasks
   for (const card of jobCards) {
     const { error } = await client.from('job_cards').upsert({
       id: card.id,
@@ -667,6 +678,13 @@ export async function pushLocalDataToSupabase(): Promise<{
       service_type: card.serviceType,
       package_name: card.packageName,
       floor_manager_id: card.floorManagerId,
+      floor_manager_name: card.floorManagerName,
+      city_id: card.cityId || null,
+      city_name: card.cityName || null,
+      workshop_id: card.workshopId || null,
+      workshop_name: card.workshopName || null,
+      is_cars24: card.isCars24 || false,
+      cars24_ref_no: card.cars24RefNo || null,
       pickup_requested: card.pickupRequested,
       delivery_requested: card.deliveryRequested,
       discount: card.discount,
@@ -675,6 +693,30 @@ export async function pushLocalDataToSupabase(): Promise<{
       qc_passed: card.qcPassed,
       qc_notes: card.qcNotes,
     });
+
+    if (Array.isArray(card.tasks) && card.tasks.length > 0) {
+      for (const t of card.tasks) {
+        await client.from('job_tasks').upsert({
+          id: t.id,
+          job_card_id: card.id,
+          title: t.title || t.notes || 'Task',
+          category: t.category || 'REPAIR',
+          assigned_to_id: t.assignedToId || null,
+          assigned_to_name: t.assignedToName || null,
+          assigned_type: t.assignedType || 'EMPLOYEE',
+          estimated_cost: t.estimatedCost || 0,
+          customer_price: t.customerPrice || t.estimatedCost || 0,
+          status: t.status || 'PENDING',
+          requires_customer_approval: t.requiresCustomerApproval || false,
+          is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
+          rejection_reason: t.rejectionReason || null,
+          notes: t.notes || null,
+          completed_at: t.completedAt || null,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
     if (error) errors.push(`Job Cards table error (${card.id}): ${error.message}`);
     else jcPushed++;
   }

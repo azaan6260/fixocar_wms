@@ -40,7 +40,8 @@ export function RoleWorkspaceView({
   onOpenCustomerApprovalPortal,
 }: RoleWorkspaceViewProps) {
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null);
-  const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(true);
+  const isAdminOrManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
+  const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(!isAdminOrManager);
   const authUser = getAuthUser();
   
   // Use global i18n
@@ -53,7 +54,7 @@ export function RoleWorkspaceView({
     jobCards.forEach(card => {
       card.tasks.forEach(task => {
         let matchesRole = false;
-        if (currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER') {
+        if (isAdminOrManager) {
           matchesRole = true;
         } else if (currentRole === 'MECHANIC' && (task.category === 'MECHANICAL' || task.category === 'INSPECTION')) {
           matchesRole = true;
@@ -68,7 +69,7 @@ export function RoleWorkspaceView({
         if (!matchesRole) return;
 
         // If onlyMyTasks is enabled and user is logged in as employee/vendor
-        if (onlyMyTasks && authUser && (authUser.employeeId || authUser.vendorId)) {
+        if (onlyMyTasks && !isAdminOrManager && authUser && (authUser.employeeId || authUser.vendorId)) {
           const isAssignedToMe = 
             (authUser.employeeId && task.assignedToId === authUser.employeeId) ||
             (authUser.vendorId && (task.outsourcedVendorId === authUser.vendorId || task.assignedToId === authUser.vendorId)) ||
