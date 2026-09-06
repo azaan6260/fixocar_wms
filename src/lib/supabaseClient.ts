@@ -376,12 +376,17 @@ export async function authenticateViaSupabase(
   identifier: string,
   password?: string
 ): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
-  if (!password) return { success: false, error: 'Password required' };
+  if (!password) {
+    console.warn('[AUTH_TRACE] authenticateViaSupabase: Password is missing.');
+    return { success: false, error: 'Password required' };
+  }
   
   const config = getStoredSupabaseConfig();
+  console.log('[AUTH_TRACE] authenticateViaSupabase starting for:', identifier, 'with URL:', config.supabaseUrl ? 'CONFIGURED' : 'MISSING');
 
   // Try server endpoint first
   try {
+    console.log('[AUTH_TRACE] Fetching /api/supabase/auth/login...');
     const res = await fetch('/api/supabase/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -396,18 +401,24 @@ export async function authenticateViaSupabase(
 
     if (res.ok) {
       const data = await res.json().catch(() => null);
+      console.log('[AUTH_TRACE] /api/supabase/auth/login response:', data);
       if (data && data.success && data.user) {
+        console.log('[AUTH_TRACE] Server authentication verified user:', data.user);
         return { success: true, user: data.user };
       }
       if (data && data.error) {
+        console.warn('[AUTH_TRACE] Server authentication failed with error:', data.error);
         return { success: false, error: data.error };
       }
+    } else {
+      console.warn('[AUTH_TRACE] Server auth endpoint returned HTTP status:', res.status);
     }
   } catch (err: any) {
-    console.warn('Supabase login API error, checking client direct connection:', err);
+    console.warn('[AUTH_TRACE] Supabase login API fetch error, checking client direct connection:', err);
   }
 
   // Client-side direct authentication fallback
+  console.log('[AUTH_TRACE] Running direct client-side Supabase authentication fallback...');
   const client = getSupabaseClient();
   if (client) {
     try {
@@ -417,6 +428,7 @@ export async function authenticateViaSupabase(
 
       const formattedPassword = password.length < 6 ? password.padEnd(6, '0') : password;
 
+      console.log('[AUTH_TRACE] Direct client sign-in attempt for email:', formattedEmail);
       // Attempt Supabase Auth sign in directly with raw password, then formatted
       let authUserRes = await client.auth.signInWithPassword({
         email: formattedEmail,
@@ -424,6 +436,7 @@ export async function authenticateViaSupabase(
       });
 
       if (authUserRes.error && formattedPassword !== password) {
+        console.log('[AUTH_TRACE] Direct sign-in raw password failed, trying formatted password padding...');
         authUserRes = await client.auth.signInWithPassword({
           email: formattedEmail,
           password: formattedPassword
@@ -432,25 +445,34 @@ export async function authenticateViaSupabase(
 
       if (!authUserRes.error && authUserRes.data.user) {
         const metadata = authUserRes.data.user.user_metadata || {};
+        const verifiedUser: AuthUser = {
+          id: authUserRes.data.user.id,
+          name: metadata.name || identifier,
+          loginId: metadata.login_id || identifier,
+          email: authUserRes.data.user.email || formattedEmail,
+          role: metadata.role || 'SUPER_ADMIN',
+          userType: 'EMPLOYEE'
+        };
+        console.log('[AUTH_TRACE] Client direct Supabase Auth sign-in successful. Verified user:', verifiedUser);
         return {
           success: true,
-          user: {
-            id: authUserRes.data.user.id,
-            name: metadata.name || identifier,
-            loginId: metadata.login_id || identifier,
-            email: authUserRes.data.user.email || formattedEmail,
-            role: metadata.role || 'SUPER_ADMIN',
-            userType: 'EMPLOYEE'
-          }
+          user: verifiedUser
         };
+      } else if (authUserRes.error) {
+        console.warn('[AUTH_TRACE] Direct client signInWithPassword failed:', authUserRes.error.message);
       }
 
       // Check public.employees table fallback
-      const { data: empData } = await client
+      console.log('[AUTH_TRACE] Checking public.employees table directly for identifier:', identifier.toLowerCase());
+      const { data: empData, error: empErr } = await client
         .from('employees')
         .select('*')
         .or(`login_id.eq.${identifier.toLowerCase()},email.eq.${identifier.toLowerCase()}`)
         .single();
+
+      if (empErr) {
+        console.warn('[AUTH_TRACE] Direct query to public.employees error:', empErr.message);
+      }
 
       const isPasswordMatch = empData && (
         empData.password_hash === password || 
@@ -459,23 +481,28 @@ export async function authenticateViaSupabase(
       );
 
       if (empData && isPasswordMatch) {
+        const verifiedUser: AuthUser = {
+          id: empData.id,
+          name: empData.name,
+          loginId: empData.login_id || identifier,
+          email: empData.email || formattedEmail,
+          role: empData.role || 'SUPER_ADMIN',
+          userType: 'EMPLOYEE'
+        };
+        console.log('[AUTH_TRACE] Direct query to public.employees matched user:', verifiedUser);
         return {
           success: true,
-          user: {
-            id: empData.id,
-            name: empData.name,
-            loginId: empData.login_id || identifier,
-            email: empData.email || formattedEmail,
-            role: empData.role || 'SUPER_ADMIN',
-            userType: 'EMPLOYEE'
-          }
+          user: verifiedUser
         };
       }
     } catch (clientAuthErr: any) {
-      console.warn('Client direct authentication exception:', clientAuthErr);
+      console.warn('[AUTH_TRACE] Client direct authentication exception:', clientAuthErr);
     }
+  } else {
+    console.warn('[AUTH_TRACE] getSupabaseClient() returned null. Direct client fallback unavailable.');
   }
 
+  console.warn('[AUTH_TRACE] All Supabase authentication pathways exhausted. Sign-in failed for:', identifier);
   return { success: false, error: 'Invalid login ID or password. Please verify credentials.' };
 }
 

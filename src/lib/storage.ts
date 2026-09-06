@@ -2507,14 +2507,27 @@ export function getAuthUser(): AuthUser | null {
     raw = getCookieValue(STORAGE_KEYS.AUTH_USER);
   }
 
-  if (!raw) return null;
+  if (!raw) {
+    console.log('[AUTH_TRACE] getAuthUser: No session found in localStorage or cookie.');
+    return null;
+  }
 
   try {
     const user = JSON.parse(raw);
+    console.log('[AUTH_TRACE] getAuthUser: Retrieved session:', {
+      id: user.id,
+      name: user.name,
+      loginId: user.loginId,
+      email: user.email,
+      role: user.role,
+      userType: user.userType,
+      loggedInAt: user.loggedInAt
+    });
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, raw); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, raw);
     return user;
-  } catch {
+  } catch (err) {
+    console.warn('[AUTH_TRACE] getAuthUser: Failed to parse raw session data:', err);
     return null;
   }
 }
@@ -2522,10 +2535,18 @@ export function getAuthUser(): AuthUser | null {
 export function saveAuthUser(user: AuthUser | null): void {
   if (typeof window === 'undefined') return;
   if (user) {
+    console.log('[AUTH_TRACE] saveAuthUser: Saving active user session:', {
+      id: user.id,
+      name: user.name,
+      loginId: user.loginId,
+      email: user.email,
+      role: user.role
+    });
     const str = JSON.stringify(user);
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, str);
   } else {
+    console.log('[AUTH_TRACE] saveAuthUser: Clearing user session (logout).');
     try { localStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
     deleteCookieValue(STORAGE_KEYS.AUTH_USER);
   }
@@ -2533,6 +2554,7 @@ export function saveAuthUser(user: AuthUser | null): void {
 }
 
 export function logoutAuthUser(): void {
+  console.log('[AUTH_TRACE] logoutAuthUser: Logging out active user.');
   saveAuthUser(null);
   logoutCustomerSession();
   notifyStoreChange();
@@ -2546,12 +2568,19 @@ export function authenticateUser(
   const cleanId = identifier.trim().toLowerCase();
   const cleanPass = (password || '').trim();
 
+  console.log('[AUTH_TRACE] authenticateUser attempt:', {
+    identifier: cleanId,
+    isCustomerLogin: !!options?.isCustomerLogin,
+    passLength: cleanPass.length
+  });
+
   // Handle Customer Portal Sign In / Register
   if (options?.isCustomerLogin) {
     const rawPhone = cleanId.replace(/\D/g, '');
     const isEmail = cleanId.includes('@');
     
     if (!isEmail && rawPhone.length < 10) {
+      console.warn('[AUTH_TRACE] Customer login failed: Invalid phone/email format:', cleanId);
       return { success: false, error: 'Please enter a valid 10-digit mobile number or email address.' };
     }
 
@@ -2580,6 +2609,7 @@ export function authenticateUser(
     };
     saveCustomerSession(custSession);
 
+    console.log('[AUTH_TRACE] Customer authentication successful:', custUser);
     return { success: true, user: custUser };
   }
 
@@ -2596,6 +2626,7 @@ export function authenticateUser(
   // Fallback for Admin login if admin user not found in local array
   if (!matchedEmp && (cleanId === 'admin' || cleanId === 'emp-admin' || cleanId === 'admin@workshop.fixocar.com')) {
     if (['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
+      console.log('[AUTH_TRACE] Admin fallback matched default Super Admin credentials.');
       matchedEmp = {
         id: 'emp-admin',
         name: 'Super Admin',
@@ -2617,8 +2648,17 @@ export function authenticateUser(
   }
 
   if (matchedEmp) {
+    console.log('[AUTH_TRACE] Matched local employee profile:', {
+      id: matchedEmp.id,
+      name: matchedEmp.name,
+      loginId: matchedEmp.loginId,
+      email: matchedEmp.email,
+      role: matchedEmp.role
+    });
+
     const expectedPassword = matchedEmp.password || 'password123';
     if (!cleanPass) {
+      console.warn('[AUTH_TRACE] Password missing for staff user:', cleanId);
       return { success: false, error: 'Password is required to sign in.' };
     }
     
@@ -2627,6 +2667,11 @@ export function authenticateUser(
       ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass);
 
     if (!isPassMatch) {
+      console.warn('[AUTH_TRACE] Password mismatch for local employee profile:', {
+        identifier: cleanId,
+        expectedLength: expectedPassword.length,
+        providedLength: cleanPass.length
+      });
       return { success: false, error: 'Incorrect password. Please verify your credentials and try again.' };
     }
 
@@ -2648,8 +2693,11 @@ export function authenticateUser(
       loggedInAt: new Date().toISOString()
     };
     saveAuthUser(authUser);
+    console.log('[AUTH_TRACE] Local staff authentication successful:', authUser);
     return { success: true, user: authUser };
   }
+
+  console.log('[AUTH_TRACE] No local employee profile found matching identifier:', cleanId);
 
   // 2. Check Vendors / Sublet Contractors
   const vendors = getVendors();

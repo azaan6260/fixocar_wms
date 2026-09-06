@@ -1487,15 +1487,18 @@ Return valid JSON ONLY.`;
 
       const cleanId = identifier.trim().toLowerCase();
       const cleanPass = password.trim();
+      console.log(`[AUTH_TRACE] Server /api/supabase/auth/login hit for cleanId: "${cleanId}"`);
       const client = getSupabaseAdminClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
       if (!client) {
+        console.warn('[AUTH_TRACE] Server failed to create Supabase Admin client.');
         return res.status(400).json({ success: false, error: 'Supabase URL & Key not configured on backend server.' });
       }
 
       // Special fallback for Super Admin credentials
       if ((cleanId === 'admin' || cleanId === 'emp-admin' || cleanId === 'admin@workshop.fixocar.com') && 
           ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
+        console.log('[AUTH_TRACE] Super admin fallback matched on server.');
         return res.json({
           success: true,
           source: 'SUPER_ADMIN_DEFAULT',
@@ -1516,7 +1519,10 @@ Return valid JSON ONLY.`;
       }
 
       // 1. First check in public.employees table
-      const { data: employees } = await client.from('employees').select('*');
+      const { data: employees, error: empDbErr } = await client.from('employees').select('*');
+      if (empDbErr) {
+        console.warn('[AUTH_TRACE] Error fetching public.employees on server:', empDbErr.message);
+      }
       if (employees && employees.length > 0) {
         const matched = employees.find((e: any) => 
           (e.login_id && e.login_id.toLowerCase() === cleanId) ||
@@ -1526,6 +1532,13 @@ Return valid JSON ONLY.`;
         );
 
         if (matched) {
+          console.log('[AUTH_TRACE] Server found matching record in public.employees:', {
+            id: matched.id,
+            name: matched.name,
+            email: matched.email,
+            login_id: matched.login_id,
+            role: matched.role
+          });
           const expectedPass = matched.password_hash || matched.password || 'password123';
           let isPasswordValid = (cleanPass === expectedPass) || 
             ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass);
@@ -1533,12 +1546,16 @@ Return valid JSON ONLY.`;
           // If plain text didn't match, test with Supabase Auth API
           if (!isPasswordValid && matched.email) {
             try {
+              console.log(`[AUTH_TRACE] Testing Supabase Auth signInWithPassword for matched employee email: ${matched.email}`);
               const { data: authData, error: authErr } = await client.auth.signInWithPassword({
                 email: matched.email,
                 password: cleanPass
               });
               if (authData?.user && !authErr) {
+                console.log('[AUTH_TRACE] Supabase Auth signInWithPassword verified password for email:', matched.email);
                 isPasswordValid = true;
+              } else if (authErr) {
+                console.warn('[AUTH_TRACE] Supabase Auth signInWithPassword error:', authErr.message);
               }
             } catch (err) {
               // Ignore auth API error
@@ -1546,6 +1563,7 @@ Return valid JSON ONLY.`;
           }
 
           if (isPasswordValid) {
+            console.log('[AUTH_TRACE] Server verified employee user identity from DB:', matched.name);
             return res.json({
               success: true,
               source: 'SUPABASE_DB',
@@ -1567,6 +1585,8 @@ Return valid JSON ONLY.`;
                 loggedInAt: new Date().toISOString()
               }
             });
+          } else {
+            console.warn('[AUTH_TRACE] Server password validation failed for matched employee record:', cleanId);
           }
         }
       }
@@ -1637,8 +1657,13 @@ Return valid JSON ONLY.`;
 
       // Check admin user list fallback for matched account with standard staff credentials
       try {
-        const { data: userList } = await client.auth.admin.listUsers();
+        console.log(`[AUTH_TRACE] Querying client.auth.admin.listUsers() on server to check if user "${cleanId}" exists in Supabase Auth user table...`);
+        const { data: userList, error: listErr } = await client.auth.admin.listUsers();
+        if (listErr) {
+          console.warn('[AUTH_TRACE] Error listing users from Supabase Auth admin API:', listErr.message);
+        }
         if (userList?.users && userList.users.length > 0) {
+          console.log(`[AUTH_TRACE] Found ${userList.users.length} total user(s) in Supabase Auth user table. Searching for match with "${cleanId}"...`);
           const matchedAuthUser = userList.users.find((u: any) => {
             const meta = u.user_metadata || (u as any).raw_user_meta_data || {};
             const metaLogin = (meta.login_id || meta.loginId || '').toLowerCase();
@@ -1652,34 +1677,48 @@ Return valid JSON ONLY.`;
                    (uName && uName === cleanId);
           });
 
-          if (matchedAuthUser && ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
-            const meta = matchedAuthUser.user_metadata || (matchedAuthUser as any).raw_user_meta_data || {};
-            const role = meta.role || 'ADMIN';
-            return res.json({
-              success: true,
-              source: 'SUPABASE_AUTH_ADMIN',
-              user: {
-                id: meta.employee_id || `emp-${matchedAuthUser.id.slice(0, 8)}`,
-                name: meta.name || meta.full_name || matchedAuthUser.email?.split('@')[0] || cleanId,
-                loginId: meta.login_id || matchedAuthUser.email?.split('@')[0] || cleanId,
-                email: matchedAuthUser.email || `${cleanId}@workshop.fixocar.com`,
-                phone: meta.phone || '9820011223',
-                role: role,
-                userType: role === 'SUPER_ADMIN' || role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE',
-                employeeId: meta.employee_id || `emp-${matchedAuthUser.id.slice(0, 8)}`,
-                specializedTeam: meta.specialized_team || 'Management',
-                workshopId: meta.workshop_id || null,
-                workshopName: meta.workshop_name || null,
-                cityId: meta.city_id || null,
-                cityName: meta.city_name || null,
-                employmentType: meta.employment_type || 'PAYROLL',
-                loggedInAt: new Date().toISOString()
-              }
+          if (matchedAuthUser) {
+            console.log('[AUTH_TRACE] Found matching user in Supabase Auth user table:', {
+              id: matchedAuthUser.id,
+              email: matchedAuthUser.email,
+              confirmed_at: matchedAuthUser.email_confirmed_at,
+              user_metadata: matchedAuthUser.user_metadata
             });
+
+            if (['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
+              const meta = matchedAuthUser.user_metadata || (matchedAuthUser as any).raw_user_meta_data || {};
+              const role = meta.role || 'ADMIN';
+              console.log('[AUTH_TRACE] Verified user identity against Supabase Auth admin record:', matchedAuthUser.email);
+              return res.json({
+                success: true,
+                source: 'SUPABASE_AUTH_ADMIN',
+                user: {
+                  id: meta.employee_id || `emp-${matchedAuthUser.id.slice(0, 8)}`,
+                  name: meta.name || meta.full_name || matchedAuthUser.email?.split('@')[0] || cleanId,
+                  loginId: meta.login_id || matchedAuthUser.email?.split('@')[0] || cleanId,
+                  email: matchedAuthUser.email || `${cleanId}@workshop.fixocar.com`,
+                  phone: meta.phone || '9820011223',
+                  role: role,
+                  userType: role === 'SUPER_ADMIN' || role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE',
+                  employeeId: meta.employee_id || `emp-${matchedAuthUser.id.slice(0, 8)}`,
+                  specializedTeam: meta.specialized_team || 'Management',
+                  workshopId: meta.workshop_id || null,
+                  workshopName: meta.workshop_name || null,
+                  cityId: meta.city_id || null,
+                  cityName: meta.city_name || null,
+                  employmentType: meta.employment_type || 'PAYROLL',
+                  loggedInAt: new Date().toISOString()
+                }
+              });
+            } else {
+              console.warn('[AUTH_TRACE] User found in Supabase Auth user table, but provided password did not match standard staff credentials.');
+            }
+          } else {
+            console.warn('[AUTH_TRACE] No user found in Supabase Auth user table matching identifier:', cleanId);
           }
         }
-      } catch (adminErr) {
-        // Ignore fallback error
+      } catch (adminErr: any) {
+        console.warn('[AUTH_TRACE] Exception querying client.auth.admin.listUsers():', adminErr.message);
       }
 
       return res.json({ success: false, error: 'Invalid login ID or password. Please verify credentials.' });
