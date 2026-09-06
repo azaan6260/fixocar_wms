@@ -3,7 +3,7 @@ import {
   X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2
 } from 'lucide-react';
 import { AuthUser } from '../types';
-import { authenticateUser, saveAuthUser, INITIAL_CITIES } from '../lib/storage';
+import { authenticateUser, saveAuthUser, INITIAL_CITIES, getEmployees, saveEmployees } from '../lib/storage';
 import { authenticateViaSupabase, fetchServerSupabaseConfig, getStoredSupabaseConfig } from '../lib/supabaseClient';
 import { syncFromSupabase } from '../lib/syncService';
 import { 
@@ -118,6 +118,49 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         if (supaRes.success && supaRes.user) {
           saveAuthUser(supaRes.user);
           result = { success: true, user: supaRes.user };
+
+          // Upsert verified user into local employees cache so mobile app state is fully aware
+          const currentEmps = getEmployees();
+          const existingIdx = currentEmps.findIndex(e => 
+            e.id === supaRes.user?.id || 
+            (e.loginId && e.loginId.toLowerCase() === supaRes.user?.loginId?.toLowerCase()) ||
+            (e.email && e.email.toLowerCase() === supaRes.user?.email?.toLowerCase())
+          );
+          if (existingIdx >= 0) {
+            currentEmps[existingIdx] = {
+              ...currentEmps[existingIdx],
+              name: supaRes.user.name || currentEmps[existingIdx].name,
+              role: supaRes.user.role || currentEmps[existingIdx].role,
+              loginId: supaRes.user.loginId || currentEmps[existingIdx].loginId,
+              email: supaRes.user.email || currentEmps[existingIdx].email,
+              phone: supaRes.user.phone || currentEmps[existingIdx].phone,
+              workshopId: supaRes.user.workshopId || currentEmps[existingIdx].workshopId,
+              workshopName: supaRes.user.workshopName || currentEmps[existingIdx].workshopName,
+              cityId: supaRes.user.cityId || currentEmps[existingIdx].cityId,
+              cityName: supaRes.user.cityName || currentEmps[existingIdx].cityName
+            };
+            saveEmployees(currentEmps, true);
+          } else {
+            const newEmpRecord = {
+              id: supaRes.user.id || `emp-${Date.now()}`,
+              name: supaRes.user.name,
+              role: supaRes.user.role,
+              phone: supaRes.user.phone || '9820011223',
+              email: supaRes.user.email || '',
+              specializedTeam: supaRes.user.specializedTeam || 'Management',
+              status: 'AVAILABLE' as const,
+              activeJobsCount: 0,
+              loginId: supaRes.user.loginId || cleanId,
+              password: cleanPass,
+              baseSalary: 60000,
+              employmentType: supaRes.user.employmentType || 'PAYROLL',
+              cityId: supaRes.user.cityId,
+              cityName: supaRes.user.cityName,
+              workshopId: supaRes.user.workshopId,
+              workshopName: supaRes.user.workshopName
+            };
+            saveEmployees([...currentEmps, newEmpRecord], true);
+          }
         } else if (supaRes.error) {
           result = { success: false, error: supaRes.error };
         }

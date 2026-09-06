@@ -464,11 +464,23 @@ export async function authenticateViaSupabase(
 
       // Check public.employees table fallback
       console.log('[AUTH_TRACE] Checking public.employees table directly for identifier:', identifier.toLowerCase());
-      const { data: empData, error: empErr } = await client
+      const { data: empRows, error: empErr } = await client
         .from('employees')
-        .select('*')
-        .or(`login_id.eq.${identifier.toLowerCase()},email.eq.${identifier.toLowerCase()}`)
-        .single();
+        .select('*');
+
+      if (empErr) {
+        console.warn('[AUTH_TRACE] Direct query to public.employees error:', empErr.message);
+      }
+
+      const cleanIdLower = identifier.trim().toLowerCase();
+      const empData = empRows?.find((e: any) => 
+        (e.login_id && e.login_id.toLowerCase() === cleanIdLower) ||
+        (e.email && e.email.toLowerCase() === cleanIdLower) ||
+        (e.id && e.id.toLowerCase() === cleanIdLower) ||
+        (e.name && e.name.toLowerCase() === cleanIdLower) ||
+        (e.name && e.name.toLowerCase().includes(cleanIdLower)) ||
+        (e.phone && e.phone.replace(/\D/g, '') === cleanIdLower.replace(/\D/g, '') && cleanIdLower.replace(/\D/g, '').length >= 10)
+      );
 
       if (empErr) {
         console.warn('[AUTH_TRACE] Direct query to public.employees error:', empErr.message);
