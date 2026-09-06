@@ -9,7 +9,9 @@ import {
   getVehicleCheckIns, saveVehicleCheckIns,
   getCarModels, saveCarModels,
   getStandardJobs, saveStandardJobs,
-  dispatchToastNotification
+  dispatchToastNotification,
+  getAuthUser, saveAuthUser,
+  getActiveWorkshopId, setActiveWorkshopId
 } from './storage';
 import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor } from '../types';
 
@@ -23,6 +25,57 @@ export interface SyncResult {
   vendorsSynced: number;
   jobCardsSynced: number;
   errors: string[];
+}
+
+function verifyAndUpdateAuthUserWorkshop(mergedEmployees: Employee[], sourceTag: string) {
+  const authUser = getAuthUser();
+  if (!authUser) {
+    console.log(`[SYNC_WORKSHOP_TRACE] [${sourceTag}] No active authenticated user session in localStorage.`);
+    return;
+  }
+
+  const matchedEmp = mergedEmployees.find(e => 
+    (e.id && e.id === authUser.id) ||
+    (e.email && authUser.email && e.email.toLowerCase().trim() === authUser.email.toLowerCase().trim()) ||
+    (e.loginId && authUser.loginId && e.loginId.toLowerCase().trim() === authUser.loginId.toLowerCase().trim())
+  );
+
+  console.log(`[SYNC_WORKSHOP_TRACE] [${sourceTag}] Authenticated User Workshop Sync Check:`, {
+    authUserId: authUser.id,
+    authUserName: authUser.name,
+    authUserRole: authUser.role,
+    matchedEmployeeId: matchedEmp?.id || null,
+    matchedEmployeeName: matchedEmp?.name || null,
+    syncedWorkshopId: matchedEmp?.workshopId || null,
+    syncedWorkshopName: matchedEmp?.workshopName || null,
+    syncedCityId: matchedEmp?.cityId || null,
+    syncedCityName: matchedEmp?.cityName || null,
+    currentActiveWorkshopId: getActiveWorkshopId()
+  });
+
+  if (matchedEmp) {
+    const wsId = matchedEmp.workshopId || null;
+    const wsName = matchedEmp.workshopName || null;
+    const cId = matchedEmp.cityId || null;
+    const cName = matchedEmp.cityName || null;
+
+    if (wsId && (authUser.workshopId !== wsId || authUser.workshopName !== wsName)) {
+      console.log(`[SYNC_WORKSHOP_TRACE] [${sourceTag}] Synchronizing updated workshop_id (${wsId}) to authenticated user context.`);
+      const updatedUser = {
+        ...authUser,
+        workshopId: wsId,
+        workshopName: wsName,
+        cityId: cId,
+        cityName: cName
+      };
+      saveAuthUser(updatedUser);
+      setActiveWorkshopId(wsId);
+    } else if (wsId) {
+      setActiveWorkshopId(wsId);
+    } else {
+      console.warn(`[SYNC_WORKSHOP_TRACE] [${sourceTag}] User '${authUser.name}' (${authUser.id}) has NO assigned workshop_id in employee registry (Unassigned).`);
+    }
+  }
 }
 
 export async function syncFromSupabase(): Promise<SyncResult> {
@@ -59,6 +112,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           const merged = Array.from(empMap.values());
           saveEmployees(merged, true);
           employeesSynced = merged.length;
+          verifyAndUpdateAuthUserWorkshop(merged, 'Central Store');
         }
 
         if (Array.isArray(store.jobCards) && store.jobCards.length > 0) {
@@ -193,6 +247,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       const mergedEmployees = Array.from(empMap.values());
       saveEmployees(mergedEmployees, true);
       employeesSynced = mergedEmployees.length;
+      verifyAndUpdateAuthUserWorkshop(mergedEmployees, 'Supabase DB');
     }
 
     // 2. CITIES
