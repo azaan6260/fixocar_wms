@@ -111,6 +111,15 @@ CREATE TABLE IF NOT EXISTS public.employees (
   CONSTRAINT fk_employees_workshop FOREIGN KEY (workshop_id) REFERENCES public.workshops(id) ON DELETE SET NULL
 );
 
+-- Idempotent migrations for existing employees table
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS city_id text;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS city_name text;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS workshop_id text;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS workshop_name text;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS employment_type text DEFAULT 'PAYROLL';
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS login_id text;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS password_hash text;
+
 CREATE TABLE IF NOT EXISTS public.vendors (
   id text NOT NULL,
   name text NOT NULL,
@@ -271,6 +280,16 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   CONSTRAINT fk_job_cards_workshop FOREIGN KEY (workshop_id) REFERENCES public.workshops(id) ON DELETE SET NULL
 );
 
+-- Idempotent migrations for existing job_cards table
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS city_id text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS city_name text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS workshop_id text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS workshop_name text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_id text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_name text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS is_cars24 boolean DEFAULT false;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS cars24_ref_no text;
+
 CREATE TABLE IF NOT EXISTS public.job_card_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   job_card_id text NOT NULL,
@@ -325,6 +344,16 @@ CREATE TABLE IF NOT EXISTS public.job_tasks (
   CONSTRAINT job_tasks_job_card_id_fkey FOREIGN KEY (job_card_id) REFERENCES public.job_cards(id) ON DELETE CASCADE,
   CONSTRAINT job_tasks_paired_denter_id_fkey FOREIGN KEY (paired_denter_id) REFERENCES public.employees(id) ON DELETE SET NULL
 );
+
+-- Idempotent migrations for existing job_tasks table
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_to_id text;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_to_name text;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_type text DEFAULT 'EMPLOYEE';
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS customer_price numeric DEFAULT 0;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS estimated_cost numeric DEFAULT 0;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS requires_customer_approval boolean DEFAULT false;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS is_customer_approved boolean;
+ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS rejection_reason text;
 
 -- ==========================================
 -- 8. LOGISTICS, PURCHASING & VEHICLE CHECK-INS

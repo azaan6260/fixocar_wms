@@ -38,7 +38,31 @@ const STORAGE_KEYS = {
   WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v4',
   CAR_MODELS: 'fixocar_car_models_v4',
   AUTH_USER: 'fixocar_auth_user_v4',
+  ACTIVE_WORKSHOP: 'fixocar_active_workshop_v4',
 };
+
+// Global active workshop observer context helpers
+export function getActiveWorkshopId(): string {
+  if (typeof window === 'undefined') return 'ALL';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORKSHOP);
+    if (saved && saved.trim() !== '') return saved.trim();
+  } catch {}
+
+  const user = getAuthUser();
+  if (user && user.workshopId && user.workshopId.trim() !== '') {
+    return user.workshopId.trim();
+  }
+  return 'ALL';
+}
+
+export function setActiveWorkshopId(workshopId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSHOP, workshopId);
+  } catch {}
+  notifyStoreChange();
+}
 
 // Event listener mechanism for real-time UI updates across views
 type StorageListener = () => void;
@@ -75,7 +99,7 @@ export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
   );
 }
 
-export function getJobCards(): JobCard[] {
+export function getAllJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
   if (!local) {
     localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify([]));
@@ -91,6 +115,21 @@ export function getJobCards(): JobCard[] {
   } catch {
     return [];
   }
+}
+
+export function getJobCards(workshopIdFilter?: string): JobCard[] {
+  const allCards = getAllJobCards();
+  const targetWs = workshopIdFilter !== undefined ? workshopIdFilter : getActiveWorkshopId();
+
+  if (!targetWs || targetWs === 'ALL' || targetWs === '') {
+    return allCards;
+  }
+
+  return allCards.filter(c => 
+    c.workshopId === targetWs || 
+    c.workshopName === targetWs || 
+    !c.workshopId
+  );
 }
 
 export function saveJobCards(cards: JobCard[], skipPush = false) {
@@ -1009,7 +1048,7 @@ export function addPartToTask(
 }
 
 // 2. EMPLOYEES STORAGE
-export function getEmployees(): Employee[] {
+export function getAllEmployees(): Employee[] {
   const local = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
   let list: Employee[] = [];
   if (local !== null) {
@@ -1048,6 +1087,22 @@ export function getEmployees(): Employee[] {
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(migrated));
   }
   return migrated;
+}
+
+export function getEmployees(workshopIdFilter?: string): Employee[] {
+  const allStaff = getAllEmployees();
+  const targetWs = workshopIdFilter !== undefined ? workshopIdFilter : getActiveWorkshopId();
+
+  if (!targetWs || targetWs === 'ALL' || targetWs === '') {
+    return allStaff;
+  }
+
+  return allStaff.filter(emp => 
+    emp.workshopId === targetWs || 
+    emp.workshopName === targetWs ||
+    emp.role === 'SUPER_ADMIN' ||
+    !emp.workshopId
+  );
 }
 
 export function saveEmployees(employees: Employee[], skipPush = false) {
@@ -1115,7 +1170,7 @@ export function saveEmployees(employees: Employee[], skipPush = false) {
 }
 
 export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   const newEmp: Employee = {
     ...employee,
     id: `emp-${Date.now().toString().slice(-4)}`
@@ -1131,7 +1186,7 @@ export function createEmployee(employee: Omit<Employee, 'id'>): Employee {
 }
 
 export function updateEmployee(id: string, updates: Partial<Employee>) {
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   const index = employees.findIndex(e => e.id === id);
   if (index !== -1) {
     const updatedEmp = { ...employees[index], ...updates };
@@ -1146,7 +1201,7 @@ export function updateEmployee(id: string, updates: Partial<Employee>) {
 }
 
 export function deleteEmployee(id: string) {
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   const emp = employees.find(e => e.id === id);
   const remaining = employees.filter(e => e.id !== id);
 
@@ -2047,7 +2102,7 @@ export function addStandardJobToJobCard(
   // Dual pricing check: Cars24 B2B vs Retail
   const isCars24 = isCars24JobCard(card);
   const customerPrice = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   const vendorList = getVendors();
 
   // Dual contract pricing check: Cars24 vs Retail
@@ -2569,6 +2624,9 @@ export function saveAuthUser(user: AuthUser | null): void {
     const str = JSON.stringify(user);
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, str);
+    if (user.workshopId && user.workshopId.trim() !== '') {
+      try { localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSHOP, user.workshopId.trim()); } catch {}
+    }
   } else {
     console.log('[AUTH_TRACE] saveAuthUser: Clearing user session (logout).');
     try { localStorage.removeItem(STORAGE_KEYS.AUTH_USER); } catch {}
@@ -2639,7 +2697,7 @@ export function authenticateUser(
 
   // WMS Staff & Contractor Authentication:
   // 1. Check Employees & Super Admin in employee registry by Email Address
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   let matchedEmp = employees.find(e => 
     (e.email && e.email.toLowerCase() === cleanId) ||
     (e.loginId && e.loginId.toLowerCase() === cleanId) || 
