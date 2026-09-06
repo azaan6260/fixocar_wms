@@ -2644,17 +2644,17 @@ export function authenticateUser(
   }
 
   // WMS Staff & Contractor Authentication:
-  // 1. Check Employees & Super Admin in employee registry
+  // 1. Check Employees & Super Admin in employee registry by Email Address
   const employees = getEmployees();
   let matchedEmp = employees.find(e => 
-    (e.loginId && e.loginId.toLowerCase() === cleanId) || 
     (e.email && e.email.toLowerCase() === cleanId) ||
+    (e.loginId && e.loginId.toLowerCase() === cleanId) || 
     (e.id && e.id.toLowerCase() === cleanId) ||
-    (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
+    (e.email && e.email.toLowerCase().split('@')[0] === cleanId)
   );
 
   // Fallback for Admin login if admin user not found in local array
-  if (!matchedEmp && (cleanId === 'admin' || cleanId === 'emp-admin' || cleanId === 'admin@workshop.fixocar.com')) {
+  if (!matchedEmp && ['admin@fixocar.com', 'admin@workshop.fixocar.com', 'admin', 'emp-admin'].includes(cleanId)) {
     if (['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
       console.log('[AUTH_TRACE] Admin fallback matched default Super Admin credentials.');
       matchedEmp = {
@@ -2662,23 +2662,23 @@ export function authenticateUser(
         name: 'Super Admin',
         role: 'SUPER_ADMIN',
         phone: '9820011223',
-        email: 'admin@workshop.fixocar.com',
+        email: 'admin@fixocar.com',
         specializedTeam: 'Management',
         status: 'AVAILABLE',
         activeJobsCount: 0,
-        loginId: 'admin',
+        loginId: 'admin@fixocar.com',
         password: cleanPass,
         baseSalary: 120000,
         employmentType: 'PAYROLL'
       };
-      if (!employees.some(e => e.id === 'emp-admin' || e.loginId === 'admin')) {
+      if (!employees.some(e => e.id === 'emp-admin' || e.email === 'admin@fixocar.com')) {
         saveEmployees([...employees, matchedEmp], true);
       }
     }
   }
 
   // Fallback for Taifur login if taifur user not found in local array
-  if (!matchedEmp && (cleanId === 'taifur' || cleanId === 'emp-taifur' || cleanId === 'taifur@workshop.fixocar.com')) {
+  if (!matchedEmp && ['taifur@fixocar.com', 'taifur@workshop.fixocar.com', 'taifur', 'emp-taifur'].includes(cleanId)) {
     if (['123456', 'password123', 'admin', 'admin123'].includes(cleanPass)) {
       console.log('[AUTH_TRACE] Taifur fallback matched default Admin credentials.');
       matchedEmp = {
@@ -2686,16 +2686,16 @@ export function authenticateUser(
         name: 'Taifur',
         role: 'ADMIN',
         phone: '9820011224',
-        email: 'taifur@workshop.fixocar.com',
+        email: 'taifur@fixocar.com',
         specializedTeam: 'Management',
         status: 'AVAILABLE',
         activeJobsCount: 0,
-        loginId: 'taifur',
+        loginId: 'taifur@fixocar.com',
         password: cleanPass,
         baseSalary: 80000,
         employmentType: 'PAYROLL'
       };
-      if (!employees.some(e => e.id === 'emp-taifur' || e.loginId === 'taifur')) {
+      if (!employees.some(e => e.id === 'emp-taifur' || e.email === 'taifur@fixocar.com')) {
         saveEmployees([...employees, matchedEmp], true);
       }
     }

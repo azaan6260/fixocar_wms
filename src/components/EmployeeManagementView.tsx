@@ -61,6 +61,13 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
     e.preventDefault();
     if (!editingEmployee) return;
 
+    // Ensure work email address is set properly
+    if (!editingEmployee.email) {
+      const cleanName = (editingEmployee.name || 'staff').toLowerCase().replace(/\s+/g, '.');
+      editingEmployee.email = `${cleanName}@fixocar.com`;
+    }
+    editingEmployee.loginId = editingEmployee.email;
+
     // Ensure workshop association is properly linked
     if (editingEmployee.workshopId) {
       const selectedWs = workshops.find(w => w.id === editingEmployee.workshopId);
@@ -757,8 +764,8 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Login ID (Username)</label>
-                    <input type="text" value={editingEmployee.loginId || ''} onChange={e => setEditingEmployee({...editingEmployee, loginId: e.target.value})} className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono" />
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Work Email Address (For System Sign-In)</label>
+                    <input type="email" placeholder="e.g. employee@fixocar.com" value={editingEmployee.email || ''} onChange={e => setEditingEmployee({...editingEmployee, email: e.target.value, loginId: e.target.value})} className="w-full p-2.5 text-sm rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Password</label>

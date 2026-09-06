@@ -112,11 +112,11 @@ function getInitialCentralStore(): CentralStoreData {
         name: 'Super Admin',
         role: 'SUPER_ADMIN',
         phone: '9820011223',
-        email: 'admin@workshop.fixocar.com',
+        email: 'admin@fixocar.com',
         specializedTeam: 'Management',
         status: 'AVAILABLE',
         activeJobsCount: 0,
-        loginId: 'admin',
+        loginId: 'admin@fixocar.com',
         password: '123456',
         baseSalary: 120000,
         employmentType: 'PAYROLL'
@@ -126,11 +126,11 @@ function getInitialCentralStore(): CentralStoreData {
         name: 'Taifur',
         role: 'ADMIN',
         phone: '9820011224',
-        email: 'taifur@workshop.fixocar.com',
+        email: 'taifur@fixocar.com',
         specializedTeam: 'Management',
         status: 'AVAILABLE',
         activeJobsCount: 0,
-        loginId: 'taifur',
+        loginId: 'taifur@fixocar.com',
         password: '123456',
         baseSalary: 80000,
         employmentType: 'PAYROLL'
@@ -1114,23 +1114,23 @@ Return valid JSON ONLY.`;
     try {
       const { identifier, password } = req.body;
       if (!identifier) {
-        return res.status(400).json({ success: false, error: 'Identifier is required' });
+        return res.status(400).json({ success: false, error: 'Email address is required' });
       }
 
       const cleanId = identifier.trim().toLowerCase();
       const cleanPass = (password || '').trim();
       const store = loadCentralStore();
 
-      // 1. Check Super Admin & Taifur defaults
-      if ((cleanId === 'admin' || cleanId === 'emp-admin' || cleanId === 'admin@workshop.fixocar.com') &&
+      // 1. Super Admin email logins (admin@fixocar.com, admin@workshop.fixocar.com, or admin)
+      if (['admin@fixocar.com', 'admin@workshop.fixocar.com', 'admin', 'emp-admin'].includes(cleanId) &&
           (!cleanPass || ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass))) {
         return res.json({
           success: true,
           user: {
             id: 'emp-admin',
             name: 'Super Admin',
-            loginId: 'admin',
-            email: 'admin@workshop.fixocar.com',
+            loginId: 'admin@fixocar.com',
+            email: 'admin@fixocar.com',
             phone: '9820011223',
             role: 'SUPER_ADMIN',
             userType: 'ADMIN',
@@ -1142,15 +1142,16 @@ Return valid JSON ONLY.`;
         });
       }
 
-      if ((cleanId === 'taifur' || cleanId === 'emp-taifur' || cleanId === 'taifur@workshop.fixocar.com') &&
+      // 2. Taifur Admin email logins (taifur@fixocar.com, taifur@workshop.fixocar.com, or taifur)
+      if (['taifur@fixocar.com', 'taifur@workshop.fixocar.com', 'taifur', 'emp-taifur'].includes(cleanId) &&
           (!cleanPass || ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass))) {
         return res.json({
           success: true,
           user: {
             id: 'emp-taifur',
             name: 'Taifur',
-            loginId: 'taifur',
-            email: 'taifur@workshop.fixocar.com',
+            loginId: 'taifur@fixocar.com',
+            email: 'taifur@fixocar.com',
             phone: '9820011224',
             role: 'ADMIN',
             userType: 'ADMIN',
@@ -1162,14 +1163,12 @@ Return valid JSON ONLY.`;
         });
       }
 
-      // 2. Search in Central Store Employees
+      // 3. Search in Central Store Employees by Email Address (or fallback loginId / name)
       const matchedEmp = store.employees.find((e: any) =>
-        (e.loginId && e.loginId.toLowerCase() === cleanId) ||
         (e.email && e.email.toLowerCase() === cleanId) ||
+        (e.loginId && e.loginId.toLowerCase() === cleanId) ||
         (e.id && e.id.toLowerCase() === cleanId) ||
-        (e.name && e.name.toLowerCase() === cleanId) ||
-        (e.name && e.name.toLowerCase().includes(cleanId)) ||
-        (e.phone && e.phone.replace(/\D/g, '') === cleanId.replace(/\D/g, '') && cleanId.replace(/\D/g, '').length >= 10)
+        (e.email && e.email.toLowerCase().split('@')[0] === cleanId)
       );
 
       if (matchedEmp) {
@@ -1177,13 +1176,14 @@ Return valid JSON ONLY.`;
         const isPassValid = !cleanPass || cleanPass === expectedPass || ['123456', 'password123', 'admin', 'admin123'].includes(cleanPass);
         if (isPassValid) {
           const role = matchedEmp.role || 'MECHANIC';
+          const userEmail = matchedEmp.email || (cleanId.includes('@') ? cleanId : `${cleanId}@fixocar.com`);
           return res.json({
             success: true,
             user: {
               id: matchedEmp.id,
               name: matchedEmp.name,
-              loginId: matchedEmp.loginId || cleanId,
-              email: matchedEmp.email || `${cleanId}@workshop.fixocar.com`,
+              loginId: userEmail,
+              email: userEmail,
               phone: matchedEmp.phone || '9820011223',
               role: role,
               userType: (role === 'SUPER_ADMIN' || role === 'ADMIN') ? 'ADMIN' : 'EMPLOYEE',
@@ -1200,26 +1200,26 @@ Return valid JSON ONLY.`;
         }
       }
 
-      // 3. Fallback to Supabase employees table
+      // 4. Fallback to Supabase employees table
       const client = getSupabaseAdminClient();
       if (client) {
         const { data: supaEmps } = await client.from('employees').select('*');
         if (supaEmps && supaEmps.length > 0) {
           const supaMatched = supaEmps.find((e: any) =>
-            (e.login_id && e.login_id.toLowerCase() === cleanId) ||
             (e.email && e.email.toLowerCase() === cleanId) ||
-            (e.id && e.id.toLowerCase() === cleanId) ||
-            (e.name && e.name.toLowerCase() === cleanId)
+            (e.login_id && e.login_id.toLowerCase() === cleanId) ||
+            (e.id && e.id.toLowerCase() === cleanId)
           );
           if (supaMatched) {
             const role = supaMatched.role || 'MECHANIC';
+            const userEmail = supaMatched.email || (cleanId.includes('@') ? cleanId : `${cleanId}@fixocar.com`);
             return res.json({
               success: true,
               user: {
                 id: supaMatched.id,
                 name: supaMatched.name,
-                loginId: supaMatched.login_id || cleanId,
-                email: supaMatched.email || `${cleanId}@workshop.fixocar.com`,
+                loginId: userEmail,
+                email: userEmail,
                 phone: supaMatched.phone || '9820011223',
                 role: role,
                 userType: (role === 'SUPER_ADMIN' || role === 'ADMIN') ? 'ADMIN' : 'EMPLOYEE',
@@ -1237,7 +1237,7 @@ Return valid JSON ONLY.`;
         }
       }
 
-      return res.status(401).json({ success: false, error: 'Invalid login ID or password.' });
+      return res.status(401).json({ success: false, error: 'Invalid work email address or password.' });
     } catch (err: any) {
       console.error('[CENTRAL_AUTH] Login error:', err);
       res.status(500).json({ success: false, error: err.message });
