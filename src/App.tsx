@@ -2,8 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, JobCard, Employee, Vendor, AuthUser, isTabAllowedForRole, getDefaultTabForRole } from './types';
 import { 
   getJobCards, 
+  getAllJobCards,
   getEmployees, 
+  getAllEmployees,
   getVendors, 
+  getCities,
+  getWorkshops,
+  getStandardJobs,
+  getCarModels,
+  getInventoryItems,
+  getWorkshopExpenses,
+  getJobCardHistoryRecords,
+  getDeliveries,
+  getPurchaseOrders,
+  getVehicleCheckIns,
+  getAttendances,
+  getSalaries,
   getJobCardById, 
   subscribeToStore,
   getAuthUser,
@@ -166,9 +180,44 @@ export default function App() {
 
   // Subscribe to storage updates & sync from Supabase on startup and periodically
   useEffect(() => {
+    const runDiagnosticCheck = () => {
+      const isMobile = typeof navigator !== 'undefined' && (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768);
+      const storeStats = {
+        cities: getCities().length,
+        workshops: getWorkshops().length,
+        employees: getAllEmployees().length,
+        vendors: getVendors().length,
+        standard_jobs: getStandardJobs().length,
+        car_models: getCarModels().length,
+        inventory_items: getInventoryItems().length,
+        workshop_expenses: getWorkshopExpenses().length,
+        job_cards: getAllJobCards().length,
+        job_tasks: getAllJobCards().reduce((acc, card) => acc + (card.tasks ? card.tasks.length : 0), 0),
+        job_card_history: getJobCardHistoryRecords().length,
+        delivery_records: getDeliveries().length,
+        purchase_orders: getPurchaseOrders().length,
+        vehicle_check_ins: getVehicleCheckIns().length,
+        attendance_records: getAttendances().length,
+        salary_records: getSalaries().length
+      };
+
+      const unhydratedTables = Object.entries(storeStats)
+        .filter(([_, count]) => count === 0)
+        .map(([table]) => table);
+
+      console.log(`[DIAGNOSTIC_CHECK] ${isMobile ? '[MOBILE_DEVICE]' : '[DESKTOP_DEVICE]'} Storage Hydration Audit (16 Tables):`, storeStats);
+
+      if (unhydratedTables.length > 0) {
+        console.warn(`[DIAGNOSTIC_CHECK] ⚠️ ${unhydratedTables.length} of 16 expected tables failed to hydrate or are empty on initialization:`, unhydratedTables);
+      } else {
+        console.log(`[DIAGNOSTIC_CHECK] ✅ All 16 expected database tables successfully hydrated in local store.`);
+      }
+    };
+
     const initializeGlobalSync = async () => {
       await fetchServerSupabaseConfig();
       await syncFromSupabase();
+      runDiagnosticCheck();
     };
     initializeGlobalSync();
 
