@@ -5,7 +5,7 @@ import {
   getVendors, saveVendors,
   getCities, saveCities,
   getWorkshops, saveWorkshops,
-  getJobCards, saveJobCards,
+  getAllJobCards, getJobCards, saveJobCards,
   getJobCardHistoryRecords, saveJobCardHistoryRecords,
   getVehicleCheckIns, saveVehicleCheckIns,
   getCarModels, saveCarModels,
@@ -14,12 +14,14 @@ import {
   getDeliveries, saveDeliveries,
   getPurchaseOrders, savePurchaseOrders,
   getWorkshopExpenses, saveWorkshopExpenses,
+  getAttendances, saveAttendances,
+  getSalaries, saveSalaries,
   dispatchToastNotification,
   getAuthUser, saveAuthUser,
   getActiveWorkshopId, setActiveWorkshopId
 } from './storage';
 import { INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
-import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor, JobCardHistoryRecord, InventoryItem, DeliveryRecord, PurchaseOrder, WorkshopExpense } from '../types';
+import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor, JobCardHistoryRecord, InventoryItem, DeliveryRecord, PurchaseOrder, WorkshopExpense, AttendanceRecord, SalaryRecord } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -141,7 +143,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         }
 
         if (Array.isArray(store.jobCards) && store.jobCards.length > 0) {
-          const currentLocal = getJobCards();
+          const currentLocal = getAllJobCards();
           const merged: JobCard[] = [...store.jobCards];
           for (const loc of currentLocal) {
             if (!merged.some(m => m.id === loc.id)) {
@@ -150,6 +152,127 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           }
           saveJobCards(merged, true);
           jobCardsSynced = merged.length;
+        }
+
+        if (Array.isArray(store.jobCardHistory) && store.jobCardHistory.length > 0) {
+          const currentLocal = getJobCardHistoryRecords();
+          const merged: JobCardHistoryRecord[] = [...store.jobCardHistory];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveJobCardHistoryRecords(merged);
+        }
+
+        if (Array.isArray(store.inventoryItems) && store.inventoryItems.length > 0) {
+          const currentLocal = getInventoryItems();
+          const merged: InventoryItem[] = [...store.inventoryItems];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveInventoryItems(merged);
+        }
+
+        if (Array.isArray(store.deliveryRecords) && store.deliveryRecords.length > 0) {
+          const currentLocal = getDeliveries();
+          const merged: DeliveryRecord[] = [...store.deliveryRecords];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveDeliveries(merged);
+        }
+
+        if (Array.isArray(store.purchaseOrders) && store.purchaseOrders.length > 0) {
+          const currentLocal = getPurchaseOrders();
+          const merged: PurchaseOrder[] = [...store.purchaseOrders];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          savePurchaseOrders(merged);
+        }
+
+        if (Array.isArray(store.workshopExpenses) && store.workshopExpenses.length > 0) {
+          const currentLocal = getWorkshopExpenses();
+          const merged: WorkshopExpense[] = [...store.workshopExpenses];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveWorkshopExpenses(merged);
+        }
+
+        if (Array.isArray(store.standardJobs) && store.standardJobs.length > 0) {
+          const currentLocal = getStandardJobs();
+          const merged: StandardJob[] = [...store.standardJobs];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveStandardJobs(merged, true);
+        }
+
+        if (Array.isArray(store.carModels) && store.carModels.length > 0) {
+          const currentLocal = getCarModels();
+          const merged: CarModelRecord[] = [...store.carModels];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id || (m.make === loc.make && m.model === loc.model))) {
+              merged.push(loc);
+            }
+          }
+          saveCarModels(merged, true);
+        }
+
+        if (Array.isArray(store.attendanceRecords) && store.attendanceRecords.length > 0) {
+          const currentLocal = getAttendances();
+          const mapped: AttendanceRecord[] = store.attendanceRecords.map((a: any) => ({
+            id: a.id,
+            employeeId: a.employeeId || a.employee_id,
+            date: a.date,
+            status: a.status || 'PRESENT',
+            clockInTime: a.clockInTime || a.clock_in_time || a.checkInTime || a.check_in_time,
+            clockOutTime: a.clockOutTime || a.clock_out_time || a.checkOutTime || a.check_out_time,
+            clockInLocation: a.clockInLocation || a.clock_in_location,
+            clockOutLocation: a.clockOutLocation || a.clock_out_location,
+            photoUrl: a.photoUrl || a.photo_url
+          }));
+          const merged: AttendanceRecord[] = [...mapped];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveAttendances(merged, true);
+        }
+
+        if (Array.isArray(store.salaryRecords) && store.salaryRecords.length > 0) {
+          const currentLocal = getSalaries();
+          const mapped: SalaryRecord[] = store.salaryRecords.map((s: any) => ({
+            id: s.id,
+            employeeId: s.employeeId || s.employee_id,
+            month: s.month,
+            baseSalary: s.baseSalary ?? s.base_salary ?? 0,
+            deductions: s.deductions ?? 0,
+            bonuses: s.bonuses ?? s.bonus ?? 0,
+            netPay: s.netPay ?? s.net_pay ?? s.netSalary ?? 0,
+            status: s.status || 'PENDING',
+            transferDate: s.transferDate || s.transfer_date || s.paymentDate || s.payment_date
+          }));
+          const merged: SalaryRecord[] = [...mapped];
+          for (const loc of currentLocal) {
+            if (!merged.some(m => m.id === loc.id)) {
+              merged.push(loc);
+            }
+          }
+          saveSalaries(merged, true);
         }
 
         if (Array.isArray(store.cities) && store.cities.length > 0) {
@@ -477,7 +600,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         };
       });
 
-      const currentLocal = getJobCards();
+      const currentLocal = getAllJobCards();
       const mergedCards = [...supaCards];
       for (const loc of currentLocal) {
         if (!mergedCards.some(m => m.id === loc.id)) {
@@ -716,6 +839,58 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveWorkshopExpenses(supaExpenses);
     }
 
+    // 14. ATTENDANCE RECORDS
+    const { data: attendanceRows, error: attErr } = await client.from('attendance_records').select('*');
+    if (attErr) {
+      if (attErr.code === '42P01') missingTables.push('attendance_records');
+    } else if (attendanceRows !== null) {
+      const supaAttendance: AttendanceRecord[] = attendanceRows.map((a: any) => ({
+        id: a.id,
+        employeeId: a.employee_id,
+        date: a.date,
+        status: a.status,
+        clockInTime: a.check_in_time || a.clock_in_time,
+        clockOutTime: a.check_out_time || a.clock_out_time,
+        clockInLocation: a.clock_in_location,
+        clockOutLocation: a.clock_out_location,
+        photoUrl: a.photo_url
+      }));
+      const currentAtt = getAttendances();
+      const mergedAtt = [...supaAttendance];
+      for (const loc of currentAtt) {
+        if (!mergedAtt.some(m => m.id === loc.id)) {
+          mergedAtt.push(loc);
+        }
+      }
+      saveAttendances(mergedAtt, true);
+    }
+
+    // 15. SALARY RECORDS
+    const { data: salaryRows, error: salErr } = await client.from('salary_records').select('*');
+    if (salErr) {
+      if (salErr.code === '42P01') missingTables.push('salary_records');
+    } else if (salaryRows !== null) {
+      const supaSalaries: SalaryRecord[] = salaryRows.map((s: any) => ({
+        id: s.id,
+        employeeId: s.employee_id,
+        month: s.month,
+        baseSalary: s.base_salary || 0,
+        bonuses: s.bonus || s.bonuses || 0,
+        deductions: s.deductions || 0,
+        netPay: s.net_salary || s.net_pay || 0,
+        status: s.status || 'PENDING',
+        transferDate: s.payment_date || s.transfer_date
+      }));
+      const currentSal = getSalaries();
+      const mergedSal = [...supaSalaries];
+      for (const loc of currentSal) {
+        if (!mergedSal.some(m => m.id === loc.id)) {
+          mergedSal.push(loc);
+        }
+      }
+      saveSalaries(mergedSal, true);
+    }
+
     // Automatically push merged dataset back to Supabase in background
     pushLocalDataToSupabase().catch(pushErr => {
       console.warn('[SYNC_TRACE] Background pushLocalDataToSupabase error after sync:', pushErr);
@@ -775,7 +950,9 @@ export async function pushLocalDataToSupabase(): Promise<{
         inventoryItems: getInventoryItems(),
         deliveryRecords: getDeliveries(),
         purchaseOrders: getPurchaseOrders(),
-        workshopExpenses: getWorkshopExpenses()
+        workshopExpenses: getWorkshopExpenses(),
+        attendanceRecords: getAttendances(),
+        salaryRecords: getSalaries()
       })
     });
   } catch (centralPushErr) {
@@ -1166,6 +1343,35 @@ export async function pushLocalDataToSupabase(): Promise<{
       is_approved: exp.isApproved ?? true,
       approved_by_name: exp.approvedByName || null,
       created_at: exp.createdAt
+    });
+  }
+
+  // Push Attendance Records
+  const attList = getAttendances();
+  for (const att of attList) {
+    await client.from('attendance_records').upsert({
+      id: att.id,
+      employee_id: att.employeeId,
+      date: att.date,
+      status: att.status,
+      check_in_time: att.clockInTime || null,
+      check_out_time: att.clockOutTime || null
+    });
+  }
+
+  // Push Salary Records
+  const salList = getSalaries();
+  for (const sal of salList) {
+    await client.from('salary_records').upsert({
+      id: sal.id,
+      employee_id: sal.employeeId,
+      month: sal.month,
+      base_salary: sal.baseSalary || 0,
+      bonus: sal.bonuses || 0,
+      deductions: sal.deductions || 0,
+      net_salary: sal.netPay || 0,
+      status: sal.status || 'PENDING',
+      payment_date: sal.transferDate || null
     });
   }
 

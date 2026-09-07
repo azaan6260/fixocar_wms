@@ -42,13 +42,14 @@ const STORAGE_KEYS = {
 // Global active workshop observer context helpers
 export function getActiveWorkshopId(): string {
   if (typeof window === 'undefined') return 'ALL';
+  const user = getAuthUser();
+
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORKSHOP);
     if (saved && saved.trim() !== '') return saved.trim();
   } catch {}
 
-  const user = getAuthUser();
-  if (user && user.workshopId && user.workshopId.trim() !== '') {
+  if (user && user.role !== 'SUPER_ADMIN' && user.workshopId && user.workshopId.trim() !== '') {
     return user.workshopId.trim();
   }
   return 'ALL';
@@ -1369,9 +1370,10 @@ export function getAttendances(): import('../types').AttendanceRecord[] {
   try { return JSON.parse(local); } catch { return []; }
 }
 
-export function saveAttendances(records: import('../types').AttendanceRecord[]) {
+export function saveAttendances(records: import('../types').AttendanceRecord[], skipPush = false) {
   localStorage.setItem('autocraft_attendance_v1', JSON.stringify(records));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('attendanceRecords', records);
 }
 
 export function createAttendance(record: Omit<import('../types').AttendanceRecord, 'id'>) {
@@ -1392,9 +1394,10 @@ export function getSalaries(): import('../types').SalaryRecord[] {
   try { return JSON.parse(local); } catch { return []; }
 }
 
-export function saveSalaries(records: import('../types').SalaryRecord[]) {
+export function saveSalaries(records: import('../types').SalaryRecord[], skipPush = false) {
   localStorage.setItem('autocraft_salaries_v1', JSON.stringify(records));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('salaryRecords', records);
 }
 
 export function createSalaryRecord(record: Omit<import('../types').SalaryRecord, 'id'>) {
@@ -2827,7 +2830,9 @@ export function saveAuthUser(user: AuthUser | null): void {
     const str = JSON.stringify(user);
     try { localStorage.setItem(STORAGE_KEYS.AUTH_USER, str); } catch {}
     setCookieValue(STORAGE_KEYS.AUTH_USER, str);
-    if (user.workshopId && user.workshopId.trim() !== '') {
+    if (user.role === 'SUPER_ADMIN') {
+      try { localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSHOP, 'ALL'); } catch {}
+    } else if (user.workshopId && user.workshopId.trim() !== '') {
       try { localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSHOP, user.workshopId.trim()); } catch {}
     }
   } else {

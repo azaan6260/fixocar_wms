@@ -107,6 +107,8 @@ interface CentralStoreData {
   deliveryRecords?: any[];
   purchaseOrders?: any[];
   workshopExpenses?: any[];
+  attendanceRecords?: any[];
+  salaryRecords?: any[];
 }
 
 const DEFAULT_INITIAL_CITIES = [
@@ -188,7 +190,14 @@ function loadCentralStore(): CentralStoreData {
           vendors: Array.isArray(parsed.vendors) ? parsed.vendors : [],
           vehicleCheckIns: Array.isArray(parsed.vehicleCheckIns) ? parsed.vehicleCheckIns : [],
           standardJobs: Array.isArray(parsed.standardJobs) ? parsed.standardJobs : [],
-          carModels: Array.isArray(parsed.carModels) ? parsed.carModels : []
+          carModels: Array.isArray(parsed.carModels) ? parsed.carModels : [],
+          jobCardHistory: Array.isArray(parsed.jobCardHistory) ? parsed.jobCardHistory : [],
+          inventoryItems: Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : [],
+          deliveryRecords: Array.isArray(parsed.deliveryRecords) ? parsed.deliveryRecords : [],
+          purchaseOrders: Array.isArray(parsed.purchaseOrders) ? parsed.purchaseOrders : [],
+          workshopExpenses: Array.isArray(parsed.workshopExpenses) ? parsed.workshopExpenses : [],
+          attendanceRecords: Array.isArray(parsed.attendanceRecords) ? parsed.attendanceRecords : [],
+          salaryRecords: Array.isArray(parsed.salaryRecords) ? parsed.salaryRecords : []
         };
         // Guarantee Super Admin and Taifur are in employees list
         if (!memoryCentralStore.employees.some(e => e.id === 'emp-admin' || e.loginId === 'admin')) {
@@ -1348,6 +1357,42 @@ Return valid JSON ONLY.`;
             (store as any).workshopExpenses = mergeArrayItems((store as any).workshopExpenses || [], mappedExpenses, e => e.id);
           }
 
+          // 12. Attendance Records
+          const { data: supaAttendance } = await client.from('attendance_records').select('*');
+          if (supaAttendance && supaAttendance.length > 0) {
+            const mappedAttendance = supaAttendance.map((a: any) => ({
+              id: a.id,
+              employeeId: a.employee_id,
+              employeeName: a.employee_name,
+              date: a.date,
+              status: a.status,
+              checkInTime: a.check_in_time,
+              checkOutTime: a.check_out_time,
+              notes: a.notes,
+              workshopId: a.workshop_id
+            }));
+            (store as any).attendanceRecords = mergeArrayItems((store as any).attendanceRecords || [], mappedAttendance, a => a.id);
+          }
+
+          // 13. Salary Records
+          const { data: supaSalaries } = await client.from('salary_records').select('*');
+          if (supaSalaries && supaSalaries.length > 0) {
+            const mappedSalaries = supaSalaries.map((s: any) => ({
+              id: s.id,
+              employeeId: s.employee_id,
+              employeeName: s.employee_name,
+              month: s.month,
+              baseSalary: s.base_salary || 0,
+              bonus: s.bonus || 0,
+              deductions: s.deductions || 0,
+              netSalary: s.net_salary || 0,
+              status: s.status || 'PENDING',
+              paymentDate: s.payment_date,
+              notes: s.notes
+            }));
+            (store as any).salaryRecords = mergeArrayItems((store as any).salaryRecords || [], mappedSalaries, s => s.id);
+          }
+
           saveCentralStore(store);
         } catch (supaFetchErr) {
           console.warn('[CENTRAL_STORE] Supabase query warning:', supaFetchErr);
@@ -1364,7 +1409,7 @@ Return valid JSON ONLY.`;
   app.post('/api/central/store', async (req, res) => {
     try {
       const currentStore = loadCentralStore();
-      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels, jobCardHistory, inventoryItems, deliveryRecords, purchaseOrders, workshopExpenses } = req.body;
+      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels, jobCardHistory, inventoryItems, deliveryRecords, purchaseOrders, workshopExpenses, attendanceRecords, salaryRecords } = req.body;
 
       if (Array.isArray(employees) && employees.length > 0) {
         currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.email || e.loginId || e.name);
@@ -1404,6 +1449,12 @@ Return valid JSON ONLY.`;
       }
       if (Array.isArray(workshopExpenses) && workshopExpenses.length > 0) {
         currentStore.workshopExpenses = mergeArrayItems(currentStore.workshopExpenses || [], workshopExpenses, ex => ex.id);
+      }
+      if (Array.isArray(attendanceRecords) && attendanceRecords.length > 0) {
+        currentStore.attendanceRecords = mergeArrayItems(currentStore.attendanceRecords || [], attendanceRecords, att => att.id);
+      }
+      if (Array.isArray(salaryRecords) && salaryRecords.length > 0) {
+        currentStore.salaryRecords = mergeArrayItems(currentStore.salaryRecords || [], salaryRecords, sal => sal.id);
       }
 
       saveCentralStore(currentStore);
