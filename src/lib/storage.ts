@@ -1775,7 +1775,136 @@ export function resetToDefaultMockData() {
   localStorage.removeItem(STORAGE_KEYS.SERVICE_BOOKINGS);
   localStorage.removeItem(STORAGE_KEYS.CITIES);
   localStorage.removeItem(STORAGE_KEYS.WORKSHOPS);
+  localStorage.removeItem(STORAGE_KEYS.INVENTORY);
+  localStorage.removeItem(STORAGE_KEYS.STANDARD_JOBS);
+  localStorage.removeItem(STORAGE_KEYS.VEHICLE_CHECKINS);
+  localStorage.removeItem(STORAGE_KEYS.CAR_MODELS);
+  localStorage.removeItem(STORAGE_KEYS.WORKSHOP_EXPENSES);
   notifyStoreChange();
+}
+
+export interface StorageIntegrityResult {
+  isValid: boolean;
+  resetTriggered: boolean;
+  issues: string[];
+  repairedTables: string[];
+}
+
+export function validateLocalStorageIntegrity(): StorageIntegrityResult {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return {
+      isValid: false,
+      resetTriggered: false,
+      issues: ['localStorage is not available in current environment'],
+      repairedTables: []
+    };
+  }
+
+  const issues: string[] = [];
+  const repairedTables: string[] = [];
+
+  const criticalTableSchema: { key: string; tableName: string; seedData: any[] }[] = [
+    { key: STORAGE_KEYS.JOB_CARDS, tableName: 'job_cards', seedData: INITIAL_JOB_CARDS },
+    { key: STORAGE_KEYS.EMPLOYEES, tableName: 'employees', seedData: INITIAL_EMPLOYEES },
+    { key: STORAGE_KEYS.VENDORS, tableName: 'vendors', seedData: INITIAL_VENDORS },
+    { key: STORAGE_KEYS.DELIVERIES, tableName: 'deliveries', seedData: INITIAL_DELIVERIES },
+    { key: STORAGE_KEYS.PURCHASE_ORDERS, tableName: 'purchase_orders', seedData: INITIAL_PURCHASE_ORDERS },
+    { key: STORAGE_KEYS.CITIES, tableName: 'cities', seedData: INITIAL_CITIES },
+    { key: STORAGE_KEYS.WORKSHOPS, tableName: 'workshops', seedData: INITIAL_WORKSHOPS },
+    { key: STORAGE_KEYS.INVENTORY, tableName: 'inventory', seedData: INITIAL_INVENTORY_ITEMS },
+    { key: STORAGE_KEYS.STANDARD_JOBS, tableName: 'standard_jobs', seedData: INITIAL_STANDARD_JOBS },
+    { key: STORAGE_KEYS.VEHICLE_CHECKINS, tableName: 'vehicle_checkins', seedData: INITIAL_VEHICLE_CHECKINS },
+    { key: STORAGE_KEYS.CAR_MODELS, tableName: 'car_models', seedData: INITIAL_CAR_MODELS },
+    { key: STORAGE_KEYS.CITY_SERVICES, tableName: 'city_services', seedData: INITIAL_CITY_SERVICES },
+    { key: STORAGE_KEYS.SERVICE_BOOKINGS, tableName: 'service_bookings', seedData: INITIAL_SERVICE_BOOKINGS }
+  ];
+
+  let needsReset = false;
+
+  for (const table of criticalTableSchema) {
+    const rawVal = localStorage.getItem(table.key);
+
+    if (rawVal === null) {
+      issues.push(`Table '${table.tableName}' (key: ${table.key}) is missing from localStorage`);
+      needsReset = true;
+    } else {
+      try {
+        const parsed = JSON.parse(rawVal);
+        if (!Array.isArray(parsed)) {
+          issues.push(`Table '${table.tableName}' schema is corrupted (expected Array, got ${typeof parsed})`);
+          needsReset = true;
+        } else if (parsed.length === 0 && table.seedData.length > 0) {
+          issues.push(`Critical table '${table.tableName}' is empty (0 records)`);
+          needsReset = true;
+        }
+      } catch (err) {
+        issues.push(`Table '${table.tableName}' contains invalid/corrupted JSON`);
+        needsReset = true;
+      }
+    }
+  }
+
+  if (needsReset) {
+    console.warn('[STORAGE_INTEGRITY] ⚠️ Local storage integrity check failed. Issues detected:', issues);
+    console.log('[STORAGE_INTEGRITY] 🔄 Triggering full schema repair, re-seeding default collections, and requesting central re-download...');
+
+    for (const table of criticalTableSchema) {
+      try {
+        const rawVal = localStorage.getItem(table.key);
+        let isValidNonEmptyArray = false;
+        if (rawVal !== null) {
+          try {
+            const parsed = JSON.parse(rawVal);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              isValidNonEmptyArray = true;
+            }
+          } catch {}
+        }
+        if (!isValidNonEmptyArray) {
+          localStorage.setItem(table.key, JSON.stringify(table.seedData));
+          repairedTables.push(table.tableName);
+        }
+      } catch (e) {
+        localStorage.setItem(table.key, JSON.stringify(table.seedData));
+        repairedTables.push(table.tableName);
+      }
+    }
+
+    notifyStoreChange();
+
+    // Trigger full re-download / sync from central database store & Supabase
+    if (typeof window !== 'undefined') {
+      import('./syncService').then(syncModule => {
+        if (syncModule && typeof syncModule.syncFromSupabase === 'function') {
+          console.log('[STORAGE_INTEGRITY] 🌐 Executing full re-sync & download from backend database...');
+          syncModule.syncFromSupabase().catch(err => {
+            console.error('[STORAGE_INTEGRITY] Sync re-download failed:', err);
+          });
+        }
+      }).catch(() => {});
+    }
+
+    dispatchToastNotification({
+      title: 'Storage Schema Auto-Repaired',
+      message: `Repaired ${repairedTables.length} missing/corrupted database tables and triggered re-download.`,
+      type: 'INFO'
+    });
+
+    return {
+      isValid: false,
+      resetTriggered: true,
+      issues,
+      repairedTables
+    };
+  }
+
+  console.log('[STORAGE_INTEGRITY] ✅ Local storage schema integrity validated successfully.');
+  return {
+    isValid: true,
+    resetTriggered: false,
+    issues: [],
+    repairedTables: []
+  };
 }
 
 // Clear all demo data completely for fresh Admin setup (Cities -> Workshops -> Employees -> Cards)

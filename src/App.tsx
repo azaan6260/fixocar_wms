@@ -21,7 +21,8 @@ import {
   getJobCardById, 
   subscribeToStore,
   getAuthUser,
-  logoutAuthUser
+  logoutAuthUser,
+  validateLocalStorageIntegrity
 } from './lib/storage';
 import { Camera, Wrench, Home } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
@@ -215,6 +216,7 @@ export default function App() {
     };
 
     const initializeGlobalSync = async () => {
+      validateLocalStorageIntegrity();
       await fetchServerSupabaseConfig();
       await syncFromSupabase();
       runDiagnosticCheck();

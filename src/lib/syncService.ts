@@ -86,6 +86,79 @@ function verifyAndUpdateAuthUserWorkshop(mergedEmployees: Employee[], sourceTag:
   }
 }
 
+export interface ChunkedFetchOptions {
+  chunkSize?: number;
+  selectQuery?: string;
+  orderBy?: { column: string; ascending?: boolean };
+}
+
+/**
+ * Downloads data from a Supabase table in smaller paginated batches/chunks.
+ * Prevents HTTP request timeouts, payload truncation, and high memory usage during mobile synchronization.
+ */
+export async function fetchTableInChunks<T = any>(
+  client: any,
+  tableName: string,
+  options: ChunkedFetchOptions = {}
+): Promise<{ data: T[] | null; error: any }> {
+  if (!client) {
+    return { data: null, error: new Error('Supabase client is not available') };
+  }
+
+  const chunkSize = options.chunkSize || 100;
+  const selectQuery = options.selectQuery || '*';
+  let allRows: T[] = [];
+  let page = 0;
+  let hasMore = true;
+  let lastError: any = null;
+
+  while (hasMore) {
+    const from = page * chunkSize;
+    const to = from + chunkSize - 1;
+
+    try {
+      let query = client
+        .from(tableName)
+        .select(selectQuery)
+        .range(from, to);
+
+      if (options.orderBy) {
+        query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending ?? true });
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        lastError = error;
+        console.warn(`[CHUNKED_FETCH] Error fetching page ${page} (${from}-${to}) for table '${tableName}':`, error.message || error);
+        break;
+      }
+
+      if (data && Array.isArray(data) && data.length > 0) {
+        allRows = allRows.concat(data as T[]);
+        console.log(`[CHUNKED_FETCH] Downloaded chunk ${page + 1} (${data.length} records, range ${from}-${to}) for table '${tableName}'`);
+        if (data.length < chunkSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
+    } catch (chunkErr: any) {
+      lastError = chunkErr;
+      console.error(`[CHUNKED_FETCH] Exception on page ${page} for table '${tableName}':`, chunkErr);
+      break;
+    }
+  }
+
+  if (lastError && allRows.length === 0) {
+    return { data: null, error: lastError };
+  }
+
+  return { data: allRows, error: null };
+}
+
 export async function syncFromSupabase(): Promise<SyncResult> {
   const missingTables: string[] = [];
   const errors: string[] = [];
@@ -372,11 +445,11 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       console.warn('[SYNC_TRACE] Initial pushLocalDataToSupabase warning:', pushFirstErr);
     }
 
-    // 1. EMPLOYEES
-    const { data: employees, error: empErr } = await client.from('employees').select('*');
+    // 1. EMPLOYEES (Chunked Fetch)
+    const { data: employees, error: empErr } = await fetchTableInChunks<any>(client, 'employees', { chunkSize: 100 });
     if (empErr) {
       if (empErr.code === '42P01') missingTables.push('employees');
-      errors.push(`Employees table error: ${empErr.message}`);
+      errors.push(`Employees table error: ${empErr.message || empErr}`);
     } else if (employees !== null) {
       const supaEmployees: Employee[] = employees.map((e: any) => ({
         id: e.id,
@@ -419,11 +492,11 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       verifyAndUpdateAuthUserWorkshop(mergedEmployees, 'Supabase DB');
     }
 
-    // 2. CITIES
-    const { data: cities, error: cityErr } = await client.from('cities').select('*');
+    // 2. CITIES (Chunked Fetch)
+    const { data: cities, error: cityErr } = await fetchTableInChunks<any>(client, 'cities', { chunkSize: 100 });
     if (cityErr) {
       if (cityErr.code === '42P01') missingTables.push('cities');
-      errors.push(`Cities table error: ${cityErr.message}`);
+      errors.push(`Cities table error: ${cityErr.message || cityErr}`);
     } else {
       const supaCities: City[] = (cities || []).map((c: any) => ({
         id: c.id,
@@ -451,11 +524,11 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       }
     }
 
-    // 3. WORKSHOPS
-    const { data: workshops, error: wsErr } = await client.from('workshops').select('*');
+    // 3. WORKSHOPS (Chunked Fetch)
+    const { data: workshops, error: wsErr } = await fetchTableInChunks<any>(client, 'workshops', { chunkSize: 100 });
     if (wsErr) {
       if (wsErr.code === '42P01') missingTables.push('workshops');
-      errors.push(`Workshops table error: ${wsErr.message}`);
+      errors.push(`Workshops table error: ${wsErr.message || wsErr}`);
     } else {
       const supaWorkshops: Workshop[] = (workshops || []).map((w: any) => ({
         id: w.id,
@@ -496,11 +569,11 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       }
     }
 
-    // 4. VENDORS
-    const { data: vendors, error: venErr } = await client.from('vendors').select('*');
+    // 4. VENDORS (Chunked Fetch)
+    const { data: vendors, error: venErr } = await fetchTableInChunks<any>(client, 'vendors', { chunkSize: 100 });
     if (venErr) {
       if (venErr.code === '42P01') missingTables.push('vendors');
-      errors.push(`Vendors table error: ${venErr.message}`);
+      errors.push(`Vendors table error: ${venErr.message || venErr}`);
     } else if (vendors !== null) {
       const supaVendors: Vendor[] = vendors.map((v: any) => ({
         id: v.id,
@@ -526,12 +599,12 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       vendorsSynced = mergedVendors.length;
     }
 
-    // 5. JOB CARDS & TASKS
-    const { data: jobCards, error: jcErr } = await client.from('job_cards').select('*');
-    const { data: jobTasks } = await client.from('job_tasks').select('*');
+    // 5. JOB CARDS & TASKS (Chunked Fetch)
+    const { data: jobCards, error: jcErr } = await fetchTableInChunks<any>(client, 'job_cards', { chunkSize: 100 });
+    const { data: jobTasks } = await fetchTableInChunks<any>(client, 'job_tasks', { chunkSize: 100 });
     if (jcErr) {
       if (jcErr.code === '42P01') missingTables.push('job_cards');
-      errors.push(`Job cards table error: ${jcErr.message}`);
+      errors.push(`Job cards table error: ${jcErr.message || jcErr}`);
     } else if (jobCards !== null) {
       const supaCards = jobCards.map((c: any): JobCard => {
         const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
@@ -612,8 +685,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       jobCardsSynced = mergedCards.length;
     }
 
-    // 6. VEHICLE CHECK-INS (GATE PASS)
-    const { data: vehicleCheckIns, error: vciErr } = await client.from('vehicle_check_ins').select('*');
+    // 6. VEHICLE CHECK-INS (GATE PASS) (Chunked Fetch)
+    const { data: vehicleCheckIns, error: vciErr } = await fetchTableInChunks<any>(client, 'vehicle_check_ins', { chunkSize: 100 });
     if (vciErr) {
       if (vciErr.code === '42P01') missingTables.push('vehicle_check_ins');
     } else if (vehicleCheckIns !== null) {
@@ -655,8 +728,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveVehicleCheckIns(mergedCheckIns);
     }
 
-    // 7. CAR MODELS & VARIANTS
-    const { data: carModels, error: cmErr } = await client.from('car_models').select('*');
+    // 7. CAR MODELS & VARIANTS (Chunked Fetch)
+    const { data: carModels, error: cmErr } = await fetchTableInChunks<any>(client, 'car_models', { chunkSize: 100 });
     if (cmErr) {
       if (cmErr.code === '42P01') missingTables.push('car_models');
     } else if (carModels !== null) {
@@ -684,8 +757,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveCarModels(mergedModels, true);
     }
 
-    // 8. STANDARD JOBS
-    const { data: stdJobs, error: sjErr } = await client.from('standard_jobs').select('*');
+    // 8. STANDARD JOBS (Chunked Fetch)
+    const { data: stdJobs, error: sjErr } = await fetchTableInChunks<any>(client, 'standard_jobs', { chunkSize: 100 });
     if (sjErr) {
       if (sjErr.code === '42P01') missingTables.push('standard_jobs');
     } else if (stdJobs !== null) {
@@ -715,8 +788,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveStandardJobs(mergedStdJobs, true);
     }
 
-    // 9. JOB CARD HISTORY
-    const { data: historyRows, error: histErr } = await client.from('job_card_history').select('*');
+    // 9. JOB CARD HISTORY (Chunked Fetch)
+    const { data: historyRows, error: histErr } = await fetchTableInChunks<any>(client, 'job_card_history', { chunkSize: 100 });
     if (histErr) {
       if (histErr.code === '42P01') missingTables.push('job_card_history');
     } else if (historyRows !== null) {
@@ -736,8 +809,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveJobCardHistoryRecords(supaHistory);
     }
 
-    // 10. INVENTORY ITEMS
-    const { data: invItems, error: invErr } = await client.from('inventory_items').select('*');
+    // 10. INVENTORY ITEMS (Chunked Fetch)
+    const { data: invItems, error: invErr } = await fetchTableInChunks<any>(client, 'inventory_items', { chunkSize: 100 });
     if (invErr) {
       if (invErr.code === '42P01') missingTables.push('inventory_items');
     } else if (invItems !== null) {
@@ -761,8 +834,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveInventoryItems(supaInventory);
     }
 
-    // 11. DELIVERY RECORDS
-    const { data: deliveries, error: delErr } = await client.from('delivery_records').select('*');
+    // 11. DELIVERY RECORDS (Chunked Fetch)
+    const { data: deliveries, error: delErr } = await fetchTableInChunks<any>(client, 'delivery_records', { chunkSize: 100 });
     if (delErr) {
       if (delErr.code === '42P01') missingTables.push('delivery_records');
     } else if (deliveries !== null) {
@@ -794,8 +867,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveDeliveries(supaDeliveries);
     }
 
-    // 12. PURCHASE ORDERS
-    const { data: purchaseOrders, error: poErr } = await client.from('purchase_orders').select('*');
+    // 12. PURCHASE ORDERS (Chunked Fetch)
+    const { data: purchaseOrders, error: poErr } = await fetchTableInChunks<any>(client, 'purchase_orders', { chunkSize: 100 });
     if (poErr) {
       if (poErr.code === '42P01') missingTables.push('purchase_orders');
     } else if (purchaseOrders !== null) {
@@ -814,8 +887,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       savePurchaseOrders(supaPOs);
     }
 
-    // 13. WORKSHOP EXPENSES
-    const { data: expenses, error: expErr } = await client.from('workshop_expenses').select('*');
+    // 13. WORKSHOP EXPENSES (Chunked Fetch)
+    const { data: expenses, error: expErr } = await fetchTableInChunks<any>(client, 'workshop_expenses', { chunkSize: 100 });
     if (expErr) {
       if (expErr.code === '42P01') missingTables.push('workshop_expenses');
     } else if (expenses !== null) {
@@ -839,8 +912,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveWorkshopExpenses(supaExpenses);
     }
 
-    // 14. ATTENDANCE RECORDS
-    const { data: attendanceRows, error: attErr } = await client.from('attendance_records').select('*');
+    // 14. ATTENDANCE RECORDS (Chunked Fetch)
+    const { data: attendanceRows, error: attErr } = await fetchTableInChunks<any>(client, 'attendance_records', { chunkSize: 100 });
     if (attErr) {
       if (attErr.code === '42P01') missingTables.push('attendance_records');
     } else if (attendanceRows !== null) {
@@ -865,8 +938,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveAttendances(mergedAtt, true);
     }
 
-    // 15. SALARY RECORDS
-    const { data: salaryRows, error: salErr } = await client.from('salary_records').select('*');
+    // 15. SALARY RECORDS (Chunked Fetch)
+    const { data: salaryRows, error: salErr } = await fetchTableInChunks<any>(client, 'salary_records', { chunkSize: 100 });
     if (salErr) {
       if (salErr.code === '42P01') missingTables.push('salary_records');
     } else if (salaryRows !== null) {
