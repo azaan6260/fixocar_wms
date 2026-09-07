@@ -138,11 +138,15 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
     );
   }
 
-  return allCards.filter(c => 
+  const filtered = allCards.filter(c => 
     c.workshopId === targetWs || 
     c.workshopName === targetWs || 
     !c.workshopId
   );
+  if (filtered.length === 0 && allCards.length > 0) {
+    return allCards;
+  }
+  return filtered;
 }
 
 export function saveJobCards(cards: JobCard[], skipPush = false) {
@@ -1232,12 +1236,16 @@ export function getEmployees(workshopIdFilter?: string): Employee[] {
     );
   }
 
-  return allStaff.filter(emp => 
+  const filtered = allStaff.filter(emp => 
     emp.workshopId === targetWs || 
     emp.workshopName === targetWs ||
     emp.role === 'SUPER_ADMIN' ||
     !emp.workshopId
   );
+  if (filtered.length === 0 && allStaff.length > 0) {
+    return allStaff;
+  }
+  return filtered;
 }
 
 export function saveEmployees(employees: Employee[], skipPush = false) {

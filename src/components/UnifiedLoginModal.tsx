@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2
+  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2, Zap
 } from 'lucide-react';
 import { AuthUser } from '../types';
 import { authenticateUser, saveAuthUser, getCities, getEmployees, saveEmployees } from '../lib/storage';
@@ -366,6 +366,32 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* 1-Tap Quick Demo Admin Login */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIdentifier('admin@fixocar.com');
+                    setPassword('123456');
+                    setIsLoading(true);
+                    setError(null);
+                    const res = authenticateUser('admin@fixocar.com', '123456', { isCustomerLogin: false });
+                    if (res.success && res.user) {
+                      saveAuthUser(res.user);
+                      try { await syncFromSupabase(); } catch {}
+                      setIsLoading(false);
+                      onLoginSuccess(res.user);
+                      onClose();
+                    } else {
+                      setIsLoading(false);
+                      setError('Failed to authenticate demo admin.');
+                    }
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-bounce" />
+                  <span>1-Tap Demo Admin Sign-In (Load All Mobile Data)</span>
+                </button>
 
                 <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />

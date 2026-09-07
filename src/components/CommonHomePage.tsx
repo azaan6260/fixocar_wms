@@ -72,6 +72,23 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white font-sans">
       
+      {/* Mobile Demo Quick Banner */}
+      <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-950 border-b border-emerald-500/30 px-4 py-2 text-center">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 text-emerald-300 font-bold">
+            <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-pulse shrink-0" />
+            <span>Testing on Mobile? You are currently on the Customer Portal view (/).</span>
+          </div>
+          <button
+            onClick={() => onOpenLogin('STAFF')}
+            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-600/30 shrink-0"
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Open WMS Staff Workspace & All Data</span>
+          </button>
+        </div>
+      </div>
+
       {/* Top Universal Navbar */}
       <header className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
