@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, Workshop, City, isTabAllowedForRole, getDefaultTabForRole } from '../types';
 import { RoleBadge, ROLE_CONFIG } from './RoleBadge';
 import { getStoredSupabaseConfig, getSupabaseClient } from '../lib/supabaseClient';
-import { resetToDefaultMockData, getJobCards, subscribeToStore, getAuthUser, logoutAuthUser, getWorkshops, getCities, getActiveWorkshopId, setActiveWorkshopId } from '../lib/storage';
+import { resetToDefaultMockData, getJobCards, getAllJobCards, getAllEmployees, subscribeToStore, getAuthUser, logoutAuthUser, getWorkshops, getCities, getActiveWorkshopId, setActiveWorkshopId, dispatchToastNotification } from '../lib/storage';
 import { syncFromSupabase } from '../lib/syncService';
 import { useI18n } from '../lib/i18n';
 import { 
@@ -256,7 +256,20 @@ export function HeaderNav({
               onClick={async () => {
                 setIsSyncing(true);
                 try {
-                  await syncFromSupabase();
+                  const res = await syncFromSupabase();
+                  const cardsCount = getAllJobCards().length;
+                  const staffCount = getAllEmployees().length;
+                  dispatchToastNotification({
+                    type: 'JOB_CARD_CREATED',
+                    title: '✅ Central Database Synced',
+                    message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
+                  });
+                } catch (err: any) {
+                  dispatchToastNotification({
+                    type: 'ESTIMATE_DECLINED',
+                    title: '⚠️ Database Sync Warning',
+                    message: err.message || 'Check network connection or try again.'
+                  });
                 } finally {
                   setIsSyncing(false);
                 }

@@ -47,7 +47,13 @@ export async function fetchServerSupabaseConfig(): Promise<{
   supabaseServiceKey: string;
 }> {
   try {
-    const res = await fetch('/api/supabase/config');
+    const res = await fetch(`/api/supabase/config?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
     if (res.ok) {
       const data = await res.json().catch(() => null);
       if (data && data.configured && data.supabaseUrl) {

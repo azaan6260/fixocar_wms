@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseClient, getStoredSupabaseConfig, fetchServerSupabaseConfig } from './supabaseClient';
 import { 
-  getEmployees, saveEmployees,
+  getAllEmployees, getEmployees, saveEmployees,
   getVendors, saveVendors,
   getCities, saveCities,
   getWorkshops, saveWorkshops,
@@ -171,7 +171,13 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
   // 1. Always pull from central server store first (syncs laptop & mobile)
   try {
-    const res = await fetch('/api/central/store');
+    const res = await fetch(`/api/central/store?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
     if (res.ok) {
       const data = await res.json().catch(() => null);
       if (data && data.success && data.store) {
@@ -1002,9 +1008,9 @@ export async function pushLocalDataToSupabase(): Promise<{
 }> {
   const cities = getCities();
   const workshops = getWorkshops();
-  const employees = getEmployees();
+  const employees = getAllEmployees();
   const vendors = getVendors();
-  const jobCards = getJobCards();
+  const jobCards = getAllJobCards();
   const checkIns = getVehicleCheckIns();
 
   // Always sync to central backend server first

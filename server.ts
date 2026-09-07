@@ -1058,6 +1058,10 @@ Return valid JSON ONLY.`;
   // CENTRAL UNIFIED STORE & REALTIME SYNC (Laptop & Mobile)
   // ==========================================
   app.get('/api/central/store', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     try {
       const store = loadCentralStore();
       const client = getSupabaseAdminClient();
@@ -1774,6 +1778,9 @@ Return valid JSON ONLY.`;
 
   // GET server-stored Supabase credentials for all connected devices
   app.get('/api/supabase/config', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const persisted = loadPersistedSupabaseConfig() || {};
     const url = persisted.supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
     const anonKey = persisted.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
