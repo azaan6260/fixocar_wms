@@ -6,14 +6,20 @@ import {
   getCities, saveCities,
   getWorkshops, saveWorkshops,
   getJobCards, saveJobCards,
+  getJobCardHistoryRecords, saveJobCardHistoryRecords,
   getVehicleCheckIns, saveVehicleCheckIns,
   getCarModels, saveCarModels,
   getStandardJobs, saveStandardJobs,
+  getInventoryItems, saveInventoryItems,
+  getDeliveries, saveDeliveries,
+  getPurchaseOrders, savePurchaseOrders,
+  getWorkshopExpenses, saveWorkshopExpenses,
   dispatchToastNotification,
   getAuthUser, saveAuthUser,
   getActiveWorkshopId, setActiveWorkshopId
 } from './storage';
-import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor } from '../types';
+import { INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
+import { JobCard, JobTask, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor, JobCardHistoryRecord, InventoryItem, DeliveryRecord, PurchaseOrder, WorkshopExpense } from '../types';
 
 export interface SyncResult {
   success: boolean;
@@ -99,7 +105,26 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           const currentLocal = getEmployees();
           const empMap = new Map<string, Employee>();
           
-          for (const sEmp of store.employees) {
+          for (const rawEmp of store.employees) {
+            const sEmp: Employee = {
+              id: rawEmp.id,
+              name: rawEmp.name || rawEmp.employee_name || rawEmp.full_name || 'Staff',
+              role: rawEmp.role || 'MECHANIC',
+              phone: rawEmp.phone || rawEmp.mobile || '',
+              email: rawEmp.email || rawEmp.work_email || '',
+              specializedTeam: rawEmp.specializedTeam || rawEmp.specialized_team || 'Mechanical',
+              status: rawEmp.status || 'AVAILABLE',
+              avatarUrl: rawEmp.avatarUrl || rawEmp.avatar_url,
+              activeJobsCount: rawEmp.activeJobsCount || rawEmp.active_jobs_count || 0,
+              loginId: rawEmp.loginId || rawEmp.login_id || rawEmp.email,
+              password: rawEmp.password || rawEmp.password_hash || '123456',
+              baseSalary: rawEmp.baseSalary || rawEmp.base_salary || 0,
+              employmentType: rawEmp.employmentType || rawEmp.employment_type || 'PAYROLL',
+              cityId: rawEmp.cityId || rawEmp.city_id,
+              cityName: rawEmp.cityName || rawEmp.city_name,
+              workshopId: rawEmp.workshopId || rawEmp.workshop_id,
+              workshopName: rawEmp.workshopName || rawEmp.workshop_name
+            };
             const key = (sEmp.id || sEmp.email || sEmp.loginId || sEmp.name || '').toLowerCase().trim();
             if (key) empMap.set(key, sEmp);
           }
@@ -129,26 +154,42 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
         if (Array.isArray(store.cities) && store.cities.length > 0) {
           const currentLocal = getCities();
-          const merged: City[] = [...store.cities];
+          const mergedCities: City[] = store.cities.map((c: any) => ({
+            id: c.id,
+            name: c.name || c.city_name || c.cityName || c.title || 'City',
+            state: c.state || c.state_name || c.province || '',
+            createdAt: c.createdAt || c.created_at || new Date().toISOString().split('T')[0]
+          }));
           for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
-              merged.push(loc);
+            if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
+              mergedCities.push(loc);
             }
           }
-          saveCities(merged, true);
-          citiesSynced = merged.length;
+          saveCities(mergedCities, true);
+          citiesSynced = mergedCities.length;
         }
 
         if (Array.isArray(store.workshops) && store.workshops.length > 0) {
           const currentLocal = getWorkshops();
-          const merged: Workshop[] = [...store.workshops];
+          const mergedWorkshops: Workshop[] = store.workshops.map((w: any) => ({
+            id: w.id,
+            name: w.name || w.workshop_name || w.workshopName || 'Workshop',
+            code: w.code || 'WS',
+            cityId: w.city_id || w.cityId,
+            cityName: w.city_name || w.cityName || w.city || '',
+            address: w.address || '',
+            phone: w.phone || '',
+            isCars24Partner: w.is_cars24_partner ?? w.isCars24Partner ?? false,
+            managerName: w.manager_name || w.managerName || '',
+            createdAt: w.created_at || w.createdAt
+          }));
           for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
-              merged.push(loc);
+            if (!mergedWorkshops.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
+              mergedWorkshops.push(loc);
             }
           }
-          saveWorkshops(merged, true);
-          workshopsSynced = merged.length;
+          saveWorkshops(mergedWorkshops, true);
+          workshopsSynced = mergedWorkshops.length;
         }
 
         if (Array.isArray(store.vendors) && store.vendors.length > 0) {
@@ -255,23 +296,31 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (cityErr) {
       if (cityErr.code === '42P01') missingTables.push('cities');
       errors.push(`Cities table error: ${cityErr.message}`);
-    } else if (cities !== null) {
-      const supaCities: City[] = cities.map((c: any) => ({
+    } else {
+      const supaCities: City[] = (cities || []).map((c: any) => ({
         id: c.id,
-        name: c.name,
-        state: c.state || '',
-        createdAt: c.created_at || new Date().toISOString().split('T')[0]
+        name: c.name || c.city_name || c.cityName || c.title || 'City',
+        state: c.state || c.state_name || c.province || '',
+        createdAt: c.created_at || c.createdAt || new Date().toISOString().split('T')[0]
       }));
 
       const currentLocal = getCities();
       const mergedCities: City[] = [...supaCities];
-      for (const loc of currentLocal) {
-        if (!mergedCities.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+      for (const loc of [...currentLocal, ...INITIAL_CITIES]) {
+        if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
           mergedCities.push(loc);
         }
       }
       saveCities(mergedCities, true);
       citiesSynced = mergedCities.length;
+
+      for (const c of mergedCities) {
+        client.from('cities').upsert({
+          id: c.id,
+          name: c.name,
+          state: c.state || ''
+        }).then(() => {}, () => {});
+      }
     }
 
     // 3. WORKSHOPS
@@ -279,29 +328,44 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (wsErr) {
       if (wsErr.code === '42P01') missingTables.push('workshops');
       errors.push(`Workshops table error: ${wsErr.message}`);
-    } else if (workshops !== null) {
-      const supaWorkshops: Workshop[] = workshops.map((w: any) => ({
+    } else {
+      const supaWorkshops: Workshop[] = (workshops || []).map((w: any) => ({
         id: w.id,
-        name: w.name,
+        name: w.name || w.workshop_name || w.workshopName || 'Workshop',
         code: w.code || 'WS',
-        cityId: w.city_id,
-        cityName: w.city_name,
-        address: w.address,
-        phone: w.phone,
-        isCars24Partner: w.is_cars24_partner ?? false,
-        managerName: w.manager_name || '',
-        createdAt: w.created_at
+        cityId: w.city_id || w.cityId,
+        cityName: w.city_name || w.cityName || w.city || '',
+        address: w.address || '',
+        phone: w.phone || '',
+        isCars24Partner: w.is_cars24_partner ?? w.isCars24Partner ?? false,
+        managerName: w.manager_name || w.managerName || '',
+        createdAt: w.created_at || w.createdAt
       }));
 
       const currentLocal = getWorkshops();
       const mergedWorkshops: Workshop[] = [...supaWorkshops];
-      for (const loc of currentLocal) {
-        if (!mergedWorkshops.some(m => m.id === loc.id || m.name.toLowerCase() === loc.name.toLowerCase())) {
+      for (const loc of [...currentLocal, ...INITIAL_WORKSHOPS]) {
+        if (!mergedWorkshops.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
           mergedWorkshops.push(loc);
         }
       }
       saveWorkshops(mergedWorkshops, true);
       workshopsSynced = mergedWorkshops.length;
+
+      for (const w of mergedWorkshops) {
+        const fullPayload = {
+          id: w.id,
+          name: w.name,
+          city_id: w.cityId,
+          city_name: w.cityName,
+          code: w.code || 'WS',
+          address: w.address || '',
+          phone: w.phone || '',
+          is_cars24_partner: w.isCars24Partner ?? false,
+          manager_name: w.managerName || '',
+        };
+        client.from('workshops').upsert(fullPayload).then(() => {}, () => {});
+      }
     }
 
     // 4. VENDORS
@@ -523,6 +587,130 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveStandardJobs(mergedStdJobs, true);
     }
 
+    // 9. JOB CARD HISTORY
+    const { data: historyRows, error: histErr } = await client.from('job_card_history').select('*');
+    if (histErr) {
+      if (histErr.code === '42P01') missingTables.push('job_card_history');
+    } else if (historyRows !== null) {
+      const supaHistory: JobCardHistoryRecord[] = historyRows.map((h: any) => ({
+        id: h.id || `hist-${Date.now()}`,
+        jobCardId: h.job_card_id,
+        previousStatus: h.previous_status,
+        newStatus: h.new_status,
+        actionType: h.action_type || 'STATUS_CHANGE',
+        changedById: h.changed_by_id,
+        changedByName: h.changed_by_name || 'System',
+        changedByRole: h.changed_by_role,
+        notes: h.notes,
+        metadata: h.metadata,
+        createdAt: h.created_at || new Date().toISOString()
+      }));
+      saveJobCardHistoryRecords(supaHistory);
+    }
+
+    // 10. INVENTORY ITEMS
+    const { data: invItems, error: invErr } = await client.from('inventory_items').select('*');
+    if (invErr) {
+      if (invErr.code === '42P01') missingTables.push('inventory_items');
+    } else if (invItems !== null) {
+      const supaInventory: InventoryItem[] = invItems.map((i: any) => ({
+        id: i.id,
+        name: i.name,
+        partNumber: i.part_number,
+        category: i.category,
+        stockQuantity: i.stock_quantity || 0,
+        unit: i.unit || 'Pcs',
+        minStockAlert: i.min_stock_alert || 5,
+        unitCost: i.unit_cost || 0,
+        sellingPrice: i.selling_price || 0,
+        supplierVendorId: i.supplier_vendor_id,
+        supplierVendorName: i.supplier_vendor_name,
+        shelfLocation: i.shelf_location,
+        workshopId: i.workshop_id,
+        workshopName: i.workshop_name,
+        lastRestockedAt: i.last_restocked_at
+      }));
+      saveInventoryItems(supaInventory);
+    }
+
+    // 11. DELIVERY RECORDS
+    const { data: deliveries, error: delErr } = await client.from('delivery_records').select('*');
+    if (delErr) {
+      if (delErr.code === '42P01') missingTables.push('delivery_records');
+    } else if (deliveries !== null) {
+      const supaDeliveries: DeliveryRecord[] = deliveries.map((d: any) => ({
+        id: d.id,
+        jobCardId: d.job_card_id,
+        vehicleReg: d.vehicle_reg,
+        customerName: d.customer_name,
+        customerPhone: d.customer_phone,
+        deliveryBoyId: d.delivery_boy_id,
+        deliveryBoyName: d.delivery_boy_name,
+        deliveryBoyPhone: d.delivery_boy_phone,
+        type: d.type || 'DELIVERY',
+        pickupAddress: d.pickup_address,
+        deliveryAddress: d.delivery_address,
+        status: d.status || 'ASSIGNED',
+        totalAmountDue: d.total_amount_due || 0,
+        paymentStatus: d.payment_status || 'PENDING',
+        paymentMethod: d.payment_method,
+        collectedAt: d.collected_at,
+        currentLat: d.current_lat,
+        currentLng: d.current_lng,
+        destinationLat: d.destination_lat,
+        destinationLng: d.destination_lng,
+        etaMinutes: d.eta_minutes || 20,
+        notes: d.notes,
+        updatedAt: d.updated_at
+      }));
+      saveDeliveries(supaDeliveries);
+    }
+
+    // 12. PURCHASE ORDERS
+    const { data: purchaseOrders, error: poErr } = await client.from('purchase_orders').select('*');
+    if (poErr) {
+      if (poErr.code === '42P01') missingTables.push('purchase_orders');
+    } else if (purchaseOrders !== null) {
+      const supaPOs: PurchaseOrder[] = purchaseOrders.map((p: any) => ({
+        id: p.id,
+        jobCardId: p.job_card_id,
+        vehicleReg: p.vehicle_reg,
+        vendorId: p.vendor_id,
+        vendorName: p.vendor_name,
+        category: p.category,
+        itemDescription: p.item_description,
+        amount: p.amount || 0,
+        status: p.status || 'ISSUED',
+        createdAt: p.created_at
+      }));
+      savePurchaseOrders(supaPOs);
+    }
+
+    // 13. WORKSHOP EXPENSES
+    const { data: expenses, error: expErr } = await client.from('workshop_expenses').select('*');
+    if (expErr) {
+      if (expErr.code === '42P01') missingTables.push('workshop_expenses');
+    } else if (expenses !== null) {
+      const supaExpenses: WorkshopExpense[] = expenses.map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        category: e.category,
+        amount: e.amount || 0,
+        date: e.date || new Date().toISOString().split('T')[0],
+        workshopId: e.workshop_id,
+        workshopName: e.workshop_name,
+        paymentMode: e.payment_mode || 'UPI',
+        paidByName: e.paid_by_name || 'Staff',
+        vendorName: e.vendor_name,
+        receiptNumber: e.receipt_number,
+        notes: e.notes,
+        isApproved: e.is_approved ?? true,
+        approvedByName: e.approved_by_name,
+        createdAt: e.created_at
+      }));
+      saveWorkshopExpenses(supaExpenses);
+    }
+
     // Automatically push merged dataset back to Supabase in background
     pushLocalDataToSupabase().catch(pushErr => {
       console.warn('[SYNC_TRACE] Background pushLocalDataToSupabase error after sync:', pushErr);
@@ -577,7 +765,12 @@ export async function pushLocalDataToSupabase(): Promise<{
         cities,
         workshops,
         vendors,
-        vehicleCheckIns: checkIns
+        vehicleCheckIns: checkIns,
+        jobCardHistory: getJobCardHistoryRecords(),
+        inventoryItems: getInventoryItems(),
+        deliveryRecords: getDeliveries(),
+        purchaseOrders: getPurchaseOrders(),
+        workshopExpenses: getWorkshopExpenses()
       })
     });
   } catch (centralPushErr) {
@@ -715,39 +908,53 @@ export async function pushLocalDataToSupabase(): Promise<{
 
   // Push Job Cards & Tasks
   for (const card of jobCards) {
-    const { error } = await client.from('job_cards').upsert({
+    const fullPayload = {
       id: card.id,
-      registration_number: card.vehicle.registrationNumber,
-      vehicle_make: card.vehicle.make,
-      vehicle_model: card.vehicle.model,
-      vehicle_year: card.vehicle.year,
-      vehicle_color: card.vehicle.color,
-      vehicle_vin: card.vehicle.vin,
-      fuel_level: card.vehicle.fuelLevel,
-      mileage: card.vehicle.mileage,
-      customer_name: card.customer.name,
-      customer_phone: card.customer.phone,
-      customer_email: card.customer.email,
-      customer_address: card.customer.address,
-      status: card.status,
-      service_type: card.serviceType,
-      package_name: card.packageName,
-      floor_manager_id: card.floorManagerId,
-      floor_manager_name: card.floorManagerName,
+      registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
+      vehicle_make: card.vehicle?.make || 'Vehicle',
+      vehicle_model: card.vehicle?.model || '',
+      vehicle_year: card.vehicle?.year || 2022,
+      vehicle_color: card.vehicle?.color || 'Standard',
+      vehicle_vin: card.vehicle?.vin || '',
+      fuel_level: card.vehicle?.fuelLevel || 50,
+      mileage: card.vehicle?.mileage || 0,
+      customer_name: card.customer?.name || 'Customer',
+      customer_phone: card.customer?.phone || '',
+      customer_email: card.customer?.email || '',
+      customer_address: card.customer?.address || '',
+      status: card.status || 'CREATED',
+      service_type: card.serviceType || 'CUSTOM_REPAIR',
+      package_name: card.packageName || null,
+      floor_manager_id: card.floorManagerId || null,
+      floor_manager_name: card.floorManagerName || null,
       city_id: card.cityId || null,
       city_name: card.cityName || null,
       workshop_id: card.workshopId || null,
       workshop_name: card.workshopName || null,
       is_cars24: card.isCars24 || false,
       cars24_ref_no: card.cars24RefNo || null,
-      pickup_requested: card.pickupRequested,
-      delivery_requested: card.deliveryRequested,
-      discount: card.discount,
-      tax_rate: card.taxRate,
-      advance_paid: card.advancePaid,
-      qc_passed: card.qcPassed,
-      qc_notes: card.qcNotes,
-    });
+      pickup_requested: card.pickupRequested || false,
+      delivery_requested: card.deliveryRequested || false,
+      discount: card.discount || 0,
+      tax_rate: card.taxRate || 18,
+      advance_paid: card.advancePaid || 0,
+      qc_passed: card.qcPassed || false,
+      qc_notes: card.qcNotes || null,
+      updated_at: new Date().toISOString()
+    };
+
+    let { error } = await client.from('job_cards').upsert(fullPayload);
+
+    if (error && (error.message?.includes('foreign key') || error.message?.includes('fk_job_cards') || error.message?.includes('schema cache'))) {
+      const fallbackPayload = {
+        ...fullPayload,
+        floor_manager_id: null,
+        city_id: null,
+        workshop_id: null
+      };
+      const res = await client.from('job_cards').upsert(fallbackPayload);
+      error = res.error;
+    }
 
     if (Array.isArray(card.tasks) && card.tasks.length > 0) {
       for (const t of card.tasks) {
@@ -847,6 +1054,114 @@ export async function pushLocalDataToSupabase(): Promise<{
     });
     if (error) errors.push(`Standard Jobs table error (${j.title}): ${error.message}`);
     else sjPushed++;
+  }
+
+  // Push Job Card History
+  const historyList = getJobCardHistoryRecords();
+  for (const h of historyList) {
+    await client.from('job_card_history').upsert({
+      id: h.id,
+      job_card_id: h.jobCardId,
+      previous_status: h.previousStatus || null,
+      new_status: h.newStatus,
+      action_type: h.actionType || 'STATUS_CHANGE',
+      changed_by_id: h.changedById || null,
+      changed_by_name: h.changedByName || 'System',
+      changed_by_role: h.changedByRole || null,
+      notes: h.notes || null,
+      created_at: h.createdAt
+    });
+  }
+
+  // Push Inventory Items
+  const inventoryList = getInventoryItems();
+  for (const item of inventoryList) {
+    await client.from('inventory_items').upsert({
+      id: item.id,
+      name: item.name,
+      part_number: item.partNumber,
+      category: item.category,
+      stock_quantity: item.stockQuantity || 0,
+      unit: item.unit || 'Pcs',
+      min_stock_alert: item.minStockAlert || 5,
+      unit_cost: item.unitCost || 0,
+      selling_price: item.sellingPrice || 0,
+      supplier_vendor_id: item.supplierVendorId || null,
+      supplier_vendor_name: item.supplierVendorName || null,
+      shelf_location: item.shelfLocation || null,
+      workshop_id: item.workshopId || null,
+      workshop_name: item.workshopName || null,
+      last_restocked_at: item.lastRestockedAt || new Date().toISOString()
+    });
+  }
+
+  // Push Delivery Records
+  const deliveriesList = getDeliveries();
+  for (const del of deliveriesList) {
+    await client.from('delivery_records').upsert({
+      id: del.id,
+      job_card_id: del.jobCardId,
+      vehicle_reg: del.vehicleReg,
+      customer_name: del.customerName,
+      customer_phone: del.customerPhone,
+      delivery_boy_id: del.deliveryBoyId || null,
+      delivery_boy_name: del.deliveryBoyName || null,
+      delivery_boy_phone: del.deliveryBoyPhone || null,
+      type: del.type || 'DELIVERY',
+      pickup_address: del.pickupAddress || null,
+      delivery_address: del.deliveryAddress || null,
+      status: del.status || 'ASSIGNED',
+      total_amount_due: del.totalAmountDue || 0,
+      payment_status: del.paymentStatus || 'PENDING',
+      payment_method: del.paymentMethod || null,
+      collected_at: del.collectedAt || null,
+      current_lat: del.currentLat || null,
+      current_lng: del.currentLng || null,
+      destination_lat: del.destinationLat || null,
+      destination_lng: del.destinationLng || null,
+      eta_minutes: del.etaMinutes || 20,
+      notes: del.notes || null,
+      updated_at: (del as any).updatedAt || new Date().toISOString()
+    });
+  }
+
+  // Push Purchase Orders
+  const poList = getPurchaseOrders();
+  for (const po of poList) {
+    await client.from('purchase_orders').upsert({
+      id: po.id,
+      job_card_id: po.jobCardId,
+      vehicle_reg: po.vehicleReg,
+      vendor_id: po.vendorId,
+      vendor_name: po.vendorName,
+      category: po.category,
+      item_description: po.itemDescription,
+      amount: po.amount || 0,
+      status: po.status || 'ISSUED',
+      created_at: po.createdAt
+    });
+  }
+
+  // Push Workshop Expenses
+  const expList = getWorkshopExpenses();
+  for (const exp of expList) {
+    await client.from('workshop_expenses').upsert({
+      id: exp.id,
+      title: exp.title,
+      category: exp.category,
+      amount: exp.amount || 0,
+      date: exp.date || new Date().toISOString().split('T')[0],
+      workshop_id: exp.workshopId || null,
+      workshop_name: exp.workshopName || null,
+      payment_mode: exp.paymentMode || 'UPI',
+      paid_by_name: exp.paidByName || 'Staff',
+      vendor_name: exp.vendorName || null,
+      receipt_number: exp.receiptNumber || null,
+      notes: exp.notes || null,
+      is_approved: exp.isApproved ?? true,
+      approved_by_name: exp.approvedByName || null,
+      created_at: exp.createdAt
+    });
   }
 
   const isSuccess = errors.length === 0;

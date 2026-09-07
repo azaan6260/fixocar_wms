@@ -1,8 +1,9 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser } from '../types';
-import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE } from './mockData';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser } from '../types';
+import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
+export { formatJobCardStatus };
 
 export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>) {
   if (typeof window === 'undefined') return;
@@ -15,12 +16,9 @@ export function dispatchToastNotification(notification: Omit<ToastNotification, 
   window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: fullNotification }));
 }
 
-export const INITIAL_CITIES: City[] = [];
-
-export const INITIAL_WORKSHOPS: Workshop[] = [];
-
 const STORAGE_KEYS = {
   JOB_CARDS: 'autocraft_job_cards_v4',
+  JOB_CARD_HISTORY: 'fixocar_job_card_history_v4',
   EMPLOYEES: 'autocraft_employees_v4',
   VENDORS: 'autocraft_vendors_v4',
   DELIVERIES: 'autocraft_deliveries_v4',
@@ -125,6 +123,19 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
     return allCards;
   }
 
+  if (targetWs.startsWith('CITY:')) {
+    const cityKey = targetWs.replace('CITY:', '').toLowerCase();
+    const cities = getCities();
+    const targetCity = cities.find(c => c.id.toLowerCase() === cityKey || c.name.toLowerCase() === cityKey);
+    const cityNameLower = targetCity ? targetCity.name.toLowerCase() : cityKey;
+
+    return allCards.filter(c => 
+      (c.cityId && c.cityId.toLowerCase() === cityKey) ||
+      (c.cityName && c.cityName.toLowerCase() === cityNameLower) ||
+      !c.workshopId
+    );
+  }
+
   return allCards.filter(c => 
     c.workshopId === targetWs || 
     c.workshopName === targetWs || 
@@ -141,38 +152,66 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
   const client = getSupabaseClient();
   if (client) {
       cards.forEach(card => {
-        client.from('job_cards').upsert({
+        const fullPayload = {
           id: card.id,
-          registration_number: card.vehicle.registrationNumber,
-          vehicle_make: card.vehicle.make,
-          vehicle_model: card.vehicle.model,
-          vehicle_year: card.vehicle.year,
-          vehicle_color: card.vehicle.color,
-          vehicle_vin: card.vehicle.vin,
-          fuel_level: card.vehicle.fuelLevel,
-          mileage: card.vehicle.mileage,
-          customer_name: card.customer.name,
-          customer_phone: card.customer.phone,
-          customer_email: card.customer.email,
-          customer_address: card.customer.address,
-          status: card.status,
-          service_type: card.serviceType,
-          package_name: card.packageName,
-          floor_manager_id: card.floorManagerId,
-          pickup_requested: card.pickupRequested,
-          delivery_requested: card.deliveryRequested,
-          discount: card.discount,
-          tax_rate: card.taxRate,
-          advance_paid: card.advancePaid,
-          qc_passed: card.qcPassed,
-          qc_notes: card.qcNotes,
-        }).then(({ error }) => {
+          registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
+          vehicle_make: card.vehicle?.make || 'Vehicle',
+          vehicle_model: card.vehicle?.model || '',
+          vehicle_year: card.vehicle?.year || 2022,
+          vehicle_color: card.vehicle?.color || 'Standard',
+          vehicle_vin: card.vehicle?.vin || '',
+          fuel_level: card.vehicle?.fuelLevel || 50,
+          mileage: card.vehicle?.mileage || 0,
+          customer_name: card.customer?.name || 'Customer',
+          customer_phone: card.customer?.phone || '',
+          customer_email: card.customer?.email || '',
+          customer_address: card.customer?.address || '',
+          status: card.status || 'CREATED',
+          service_type: card.serviceType || 'CUSTOM_REPAIR',
+          package_name: card.packageName || null,
+          floor_manager_id: card.floorManagerId || null,
+          floor_manager_name: card.floorManagerName || null,
+          city_id: card.cityId || null,
+          city_name: card.cityName || null,
+          workshop_id: card.workshopId || null,
+          workshop_name: card.workshopName || null,
+          is_cars24: card.isCars24 || false,
+          cars24_ref_no: card.cars24RefNo || null,
+          pickup_requested: card.pickupRequested || false,
+          delivery_requested: card.deliveryRequested || false,
+          discount: card.discount || 0,
+          tax_rate: card.taxRate || 18,
+          advance_paid: card.advancePaid || 0,
+          qc_passed: card.qcPassed || false,
+          qc_notes: card.qcNotes || null,
+          updated_at: new Date().toISOString()
+        };
+
+        client.from('job_cards').upsert(fullPayload).then(({ error }) => {
           if (error) {
-            console.error('Supabase sync error (job_card):', error);
-            dispatchToastNotification({
-              type: 'ESTIMATE_DECLINED',
-              title: `❌ Supabase Sync Error (Job Card)`,
-              message: `Could not sync Job Card "${card.id}" to Supabase: ${error.message}`
+            console.warn('Supabase job_cards upsert warning, retrying with fallback payload without FKs:', error.message);
+            // Fallback retry without FK constraint fields if foreign key missing in target table
+            const fallbackPayload = {
+              ...fullPayload,
+              floor_manager_id: null,
+              city_id: null,
+              workshop_id: null
+            };
+            client.from('job_cards').upsert(fallbackPayload).then(({ error: fbErr }) => {
+              if (fbErr) {
+                console.error('Supabase sync error (job_card fallback):', fbErr);
+                dispatchToastNotification({
+                  type: 'ESTIMATE_DECLINED',
+                  title: `❌ Supabase Sync Error (Job Card)`,
+                  message: `Could not sync Job Card "${card.id}" to Supabase: ${fbErr.message}`
+                });
+              } else {
+                dispatchToastNotification({
+                  type: 'ESTIMATE_APPROVED',
+                  title: `✅ Saved to Supabase Database`,
+                  message: `Job Card "${card.id}" saved to Supabase database successfully.`
+                });
+              }
             });
           } else {
             dispatchToastNotification({
@@ -189,10 +228,10 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
             client.from('job_tasks').upsert({
               id: t.id,
               job_card_id: card.id,
-              title: t.title,
-              category: t.category,
-              assigned_to_id: t.assignedToId,
-              assigned_to_name: t.assignedToName,
+              title: t.title || 'Task',
+              category: t.category || 'REPAIR',
+              assigned_to_id: t.assignedToId || null,
+              assigned_to_name: t.assignedToName || null,
               assigned_type: t.assignedType || 'EMPLOYEE',
               estimated_cost: t.estimatedCost || 0,
               customer_price: t.customerPrice || 0,
@@ -212,7 +251,7 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
           });
         }
       });
-    }
+  }
 }
 
 export function getJobCardById(id: string): JobCard | undefined {
@@ -261,6 +300,61 @@ export function deleteJobCard(id: string): boolean {
   return true;
 }
 
+// 1.1 JOB CARD HISTORY AUDIT TRAIL
+export function getJobCardHistoryRecords(jobCardId?: string): JobCardHistoryRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.JOB_CARD_HISTORY);
+    if (!raw) return [];
+    const parsed: JobCardHistoryRecord[] = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    if (jobCardId) {
+      return parsed.filter(h => h.jobCardId === jobCardId);
+    }
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+export function saveJobCardHistoryRecords(records: JobCardHistoryRecord[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.JOB_CARD_HISTORY, JSON.stringify(records));
+  notifyStoreChange();
+  notifyCentralServer('jobCardHistory', records);
+}
+
+export function recordJobCardHistory(entry: Omit<JobCardHistoryRecord, 'id' | 'createdAt'>): JobCardHistoryRecord {
+  const newRecord: JobCardHistoryRecord = {
+    id: `hist-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    ...entry,
+    createdAt: new Date().toISOString()
+  };
+  const existing = getJobCardHistoryRecords();
+  const updated = [newRecord, ...existing];
+  saveJobCardHistoryRecords(updated);
+
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('job_card_history').upsert({
+      id: newRecord.id,
+      job_card_id: newRecord.jobCardId,
+      previous_status: newRecord.previousStatus || null,
+      new_status: newRecord.newStatus,
+      action_type: newRecord.actionType || 'STATUS_CHANGE',
+      changed_by_id: newRecord.changedById || null,
+      changed_by_name: newRecord.changedByName || 'System',
+      changed_by_role: newRecord.changedByRole || null,
+      notes: newRecord.notes || null,
+      created_at: newRecord.createdAt
+    }).then(({ error }) => {
+      if (error) console.warn('Supabase job_card_history upsert error:', error.message);
+    });
+  }
+
+  return newRecord;
+}
+
 export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCard {
   const existingActive = getActiveJobCardForRegNo(newCard.vehicle.registrationNumber);
   if (existingActive) {
@@ -277,6 +371,19 @@ export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCa
   };
   cards.unshift(fullCard);
   saveJobCards(cards);
+
+  // Log initial status audit entry in job_card_history
+  const currentUser = getAuthUser();
+  recordJobCardHistory({
+    jobCardId: fullCard.id,
+    previousStatus: undefined,
+    newStatus: fullCard.status || 'CREATED',
+    actionType: 'STATUS_CHANGE',
+    changedById: currentUser?.id,
+    changedByName: currentUser?.name || 'Staff User',
+    changedByRole: currentUser?.role,
+    notes: `Job Card ${fullCard.id} created for vehicle ${fullCard.vehicle.registrationNumber}`
+  });
 
   dispatchToastNotification({
     type: 'JOB_CARD_CREATED',
@@ -311,6 +418,18 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
         customerName: newCard.customer.name,
         oldStatus: oldCard.status,
         newStatus: newCard.status,
+      });
+
+      const currentUser = getAuthUser();
+      recordJobCardHistory({
+        jobCardId: newCard.id,
+        previousStatus: oldCard.status,
+        newStatus: newCard.status,
+        actionType: 'STATUS_CHANGE',
+        changedById: currentUser?.id,
+        changedByName: currentUser?.name || 'Staff User',
+        changedByRole: currentUser?.role,
+        notes: `Job Card ${newCard.id} status updated from ${oldLabel} to ${newLabel}`
       });
     }
 
@@ -1097,6 +1216,20 @@ export function getEmployees(workshopIdFilter?: string): Employee[] {
     return allStaff;
   }
 
+  if (targetWs.startsWith('CITY:')) {
+    const cityKey = targetWs.replace('CITY:', '').toLowerCase();
+    const cities = getCities();
+    const targetCity = cities.find(c => c.id.toLowerCase() === cityKey || c.name.toLowerCase() === cityKey);
+    const cityNameLower = targetCity ? targetCity.name.toLowerCase() : cityKey;
+
+    return allStaff.filter(emp => 
+      emp.role === 'SUPER_ADMIN' ||
+      (emp.cityId && emp.cityId.toLowerCase() === cityKey) ||
+      (emp.cityName && emp.cityName.toLowerCase() === cityNameLower) ||
+      !emp.workshopId
+    );
+  }
+
   return allStaff.filter(emp => 
     emp.workshopId === targetWs || 
     emp.workshopName === targetWs ||
@@ -1441,6 +1574,12 @@ export function getPurchaseOrders(): PurchaseOrder[] {
   try { return JSON.parse(local); } catch { return []; }
 }
 
+export function savePurchaseOrders(pos: PurchaseOrder[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(pos));
+  notifyStoreChange();
+}
+
 export function createPurchaseOrder(po: Omit<PurchaseOrder, 'id' | 'createdAt'>): PurchaseOrder {
   const pos = getPurchaseOrders();
   const newPO: PurchaseOrder = {
@@ -1622,15 +1761,43 @@ export function clearAllDemoData() {
 // 8. CITIES STORAGE
 export function getCities(): City[] {
   const local = localStorage.getItem(STORAGE_KEYS.CITIES);
-  if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify([]));
-    return [];
+  let parsed: City[] = [];
+  if (local !== null) {
+    try { 
+      const raw = JSON.parse(local);
+      if (Array.isArray(raw)) {
+        parsed = raw.map((c: any) => ({
+          id: c.id || `city-${Date.now()}`,
+          name: c.name || c.city_name || c.cityName || c.title || '',
+          state: c.state || c.state_name || '',
+          createdAt: c.createdAt || c.created_at || new Date().toISOString().split('T')[0]
+        })).filter(c => c.name && c.name.trim() !== '');
+      }
+    } catch { parsed = []; }
   }
-  try {
-    return JSON.parse(local);
-  } catch {
-    return [];
+
+  // If local list is empty, initialize with INITIAL_CITIES or inferred from workshops
+  if (parsed.length === 0) {
+    const workshops = getWorkshops();
+    const inferred: City[] = [];
+    workshops.forEach(w => {
+      if (w.cityName && w.cityName.trim() !== '' && !inferred.some(c => c.name.toLowerCase() === w.cityName.toLowerCase())) {
+        inferred.push({
+          id: w.cityId || `city-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          name: w.cityName.trim(),
+          state: '',
+          createdAt: new Date().toISOString().split('T')[0]
+        });
+      }
+    });
+    const baseCities = inferred.length > 0 ? inferred : (INITIAL_CITIES.length > 0 ? INITIAL_CITIES : []);
+    if (baseCities.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(baseCities));
+    }
+    return baseCities;
   }
+
+  return parsed;
 }
 
 export function saveCities(cities: City[], skipPush = false) {
@@ -1711,13 +1878,20 @@ export function deleteCity(id: string) {
 export function getWorkshops(): Workshop[] {
   const local = localStorage.getItem(STORAGE_KEYS.WORKSHOPS);
   if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify([]));
-    return [];
+    if (INITIAL_WORKSHOPS.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(INITIAL_WORKSHOPS));
+    }
+    return INITIAL_WORKSHOPS;
   }
   try {
-    return JSON.parse(local);
+    const parsed = JSON.parse(local);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (INITIAL_WORKSHOPS.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(INITIAL_WORKSHOPS));
+    }
+    return INITIAL_WORKSHOPS;
   } catch {
-    return [];
+    return INITIAL_WORKSHOPS;
   }
 }
 

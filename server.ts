@@ -102,7 +102,31 @@ interface CentralStoreData {
   vehicleCheckIns: any[];
   standardJobs: any[];
   carModels: any[];
+  jobCardHistory?: any[];
+  inventoryItems?: any[];
+  deliveryRecords?: any[];
+  purchaseOrders?: any[];
+  workshopExpenses?: any[];
 }
+
+const DEFAULT_INITIAL_CITIES = [
+  { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2025-01-01' },
+  { id: 'city-delhi', name: 'Delhi NCR', state: 'Delhi', createdAt: '2025-01-01' },
+  { id: 'city-bengaluru', name: 'Bengaluru', state: 'Karnataka', createdAt: '2025-01-01' },
+  { id: 'city-hyderabad', name: 'Hyderabad', state: 'Telangana', createdAt: '2025-01-01' },
+  { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2025-01-01' },
+  { id: 'city-chennai', name: 'Chennai', state: 'Tamil Nadu', createdAt: '2025-01-01' },
+  { id: 'city-jaipur', name: 'Jaipur', state: 'Rajasthan', createdAt: '2025-01-01' },
+  { id: 'city-ahmedabad', name: 'Ahmedabad', state: 'Gujarat', createdAt: '2025-01-01' },
+  { id: 'city-chandigarh', name: 'Chandigarh', state: 'Punjab', createdAt: '2025-01-01' },
+  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' }
+];
+
+const DEFAULT_INITIAL_WORKSHOPS = [
+  { id: 'ws-mumbai-central', cityId: 'city-mumbai', cityName: 'Mumbai', name: 'FixoCar Mumbai Central Workshop', code: 'WS-MUM-01', address: 'Andheri East, Mumbai, MH', phone: '022-88990011', isCars24Partner: true, managerName: 'Taifur', createdAt: '2025-01-01' },
+  { id: 'ws-delhi-hub', cityId: 'city-delhi', cityName: 'Delhi NCR', name: 'FixoCar Delhi NCR Hub', code: 'WS-DEL-01', address: 'Okhla Industrial Area, New Delhi', phone: '011-88990022', isCars24Partner: true, managerName: 'Rajesh Kumar', createdAt: '2025-01-01' },
+  { id: 'ws-bengaluru-main', cityId: 'city-bengaluru', cityName: 'Bengaluru', name: 'FixoCar Bengaluru Tech Park Hub', code: 'WS-BLR-01', address: 'Whitefield, Bengaluru, KA', phone: '080-88990033', isCars24Partner: true, managerName: 'Anand V', createdAt: '2025-01-01' }
+];
 
 function getInitialCentralStore(): CentralStoreData {
   return {
@@ -137,8 +161,8 @@ function getInitialCentralStore(): CentralStoreData {
       }
     ],
     jobCards: [],
-    cities: [],
-    workshops: [],
+    cities: DEFAULT_INITIAL_CITIES,
+    workshops: DEFAULT_INITIAL_WORKSHOPS,
     vendors: [],
     vehicleCheckIns: [],
     standardJobs: [],
@@ -171,6 +195,12 @@ function loadCentralStore(): CentralStoreData {
         }
         if (!memoryCentralStore.employees.some(e => e.id === 'emp-taifur' || e.loginId === 'taifur')) {
           memoryCentralStore.employees.push(getInitialCentralStore().employees[1]);
+        }
+        if (!memoryCentralStore.cities || memoryCentralStore.cities.length === 0) {
+          memoryCentralStore.cities = DEFAULT_INITIAL_CITIES;
+        }
+        if (!memoryCentralStore.workshops || memoryCentralStore.workshops.length === 0) {
+          memoryCentralStore.workshops = DEFAULT_INITIAL_WORKSHOPS;
         }
         return memoryCentralStore;
       }
@@ -1023,23 +1053,23 @@ Return valid JSON ONLY.`;
           if (supaEmps && supaEmps.length > 0) {
             const mappedEmps = supaEmps.map((e: any) => ({
               id: e.id,
-              name: e.name,
-              role: e.role,
-              phone: e.phone,
-              email: e.email || '',
-              specializedTeam: e.specialized_team,
+              name: e.name || e.employee_name || e.full_name || 'Staff',
+              role: e.role || 'MECHANIC',
+              phone: e.phone || e.mobile || '',
+              email: e.email || e.work_email || '',
+              specializedTeam: e.specialized_team || e.specializedTeam || 'Mechanical',
               status: e.status || 'AVAILABLE',
-              avatarUrl: e.avatar_url,
-              activeJobsCount: e.active_jobs_count || 0,
-              loginId: e.login_id,
+              avatarUrl: e.avatar_url || e.avatarUrl,
+              activeJobsCount: e.active_jobs_count || e.activeJobsCount || 0,
+              loginId: e.login_id || e.loginId || e.email,
               password: e.password_hash || e.password || '123456',
-              baseSalary: e.base_salary || 0,
-              createdAt: e.created_at,
-              employmentType: e.employment_type || 'PAYROLL',
-              cityId: e.city_id,
-              cityName: e.city_name,
-              workshopId: e.workshop_id,
-              workshopName: e.workshop_name
+              baseSalary: e.base_salary || e.baseSalary || 0,
+              createdAt: e.created_at || e.createdAt,
+              employmentType: e.employment_type || e.employmentType || 'PAYROLL',
+              cityId: e.city_id || e.cityId,
+              cityName: e.city_name || e.cityName,
+              workshopId: e.workshop_id || e.workshopId,
+              workshopName: e.workshop_name || e.workshopName
             }));
             store.employees = mergeArrayItems(store.employees, mappedEmps, e => e.id || e.email || e.loginId || e.name);
           }
@@ -1049,69 +1079,69 @@ Return valid JSON ONLY.`;
           const { data: supaTasks } = await client.from('job_tasks').select('*');
           if (supaCards && supaCards.length > 0) {
             const mappedCards = supaCards.map((c: any) => {
-              const tasks = (supaTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
+              const tasks = (supaTasks || []).filter((t: any) => t.job_card_id === c.id || t.jobCardId === c.id).map((t: any) => ({
                 id: t.id,
-                jobCardId: t.job_card_id,
+                jobCardId: t.job_card_id || t.jobCardId,
                 title: t.title || t.description || 'Task',
                 category: t.category || 'REPAIR',
-                assignedToId: t.assigned_to_id || t.assigned_to,
-                assignedToName: t.assigned_to_name,
-                assignedType: t.assigned_type || 'EMPLOYEE',
-                estimatedCost: t.estimated_cost || 0,
-                customerPrice: t.customer_price || t.estimated_cost || 0,
+                assignedToId: t.assigned_to_id || t.assigned_to || t.assignedToId,
+                assignedToName: t.assigned_to_name || t.assignedToName,
+                assignedType: t.assigned_type || t.assignedType || 'EMPLOYEE',
+                estimatedCost: t.estimated_cost || t.estimatedCost || 0,
+                customerPrice: t.customer_price || t.customerPrice || t.estimated_cost || 0,
                 status: t.status || 'PENDING',
-                requiresCustomerApproval: t.requires_customer_approval || false,
-                isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
-                rejectionReason: t.rejection_reason,
+                requiresCustomerApproval: t.requires_customer_approval ?? t.requiresCustomerApproval ?? false,
+                isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? t.is_customer_approved : t.isCustomerApproved,
+                rejectionReason: t.rejection_reason || t.rejectionReason,
                 notes: t.notes || t.description,
-                completedAt: t.completed_at,
-                isAdditionalWork: t.is_additional_work,
-                additionalWorkRequestedBy: t.additional_work_requested_by,
-                additionalWorkRequestedAt: t.additional_work_requested_at,
-                approvalStatus: t.approval_status
+                completedAt: t.completed_at || t.completedAt,
+                isAdditionalWork: t.is_additional_work || t.isAdditionalWork,
+                additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
+                additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
+                approvalStatus: t.approval_status || t.approvalStatus
               }));
 
               return {
                 id: c.id,
                 vehicle: {
-                  registrationNumber: c.registration_number,
-                  make: c.vehicle_make,
-                  model: c.vehicle_model,
-                  year: c.vehicle_year,
-                  color: c.vehicle_color,
-                  vin: c.vehicle_vin,
-                  fuelLevel: c.fuel_level,
-                  mileage: c.mileage
+                  registrationNumber: c.registration_number || c.registrationNumber || c.reg_no || c.reg_number || 'UNKNOWN',
+                  make: c.vehicle_make || c.make || 'Vehicle',
+                  model: c.vehicle_model || c.model || '',
+                  year: c.vehicle_year || c.year || 2022,
+                  color: c.vehicle_color || c.color || 'Standard',
+                  vin: c.vehicle_vin || c.vin || '',
+                  fuelLevel: c.fuel_level || c.fuelLevel || 50,
+                  mileage: c.mileage || 0
                 },
                 customer: {
-                  id: c.customer_id || `cust-${c.id}`,
-                  name: c.customer_name,
-                  phone: c.customer_phone,
-                  email: c.customer_email,
-                  address: c.customer_address
+                  id: c.customer_id || c.customerId || `cust-${c.id}`,
+                  name: c.customer_name || c.customerName || 'Customer',
+                  phone: c.customer_phone || c.customerPhone || '',
+                  email: c.customer_email || c.customerEmail || '',
+                  address: c.customer_address || c.customerAddress || ''
                 },
-                status: c.status,
-                serviceType: c.service_type,
-                packageName: c.package_name,
-                floorManagerId: c.floor_manager_id,
-                pickupRequested: c.pickup_requested,
-                deliveryRequested: c.delivery_requested,
-                discount: c.discount,
-                taxRate: c.tax_rate,
-                advancePaid: c.advance_paid,
-                qcPassed: c.qc_passed,
-                qcNotes: c.qc_notes,
-                cityId: c.city_id,
-                cityName: c.city_name,
-                workshopId: c.workshop_id,
-                workshopName: c.workshop_name,
-                floorManagerName: c.floor_manager_name,
-                isCars24: c.is_cars24,
-                cars24RefNo: c.cars24_ref_no,
+                status: c.status || 'ESTIMATE_PENDING',
+                serviceType: c.service_type || c.serviceType || 'REPAIR',
+                packageName: c.package_name || c.packageName,
+                floorManagerId: c.floor_manager_id || c.floorManagerId,
+                pickupRequested: c.pickup_requested || c.pickupRequested,
+                deliveryRequested: c.delivery_requested || c.deliveryRequested,
+                discount: c.discount || 0,
+                taxRate: c.tax_rate || c.taxRate || 18,
+                advancePaid: c.advance_paid || c.advancePaid || 0,
+                qcPassed: c.qc_passed || c.qcPassed || false,
+                qcNotes: c.qc_notes || c.qcNotes,
+                cityId: c.city_id || c.cityId,
+                cityName: c.city_name || c.cityName,
+                workshopId: c.workshop_id || c.workshopId,
+                workshopName: c.workshop_name || c.workshopName,
+                floorManagerName: c.floor_manager_name || c.floorManagerName,
+                isCars24: c.is_cars24 ?? c.isCars24 ?? false,
+                cars24RefNo: c.cars24_ref_no || c.cars24RefNo,
                 tasks,
-                createdAt: c.created_at,
-                estimatedCompletionDate: c.estimated_completion_date,
-                qcChecklist: c.qc_checklist || []
+                createdAt: c.created_at || c.createdAt,
+                estimatedCompletionDate: c.estimated_completion_date || c.estimatedCompletionDate,
+                qcChecklist: c.qc_checklist || c.qcChecklist || []
               };
             });
             store.jobCards = mergeArrayItems(store.jobCards, mappedCards, j => j.id);
@@ -1122,9 +1152,9 @@ Return valid JSON ONLY.`;
           if (supaCities && supaCities.length > 0) {
             const mappedCities = supaCities.map((c: any) => ({
               id: c.id,
-              name: c.name,
-              state: c.state || '',
-              createdAt: c.created_at
+              name: c.name || c.city_name || c.cityName || c.title || 'City',
+              state: c.state || c.state_name || c.province || '',
+              createdAt: c.created_at || c.createdAt
             }));
             store.cities = mergeArrayItems(store.cities, mappedCities, c => c.id || c.name);
           }
@@ -1134,15 +1164,15 @@ Return valid JSON ONLY.`;
           if (supaWorkshops && supaWorkshops.length > 0) {
             const mappedWorkshops = supaWorkshops.map((w: any) => ({
               id: w.id,
-              name: w.name,
+              name: w.name || w.workshop_name || w.workshopName || 'Workshop',
               code: w.code || 'WS',
-              cityId: w.city_id,
-              cityName: w.city_name,
-              address: w.address,
-              phone: w.phone,
-              isCars24Partner: w.is_cars24_partner ?? false,
-              managerName: w.manager_name || '',
-              createdAt: w.created_at
+              cityId: w.city_id || w.cityId,
+              cityName: w.city_name || w.cityName,
+              address: w.address || '',
+              phone: w.phone || '',
+              isCars24Partner: w.is_cars24_partner ?? w.isCars24Partner ?? false,
+              managerName: w.manager_name || w.managerName || '',
+              createdAt: w.created_at || w.createdAt
             }));
             store.workshops = mergeArrayItems(store.workshops, mappedWorkshops, w => w.id || w.name);
           }
@@ -1165,6 +1195,152 @@ Return valid JSON ONLY.`;
             store.vendors = mergeArrayItems(store.vendors, mappedVendors, v => v.id || v.name);
           }
 
+          // 6. Job Card History
+          const { data: supaHistory } = await client.from('job_card_history').select('*');
+          if (supaHistory && supaHistory.length > 0) {
+            const mappedHistory = supaHistory.map((h: any) => ({
+              id: h.id,
+              jobCardId: h.job_card_id,
+              previousStatus: h.previous_status,
+              newStatus: h.new_status,
+              actionType: h.action_type || 'STATUS_CHANGE',
+              changedById: h.changed_by_id,
+              changedByName: h.changed_by_name || 'System',
+              changedByRole: h.changed_by_role,
+              notes: h.notes,
+              createdAt: h.created_at
+            }));
+            store.jobCardHistory = mergeArrayItems((store as any).jobCardHistory || [], mappedHistory, h => h.id);
+          }
+
+          // 7. Vehicle Check-Ins
+          const { data: supaCheckIns } = await client.from('vehicle_check_ins').select('*');
+          if (supaCheckIns && supaCheckIns.length > 0) {
+            const mappedCheckIns = supaCheckIns.map((v: any) => ({
+              id: v.id,
+              registrationNumber: v.registration_number,
+              make: v.make || 'Vehicle',
+              model: v.model || '',
+              variant: v.variant,
+              fuelType: v.fuel_type || 'Petrol',
+              color: v.color || 'White',
+              fuelLevel: v.fuel_level || 50,
+              mileage: v.mileage || 10000,
+              isCars24: v.is_cars24 ?? false,
+              cars24RefNo: v.cars24_ref_no,
+              customerName: v.customer_name || 'Customer',
+              customerPhone: v.customer_phone || '',
+              checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
+              checkedInByName: v.check_in_driver_name || 'Security',
+              checkInDriverName: v.check_in_driver_name || 'Driver',
+              checkInDriverPhone: v.check_in_driver_phone || '',
+              checkInPhotoWithDriverUrl: v.driver_photo_url,
+              checkInNotes: v.check_in_notes,
+              status: v.status || 'CHECKED_IN',
+              jobCardId: v.job_card_id,
+              checkedOutAt: v.check_out_time,
+              checkOutDriverName: v.check_out_driver_name,
+              checkOutDriverPhone: v.check_out_driver_phone,
+              checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url
+            }));
+            store.vehicleCheckIns = mergeArrayItems(store.vehicleCheckIns || [], mappedCheckIns, ci => ci.id);
+          }
+
+          // 8. Inventory Items
+          const { data: supaInventory } = await client.from('inventory_items').select('*');
+          if (supaInventory && supaInventory.length > 0) {
+            const mappedInventory = supaInventory.map((i: any) => ({
+              id: i.id,
+              name: i.name,
+              partNumber: i.part_number,
+              category: i.category,
+              stockQuantity: i.stock_quantity || 0,
+              unit: i.unit || 'Pcs',
+              minStockAlert: i.min_stock_alert || 5,
+              unitCost: i.unit_cost || 0,
+              sellingPrice: i.selling_price || 0,
+              supplierVendorId: i.supplier_vendor_id,
+              supplierVendorName: i.supplier_vendor_name,
+              shelfLocation: i.shelf_location,
+              workshopId: i.workshop_id,
+              workshopName: i.workshop_name,
+              lastRestockedAt: i.last_restocked_at
+            }));
+            (store as any).inventoryItems = mergeArrayItems((store as any).inventoryItems || [], mappedInventory, i => i.id);
+          }
+
+          // 9. Delivery Records
+          const { data: supaDeliveries } = await client.from('delivery_records').select('*');
+          if (supaDeliveries && supaDeliveries.length > 0) {
+            const mappedDeliveries = supaDeliveries.map((d: any) => ({
+              id: d.id,
+              jobCardId: d.job_card_id,
+              vehicleReg: d.vehicle_reg,
+              customerName: d.customer_name,
+              customerPhone: d.customer_phone,
+              deliveryBoyId: d.delivery_boy_id,
+              deliveryBoyName: d.delivery_boy_name,
+              deliveryBoyPhone: d.delivery_boy_phone,
+              type: d.type || 'DELIVERY',
+              pickupAddress: d.pickup_address,
+              deliveryAddress: d.delivery_address,
+              status: d.status || 'ASSIGNED',
+              totalAmountDue: d.total_amount_due || 0,
+              paymentStatus: d.payment_status || 'PENDING',
+              paymentMethod: d.payment_method,
+              collectedAt: d.collected_at,
+              currentLat: d.current_lat,
+              currentLng: d.current_lng,
+              destinationLat: d.destination_lat,
+              destinationLng: d.destination_lng,
+              etaMinutes: d.eta_minutes || 20,
+              notes: d.notes,
+              updatedAt: d.updated_at
+            }));
+            (store as any).deliveryRecords = mergeArrayItems((store as any).deliveryRecords || [], mappedDeliveries, d => d.id);
+          }
+
+          // 10. Purchase Orders
+          const { data: supaPOs } = await client.from('purchase_orders').select('*');
+          if (supaPOs && supaPOs.length > 0) {
+            const mappedPOs = supaPOs.map((p: any) => ({
+              id: p.id,
+              jobCardId: p.job_card_id,
+              vehicleReg: p.vehicle_reg,
+              vendorId: p.vendor_id,
+              vendorName: p.vendor_name,
+              category: p.category,
+              itemDescription: p.item_description,
+              amount: p.amount || 0,
+              status: p.status || 'ISSUED',
+              createdAt: p.created_at
+            }));
+            (store as any).purchaseOrders = mergeArrayItems((store as any).purchaseOrders || [], mappedPOs, p => p.id);
+          }
+
+          // 11. Workshop Expenses
+          const { data: supaExpenses } = await client.from('workshop_expenses').select('*');
+          if (supaExpenses && supaExpenses.length > 0) {
+            const mappedExpenses = supaExpenses.map((e: any) => ({
+              id: e.id,
+              title: e.title,
+              category: e.category,
+              amount: e.amount || 0,
+              date: e.date || new Date().toISOString().split('T')[0],
+              workshopId: e.workshop_id,
+              workshopName: e.workshop_name,
+              paymentMode: e.payment_mode || 'UPI',
+              paidByName: e.paid_by_name || 'Staff',
+              vendorName: e.vendor_name,
+              receiptNumber: e.receipt_number,
+              notes: e.notes,
+              isApproved: e.is_approved ?? true,
+              approvedByName: e.approved_by_name,
+              createdAt: e.created_at
+            }));
+            (store as any).workshopExpenses = mergeArrayItems((store as any).workshopExpenses || [], mappedExpenses, e => e.id);
+          }
+
           saveCentralStore(store);
         } catch (supaFetchErr) {
           console.warn('[CENTRAL_STORE] Supabase query warning:', supaFetchErr);
@@ -1181,7 +1357,7 @@ Return valid JSON ONLY.`;
   app.post('/api/central/store', async (req, res) => {
     try {
       const currentStore = loadCentralStore();
-      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels } = req.body;
+      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels, jobCardHistory, inventoryItems, deliveryRecords, purchaseOrders, workshopExpenses } = req.body;
 
       if (Array.isArray(employees) && employees.length > 0) {
         currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.email || e.loginId || e.name);
@@ -1207,11 +1383,52 @@ Return valid JSON ONLY.`;
       if (Array.isArray(carModels) && carModels.length > 0) {
         currentStore.carModels = mergeArrayItems(currentStore.carModels, carModels, cm => cm.id);
       }
+      if (Array.isArray(jobCardHistory) && jobCardHistory.length > 0) {
+        currentStore.jobCardHistory = mergeArrayItems(currentStore.jobCardHistory || [], jobCardHistory, h => h.id || `${h.jobCardId}-${h.createdAt}`);
+      }
+      if (Array.isArray(inventoryItems) && inventoryItems.length > 0) {
+        currentStore.inventoryItems = mergeArrayItems(currentStore.inventoryItems || [], inventoryItems, item => item.id || item.partNumber);
+      }
+      if (Array.isArray(deliveryRecords) && deliveryRecords.length > 0) {
+        currentStore.deliveryRecords = mergeArrayItems(currentStore.deliveryRecords || [], deliveryRecords, d => d.id);
+      }
+      if (Array.isArray(purchaseOrders) && purchaseOrders.length > 0) {
+        currentStore.purchaseOrders = mergeArrayItems(currentStore.purchaseOrders || [], purchaseOrders, po => po.id);
+      }
+      if (Array.isArray(workshopExpenses) && workshopExpenses.length > 0) {
+        currentStore.workshopExpenses = mergeArrayItems(currentStore.workshopExpenses || [], workshopExpenses, ex => ex.id);
+      }
 
       saveCentralStore(currentStore);
 
       const client = getSupabaseAdminClient();
       if (client) {
+        // Cities
+        if (Array.isArray(cities) && cities.length > 0) {
+          for (const c of cities) {
+            client.from('cities').upsert({
+              id: c.id,
+              name: c.name,
+              state: c.state || '',
+              is_active: true
+            }).then(() => {}, () => {});
+          }
+        }
+        // Workshops
+        if (Array.isArray(workshops) && workshops.length > 0) {
+          for (const w of workshops) {
+            client.from('workshops').upsert({
+              id: w.id,
+              name: w.name,
+              city_id: w.cityId,
+              city_name: w.cityName,
+              code: w.code || 'WS',
+              address: w.address || '',
+              phone: w.phone || ''
+            }).then(() => {}, () => {});
+          }
+        }
+        // Employees
         if (Array.isArray(employees) && employees.length > 0) {
           for (const emp of employees) {
             client.from('employees').upsert({
@@ -1234,41 +1451,55 @@ Return valid JSON ONLY.`;
             }).then(() => {}, () => {});
           }
         }
+        // Job Cards & Tasks
         if (Array.isArray(jobCards) && jobCards.length > 0) {
           for (const card of jobCards) {
-            client.from('job_cards').upsert({
+            const cardPayload = {
               id: card.id,
-              registration_number: card.vehicle?.registrationNumber,
-              vehicle_make: card.vehicle?.make,
-              vehicle_model: card.vehicle?.model,
-              vehicle_year: card.vehicle?.year,
-              vehicle_color: card.vehicle?.color,
-              vehicle_vin: card.vehicle?.vin,
-              fuel_level: card.vehicle?.fuelLevel,
-              mileage: card.vehicle?.mileage,
-              customer_name: card.customer?.name,
-              customer_phone: card.customer?.phone,
-              customer_email: card.customer?.email,
-              customer_address: card.customer?.address,
-              status: card.status,
-              service_type: card.serviceType,
-              package_name: card.packageName,
-              floor_manager_id: card.floorManagerId,
-              floor_manager_name: card.floorManagerName,
+              registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
+              vehicle_make: card.vehicle?.make || 'Vehicle',
+              vehicle_model: card.vehicle?.model || '',
+              vehicle_year: card.vehicle?.year || 2022,
+              vehicle_color: card.vehicle?.color || 'Standard',
+              vehicle_vin: card.vehicle?.vin || '',
+              fuel_level: card.vehicle?.fuelLevel || 50,
+              mileage: card.vehicle?.mileage || 0,
+              customer_name: card.customer?.name || 'Customer',
+              customer_phone: card.customer?.phone || '',
+              customer_email: card.customer?.email || '',
+              customer_address: card.customer?.address || '',
+              status: card.status || 'CREATED',
+              service_type: card.serviceType || 'CUSTOM_REPAIR',
+              package_name: card.packageName || null,
+              floor_manager_id: card.floorManagerId || null,
+              floor_manager_name: card.floorManagerName || null,
               city_id: card.cityId || null,
               city_name: card.cityName || null,
               workshop_id: card.workshopId || null,
               workshop_name: card.workshopName || null,
               is_cars24: card.isCars24 || false,
               cars24_ref_no: card.cars24RefNo || null,
-              pickup_requested: card.pickupRequested,
-              delivery_requested: card.deliveryRequested,
-              discount: card.discount,
-              tax_rate: card.taxRate,
-              advance_paid: card.advancePaid,
-              qc_passed: card.qcPassed,
-              qc_notes: card.qcNotes
-            }).then(() => {}, () => {});
+              pickup_requested: card.pickupRequested || false,
+              delivery_requested: card.deliveryRequested || false,
+              discount: card.discount || 0,
+              tax_rate: card.taxRate || 18,
+              advance_paid: card.advancePaid || 0,
+              qc_passed: card.qcPassed || false,
+              qc_notes: card.qcNotes || null,
+              updated_at: new Date().toISOString()
+            };
+
+            client.from('job_cards').upsert(cardPayload).then(({ error }) => {
+              if (error) {
+                // Retry with FK constraint fields set to null if foreign key missing
+                client.from('job_cards').upsert({
+                  ...cardPayload,
+                  floor_manager_id: null,
+                  city_id: null,
+                  workshop_id: null
+                }).then(() => {}, () => {});
+              }
+            }, () => {});
 
             if (Array.isArray(card.tasks) && card.tasks.length > 0) {
               for (const t of card.tasks) {
@@ -1292,6 +1523,23 @@ Return valid JSON ONLY.`;
                 }).then(() => {}, () => {});
               }
             }
+          }
+        }
+        // Job Card History
+        if (Array.isArray(jobCardHistory) && jobCardHistory.length > 0) {
+          for (const h of jobCardHistory) {
+            client.from('job_card_history').upsert({
+              id: h.id,
+              job_card_id: h.jobCardId,
+              previous_status: h.previousStatus || null,
+              new_status: h.newStatus,
+              action_type: h.actionType || 'STATUS_CHANGE',
+              changed_by_id: h.changedById || null,
+              changed_by_name: h.changedByName || 'System',
+              changed_by_role: h.changedByRole || null,
+              notes: h.notes || null,
+              created_at: h.createdAt
+            }).then(() => {}, () => {});
           }
         }
       }

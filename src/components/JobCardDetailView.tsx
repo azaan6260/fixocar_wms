@@ -12,7 +12,9 @@ import {
   reassignAllPaintTasksForJobCard,
   deleteJobCard,
   deleteJobCardTask,
-  isCars24JobCard
+  isCars24JobCard,
+  getJobCardHistoryRecords,
+  formatJobCardStatus
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
@@ -138,7 +140,7 @@ export function JobCardDetailView({
   const [isGateCheckOutOpen, setIsGateCheckOutOpen] = useState(false);
 
   // Manager Tabs
-  const [activeManagerTab, setActiveManagerTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice'>('tasks');
+  const [activeManagerTab, setActiveManagerTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
 
   // Custom task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -677,6 +679,7 @@ export function JobCardDetailView({
                   { id: 'qc', label: `QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck },
                   { id: 'delivery', label: 'Pick & Delivery', icon: Truck },
                   { id: 'invoice', label: 'GST Bill & Invoice', icon: FileText },
+                  { id: 'history', label: '📜 Status Audit Trail', icon: Clock },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeManagerTab === tab.id;
@@ -904,6 +907,63 @@ export function JobCardDetailView({
 
               {activeManagerTab === 'invoice' && (
                 <GSTInvoiceView card={card} currentRole={currentRole} />
+              )}
+
+              {activeManagerTab === 'history' && (
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="font-black text-sm text-white flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-400" />
+                        <span>Job Card Status & Audit History Log</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Complete chronological audit trail for Job Card <span className="font-mono text-amber-300">{card.id}</span>
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold rounded-lg">
+                      {getJobCardHistoryRecords(card.id).length} Logged Events
+                    </span>
+                  </div>
+
+                  {getJobCardHistoryRecords(card.id).length === 0 ? (
+                    <div className="py-8 text-center text-slate-500 text-xs">
+                      No status changes logged yet for this Job Card.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-800">
+                      {getJobCardHistoryRecords(card.id).map((rec) => (
+                        <div key={rec.id} className="relative pl-8 text-xs">
+                          <div className="absolute left-2 top-1.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-slate-950 -translate-x-1/2 shadow-xs" />
+                          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-200">
+                                {rec.previousStatus ? `${formatJobCardStatus(rec.previousStatus)} ➔ ` : ''}
+                                <span className="text-amber-400">{formatJobCardStatus(rec.newStatus)}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {new Date(rec.createdAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                              </span>
+                            </div>
+                            {rec.notes && (
+                              <p className="text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800/60 font-mono text-[11px]">
+                                {rec.notes}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-1">
+                              <User className="w-3 h-3 text-slate-500" />
+                              <span>By: <strong className="text-slate-300">{rec.changedByName || 'System'}</strong> ({rec.changedByRole || 'Staff'})</span>
+                              <span className="text-slate-600">•</span>
+                              <span className="uppercase text-[9px] font-bold px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">
+                                {rec.actionType || 'STATUS_CHANGE'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
             </div>

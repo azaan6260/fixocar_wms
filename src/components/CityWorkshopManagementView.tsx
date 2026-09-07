@@ -46,6 +46,8 @@ export function CityWorkshopManagementView({ currentRole, onNavigateEmployees }:
 
   useEffect(() => {
     refreshData();
+    // Auto-sync from Supabase database on mount to ensure latest cities and workshops are loaded
+    syncFromSupabase().then(() => refreshData()).catch(() => {});
     const unsubscribe = subscribeToStore(refreshData);
     return () => { unsubscribe(); };
   }, []);

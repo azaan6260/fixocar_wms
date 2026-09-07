@@ -164,13 +164,26 @@ export default function App() {
     setAuthUser(null);
   };
 
-  // Subscribe to storage updates & sync from Supabase on startup
+  // Subscribe to storage updates & sync from Supabase on startup and periodically
   useEffect(() => {
     const initializeGlobalSync = async () => {
       await fetchServerSupabaseConfig();
       await syncFromSupabase();
     };
     initializeGlobalSync();
+
+    // Auto-sync every 15 seconds to ensure mobile and desktop stay continuously linked with database
+    const syncInterval = setInterval(() => {
+      syncFromSupabase().catch(() => {});
+    }, 15000);
+
+    // Re-sync on tab focus or screen visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncFromSupabase().catch(() => {});
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
 
     const unsubscribe = subscribeToStore(() => {
       setJobCards(getJobCards());
@@ -180,6 +193,8 @@ export default function App() {
     });
     
     return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       unsubscribe();
     };
   }, []);

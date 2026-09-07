@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, isTabAllowedForRole, getDefaultTabForRole } from '../types';
+import { UserRole, Workshop, City, isTabAllowedForRole, getDefaultTabForRole } from '../types';
 import { RoleBadge, ROLE_CONFIG } from './RoleBadge';
 import { getStoredSupabaseConfig, getSupabaseClient } from '../lib/supabaseClient';
-import { resetToDefaultMockData, getJobCards, subscribeToStore, getAuthUser, logoutAuthUser } from '../lib/storage';
+import { resetToDefaultMockData, getJobCards, subscribeToStore, getAuthUser, logoutAuthUser, getWorkshops, getCities, getActiveWorkshopId, setActiveWorkshopId } from '../lib/storage';
+import { syncFromSupabase } from '../lib/syncService';
 import { useI18n } from '../lib/i18n';
 import { 
   Wrench, 
@@ -75,13 +76,28 @@ export function HeaderNav({
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
   const [authUser, setAuthUser] = useState(() => getAuthUser());
+  const [workshops, setWorkshops] = useState<Workshop[]>(() => getWorkshops());
+  const [cities, setCities] = useState<City[]>(() => getCities());
+  const [activeWsId, setActiveWsId] = useState<string>(() => getActiveWorkshopId());
   const supabaseConfig = getStoredSupabaseConfig();
   const { t, language, setLanguage } = useI18n();
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     setAuthUser(getAuthUser());
   }, [currentRole]);
+
+  useEffect(() => {
+    const syncHeaderStore = () => {
+      setWorkshops(getWorkshops());
+      setCities(getCities());
+      setActiveWsId(getActiveWorkshopId());
+    };
+    syncHeaderStore();
+    const unsubscribeWs = subscribeToStore(syncHeaderStore);
+    return () => unsubscribeWs();
+  }, []);
 
   useEffect(() => {
     const calculatePending = () => {
@@ -178,6 +194,43 @@ export function HeaderNav({
           {/* Right Controls: Role Switcher, Quick Actions & Call */}
           <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
 
+            {/* Active Workshop / City Scope Selector */}
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-xs font-bold text-blue-900 dark:text-blue-100 shadow-2xs shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <select
+                value={activeWsId}
+                onChange={(e) => {
+                  const selected = e.target.value;
+                  setActiveWorkshopId(selected);
+                  setActiveWsId(selected);
+                }}
+                className="bg-transparent text-xs font-black outline-none cursor-pointer text-blue-950 dark:text-blue-100 max-w-[110px] sm:max-w-[190px] truncate"
+                title="Select Active Workshop / City Scope (Super Admin can select All or any specific workshop)"
+              >
+                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold">
+                  🌐 All Cities & Workshops
+                </option>
+                {cities.length > 0 && (
+                  <optgroup label="Operational Cities">
+                    {cities.map((c) => (
+                      <option key={`city-${c.id}`} value={`CITY:${c.id}`} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold">
+                        🏙️ City: {c.name} {c.state ? `(${c.state})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {workshops.length > 0 && (
+                  <optgroup label="Workshop Hubs">
+                    {workshops.map((ws) => (
+                      <option key={ws.id} value={ws.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium">
+                        📍 {ws.cityName ? `${ws.cityName} • ` : ''}{ws.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
             <button 
               type="button"
               onClick={() => {
@@ -195,6 +248,25 @@ export function HeaderNav({
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold hover:bg-amber-500 hover:text-slate-950 transition-all"
             >
               🚘 {t('action.customerPortal')}
+            </button>
+
+            {/* Quick Manual Database Sync Button for Mobile & Desktop */}
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSyncing(true);
+                try {
+                  await syncFromSupabase();
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+              disabled={isSyncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-extrabold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Sync All Tables from Supabase & Central Server Database"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="hidden min-[480px]:inline">{isSyncing ? 'Syncing...' : 'Sync DB'}</span>
             </button>
 
             {/* Direct Hotline Call Button */}

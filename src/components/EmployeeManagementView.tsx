@@ -70,8 +70,13 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
     }
     editingEmployee.loginId = editingEmployee.email;
 
-    // Ensure workshop association is properly linked
-    if (editingEmployee.workshopId) {
+    // Super Admins don't need a specific workshop assignment
+    if (editingEmployee.role === 'SUPER_ADMIN' && (!editingEmployee.workshopId || editingEmployee.workshopId === '')) {
+      editingEmployee.workshopName = 'Global Oversight (All Hubs)';
+      editingEmployee.cityName = 'All Cities';
+      editingEmployee.workshopId = '';
+      editingEmployee.cityId = '';
+    } else if (editingEmployee.workshopId) {
       const selectedWs = workshops.find(w => w.id === editingEmployee.workshopId);
       if (selectedWs) {
         editingEmployee.workshopName = selectedWs.name;
@@ -296,84 +301,117 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
               .map(emp => {
                 const isContract = emp.employmentType === 'CONTRACT';
 
+                // Resolve Workshop & City info with fallback lookup for mobile/desktop
+                const wsInfo = (() => {
+                  if (emp.role === 'SUPER_ADMIN') {
+                    return { name: 'Global Oversight (All Hubs)', city: 'All Cities', isGlobal: true, isAssigned: false };
+                  }
+                  if (emp.workshopName && emp.workshopName.trim() !== '') {
+                    return { name: emp.workshopName, city: emp.cityName || '', isGlobal: false, isAssigned: true };
+                  }
+                  if (emp.workshopId) {
+                    const found = workshops.find(w => w.id === emp.workshopId);
+                    if (found) {
+                      return { name: found.name, city: found.cityName, isGlobal: false, isAssigned: true };
+                    }
+                  }
+                  return { name: 'Unassigned Workshop', city: 'Unassigned City', isGlobal: false, isAssigned: false };
+                })();
+
                 return (
-                  <div key={emp.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex flex-col gap-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center text-slate-500 font-bold text-lg">
-                          {emp.avatarUrl ? <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover" /> : emp.name.charAt(0)}
-                        </div>
-                        <div>
-                          <h3 className="font-extrabold text-slate-900 dark:text-slate-100">{emp.name}</h3>
-                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
-                              {emp.role}
-                            </span>
-                            {isContract ? (
-                              <span className="text-[10px] uppercase font-black text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded border border-purple-300 dark:border-purple-800">
-                                📜 Contract Basis
+                  <div key={emp.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs flex flex-col justify-between gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-base sm:text-lg flex items-center justify-center shrink-0 shadow-xs">
+                            {emp.avatarUrl ? <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover rounded-2xl" /> : emp.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm sm:text-base truncate">{emp.name}</h3>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full ${
+                                emp.role === 'SUPER_ADMIN' 
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800' 
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              }`}>
+                                {emp.role === 'SUPER_ADMIN' ? '👑 Super Admin' : emp.role}
                               </span>
-                            ) : (
-                              <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
-                                💼 Payroll
-                              </span>
-                            )}
+                              {isContract ? (
+                                <span className="text-[10px] uppercase font-black text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded border border-purple-300 dark:border-purple-800">
+                                  📜 Contract
+                                </span>
+                              ) : (
+                                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                                  💼 Payroll
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      {canManageEmployees && (
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => {
-                              setEditingEmployee(emp);
-                              setIsNewEmployee(false);
-                            }} 
-                            title="Edit / Associate Workshop"
-                            className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          {canDeleteEmployees && (
+                        
+                        {canManageEmployees && (
+                          <div className="flex items-center gap-1 shrink-0">
                             <button 
-                              onClick={() => handleDeleteEmployee(emp.id)} 
-                              title="Delete Employee"
-                              className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                              onClick={() => {
+                                setEditingEmployee(emp);
+                                setIsNewEmployee(false);
+                              }} 
+                              title="Edit / Associate Workshop"
+                              className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Assigned Workshop & City Display */}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-semibold flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          Workshop Hub:
-                        </span>
-                        {emp.workshopName ? (
-                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">{emp.workshopName}</span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Unassigned</span>
+                            {canDeleteEmployees && (
+                              <button 
+                                onClick={() => handleDeleteEmployee(emp.id)} 
+                                title="Delete Employee"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-semibold flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          City Location:
-                        </span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">{emp.cityName || 'N/A'}</span>
-                      </div>
-                    </div>
+                      {/* Prominent Assigned Workshop & City Display (Visible on Mobile & Laptop) */}
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-xl border border-slate-200/80 dark:border-slate-700/60 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-semibold flex items-center gap-1.5 shrink-0">
+                            <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                            Assigned Hub:
+                          </span>
+                          {wsInfo.isGlobal ? (
+                            <span className="font-extrabold text-[11px] text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                              🌐 Global Oversight (All Hubs)
+                            </span>
+                          ) : wsInfo.isAssigned ? (
+                            <span className="font-extrabold text-xs text-blue-900 dark:text-blue-200 bg-blue-100/80 dark:bg-blue-900/50 px-2.5 py-0.5 rounded-full border border-blue-300 dark:border-blue-700/80 text-right">
+                              {wsInfo.name}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="text-xs text-slate-500 space-y-1">
-                      <p><strong>Team:</strong> {emp.specializedTeam}</p>
-                      <p><strong>Phone:</strong> {emp.phone}</p>
-                      <p><strong>Status:</strong> {emp.status}</p>
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-semibold flex items-center gap-1.5 shrink-0">
+                            <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            City Location:
+                          </span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {wsInfo.city || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 font-medium">
+                        <p><strong>Team:</strong> {emp.specializedTeam}</p>
+                        <p><strong>Phone:</strong> {emp.phone || 'N/A'}</p>
+                        <p><strong>Status:</strong> {emp.status}</p>
+                      </div>
                     </div>
 
                     {(isAdmin || isManager) && (
@@ -717,32 +755,42 @@ export function EmployeeManagementView({ currentRole }: EmployeeManagementProps)
                   <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <Building2 className="w-4 h-4 text-blue-600" />
-                      Assigned Workshop Hub * (Required)
+                      Assigned Workshop Hub {editingEmployee.role === 'SUPER_ADMIN' ? '(Optional for Super Admin)' : '* (Required)'}
                     </span>
                     <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase">Associated City</span>
                   </label>
                   
                   {workshops.length > 0 ? (
                     <select
-                      required
+                      required={editingEmployee.role !== 'SUPER_ADMIN'}
                       value={editingEmployee.workshopId || ''}
                       onChange={e => {
                         const selectedWsId = e.target.value;
-                        const ws = workshops.find(w => w.id === selectedWsId);
-                        setEditingEmployee({
-                          ...editingEmployee,
-                          workshopId: selectedWsId,
-                          workshopName: ws?.name || '',
-                          cityId: ws?.cityId || '',
-                          cityName: ws?.cityName || ''
-                        });
+                        if (!selectedWsId) {
+                          setEditingEmployee({
+                            ...editingEmployee,
+                            workshopId: '',
+                            workshopName: 'Global Oversight (All Hubs)',
+                            cityId: '',
+                            cityName: 'All Cities'
+                          });
+                        } else {
+                          const ws = workshops.find(w => w.id === selectedWsId);
+                          setEditingEmployee({
+                            ...editingEmployee,
+                            workshopId: selectedWsId,
+                            workshopName: ws?.name || '',
+                            cityId: ws?.cityId || '',
+                            cityName: ws?.cityName || ''
+                          });
+                        }
                       }}
                       className="w-full p-2.5 text-sm font-semibold rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 shadow-xs focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="" disabled>-- Select Assigned Workshop --</option>
+                      <option value="">🌐 Global Oversight (All Cities & Hubs - Super Admin)</option>
                       {workshops.map(ws => (
                         <option key={ws.id} value={ws.id}>
-                          {ws.name} ({ws.cityName}) {ws.isCars24Partner ? '⭐ Cars24 Partner' : ''}
+                          📍 {ws.cityName ? `${ws.cityName} • ` : ''}{ws.name} {ws.isCars24Partner ? '⭐ Cars24 Partner' : ''}
                         </option>
                       ))}
                     </select>

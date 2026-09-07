@@ -3,7 +3,7 @@ import {
   X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2
 } from 'lucide-react';
 import { AuthUser } from '../types';
-import { authenticateUser, saveAuthUser, INITIAL_CITIES, getEmployees, saveEmployees } from '../lib/storage';
+import { authenticateUser, saveAuthUser, getCities, getEmployees, saveEmployees } from '../lib/storage';
 import { authenticateViaSupabase, fetchServerSupabaseConfig, getStoredSupabaseConfig } from '../lib/supabaseClient';
 import { syncFromSupabase } from '../lib/syncService';
 import { 
@@ -431,11 +431,15 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                       onChange={(e) => setSelectedCity(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                     >
-                      {INITIAL_CITIES.map((c) => (
-                        <option key={c.id} value={c.name} className="bg-slate-900 text-white">
-                          {c.name} ({c.state})
-                        </option>
-                      ))}
+                      {getCities().length > 0 ? (
+                        getCities().map((c) => (
+                          <option key={c.id} value={c.name} className="bg-slate-900 text-white">
+                            {c.name} {c.state ? `(${c.state})` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="Mumbai" className="bg-slate-900 text-white">Mumbai</option>
+                      )}
                     </select>
                   </div>
                 </div>

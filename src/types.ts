@@ -608,6 +608,20 @@ export interface JobCardComment {
   timestamp: string;
 }
 
+export interface JobCardHistoryRecord {
+  id: string;
+  jobCardId: string;
+  previousStatus?: string;
+  newStatus: string;
+  actionType: string;
+  changedById?: string;
+  changedByName?: string;
+  changedByRole?: string;
+  notes?: string;
+  metadata?: any;
+  createdAt: string;
+}
+
 export interface JobCard {
   id: string; // e.g. "JC-2026-104"
   createdAt: string;

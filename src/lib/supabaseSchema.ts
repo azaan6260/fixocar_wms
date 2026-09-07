@@ -242,7 +242,7 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   customer_phone text NOT NULL,
   customer_email text,
   customer_address text,
-  status job_card_status NOT NULL DEFAULT 'CREATED'::job_card_status,
+  status text NOT NULL DEFAULT 'CREATED'::text,
   service_type text NOT NULL DEFAULT 'CUSTOM_REPAIR'::text,
   package_name text,
   floor_manager_id text,
@@ -289,22 +289,29 @@ ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_id text;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_name text;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS is_cars24 boolean DEFAULT false;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS cars24_ref_no text;
+ALTER TABLE public.job_cards ALTER COLUMN status TYPE text USING status::text;
 
 CREATE TABLE IF NOT EXISTS public.job_card_history (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  id text NOT NULL,
   job_card_id text NOT NULL,
-  previous_status job_card_status,
-  new_status job_card_status NOT NULL,
+  previous_status text,
+  new_status text NOT NULL,
   action_type text NOT NULL DEFAULT 'STATUS_CHANGE'::text,
   changed_by_id text,
   changed_by_name text DEFAULT 'System'::text,
-  changed_by_role user_role,
+  changed_by_role text,
   notes text,
   metadata jsonb,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT job_card_history_pkey PRIMARY KEY (id),
   CONSTRAINT job_card_history_job_card_id_fkey FOREIGN KEY (job_card_id) REFERENCES public.job_cards(id) ON DELETE CASCADE
 );
+
+-- Idempotent migrations for existing job_card_history table
+ALTER TABLE public.job_card_history ALTER COLUMN id TYPE text USING id::text;
+ALTER TABLE public.job_card_history ALTER COLUMN previous_status TYPE text USING previous_status::text;
+ALTER TABLE public.job_card_history ALTER COLUMN new_status TYPE text USING new_status::text;
+ALTER TABLE public.job_card_history ALTER COLUMN changed_by_role TYPE text USING changed_by_role::text;
 
 -- ==========================================
 -- 7. JOB TASKS & REQUISITIONS
