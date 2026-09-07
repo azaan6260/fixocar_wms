@@ -100,20 +100,21 @@ export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
 
 export function getAllJobCards(): JobCard[] {
   const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify([]));
-    return [];
+  let list: JobCard[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try {
-    const parsed = JSON.parse(local);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(c => ({
-      ...c,
-      isCars24: isCars24JobCard(c)
-    }));
-  } catch {
-    return [];
+  if (list.length === 0 && INITIAL_JOB_CARDS.length > 0) {
+    list = [...INITIAL_JOB_CARDS];
+    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
   }
+  return list.map(c => ({
+    ...c,
+    isCars24: isCars24JobCard(c)
+  }));
 }
 
 export function getJobCards(workshopIdFilter?: string): JobCard[] {
@@ -1424,11 +1425,18 @@ export function updateSalaryStatus(id: string, status: 'PENDING' | 'TRANSFERRED'
 // 3. VENDORS STORAGE
 export function getVendors(): Vendor[] {
   const local = localStorage.getItem(STORAGE_KEYS.VENDORS);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify([]));
-    return [];
+  let list: Vendor[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try { return JSON.parse(local); } catch { return []; }
+  if (list.length === 0 && INITIAL_VENDORS.length > 0) {
+    list = [...INITIAL_VENDORS];
+    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(list));
+  }
+  return list;
 }
 
 export function saveVendors(vendors: Vendor[], skipPush = false) {
@@ -1511,11 +1519,18 @@ export function deleteVendor(id: string) {
 // 4. DELIVERIES STORAGE
 export function getDeliveries(): DeliveryRecord[] {
   const local = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify([]));
-    return [];
+  let list: DeliveryRecord[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try { return JSON.parse(local); } catch { return []; }
+  if (list.length === 0 && INITIAL_DELIVERIES.length > 0) {
+    list = [...INITIAL_DELIVERIES];
+    localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(list));
+  }
+  return list;
 }
 
 export function saveDeliveries(deliveries: DeliveryRecord[]) {
@@ -1570,11 +1585,18 @@ export function updateDeliveryStatus(
 // 5. PURCHASE ORDERS STORAGE
 export function getPurchaseOrders(): PurchaseOrder[] {
   const local = localStorage.getItem(STORAGE_KEYS.PURCHASE_ORDERS);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify([]));
-    return [];
+  let list: PurchaseOrder[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try { return JSON.parse(local); } catch { return []; }
+  if (list.length === 0 && INITIAL_PURCHASE_ORDERS.length > 0) {
+    list = [...INITIAL_PURCHASE_ORDERS];
+    localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(list));
+  }
+  return list;
 }
 
 export function savePurchaseOrders(pos: PurchaseOrder[]) {
@@ -2050,15 +2072,18 @@ export function deleteWorkshop(id: string) {
 // 10. INVENTORY STORAGE & CONSUMPTION MANAGEMENT
 export function getInventoryItems(): InventoryItem[] {
   const local = localStorage.getItem(STORAGE_KEYS.INVENTORY);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify([]));
-    return [];
+  let list: InventoryItem[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try {
-    return JSON.parse(local);
-  } catch {
-    return [];
+  if (list.length === 0 && INITIAL_INVENTORY_ITEMS.length > 0) {
+    list = [...INITIAL_INVENTORY_ITEMS];
+    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(list));
   }
+  return list;
 }
 
 export function saveInventoryItems(items: InventoryItem[]) {
@@ -2548,16 +2573,18 @@ export function deleteCustomerVehicle(id: string): void {
 // ----------------------------------------------------
 export function getVehicleCheckIns(): VehicleCheckIn[] {
   const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
-  if (!local) {
-    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify([]));
-    return [];
+  let list: VehicleCheckIn[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try {
-    const parsed = JSON.parse(local);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  if (list.length === 0 && INITIAL_VEHICLE_CHECKINS.length > 0) {
+    list = [...INITIAL_VEHICLE_CHECKINS];
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(list));
   }
+  return list;
 }
 
 export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
@@ -2657,16 +2684,18 @@ export function deleteWorkshopExpense(id: string): boolean {
 // ----------------------------------------------------
 export function getCarModels(): CarModelRecord[] {
   const local = localStorage.getItem(STORAGE_KEYS.CAR_MODELS);
-  if (local === null) {
-    localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(INITIAL_CAR_MODELS));
-    return INITIAL_CAR_MODELS;
+  let list: CarModelRecord[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
   }
-  try {
-    const parsed = JSON.parse(local);
-    return Array.isArray(parsed) ? parsed : INITIAL_CAR_MODELS;
-  } catch {
-    return INITIAL_CAR_MODELS;
+  if (list.length === 0 && INITIAL_CAR_MODELS.length > 0) {
+    list = [...INITIAL_CAR_MODELS];
+    localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(list));
   }
+  return list;
 }
 
 export function saveCarModels(models: CarModelRecord[], skipPush = false): void {
