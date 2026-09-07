@@ -541,7 +541,8 @@ export const INDIAN_CITIES = [
   'Jaipur',
   'Ahmedabad',
   'Chandigarh',
-  'Kolkata'
+  'Kolkata',
+  'Lucknow'
 ] as const;
 
 export type IndianCity = typeof INDIAN_CITIES[number];

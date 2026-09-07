@@ -1776,28 +1776,57 @@ export function getCities(): City[] {
     } catch { parsed = []; }
   }
 
-  // If local list is empty, initialize with INITIAL_CITIES or inferred from workshops
-  if (parsed.length === 0) {
-    const workshops = getWorkshops();
-    const inferred: City[] = [];
-    workshops.forEach(w => {
-      if (w.cityName && w.cityName.trim() !== '' && !inferred.some(c => c.name.toLowerCase() === w.cityName.toLowerCase())) {
-        inferred.push({
-          id: w.cityId || `city-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          name: w.cityName.trim(),
-          state: '',
-          createdAt: new Date().toISOString().split('T')[0]
-        });
-      }
-    });
-    const baseCities = inferred.length > 0 ? inferred : (INITIAL_CITIES.length > 0 ? INITIAL_CITIES : []);
-    if (baseCities.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(baseCities));
+  // Always merge INITIAL_CITIES and workshop-inferred cities to guarantee full city list across devices
+  const workshops = getWorkshops();
+  const inferred: City[] = [];
+  workshops.forEach(w => {
+    if (w.cityName && w.cityName.trim() !== '' && !inferred.some(c => c.name.toLowerCase() === w.cityName.toLowerCase())) {
+      inferred.push({
+        id: w.cityId || `city-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: w.cityName.trim(),
+        state: '',
+        createdAt: new Date().toISOString().split('T')[0]
+      });
     }
-    return baseCities;
+  });
+
+  const cityMap = new Map<string, City>();
+
+  // 1. Seed with INITIAL_CITIES (all 11 standard cities)
+  INITIAL_CITIES.forEach(c => {
+    cityMap.set(c.id, c);
+    cityMap.set(c.name.toLowerCase().trim(), c);
+  });
+
+  // 2. Add inferred cities from workshops
+  inferred.forEach(c => {
+    if (!cityMap.has(c.id) && !cityMap.has(c.name.toLowerCase().trim())) {
+      cityMap.set(c.id, c);
+      cityMap.set(c.name.toLowerCase().trim(), c);
+    }
+  });
+
+  // 3. Add stored local cities
+  parsed.forEach(c => {
+    const key = c.name.toLowerCase().trim();
+    if (!cityMap.has(c.id) && !cityMap.has(key)) {
+      cityMap.set(c.id, c);
+      cityMap.set(key, c);
+    } else {
+      const existing = cityMap.get(c.id) || cityMap.get(key);
+      if (existing && c.state && !existing.state) {
+        existing.state = c.state;
+      }
+    }
+  });
+
+  const finalCities = Array.from(new Set(cityMap.values()));
+
+  if (finalCities.length > parsed.length) {
+    localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(finalCities));
   }
 
-  return parsed;
+  return finalCities;
 }
 
 export function saveCities(cities: City[], skipPush = false) {

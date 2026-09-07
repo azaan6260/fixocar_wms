@@ -119,7 +119,8 @@ const DEFAULT_INITIAL_CITIES = [
   { id: 'city-jaipur', name: 'Jaipur', state: 'Rajasthan', createdAt: '2025-01-01' },
   { id: 'city-ahmedabad', name: 'Ahmedabad', state: 'Gujarat', createdAt: '2025-01-01' },
   { id: 'city-chandigarh', name: 'Chandigarh', state: 'Punjab', createdAt: '2025-01-01' },
-  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' }
+  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' },
+  { id: 'city-lucknow', name: 'Lucknow', state: 'Uttar Pradesh', createdAt: '2025-01-01' }
 ];
 
 const DEFAULT_INITIAL_WORKSHOPS = [
@@ -196,8 +197,14 @@ function loadCentralStore(): CentralStoreData {
         if (!memoryCentralStore.employees.some(e => e.id === 'emp-taifur' || e.loginId === 'taifur')) {
           memoryCentralStore.employees.push(getInitialCentralStore().employees[1]);
         }
-        if (!memoryCentralStore.cities || memoryCentralStore.cities.length === 0) {
-          memoryCentralStore.cities = DEFAULT_INITIAL_CITIES;
+        if (!memoryCentralStore.cities) {
+          memoryCentralStore.cities = [...DEFAULT_INITIAL_CITIES];
+        } else {
+          for (const initCity of DEFAULT_INITIAL_CITIES) {
+            if (!memoryCentralStore.cities.some((c: any) => c.id === initCity.id || (c.name && c.name.toLowerCase().trim() === initCity.name.toLowerCase().trim()))) {
+              memoryCentralStore.cities.push(initCity);
+            }
+          }
         }
         if (!memoryCentralStore.workshops || memoryCentralStore.workshops.length === 0) {
           memoryCentralStore.workshops = DEFAULT_INITIAL_WORKSHOPS;

@@ -18,7 +18,8 @@ export const INITIAL_CITIES: City[] = [
   { id: 'city-jaipur', name: 'Jaipur', state: 'Rajasthan', createdAt: '2025-01-01' },
   { id: 'city-ahmedabad', name: 'Ahmedabad', state: 'Gujarat', createdAt: '2025-01-01' },
   { id: 'city-chandigarh', name: 'Chandigarh', state: 'Punjab', createdAt: '2025-01-01' },
-  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' }
+  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' },
+  { id: 'city-lucknow', name: 'Lucknow', state: 'Uttar Pradesh', createdAt: '2025-01-01' }
 ];
 
 export const INITIAL_WORKSHOPS: Workshop[] = [

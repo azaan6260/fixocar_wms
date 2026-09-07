@@ -161,8 +161,13 @@ export async function syncFromSupabase(): Promise<SyncResult> {
             createdAt: c.createdAt || c.created_at || new Date().toISOString().split('T')[0]
           }));
           for (const loc of currentLocal) {
-            if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
+            if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase().trim() === loc.name.toLowerCase().trim()))) {
               mergedCities.push(loc);
+            }
+          }
+          for (const init of INITIAL_CITIES) {
+            if (!mergedCities.some(m => m.id === init.id || (m.name && init.name && m.name.toLowerCase().trim() === init.name.toLowerCase().trim()))) {
+              mergedCities.push(init);
             }
           }
           saveCities(mergedCities, true);
