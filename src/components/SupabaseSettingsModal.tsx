@@ -442,6 +442,39 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
             </div>
           ) : (
             <div className="space-y-3 text-xs">
+              {/* Live Cross-Device Sync Notice */}
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-2">
+                <p className="font-bold flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> Live Cross-Device Sync Notice (Fix 0 Job Cards on Mobile)
+                </p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal">
+                  If you see <strong>0 job cards on mobile</strong> or have synchronization errors, your Supabase database has strict constraints on PostgreSQL custom ENUM types.
+                </p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal font-bold">
+                  To resolve this completely without losing data, copy and execute this migration script in your <strong>Supabase SQL Editor</strong> to convert all constraint-bound columns to flexible text format:
+                </p>
+                <div className="relative">
+                  <pre className="p-3 rounded-lg bg-slate-950 text-amber-400 font-mono text-[10px] overflow-x-auto border border-slate-800 select-all whitespace-pre leading-tight">
+{`-- Convert Job Card & Task Statuses to Text
+ALTER TABLE public.job_cards ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.job_cards ALTER COLUMN status SET DEFAULT 'CREATED'::text;
+ALTER TABLE public.job_card_history ALTER COLUMN previous_status TYPE text USING previous_status::text;
+ALTER TABLE public.job_card_history ALTER COLUMN new_status TYPE text USING new_status::text;
+
+-- Convert Employees Role & Other Table Columns to Text
+ALTER TABLE public.employees ALTER COLUMN role TYPE text USING role::text;
+ALTER TABLE public.employees ALTER COLUMN role SET DEFAULT 'MECHANIC'::text;
+ALTER TABLE public.job_card_history ALTER COLUMN changed_by_role TYPE text USING changed_by_role::text;
+ALTER TABLE public.vendors ALTER COLUMN category TYPE text USING category::text;
+ALTER TABLE public.vendors ALTER COLUMN category SET DEFAULT 'PARTS_SUPPLIER'::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status SET DEFAULT 'PENDING'::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status SET DEFAULT 'ASSIGNED'::text;`}
+                  </pre>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <p className="text-slate-500">Copy this SQL script and paste it into the Supabase SQL Editor to create tables and RLS rules:</p>
                 <button

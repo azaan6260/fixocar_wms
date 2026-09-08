@@ -84,7 +84,7 @@ ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS code text DEFAULT 'WS';
 CREATE TABLE IF NOT EXISTS public.employees (
   id text NOT NULL,
   name text NOT NULL,
-  role user_role NOT NULL DEFAULT 'MECHANIC'::user_role,
+  role text NOT NULL DEFAULT 'MECHANIC'::text,
   phone text NOT NULL,
   email text UNIQUE,
   specialized_team text NOT NULL,
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS public.employees (
 CREATE TABLE IF NOT EXISTS public.vendors (
   id text NOT NULL,
   name text NOT NULL,
-  category vendor_category NOT NULL DEFAULT 'PARTS_SUPPLIER'::vendor_category,
+  category text NOT NULL DEFAULT 'PARTS_SUPPLIER'::text,
   contact_person text NOT NULL,
   phone text NOT NULL,
   email text,
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
   customer_phone text NOT NULL,
   customer_email text,
   customer_address text,
-  status job_card_status NOT NULL DEFAULT 'CREATED'::job_card_status,
+  status text NOT NULL DEFAULT 'CREATED'::text,
   service_type text NOT NULL DEFAULT 'CUSTOM_REPAIR'::text,
   package_name text,
   floor_manager_id text,
@@ -269,8 +269,8 @@ CREATE TABLE IF NOT EXISTS public.job_cards (
 CREATE TABLE IF NOT EXISTS public.job_card_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   job_card_id text NOT NULL,
-  previous_status job_card_status,
-  new_status job_card_status NOT NULL,
+  previous_status text,
+  new_status text NOT NULL,
   action_type text NOT NULL DEFAULT 'STATUS_CHANGE'::text,
   changed_by_id text,
   changed_by_name text DEFAULT 'System'::text,
@@ -282,6 +282,23 @@ CREATE TABLE IF NOT EXISTS public.job_card_history (
   CONSTRAINT job_card_history_job_card_id_fkey FOREIGN KEY (job_card_id) REFERENCES public.job_cards(id) ON DELETE CASCADE
 );
 
+-- Idempotent migrations to convert existing columns from job_card_status enum to text
+ALTER TABLE public.job_cards ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.job_cards ALTER COLUMN status SET DEFAULT 'CREATED'::text;
+ALTER TABLE public.job_card_history ALTER COLUMN previous_status TYPE text USING previous_status::text;
+ALTER TABLE public.job_card_history ALTER COLUMN new_status TYPE text USING new_status::text;
+
+-- Idempotent migrations to convert remaining enum columns to text
+ALTER TABLE public.employees ALTER COLUMN role TYPE text USING role::text;
+ALTER TABLE public.employees ALTER COLUMN role SET DEFAULT 'MECHANIC'::text;
+ALTER TABLE public.job_card_history ALTER COLUMN changed_by_role TYPE text USING changed_by_role::text;
+ALTER TABLE public.vendors ALTER COLUMN category TYPE text USING category::text;
+ALTER TABLE public.vendors ALTER COLUMN category SET DEFAULT 'PARTS_SUPPLIER'::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status SET DEFAULT 'PENDING'::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status SET DEFAULT 'ASSIGNED'::text;
+
 -- ==========================================
 -- 7. JOB TASKS & REQUISITIONS
 -- ==========================================
@@ -289,13 +306,13 @@ CREATE TABLE IF NOT EXISTS public.job_tasks (
   id text NOT NULL,
   job_card_id text NOT NULL,
   title text NOT NULL,
-  category task_category NOT NULL DEFAULT 'MECHANICAL'::task_category,
+  category text NOT NULL DEFAULT 'MECHANICAL'::text,
   assigned_to_id text,
   assigned_to_name text,
   assigned_type text NOT NULL DEFAULT 'EMPLOYEE'::text,
   estimated_cost numeric DEFAULT 0,
   customer_price numeric DEFAULT 0,
-  status task_status DEFAULT 'PENDING'::task_status,
+  status text DEFAULT 'PENDING'::text,
   requires_customer_approval boolean DEFAULT false,
   is_customer_approved boolean,
   rejection_reason text,
@@ -321,6 +338,11 @@ CREATE TABLE IF NOT EXISTS public.job_tasks (
   CONSTRAINT job_tasks_paired_denter_id_fkey FOREIGN KEY (paired_denter_id) REFERENCES public.employees(id) ON DELETE SET NULL
 );
 
+-- Idempotent migration to convert existing columns from task_category enum to text
+ALTER TABLE public.job_tasks ALTER COLUMN category TYPE text USING category::text;
+ALTER TABLE public.job_tasks ALTER COLUMN category SET DEFAULT 'MECHANICAL'::text;
+
+
 -- ==========================================
 -- 8. LOGISTICS, PURCHASING & VEHICLE CHECK-INS
 -- ==========================================
@@ -336,7 +358,7 @@ CREATE TABLE IF NOT EXISTS public.delivery_records (
   type text NOT NULL DEFAULT 'DELIVERY'::text,
   pickup_address text,
   delivery_address text,
-  status delivery_status DEFAULT 'ASSIGNED'::delivery_status,
+  status text DEFAULT 'ASSIGNED'::text,
   total_amount_due numeric DEFAULT 0,
   payment_status text DEFAULT 'PENDING'::text,
   payment_method text,

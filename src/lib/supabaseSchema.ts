@@ -89,7 +89,7 @@ ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS code text DEFAULT 'WS';
 CREATE TABLE IF NOT EXISTS public.employees (
   id text NOT NULL,
   name text NOT NULL,
-  role user_role NOT NULL DEFAULT 'MECHANIC'::user_role,
+  role text NOT NULL DEFAULT 'MECHANIC'::text,
   phone text NOT NULL,
   email text UNIQUE,
   specialized_team text NOT NULL,
@@ -123,7 +123,7 @@ ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS password_hash text;
 CREATE TABLE IF NOT EXISTS public.vendors (
   id text NOT NULL,
   name text NOT NULL,
-  category vendor_category NOT NULL DEFAULT 'PARTS_SUPPLIER'::vendor_category,
+  category text NOT NULL DEFAULT 'PARTS_SUPPLIER'::text,
   contact_person text NOT NULL,
   phone text NOT NULL,
   email text,
@@ -313,6 +313,16 @@ ALTER TABLE public.job_card_history ALTER COLUMN previous_status TYPE text USING
 ALTER TABLE public.job_card_history ALTER COLUMN new_status TYPE text USING new_status::text;
 ALTER TABLE public.job_card_history ALTER COLUMN changed_by_role TYPE text USING changed_by_role::text;
 
+-- Idempotent migrations to convert remaining enum columns to text
+ALTER TABLE public.employees ALTER COLUMN role TYPE text USING role::text;
+ALTER TABLE public.employees ALTER COLUMN role SET DEFAULT 'MECHANIC'::text;
+ALTER TABLE public.vendors ALTER COLUMN category TYPE text USING category::text;
+ALTER TABLE public.vendors ALTER COLUMN category SET DEFAULT 'PARTS_SUPPLIER'::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.job_tasks ALTER COLUMN status SET DEFAULT 'PENDING'::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status TYPE text USING status::text;
+ALTER TABLE public.delivery_records ALTER COLUMN status SET DEFAULT 'ASSIGNED'::text;
+
 -- ==========================================
 -- 7. JOB TASKS & REQUISITIONS
 -- ==========================================
@@ -320,13 +330,13 @@ CREATE TABLE IF NOT EXISTS public.job_tasks (
   id text NOT NULL,
   job_card_id text NOT NULL,
   title text NOT NULL,
-  category task_category NOT NULL DEFAULT 'MECHANICAL'::task_category,
+  category text NOT NULL DEFAULT 'MECHANICAL'::text,
   assigned_to_id text,
   assigned_to_name text,
   assigned_type text NOT NULL DEFAULT 'EMPLOYEE'::text,
   estimated_cost numeric DEFAULT 0,
   customer_price numeric DEFAULT 0,
-  status task_status DEFAULT 'PENDING'::task_status,
+  status text DEFAULT 'PENDING'::text,
   requires_customer_approval boolean DEFAULT false,
   is_customer_approved boolean,
   rejection_reason text,
@@ -353,6 +363,8 @@ CREATE TABLE IF NOT EXISTS public.job_tasks (
 );
 
 -- Idempotent migrations for existing job_tasks table
+ALTER TABLE public.job_tasks ALTER COLUMN category TYPE text USING category::text;
+ALTER TABLE public.job_tasks ALTER COLUMN category SET DEFAULT 'MECHANICAL'::text;
 ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_to_id text;
 ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_to_name text;
 ALTER TABLE public.job_tasks ADD COLUMN IF NOT EXISTS assigned_type text DEFAULT 'EMPLOYEE';
@@ -377,7 +389,7 @@ CREATE TABLE IF NOT EXISTS public.delivery_records (
   type text NOT NULL DEFAULT 'DELIVERY'::text,
   pickup_address text,
   delivery_address text,
-  status delivery_status DEFAULT 'ASSIGNED'::delivery_status,
+  status text DEFAULT 'ASSIGNED'::text,
   total_amount_due numeric DEFAULT 0,
   payment_status text DEFAULT 'PENDING'::text,
   payment_method text,
@@ -544,7 +556,7 @@ DECLARE
   meta jsonb;
   emp_id text;
   emp_name text;
-  emp_role user_role;
+  emp_role text;
   emp_phone text;
   emp_team text;
   emp_login_id text;
@@ -557,13 +569,7 @@ BEGIN
   meta := NEW.raw_user_meta_data;
   emp_id := COALESCE(meta->>'employee_id', 'emp-' || substring(NEW.id::text from 1 for 8));
   emp_name := COALESCE(meta->>'name', meta->>'full_name', split_part(NEW.email, '@', 1), 'New Staff');
-  
-  BEGIN
-    emp_role := (COALESCE(meta->>'role', 'MECHANIC'))::user_role;
-  EXCEPTION WHEN OTHERS THEN
-    emp_role := 'MECHANIC'::user_role;
-  END;
-
+  emp_role := COALESCE(meta->>'role', 'MECHANIC');
   emp_phone := COALESCE(meta->>'phone', '9820011223');
   emp_team := COALESCE(meta->>'specialized_team', 'General');
   emp_login_id := COALESCE(meta->>'login_id', split_part(NEW.email, '@', 1));
