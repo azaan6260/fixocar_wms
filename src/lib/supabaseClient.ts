@@ -101,6 +101,20 @@ export async function fetchServerSupabaseConfig(): Promise<{
         if (data.supabaseServiceKey) localStorage.setItem(STORAGE_KEY_SERVICE_ROLE, data.supabaseServiceKey.trim());
         supabaseInstance = null;
         return data;
+      } else {
+        // Self-healing: if the server is unconfigured, but the client HAS a config stored locally,
+        // proactively push the client's configuration to the server to heal the server-side context!
+        const localConfig = getStoredSupabaseConfig();
+        if (localConfig.isConfigured && localConfig.supabaseUrl) {
+          console.log('[SUPABASE_CLIENT] Server config is missing. Proactively restoring server-side credentials from client localStorage.');
+          await saveSupabaseConfig(localConfig.supabaseUrl, localConfig.supabaseAnonKey, localConfig.supabaseServiceKey);
+          return {
+            configured: true,
+            supabaseUrl: localConfig.supabaseUrl,
+            supabaseAnonKey: localConfig.supabaseAnonKey,
+            supabaseServiceKey: localConfig.supabaseServiceKey
+          };
+        }
       }
     }
   } catch (err) {
