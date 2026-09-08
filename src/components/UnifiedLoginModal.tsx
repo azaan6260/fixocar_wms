@@ -38,6 +38,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
   const [selectedCity, setSelectedCity] = useState('Mumbai');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [isBiometricScanning, setIsBiometricScanning] = useState(false);
   const [savedBinding, setSavedBinding] = useState<BiometricBinding | null>(null);
   const [biometricNotice, setBiometricNotice] = useState<string | null>(null);
@@ -96,15 +97,18 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     }
 
     setIsLoading(true);
+    setSyncStatus('Verifying login credentials...');
     setError(null);
 
     try {
       // Ensure mobile has the latest server Supabase configuration
+      setSyncStatus('Synchronizing cloud parameters...');
       await fetchServerSupabaseConfig();
 
       let result: { success: boolean; user?: AuthUser; error?: string } = { success: false };
 
       if (activeTab === 'STAFF') {
+        setSyncStatus('Connecting to secure authentication gateway...');
         // Step 1: Try central server authentication endpoint first
         try {
           const centralRes = await fetch('/api/central/auth/login', {
@@ -151,24 +155,54 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         saveAuthUser(result.user);
 
         // Step 4: Automatically sync & load full central database across devices
+        setSyncStatus('Securing database credentials...');
+        
+        const statusSteps = [
+          'Connecting to central database...',
+          'Downloading operational work orders...',
+          'Hydrating employee & technician registries...',
+          'Merging parts & inventory logs...',
+          'Finalizing workspace setup...'
+        ];
+        
+        let stepIdx = 0;
+        const statusInterval = setInterval(() => {
+          if (stepIdx < statusSteps.length) {
+            setSyncStatus(statusSteps[stepIdx]);
+            stepIdx++;
+          }
+        }, 800);
+
         try {
-          await syncFromSupabase();
+          // Promise.race prevents lagging on slow or offline cellular networks
+          await Promise.race([
+            syncFromSupabase(),
+            new Promise(resolve => setTimeout(resolve, 4500))
+          ]);
         } catch (syncErr) {
           console.warn('[LOGIN_FLOW] Central database sync warning:', syncErr);
+        } finally {
+          clearInterval(statusInterval);
         }
+
+        setSyncStatus('Synchronized successfully!');
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Re-save session after sync to ensure full user attributes are retained
         saveAuthUser(result.user);
 
         setIsLoading(false);
+        setSyncStatus(null);
         onLoginSuccess(result.user);
         onClose();
       } else {
         setIsLoading(false);
+        setSyncStatus(null);
         setError(result.error || 'Authentication failed. Please verify your credentials.');
       }
     } catch (err: any) {
       setIsLoading(false);
+      setSyncStatus(null);
       setError('An unexpected login error occurred. Please try again.');
     }
   };
@@ -177,6 +211,32 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
       <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative">
         
+        {/* Dynamic Database Sync & Login Progress Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-50 bg-slate-950/95 flex flex-col items-center justify-center p-6 space-y-4">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Wrench className="w-6 h-6 text-blue-400 animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-black text-white tracking-tight">
+                Preparing Workspace
+              </h3>
+              <p className="text-xs text-slate-400 font-medium px-4 max-w-xs mx-auto">
+                {syncStatus || 'Loading operations database...'}
+              </p>
+            </div>
+            <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '100%' }} />
+            </div>
+            <p className="text-[10px] text-slate-500 font-mono">
+              Do not close or refresh this page
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-3">

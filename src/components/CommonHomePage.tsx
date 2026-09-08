@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wrench, Shield, Clock, CheckCircle2, Phone, Search, Car, 
   ArrowRight, Star, ChevronRight, MapPin, Sparkles, AlertCircle,
   Settings, KeyRound, User, Lock, Fuel, Check, RefreshCw, Zap
 } from 'lucide-react';
 import { CityServiceOffering, JobCard, INDIAN_CITIES } from '../types';
-import { getCityServices, getJobCards } from '../lib/storage';
+import { getCityServices, getJobCards, subscribeToStore } from '../lib/storage';
 
 interface CommonHomePageProps {
   onOpenLogin: (tab?: 'STAFF' | 'CUSTOMER') => void;
@@ -24,8 +24,16 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
   const [trackedCard, setTrackedCard] = useState<JobCard | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const cityServices = getCityServices();
-  const jobCards = getJobCards();
+  const [cityServices, setCityServices] = useState<CityServiceOffering[]>(() => getCityServices());
+  const [jobCards, setJobCards] = useState<JobCard[]>(() => getJobCards());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToStore(() => {
+      setCityServices(getCityServices());
+      setJobCards(getJobCards());
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleSearchVehicle = (e?: React.FormEvent) => {
     if (e) e.preventDefault();

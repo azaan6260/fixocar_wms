@@ -1,6 +1,45 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Employee, AuthUser } from '../types';
 
+// Shadow localStorage with a safe fault-tolerant proxy wrapper to prevent Security/Quota exceptions on mobile devices
+const inMemoryStore = new Map<string, string>();
+const localStorageSafe = {
+  getItem(key: string): string | null {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.getItem failed for key: ${key}`, e);
+    }
+    return inMemoryStore.get(key) || null;
+  },
+  setItem(key: string, value: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.setItem failed for key: ${key}`, e);
+    }
+    inMemoryStore.set(key, value);
+  },
+  removeItem(key: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.removeItem failed for key: ${key}`, e);
+    }
+    inMemoryStore.delete(key);
+  }
+};
+const localStorage = localStorageSafe;
+
+
 const STORAGE_KEY_URL = 'autocraft_supabase_url';
 const STORAGE_KEY_ANON = 'autocraft_supabase_anon_key';
 const STORAGE_KEY_SERVICE_ROLE = 'autocraft_supabase_service_role_key';

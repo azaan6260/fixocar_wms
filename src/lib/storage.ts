@@ -5,6 +5,45 @@ import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase 
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
 export { formatJobCardStatus };
 
+// Shadow localStorage with a safe fault-tolerant proxy wrapper to prevent Security/Quota exceptions on mobile devices
+const inMemoryStore = new Map<string, string>();
+const localStorageSafe = {
+  getItem(key: string): string | null {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.getItem failed for key: ${key}`, e);
+    }
+    return inMemoryStore.get(key) || null;
+  },
+  setItem(key: string, value: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.setItem failed for key: ${key}`, e);
+    }
+    inMemoryStore.set(key, value);
+  },
+  removeItem(key: string): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[safeStorage] localStorage.removeItem failed for key: ${key}`, e);
+    }
+    inMemoryStore.delete(key);
+  }
+};
+const localStorage = localStorageSafe;
+
+
 export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>) {
   if (typeof window === 'undefined') return;
   const fullNotification: ToastNotification = {
@@ -152,11 +191,12 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
 export function saveJobCards(cards: JobCard[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
   notifyStoreChange();
-  notifyCentralServer('jobCards', cards);
+  if (!skipPush) notifyCentralServer('jobCards', cards);
 
-  // Async sync to Supabase if connected
-  const client = getSupabaseClient();
-  if (client) {
+  if (!skipPush) {
+    // Async sync to Supabase if connected
+    const client = getSupabaseClient();
+    if (client) {
       cards.forEach(card => {
         const fullPayload = {
           id: card.id,
@@ -257,6 +297,7 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
           });
         }
       });
+    }
   }
 }
 
@@ -1251,64 +1292,66 @@ export function getEmployees(workshopIdFilter?: string): Employee[] {
 export function saveEmployees(employees: Employee[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
   notifyStoreChange();
-  notifyCentralServer('employees', employees);
+  if (!skipPush) notifyCentralServer('employees', employees);
 
-  const client = getSupabaseClient();
-  if (client) {
-    employees.forEach(emp => {
-      const fullPayload = {
-        id: emp.id,
-        name: emp.name,
-        role: emp.role,
-        phone: emp.phone,
-        email: emp.email || `${emp.id}@workshop.fixocar.com`,
-        specialized_team: emp.specializedTeam,
-        status: emp.status || 'AVAILABLE',
-        active_jobs_count: emp.activeJobsCount || 0,
-        avatar_url: emp.avatarUrl,
-        login_id: emp.loginId,
-        password_hash: emp.password || '123456',
-        base_salary: emp.baseSalary || 0,
-        employment_type: emp.employmentType || 'PAYROLL',
-        city_id: emp.cityId || null,
-        city_name: emp.cityName || null,
-        workshop_id: emp.workshopId || null,
-        workshop_name: emp.workshopName || null,
-        updated_at: new Date().toISOString()
-      };
+  if (!skipPush) {
+    const client = getSupabaseClient();
+    if (client) {
+      employees.forEach(emp => {
+        const fullPayload = {
+          id: emp.id,
+          name: emp.name,
+          role: emp.role,
+          phone: emp.phone,
+          email: emp.email || `${emp.id}@workshop.fixocar.com`,
+          specialized_team: emp.specializedTeam,
+          status: emp.status || 'AVAILABLE',
+          active_jobs_count: emp.activeJobsCount || 0,
+          avatar_url: emp.avatarUrl,
+          login_id: emp.loginId,
+          password_hash: emp.password || '123456',
+          base_salary: emp.baseSalary || 0,
+          employment_type: emp.employmentType || 'PAYROLL',
+          city_id: emp.cityId || null,
+          city_name: emp.cityName || null,
+          workshop_id: emp.workshopId || null,
+          workshop_name: emp.workshopName || null,
+          updated_at: new Date().toISOString()
+        };
 
-      client.from('employees').upsert(fullPayload).then(async ({ error }) => {
-        if (error) {
-          // If foreign key constraint or schema issue, retry with core fields to guarantee record reaches Supabase
-          if (error.message?.includes('foreign key') || error.message?.includes('fk_employees') || error.message?.includes('schema cache')) {
-            const fallbackPayload = {
-              id: emp.id,
-              name: emp.name,
-              role: emp.role,
-              phone: emp.phone,
-              email: emp.email || `${emp.id}@workshop.fixocar.com`,
-              specialized_team: emp.specializedTeam,
-              status: emp.status || 'AVAILABLE',
-              active_jobs_count: emp.activeJobsCount || 0,
-              avatar_url: emp.avatarUrl,
-              login_id: emp.loginId,
-              password_hash: emp.password || '123456',
-              base_salary: emp.baseSalary || 0,
-              employment_type: emp.employmentType || 'PAYROLL',
-              updated_at: new Date().toISOString()
-            };
-            const { error: fbErr } = await client.from('employees').upsert(fallbackPayload);
-            if (fbErr) {
-              console.error('Supabase fallback sync error (employees):', fbErr);
+        client.from('employees').upsert(fullPayload).then(async ({ error }) => {
+          if (error) {
+            // If foreign key constraint or schema issue, retry with core fields to guarantee record reaches Supabase
+            if (error.message?.includes('foreign key') || error.message?.includes('fk_employees') || error.message?.includes('schema cache')) {
+              const fallbackPayload = {
+                id: emp.id,
+                name: emp.name,
+                role: emp.role,
+                phone: emp.phone,
+                email: emp.email || `${emp.id}@workshop.fixocar.com`,
+                specialized_team: emp.specializedTeam,
+                status: emp.status || 'AVAILABLE',
+                active_jobs_count: emp.activeJobsCount || 0,
+                avatar_url: emp.avatarUrl,
+                login_id: emp.loginId,
+                password_hash: emp.password || '123456',
+                base_salary: emp.baseSalary || 0,
+                employment_type: emp.employmentType || 'PAYROLL',
+                updated_at: new Date().toISOString()
+              };
+              const { error: fbErr } = await client.from('employees').upsert(fallbackPayload);
+              if (fbErr) {
+                console.error('Supabase fallback sync error (employees):', fbErr);
+              }
+            } else {
+              console.error('Supabase sync error (employees):', error);
             }
-          } else {
-            console.error('Supabase sync error (employees):', error);
           }
-        }
-      });
+        });
 
-      syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
-    });
+        syncEmployeeToSupabaseAuth(emp, emp.password, 'update');
+      });
+    }
   }
 }
 
@@ -1794,11 +1837,11 @@ export interface StorageIntegrityResult {
 }
 
 export function validateLocalStorageIntegrity(): StorageIntegrityResult {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined') {
     return {
       isValid: false,
       resetTriggered: false,
-      issues: ['localStorage is not available in current environment'],
+      issues: ['Window is undefined in current environment'],
       repairedTables: []
     };
   }
