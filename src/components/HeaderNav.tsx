@@ -259,11 +259,20 @@ export function HeaderNav({
                   const res = await syncFromSupabase();
                   const cardsCount = getAllJobCards().length;
                   const staffCount = getAllEmployees().length;
-                  dispatchToastNotification({
-                    type: 'JOB_CARD_CREATED',
-                    title: '✅ Central Database Synced',
-                    message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
-                  });
+                  
+                  if (res.errors && res.errors.length > 0) {
+                    dispatchToastNotification({
+                      type: 'ESTIMATE_DECLINED',
+                      title: '⚠️ Sync Finished with Warnings',
+                      message: `Database sync complete but encountered errors: ${res.errors.slice(0, 2).join('; ')}`
+                    });
+                  } else {
+                    dispatchToastNotification({
+                      type: 'JOB_CARD_CREATED',
+                      title: '✅ Central Database Synced',
+                      message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
+                    });
+                  }
                 } catch (err: any) {
                   dispatchToastNotification({
                     type: 'ESTIMATE_DECLINED',
