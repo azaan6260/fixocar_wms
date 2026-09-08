@@ -1450,6 +1450,7 @@ export function getVendors(): Vendor[] {
 export function saveVendors(vendors: Vendor[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(vendors));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('vendors', vendors);
 
   if (!skipPush) {
     const client = getSupabaseClient();
@@ -1544,6 +1545,7 @@ export function getDeliveries(): DeliveryRecord[] {
 export function saveDeliveries(deliveries: DeliveryRecord[]) {
   localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(deliveries));
   notifyStoreChange();
+  notifyCentralServer('deliveryRecords', deliveries);
 }
 
 export function createDeliveryRecord(record: Omit<DeliveryRecord, 'id'>): DeliveryRecord {
@@ -1611,6 +1613,7 @@ export function savePurchaseOrders(pos: PurchaseOrder[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.PURCHASE_ORDERS, JSON.stringify(pos));
   notifyStoreChange();
+  notifyCentralServer('purchaseOrders', pos);
 }
 
 export function createPurchaseOrder(po: Omit<PurchaseOrder, 'id' | 'createdAt'>): PurchaseOrder {
@@ -1994,6 +1997,7 @@ export function getCities(): City[] {
 export function saveCities(cities: City[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.CITIES, JSON.stringify(cities));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('cities', cities);
 
   if (!skipPush) {
     const client = getSupabaseClient();
@@ -2089,6 +2093,7 @@ export function getWorkshops(): Workshop[] {
 export function saveWorkshops(workshops: Workshop[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.WORKSHOPS, JSON.stringify(workshops));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('workshops', workshops);
 
   if (!skipPush) {
     const client = getSupabaseClient();
@@ -2226,6 +2231,7 @@ export function getInventoryItems(): InventoryItem[] {
 export function saveInventoryItems(items: InventoryItem[]) {
   localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(items));
   notifyStoreChange();
+  notifyCentralServer('inventoryItems', items);
 }
 
 export function addInventoryItem(itemData: Omit<InventoryItem, 'id'>): InventoryItem {
@@ -2727,6 +2733,7 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
 export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
   localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
   notifyStoreChange();
+  notifyCentralServer('vehicleCheckIns', checkIns);
 }
 
 export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'checkedInAt'>): VehicleCheckIn {
@@ -2781,6 +2788,7 @@ export function getWorkshopExpenses(): WorkshopExpense[] {
 export function saveWorkshopExpenses(expenses: WorkshopExpense[]): void {
   localStorage.setItem(STORAGE_KEYS.WORKSHOP_EXPENSES, JSON.stringify(expenses));
   notifyStoreChange();
+  notifyCentralServer('workshopExpenses', expenses);
 }
 
 export function addWorkshopExpense(expenseData: Omit<WorkshopExpense, 'id' | 'createdAt'>): WorkshopExpense {
@@ -2838,6 +2846,7 @@ export function getCarModels(): CarModelRecord[] {
 export function saveCarModels(models: CarModelRecord[], skipPush = false): void {
   localStorage.setItem(STORAGE_KEYS.CAR_MODELS, JSON.stringify(models));
   notifyStoreChange();
+  if (!skipPush) notifyCentralServer('carModels', models);
 
   if (!skipPush) {
     const client = getSupabaseClient();

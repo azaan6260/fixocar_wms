@@ -221,207 +221,222 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           verifyAndUpdateAuthUserWorkshop(merged, 'Central Store');
         }
 
-        if (Array.isArray(store.jobCards) && store.jobCards.length > 0) {
-          const currentLocal = getAllJobCards();
-          const merged: JobCard[] = [...store.jobCards];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverJobCards = Array.isArray(store.jobCards) ? store.jobCards : [];
+        const currentLocalJobCards = getAllJobCards();
+        const mergedJobCards: JobCard[] = [...serverJobCards];
+        for (const loc of currentLocalJobCards) {
+          if (!mergedJobCards.some(m => m.id === loc.id)) {
+            mergedJobCards.push(loc);
           }
-          saveJobCards(merged, true);
-          jobCardsSynced = merged.length;
+        }
+        if (mergedJobCards.length > 0) {
+          saveJobCards(mergedJobCards, true);
+          jobCardsSynced = mergedJobCards.length;
         }
 
-        if (Array.isArray(store.jobCardHistory) && store.jobCardHistory.length > 0) {
-          const currentLocal = getJobCardHistoryRecords();
-          const merged: JobCardHistoryRecord[] = [...store.jobCardHistory];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverJobCardHistory = Array.isArray(store.jobCardHistory) ? store.jobCardHistory : [];
+        const currentLocalHistory = getJobCardHistoryRecords();
+        const mergedHistory: JobCardHistoryRecord[] = [...serverJobCardHistory];
+        for (const loc of currentLocalHistory) {
+          if (!mergedHistory.some(m => m.id === loc.id)) {
+            mergedHistory.push(loc);
           }
-          saveJobCardHistoryRecords(merged);
+        }
+        if (mergedHistory.length > 0) {
+          saveJobCardHistoryRecords(mergedHistory);
         }
 
-        if (Array.isArray(store.inventoryItems) && store.inventoryItems.length > 0) {
-          const currentLocal = getInventoryItems();
-          const merged: InventoryItem[] = [...store.inventoryItems];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverInventoryItems = Array.isArray(store.inventoryItems) ? store.inventoryItems : [];
+        const currentLocalInventory = getInventoryItems();
+        const mergedInventory: InventoryItem[] = [...serverInventoryItems];
+        for (const loc of currentLocalInventory) {
+          if (!mergedInventory.some(m => m.id === loc.id)) {
+            mergedInventory.push(loc);
           }
-          saveInventoryItems(merged);
+        }
+        if (mergedInventory.length > 0) {
+          saveInventoryItems(mergedInventory);
         }
 
-        if (Array.isArray(store.deliveryRecords) && store.deliveryRecords.length > 0) {
-          const currentLocal = getDeliveries();
-          const merged: DeliveryRecord[] = [...store.deliveryRecords];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverDeliveryRecords = Array.isArray(store.deliveryRecords) ? store.deliveryRecords : [];
+        const currentLocalDeliveries = getDeliveries();
+        const mergedDeliveries: DeliveryRecord[] = [...serverDeliveryRecords];
+        for (const loc of currentLocalDeliveries) {
+          if (!mergedDeliveries.some(m => m.id === loc.id)) {
+            mergedDeliveries.push(loc);
           }
-          saveDeliveries(merged);
+        }
+        if (mergedDeliveries.length > 0) {
+          saveDeliveries(mergedDeliveries);
         }
 
-        if (Array.isArray(store.purchaseOrders) && store.purchaseOrders.length > 0) {
-          const currentLocal = getPurchaseOrders();
-          const merged: PurchaseOrder[] = [...store.purchaseOrders];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverPurchaseOrders = Array.isArray(store.purchaseOrders) ? store.purchaseOrders : [];
+        const currentLocalPOs = getPurchaseOrders();
+        const mergedPOs: PurchaseOrder[] = [...serverPurchaseOrders];
+        for (const loc of currentLocalPOs) {
+          if (!mergedPOs.some(m => m.id === loc.id)) {
+            mergedPOs.push(loc);
           }
-          savePurchaseOrders(merged);
+        }
+        if (mergedPOs.length > 0) {
+          savePurchaseOrders(mergedPOs);
         }
 
-        if (Array.isArray(store.workshopExpenses) && store.workshopExpenses.length > 0) {
-          const currentLocal = getWorkshopExpenses();
-          const merged: WorkshopExpense[] = [...store.workshopExpenses];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverExpenses = Array.isArray(store.workshopExpenses) ? store.workshopExpenses : [];
+        const currentLocalExpenses = getWorkshopExpenses();
+        const mergedExpenses: WorkshopExpense[] = [...serverExpenses];
+        for (const loc of currentLocalExpenses) {
+          if (!mergedExpenses.some(m => m.id === loc.id)) {
+            mergedExpenses.push(loc);
           }
-          saveWorkshopExpenses(merged);
+        }
+        if (mergedExpenses.length > 0) {
+          saveWorkshopExpenses(mergedExpenses);
         }
 
-        if (Array.isArray(store.standardJobs) && store.standardJobs.length > 0) {
-          const currentLocal = getStandardJobs();
-          const merged: StandardJob[] = [...store.standardJobs];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverStdJobs = Array.isArray(store.standardJobs) ? store.standardJobs : [];
+        const currentLocalStdJobs = getStandardJobs();
+        const mergedStdJobs: StandardJob[] = [...serverStdJobs];
+        for (const loc of currentLocalStdJobs) {
+          if (!mergedStdJobs.some(m => m.id === loc.id)) {
+            mergedStdJobs.push(loc);
           }
-          saveStandardJobs(merged, true);
+        }
+        if (mergedStdJobs.length > 0) {
+          saveStandardJobs(mergedStdJobs, true);
         }
 
-        if (Array.isArray(store.carModels) && store.carModels.length > 0) {
-          const currentLocal = getCarModels();
-          const merged: CarModelRecord[] = [...store.carModels];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id || (m.make === loc.make && m.model === loc.model))) {
-              merged.push(loc);
-            }
+        const serverCarModels = Array.isArray(store.carModels) ? store.carModels : [];
+        const currentLocalCarModels = getCarModels();
+        const mergedCarModels: CarModelRecord[] = [...serverCarModels];
+        for (const loc of currentLocalCarModels) {
+          if (!mergedCarModels.some(m => m.id === loc.id || (m.make === loc.make && m.model === loc.model))) {
+            mergedCarModels.push(loc);
           }
-          saveCarModels(merged, true);
+        }
+        if (mergedCarModels.length > 0) {
+          saveCarModels(mergedCarModels, true);
         }
 
-        if (Array.isArray(store.attendanceRecords) && store.attendanceRecords.length > 0) {
-          const currentLocal = getAttendances();
-          const mapped: AttendanceRecord[] = store.attendanceRecords.map((a: any) => ({
-            id: a.id,
-            employeeId: a.employeeId || a.employee_id,
-            date: a.date,
-            status: a.status || 'PRESENT',
-            clockInTime: a.clockInTime || a.clock_in_time || a.checkInTime || a.check_in_time,
-            clockOutTime: a.clockOutTime || a.clock_out_time || a.checkOutTime || a.check_out_time,
-            clockInLocation: a.clockInLocation || a.clock_in_location,
-            clockOutLocation: a.clockOutLocation || a.clock_out_location,
-            photoUrl: a.photoUrl || a.photo_url
-          }));
-          const merged: AttendanceRecord[] = [...mapped];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverAttendance = Array.isArray(store.attendanceRecords) ? store.attendanceRecords : [];
+        const currentLocalAttendance = getAttendances();
+        const mappedAttendance: AttendanceRecord[] = serverAttendance.map((a: any) => ({
+          id: a.id,
+          employeeId: a.employeeId || a.employee_id,
+          date: a.date,
+          status: a.status || 'PRESENT',
+          clockInTime: a.clockInTime || a.clock_in_time || a.checkInTime || a.check_in_time,
+          clockOutTime: a.clockOutTime || a.clock_out_time || a.checkOutTime || a.check_out_time,
+          clockInLocation: a.clockInLocation || a.clock_in_location,
+          clockOutLocation: a.clockOutLocation || a.clock_out_location,
+          photoUrl: a.photoUrl || a.photo_url
+        }));
+        const mergedAttendance: AttendanceRecord[] = [...mappedAttendance];
+        for (const loc of currentLocalAttendance) {
+          if (!mergedAttendance.some(m => m.id === loc.id)) {
+            mergedAttendance.push(loc);
           }
-          saveAttendances(merged, true);
+        }
+        if (mergedAttendance.length > 0) {
+          saveAttendances(mergedAttendance, true);
         }
 
-        if (Array.isArray(store.salaryRecords) && store.salaryRecords.length > 0) {
-          const currentLocal = getSalaries();
-          const mapped: SalaryRecord[] = store.salaryRecords.map((s: any) => ({
-            id: s.id,
-            employeeId: s.employeeId || s.employee_id,
-            month: s.month,
-            baseSalary: s.baseSalary ?? s.base_salary ?? 0,
-            deductions: s.deductions ?? 0,
-            bonuses: s.bonuses ?? s.bonus ?? 0,
-            netPay: s.netPay ?? s.net_pay ?? s.netSalary ?? 0,
-            status: s.status || 'PENDING',
-            transferDate: s.transferDate || s.transfer_date || s.paymentDate || s.payment_date
-          }));
-          const merged: SalaryRecord[] = [...mapped];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverSalaries = Array.isArray(store.salaryRecords) ? store.salaryRecords : [];
+        const currentLocalSalaries = getSalaries();
+        const mappedSalaries: SalaryRecord[] = serverSalaries.map((s: any) => ({
+          id: s.id,
+          employeeId: s.employeeId || s.employee_id,
+          month: s.month,
+          baseSalary: s.baseSalary ?? s.base_salary ?? 0,
+          deductions: s.deductions ?? 0,
+          bonuses: s.bonuses ?? s.bonus ?? 0,
+          netPay: s.netPay ?? s.net_pay ?? s.netSalary ?? 0,
+          status: s.status || 'PENDING',
+          transferDate: s.transferDate || s.transfer_date || s.paymentDate || s.payment_date
+        }));
+        const mergedSalaries: SalaryRecord[] = [...mappedSalaries];
+        for (const loc of currentLocalSalaries) {
+          if (!mergedSalaries.some(m => m.id === loc.id)) {
+            mergedSalaries.push(loc);
           }
-          saveSalaries(merged, true);
+        }
+        if (mergedSalaries.length > 0) {
+          saveSalaries(mergedSalaries, true);
         }
 
-        if (Array.isArray(store.cities) && store.cities.length > 0) {
-          const currentLocal = getCities();
-          const mergedCities: City[] = store.cities.map((c: any) => ({
-            id: c.id,
-            name: c.name || c.city_name || c.cityName || c.title || 'City',
-            state: c.state || c.state_name || c.province || '',
-            createdAt: c.createdAt || c.created_at || new Date().toISOString().split('T')[0]
-          }));
-          for (const loc of currentLocal) {
-            if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase().trim() === loc.name.toLowerCase().trim()))) {
-              mergedCities.push(loc);
-            }
+        const serverCities = Array.isArray(store.cities) ? store.cities : [];
+        const currentLocalCities = getCities();
+        const mergedCities: City[] = serverCities.map((c: any) => ({
+          id: c.id,
+          name: c.name || c.city_name || c.cityName || c.title || 'City',
+          state: c.state || c.state_name || c.province || '',
+          createdAt: c.createdAt || c.created_at || new Date().toISOString().split('T')[0]
+        }));
+        for (const loc of currentLocalCities) {
+          if (!mergedCities.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase().trim() === loc.name.toLowerCase().trim()))) {
+            mergedCities.push(loc);
           }
-          for (const init of INITIAL_CITIES) {
-            if (!mergedCities.some(m => m.id === init.id || (m.name && init.name && m.name.toLowerCase().trim() === init.name.toLowerCase().trim()))) {
-              mergedCities.push(init);
-            }
-          }
-          saveCities(mergedCities, true);
-          citiesSynced = mergedCities.length;
         }
-
-        if (Array.isArray(store.workshops) && store.workshops.length > 0) {
-          const currentLocal = getWorkshops();
-          const mergedWorkshops: Workshop[] = store.workshops.map((w: any) => ({
-            id: w.id,
-            name: w.name || w.workshop_name || w.workshopName || 'Workshop',
-            code: w.code || 'WS',
-            cityId: w.city_id || w.cityId,
-            cityName: w.city_name || w.cityName || w.city || '',
-            address: w.address || '',
-            phone: w.phone || '',
-            isCars24Partner: w.is_cars24_partner ?? w.isCars24Partner ?? false,
-            managerName: w.manager_name || w.managerName || '',
-            createdAt: w.created_at || w.createdAt
-          }));
-          for (const loc of currentLocal) {
-            if (!mergedWorkshops.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
-              mergedWorkshops.push(loc);
-            }
+        for (const init of INITIAL_CITIES) {
+          if (!mergedCities.some(m => m.id === init.id || (m.name && init.name && m.name.toLowerCase().trim() === init.name.toLowerCase().trim()))) {
+            mergedCities.push(init);
           }
-          saveWorkshops(mergedWorkshops, true);
-          workshopsSynced = mergedWorkshops.length;
         }
+        saveCities(mergedCities, true);
+        citiesSynced = mergedCities.length;
 
-        if (Array.isArray(store.vendors) && store.vendors.length > 0) {
-          const currentLocal = getVendors();
-          const merged: Vendor[] = [...store.vendors];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverWorkshops = Array.isArray(store.workshops) ? store.workshops : [];
+        const currentLocalWorkshops = getWorkshops();
+        const mergedWorkshops: Workshop[] = serverWorkshops.map((w: any) => ({
+          id: w.id,
+          name: w.name || w.workshop_name || w.workshopName || 'Workshop',
+          code: w.code || 'WS',
+          cityId: w.city_id || w.cityId,
+          cityName: w.city_name || w.cityName || w.city || '',
+          address: w.address || '',
+          phone: w.phone || '',
+          isCars24Partner: w.is_cars24_partner ?? w.isCars24Partner ?? false,
+          managerName: w.manager_name || w.managerName || '',
+          createdAt: w.created_at || w.createdAt
+        }));
+        for (const loc of currentLocalWorkshops) {
+          if (!mergedWorkshops.some(m => m.id === loc.id || (m.name && loc.name && m.name.toLowerCase() === loc.name.toLowerCase()))) {
+            mergedWorkshops.push(loc);
           }
-          saveVendors(merged, true);
-          vendorsSynced = merged.length;
         }
+        saveWorkshops(mergedWorkshops, true);
+        workshopsSynced = mergedWorkshops.length;
 
-        if (Array.isArray(store.vehicleCheckIns) && store.vehicleCheckIns.length > 0) {
-          const currentLocal = getVehicleCheckIns();
-          const merged: VehicleCheckIn[] = [...store.vehicleCheckIns];
-          for (const loc of currentLocal) {
-            if (!merged.some(m => m.id === loc.id)) {
-              merged.push(loc);
-            }
+        const serverVendors = Array.isArray(store.vendors) ? store.vendors : [];
+        const currentLocalVendors = getVendors();
+        const mergedVendors: Vendor[] = [...serverVendors];
+        for (const loc of currentLocalVendors) {
+          if (!mergedVendors.some(m => m.id === loc.id)) {
+            mergedVendors.push(loc);
           }
-          saveVehicleCheckIns(merged);
+        }
+        saveVendors(mergedVendors, true);
+        vendorsSynced = mergedVendors.length;
+
+        const serverCheckIns = Array.isArray(store.vehicleCheckIns) ? store.vehicleCheckIns : [];
+        const currentLocalCheckIns = getVehicleCheckIns();
+        const mergedCheckIns: VehicleCheckIn[] = [...serverCheckIns];
+        for (const loc of currentLocalCheckIns) {
+          if (!mergedCheckIns.some(m => m.id === loc.id)) {
+            mergedCheckIns.push(loc);
+          }
+        }
+        if (mergedCheckIns.length > 0) {
+          saveVehicleCheckIns(mergedCheckIns);
         }
       }
+    }
+
+    // Always push local datasets up to central server store after merging
+    try {
+      await pushLocalDataToSupabase();
+    } catch (pushStoreErr) {
+      console.warn('[SYNC_TRACE] Post-pull push to central store warning:', pushStoreErr);
     }
   } catch (centralErr) {
     console.warn('[SYNC_TRACE] Central server store sync warning:', centralErr);
