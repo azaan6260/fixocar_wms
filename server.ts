@@ -1099,72 +1099,144 @@ Return valid JSON ONLY.`;
           const { data: supaTasks } = await client.from('job_tasks').select('*');
           if (supaCards && supaCards.length > 0) {
             const mappedCards = supaCards.map((c: any) => {
-              const tasks = (supaTasks || []).filter((t: any) => t.job_card_id === c.id || t.jobCardId === c.id).map((t: any) => ({
-                id: t.id,
-                jobCardId: t.job_card_id || t.jobCardId,
-                title: t.title || t.description || 'Task',
+              // Extract vehicle fields
+              let vehicleObj: any = {};
+              if (typeof c.vehicle === 'object' && c.vehicle !== null) {
+                vehicleObj = c.vehicle;
+              } else if (typeof c.vehicle === 'string') {
+                try { vehicleObj = JSON.parse(c.vehicle); } catch {}
+              }
+
+              const regNo = c.registration_number || c.registrationNumber || c.reg_no || c.reg_number || c.regNo || c.vehicle_reg || c.vehicle_registration || vehicleObj.registrationNumber || vehicleObj.registration_number || vehicleObj.regNo || vehicleObj.reg_no || 'REG-PENDING';
+              const makeVal = c.vehicle_make || c.vehicleMake || c.make || vehicleObj.make || vehicleObj.vehicle_make || 'Vehicle';
+              const modelVal = c.vehicle_model || c.vehicleModel || c.model || vehicleObj.model || vehicleObj.vehicle_model || '';
+              const yearVal = c.vehicle_year || c.vehicleYear || c.year || vehicleObj.year || vehicleObj.vehicle_year || 2022;
+              const colorVal = c.vehicle_color || c.vehicleColor || c.color || vehicleObj.color || vehicleObj.vehicle_color || 'Standard';
+              const vinVal = c.vehicle_vin || c.vehicleVin || c.vin || vehicleObj.vin || vehicleObj.vehicle_vin || '';
+              const fuelVal = c.fuel_level ?? c.fuelLevel ?? c.fuel_type ?? c.fuelType ?? vehicleObj.fuelLevel ?? vehicleObj.fuel_level ?? 50;
+              const mileageVal = c.mileage ?? c.odometer ?? vehicleObj.mileage ?? vehicleObj.odometer ?? 0;
+
+              // Extract customer fields
+              let customerObj: any = {};
+              if (typeof c.customer === 'object' && c.customer !== null) {
+                customerObj = c.customer;
+              } else if (typeof c.customer === 'string') {
+                try { customerObj = JSON.parse(c.customer); } catch {}
+              }
+
+              const custName = c.customer_name || c.customerName || c.name || customerObj.name || customerObj.customer_name || 'Customer';
+              const custPhone = c.customer_phone || c.customerPhone || c.phone || customerObj.phone || customerObj.customer_phone || '';
+              const custEmail = c.customer_email || c.customerEmail || c.email || customerObj.email || customerObj.customer_email || '';
+              const custAddress = c.customer_address || c.customerAddress || c.address || customerObj.address || customerObj.customer_address || '';
+
+              // Extract tasks
+              let rowTasks: any[] = [];
+              if (Array.isArray(c.tasks)) rowTasks = c.tasks;
+              else if (Array.isArray(c.job_tasks)) rowTasks = c.job_tasks;
+              else if (typeof c.tasks === 'string') {
+                try { rowTasks = JSON.parse(c.tasks); } catch {}
+              }
+
+              const cardIdStr = String(c.id || c.job_card_id || c.jobCardId);
+              const relTasks = (supaTasks || []).filter((t: any) => String(t.job_card_id || t.jobCardId) === cardIdStr);
+              const rawTasks = relTasks.length > 0 ? relTasks : rowTasks;
+
+              const tasks = rawTasks.map((t: any, idx: number) => ({
+                id: String(t.id || `task-${cardIdStr}-${idx}`),
+                jobCardId: cardIdStr,
+                title: t.title || t.notes || t.description || 'Service Task',
                 category: t.category || 'REPAIR',
                 assignedToId: t.assigned_to_id || t.assigned_to || t.assignedToId,
                 assignedToName: t.assigned_to_name || t.assignedToName,
                 assignedType: t.assigned_type || t.assignedType || 'EMPLOYEE',
-                estimatedCost: t.estimated_cost || t.estimatedCost || 0,
-                customerPrice: t.customer_price || t.customerPrice || t.estimated_cost || 0,
+                estimatedCost: Number(t.estimated_cost || t.estimatedCost) || 0,
+                customerPrice: Number(t.customer_price || t.customerPrice || t.estimated_cost || t.estimatedCost) || 0,
                 status: t.status || 'PENDING',
-                requiresCustomerApproval: t.requires_customer_approval ?? t.requiresCustomerApproval ?? false,
-                isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? t.is_customer_approved : t.isCustomerApproved,
+                requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
+                isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
                 rejectionReason: t.rejection_reason || t.rejectionReason,
                 notes: t.notes || t.description,
                 completedAt: t.completed_at || t.completedAt,
-                isAdditionalWork: t.is_additional_work || t.isAdditionalWork,
+                isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
                 additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
                 additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
                 approvalStatus: t.approval_status || t.approvalStatus
               }));
 
+              // QC Checklist & Comments
+              let qcChecklist: any[] = [];
+              if (Array.isArray(c.qc_checklist)) qcChecklist = c.qc_checklist;
+              else if (Array.isArray(c.qcChecklist)) qcChecklist = c.qcChecklist;
+              else if (typeof c.qc_checklist === 'string') {
+                try { qcChecklist = JSON.parse(c.qc_checklist); } catch {}
+              }
+
+              let comments: any[] = [];
+              if (Array.isArray(c.comments)) comments = c.comments;
+              else if (typeof c.comments === 'string') {
+                try { comments = JSON.parse(c.comments); } catch {}
+              }
+
+              // Status normalization
+              const rawStatus = (c.status || 'ESTIMATE_PENDING').toString().toUpperCase().trim();
+              let normalizedStatus = 'ESTIMATE_PENDING';
+              if (['CREATED', 'NEW'].includes(rawStatus)) normalizedStatus = 'CREATED';
+              else if (['INSPECTION', 'PDI_IN_PROGRESS'].includes(rawStatus)) normalizedStatus = 'INSPECTION';
+              else if (['JOB_ALLOCATED', 'APPROVAL_PENDING', 'AWAITING_CUSTOMER_APPROVAL'].includes(rawStatus)) normalizedStatus = 'JOB_ALLOCATED';
+              else if (['IN_PROGRESS', 'WORK_IN_PROGRESS', 'WIP'].includes(rawStatus)) normalizedStatus = 'IN_PROGRESS';
+              else if (['ESTIMATE_PENDING'].includes(rawStatus)) normalizedStatus = 'ESTIMATE_PENDING';
+              else if (['QC_PENDING', 'QUALITY_CHECK_PENDING', 'WORK_COMPLETED'].includes(rawStatus)) normalizedStatus = 'QC_PENDING';
+              else if (['READY_FOR_DELIVERY', 'QUALITY_CHECK_PASSED'].includes(rawStatus)) normalizedStatus = 'READY_FOR_DELIVERY';
+              else if (['OUT_FOR_DELIVERY'].includes(rawStatus)) normalizedStatus = 'OUT_FOR_DELIVERY';
+              else if (['DELIVERED', 'INVOICED'].includes(rawStatus)) normalizedStatus = 'DELIVERED';
+              else if (['CLOSED', 'CANCELLED'].includes(rawStatus)) normalizedStatus = 'CLOSED';
+              else normalizedStatus = rawStatus || 'ESTIMATE_PENDING';
+
               return {
-                id: c.id,
+                id: cardIdStr,
                 vehicle: {
-                  registrationNumber: c.registration_number || c.registrationNumber || c.reg_no || c.reg_number || 'UNKNOWN',
-                  make: c.vehicle_make || c.make || 'Vehicle',
-                  model: c.vehicle_model || c.model || '',
-                  year: c.vehicle_year || c.year || 2022,
-                  color: c.vehicle_color || c.color || 'Standard',
-                  vin: c.vehicle_vin || c.vin || '',
-                  fuelLevel: c.fuel_level || c.fuelLevel || 50,
-                  mileage: c.mileage || 0
+                  registrationNumber: regNo,
+                  make: makeVal,
+                  model: modelVal,
+                  year: Number(yearVal) || 2022,
+                  color: colorVal,
+                  vin: vinVal,
+                  fuelLevel: Number(fuelVal) || 50,
+                  mileage: Number(mileageVal) || 0
                 },
                 customer: {
-                  id: c.customer_id || c.customerId || `cust-${c.id}`,
-                  name: c.customer_name || c.customerName || 'Customer',
-                  phone: c.customer_phone || c.customerPhone || '',
-                  email: c.customer_email || c.customerEmail || '',
-                  address: c.customer_address || c.customerAddress || ''
+                  id: String(c.customer_id || c.customerId || customerObj.id || `cust-${cardIdStr}`),
+                  name: custName,
+                  phone: custPhone,
+                  email: custEmail,
+                  address: custAddress
                 },
-                status: c.status || 'ESTIMATE_PENDING',
+                status: normalizedStatus,
                 serviceType: c.service_type || c.serviceType || 'REPAIR',
                 packageName: c.package_name || c.packageName,
                 floorManagerId: c.floor_manager_id || c.floorManagerId,
-                pickupRequested: c.pickup_requested || c.pickupRequested,
-                deliveryRequested: c.delivery_requested || c.deliveryRequested,
-                discount: c.discount || 0,
-                taxRate: c.tax_rate || c.taxRate || 18,
-                advancePaid: c.advance_paid || c.advancePaid || 0,
-                qcPassed: c.qc_passed || c.qcPassed || false,
+                floorManagerName: c.floor_manager_name || c.floorManagerName,
+                pickupRequested: Boolean(c.pickup_requested ?? c.pickupRequested),
+                deliveryRequested: Boolean(c.delivery_requested ?? c.deliveryRequested),
+                discount: Number(c.discount) || 0,
+                taxRate: Number(c.tax_rate ?? c.taxRate) || 18,
+                advancePaid: Number(c.advance_paid ?? c.advancePaid) || 0,
+                qcPassed: Boolean(c.qc_passed ?? c.qcPassed),
                 qcNotes: c.qc_notes || c.qcNotes,
                 cityId: c.city_id || c.cityId,
                 cityName: c.city_name || c.cityName,
                 workshopId: c.workshop_id || c.workshopId,
                 workshopName: c.workshop_name || c.workshopName,
-                floorManagerName: c.floor_manager_name || c.floorManagerName,
-                isCars24: c.is_cars24 ?? c.isCars24 ?? false,
+                isCars24: Boolean(c.is_cars24 ?? c.isCars24),
                 cars24RefNo: c.cars24_ref_no || c.cars24RefNo,
                 tasks,
-                createdAt: c.created_at || c.createdAt,
-                estimatedCompletionDate: c.estimated_completion_date || c.estimatedCompletionDate,
-                qcChecklist: c.qc_checklist || c.qcChecklist || []
+                qcChecklist,
+                comments,
+                createdAt: c.created_at || c.createdAt || new Date().toISOString(),
+                estimatedCompletionDate: c.estimated_completion_date || c.estimatedCompletionDate
               };
             });
-            store.jobCards = mergeArrayItems(store.jobCards, mappedCards, j => j.id);
+            store.jobCards = mergeArrayItems(store.jobCards, mappedCards, j => String(j.id));
           }
 
           // 3. Cities
