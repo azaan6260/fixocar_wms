@@ -169,6 +169,9 @@ export async function syncFromSupabase(): Promise<SyncResult> {
   let vendorsSynced = 0;
   let jobCardsSynced = 0;
 
+  // 0. Always initialize/sync server Supabase credentials first so mobile & server share context
+  await fetchServerSupabaseConfig().catch(() => null);
+
   // 1. Always pull from central server store first (syncs laptop & mobile)
   try {
     const res = await fetch(`/api/central/store?_t=${Date.now()}`, {
@@ -628,69 +631,83 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       errors.push(`Job cards table error: ${jcErr.message || jcErr}`);
     } else if (jobCards !== null) {
       const supaCards = jobCards.map((c: any): JobCard => {
-        const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id).map((t: any) => ({
+        const tasks: JobTask[] = (jobTasks || []).filter((t: any) => t.job_card_id === c.id || t.jobCardId === c.id).map((t: any) => ({
           id: t.id,
-          jobCardId: t.job_card_id,
+          jobCardId: t.job_card_id || t.jobCardId || c.id,
           title: t.title || t.description || 'Task', 
           category: t.category || 'REPAIR',
-          assignedToId: t.assigned_to_id || t.assigned_to,
-          assignedToName: t.assigned_to_name,
-          assignedType: t.assigned_type || 'EMPLOYEE',
-          estimatedCost: t.estimated_cost || 0,
-          customerPrice: t.customer_price || t.estimated_cost || 0,
+          assignedToId: t.assigned_to_id || t.assigned_to || t.assignedToId,
+          assignedToName: t.assigned_to_name || t.assignedToName,
+          assignedType: t.assigned_type || t.assignedType || 'EMPLOYEE',
+          estimatedCost: t.estimated_cost || t.estimatedCost || 0,
+          customerPrice: t.customer_price || t.customerPrice || t.estimated_cost || 0,
           status: t.status || 'PENDING',
-          requiresCustomerApproval: t.requires_customer_approval || false,
-          isCustomerApproved: t.is_customer_approved !== null ? t.is_customer_approved : undefined,
-          rejectionReason: t.rejection_reason,
+          requiresCustomerApproval: t.requires_customer_approval ?? t.requiresCustomerApproval ?? false,
+          isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? t.is_customer_approved : t.isCustomerApproved,
+          rejectionReason: t.rejection_reason || t.rejectionReason,
           notes: t.notes || t.description,
-          completedAt: t.completed_at,
-          isAdditionalWork: t.is_additional_work,
-          additionalWorkRequestedBy: t.additional_work_requested_by,
-          additionalWorkRequestedAt: t.additional_work_requested_at,
-          approvalStatus: t.approval_status
+          completedAt: t.completed_at || t.completedAt,
+          isAdditionalWork: t.is_additional_work || t.isAdditionalWork,
+          additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
+          additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
+          approvalStatus: t.approval_status || t.approvalStatus
         }));
 
+        const regNo = c.registration_number || c.registrationNumber || c.reg_no || c.reg_number || c.regNo || c.vehicle_reg || c.vehicle?.registrationNumber || 'REG-PENDING';
+        const makeVal = c.vehicle_make || c.vehicleMake || c.make || c.vehicle?.make || 'Vehicle';
+        const modelVal = c.vehicle_model || c.vehicleModel || c.model || c.vehicle?.model || '';
+        const yearVal = c.vehicle_year || c.vehicleYear || c.year || c.vehicle?.year || 2022;
+        const colorVal = c.vehicle_color || c.vehicleColor || c.color || c.vehicle?.color || 'Standard';
+        const vinVal = c.vehicle_vin || c.vehicleVin || c.vin || c.vehicle?.vin || '';
+        const fuelVal = c.fuel_level || c.fuelLevel || c.fuel_type || c.fuelType || 50;
+        const mileageVal = c.mileage || c.odometer || 0;
+
+        const custName = c.customer_name || c.customerName || c.name || c.customer?.name || 'Customer';
+        const custPhone = c.customer_phone || c.customerPhone || c.phone || c.customer?.phone || '';
+        const custEmail = c.customer_email || c.customerEmail || c.email || c.customer?.email || '';
+        const custAddress = c.customer_address || c.customerAddress || c.address || c.customer?.address || '';
+
         return {
-          id: c.id,
+          id: String(c.id),
           vehicle: {
-            registrationNumber: c.registration_number,
-            make: c.vehicle_make,
-            model: c.vehicle_model,
-            year: c.vehicle_year,
-            color: c.vehicle_color,
-            vin: c.vehicle_vin,
-            fuelLevel: c.fuel_level,
-            mileage: c.mileage
+            registrationNumber: regNo,
+            make: makeVal,
+            model: modelVal,
+            year: Number(yearVal) || 2022,
+            color: colorVal,
+            vin: vinVal,
+            fuelLevel: Number(fuelVal) || 50,
+            mileage: Number(mileageVal) || 0
           },
           customer: {
-            id: c.customer_id || `cust-${c.id}`,
-            name: c.customer_name,
-            phone: c.customer_phone,
-            email: c.customer_email,
-            address: c.customer_address
+            id: c.customer_id || c.customerId || `cust-${c.id}`,
+            name: custName,
+            phone: custPhone,
+            email: custEmail,
+            address: custAddress
           },
-          status: c.status,
-          serviceType: c.service_type,
-          packageName: c.package_name,
-          floorManagerId: c.floor_manager_id,
-          pickupRequested: c.pickup_requested,
-          deliveryRequested: c.delivery_requested,
-          discount: c.discount,
-          taxRate: c.tax_rate,
-          advancePaid: c.advance_paid,
-          qcPassed: c.qc_passed,
-          qcNotes: c.qc_notes,
-          cityId: c.city_id,
-          cityName: c.city_name,
-          workshopId: c.workshop_id,
-          workshopName: c.workshop_name,
-          floorManagerName: c.floor_manager_name,
-          isCars24: c.is_cars24,
-          cars24RefNo: c.cars24_ref_no,
+          status: c.status || 'ESTIMATE_PENDING',
+          serviceType: c.service_type || c.serviceType || 'REPAIR',
+          packageName: c.package_name || c.packageName,
+          floorManagerId: c.floor_manager_id || c.floorManagerId,
+          pickupRequested: c.pickup_requested ?? c.pickupRequested ?? false,
+          deliveryRequested: c.delivery_requested ?? c.deliveryRequested ?? false,
+          discount: Number(c.discount) || 0,
+          taxRate: Number(c.tax_rate || c.taxRate) || 18,
+          advancePaid: Number(c.advance_paid || c.advancePaid) || 0,
+          qcPassed: c.qc_passed ?? c.qcPassed ?? false,
+          qcNotes: c.qc_notes || c.qcNotes,
+          cityId: c.city_id || c.cityId,
+          cityName: c.city_name || c.cityName,
+          workshopId: c.workshop_id || c.workshopId,
+          workshopName: c.workshop_name || c.workshopName,
+          floorManagerName: c.floor_manager_name || c.floorManagerName,
+          isCars24: c.is_cars24 ?? c.isCars24 ?? false,
+          cars24RefNo: c.cars24_ref_no || c.cars24RefNo,
           tasks,
-          createdAt: c.created_at,
-          estimatedCompletionDate: c.estimated_completion_date,
-          qcChecklist: []
+          createdAt: c.created_at || c.createdAt || new Date().toISOString(),
+          estimatedCompletionDate: c.estimated_completion_date || c.estimatedCompletionDate,
+          qcChecklist: c.qc_checklist || c.qcChecklist || []
         };
       });
 
