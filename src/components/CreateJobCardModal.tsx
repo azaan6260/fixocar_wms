@@ -403,10 +403,10 @@ export function CreateJobCardModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           
           {step === 1 && (
-            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto min-h-0">
 
               {/* City & Workshop Selection + Cars24 Tag */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
@@ -718,7 +718,7 @@ export function CreateJobCardModal({
           )}
 
           {step === 2 && (
-            <div className="p-6 space-y-6 max-h-[72vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto min-h-0">
               
               {/* Vehicle Context Banner */}
               <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">

@@ -39,7 +39,9 @@ import {
   Car,
   LogOut,
   Home,
-  Fingerprint
+  Fingerprint,
+  Menu,
+  X
 } from 'lucide-react';
 import { getSavedBiometricBinding, registerBiometricForUser } from '../lib/biometricAuth';
 
@@ -74,6 +76,7 @@ export function HeaderNav({
 }: HeaderNavProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
   const [authUser, setAuthUser] = useState(() => getAuthUser());
   const [workshops, setWorkshops] = useState<Workshop[]>(() => getWorkshops());
@@ -170,11 +173,42 @@ export function HeaderNav({
     { id: 'employees', label: t('nav.employees'), icon: Users },
   ];
 
+  const triggerManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncFromSupabase();
+      const cardsCount = getAllJobCards().length;
+      const staffCount = getAllEmployees().length;
+      
+      if (res.errors && res.errors.length > 0) {
+        dispatchToastNotification({
+          type: 'ESTIMATE_DECLINED',
+          title: '⚠️ Sync Finished with Warnings',
+          message: `Database sync complete but encountered errors: ${res.errors.slice(0, 2).join('; ')}`
+        });
+      } else {
+        dispatchToastNotification({
+          type: 'JOB_CARD_CREATED',
+          title: '✅ Central Database Synced',
+          message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
+        });
+      }
+    } catch (err: any) {
+      dispatchToastNotification({
+        type: 'ESTIMATE_DECLINED',
+        title: '⚠️ Database Sync Warning',
+        message: err.message || 'Check network connection or try again.'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full overflow-x-hidden">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 w-full max-w-full overflow-hidden">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 w-full max-w-full">
         {/* Top Header Bar: Logo & Actions */}
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-3 min-w-0 w-full">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-3 w-full">
           
           {/* Brand Logo & Title */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
@@ -191,8 +225,8 @@ export function HeaderNav({
             </div>
           </div>
 
-          {/* Right Controls: Role Switcher, Quick Actions & Call */}
-          <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
+          {/* Desktop Right Controls: Role Switcher, Quick Actions & Call */}
+          <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
             {/* Active Workshop / City Scope Selector */}
             <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-xs font-bold text-blue-900 dark:text-blue-100 shadow-2xs shrink-0">
@@ -245,60 +279,31 @@ export function HeaderNav({
                   }
                 }
               }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold hover:bg-amber-500 hover:text-slate-950 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold hover:bg-amber-500 hover:text-slate-950 transition-all"
             >
               🚘 {t('action.customerPortal')}
             </button>
 
-            {/* Quick Manual Database Sync Button for Mobile & Desktop */}
+            {/* Quick Manual Database Sync Button */}
             <button
               type="button"
-              onClick={async () => {
-                setIsSyncing(true);
-                try {
-                  const res = await syncFromSupabase();
-                  const cardsCount = getAllJobCards().length;
-                  const staffCount = getAllEmployees().length;
-                  
-                  if (res.errors && res.errors.length > 0) {
-                    dispatchToastNotification({
-                      type: 'ESTIMATE_DECLINED',
-                      title: '⚠️ Sync Finished with Warnings',
-                      message: `Database sync complete but encountered errors: ${res.errors.slice(0, 2).join('; ')}`
-                    });
-                  } else {
-                    dispatchToastNotification({
-                      type: 'JOB_CARD_CREATED',
-                      title: '✅ Central Database Synced',
-                      message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
-                    });
-                  }
-                } catch (err: any) {
-                  dispatchToastNotification({
-                    type: 'ESTIMATE_DECLINED',
-                    title: '⚠️ Database Sync Warning',
-                    message: err.message || 'Check network connection or try again.'
-                  });
-                } finally {
-                  setIsSyncing(false);
-                }
-              }}
+              onClick={triggerManualSync}
               disabled={isSyncing}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-extrabold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"
               title="Sync All Tables from Supabase & Central Server Database"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="hidden min-[480px]:inline">{isSyncing ? 'Syncing...' : 'Sync DB'}</span>
+              <span>{isSyncing ? 'Syncing...' : 'Sync DB'}</span>
             </button>
 
             {/* Direct Hotline Call Button */}
             <a
               href="tel:8819915656"
-              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800 text-xs font-black tracking-wide hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800 text-xs font-black tracking-wide hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs"
               title="Call FixoCar Workshop Hotline"
             >
               <Phone className="w-3.5 h-3.5 fill-current text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="hidden min-[400px]:inline">8819915656</span>
+              <span>8819915656</span>
             </a>
 
             {/* OCR Number Plate Scanner Button */}
@@ -306,18 +311,18 @@ export function HeaderNav({
               <button
                 type="button"
                 onClick={onOpenScanner}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-xs active:scale-95"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-amber-400 border border-amber-500/40 hover:border-amber-400 font-bold text-xs transition-all shadow-xs active:scale-95"
                 title="Scan Vehicle Number Plate"
               >
                 <Camera className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="hidden md:inline">Scan Plate</span>
+                <span>Scan Plate</span>
               </button>
             )}
 
             {/* Quick Create Job Card Pill */}
             <button
               onClick={onOpenNewJobCardModal}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>+ Create Card</span>
@@ -330,7 +335,7 @@ export function HeaderNav({
             <div className="relative">
               <button
                 onClick={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
                 title="Administrative Settings"
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -344,7 +349,6 @@ export function HeaderNav({
                   </div>
                   
                   <div className="space-y-1">
-                    {/* Supabase Status Indicator */}
                     <button
                       onClick={() => {
                         onOpenSupabaseModal();
@@ -360,7 +364,6 @@ export function HeaderNav({
                       <span>{supabaseConfig.isConfigured ? 'Live Supabase Configured' : 'Configure Supabase'}</span>
                     </button>
                     
-                    {/* Language Toggle Container */}
                     <div className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         Language
@@ -407,7 +410,7 @@ export function HeaderNav({
                     className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-white transition-colors cursor-pointer"
                     title="Audit role workspaces (Executive feature)"
                   >
-                    <RoleBadge role={currentRole} hideLabelOnMobile={true} />
+                    <RoleBadge role={currentRole} hideLabelOnMobile={false} />
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   </button>
 
@@ -444,60 +447,215 @@ export function HeaderNav({
                 </>
               ) : (
                 <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
-                  <RoleBadge role={currentRole} hideLabelOnMobile={true} />
+                  <RoleBadge role={currentRole} hideLabelOnMobile={false} />
                 </div>
               )}
             </div>
-
-            {/* Biometric Pairing Shortcut for Staff */}
-            {authUser && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (authUser) {
-                    const res = await registerBiometricForUser(authUser);
-                    alert(res.message);
-                  }
-                }}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold transition-all cursor-pointer"
-                title="Register or test mobile Fingerprint / Face ID for this device"
-              >
-                <Fingerprint className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden lg:inline">Link Biometrics</span>
-              </button>
-            )}
-
-            {/* Home Portal Shortcut */}
-            {onGoHome && (
-              <button
-                type="button"
-                onClick={onGoHome}
-                className="hidden lg:flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
-                title="Return to Common Home Portal"
-              >
-                <Home className="w-3.5 h-3.5 text-blue-500" />
-                <span>Home</span>
-              </button>
-            )}
 
             {/* Sign Out Button */}
             {onLogout && (
               <button
                 type="button"
                 onClick={onLogout}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 text-xs font-bold transition-all cursor-pointer shrink-0"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 text-xs font-bold transition-all cursor-pointer shrink-0"
                 title="Sign Out of Session"
               >
                 <LogOut className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">Sign Out</span>
+                <span>Sign Out</span>
               </button>
             )}
 
           </div>
+
+          {/* Mobile Right Controls: Compact Buttons & Hamburger Toggle */}
+          <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+            {/* Sync DB Button */}
+            <button
+              type="button"
+              onClick={triggerManualSync}
+              disabled={isSyncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-black cursor-pointer disabled:opacity-50"
+              title="Sync Database"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Sync</span>
+            </button>
+
+            {/* Notification Drawer */}
+            <NotificationDrawer onSelectJobCard={onSelectJobCard} />
+
+            {/* Mobile Menu Hamburger Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+              aria-label="Toggle Mobile Workspace Navigation Menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+
         </div>
 
-        {/* Navigation Tabs - Horizontal Scrollable Bar */}
-        <div className="py-2 border-t border-slate-200/70 dark:border-slate-800 w-full max-w-full overflow-hidden">
+        {/* Mobile Navigation Slide-Down Drawer (Visible on Mobile when Toggled) */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 py-3 space-y-3 bg-white dark:bg-slate-900/98 animate-in slide-in-from-top-2 duration-150">
+            
+            {/* Active User Info & Role Switcher */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>{authUser?.name || 'Authorized Staff'}</span>
+                    <span className="text-[10px] text-blue-500 font-mono">({authUser?.role || currentRole})</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{authUser?.email || authUser?.loginId || 'Staff Account'}</div>
+                </div>
+                <RoleBadge role={currentRole} hideLabelOnMobile={false} />
+              </div>
+
+              {/* Scope Selector */}
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+                <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
+                <select
+                  value={activeWsId}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    setActiveWorkshopId(selected);
+                    setActiveWsId(selected);
+                  }}
+                  className="bg-transparent text-xs font-bold outline-none w-full text-slate-900 dark:text-white"
+                >
+                  <option value="ALL">🌐 All Cities & Workshops</option>
+                  {cities.map((c) => (
+                    <option key={`m-city-${c.id}`} value={`CITY:${c.id}`}>🏙️ City: {c.name}</option>
+                  ))}
+                  {workshops.map((ws) => (
+                    <option key={`m-ws-${ws.id}`} value={ws.id}>📍 {ws.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenNewJobCardModal();
+                }}
+                className="p-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>+ Create Job Card</span>
+              </button>
+
+              {onOpenScanner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenScanner();
+                  }}
+                  className="p-2.5 rounded-xl bg-slate-900 text-amber-400 border border-amber-500/40 font-bold text-xs flex items-center justify-center gap-1.5"
+                >
+                  <Camera className="w-4 h-4 text-amber-400" />
+                  <span>Scan Plate OCR</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenSupabaseModal();
+                }}
+                className={`p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border ${
+                  supabaseConfig.isConfigured 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                <span>DB Settings</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onSwitchToCustomerPortal) {
+                    onSwitchToCustomerPortal();
+                  } else {
+                    window.history.pushState({}, '', '/');
+                    window.dispatchEvent(new Event('popstate'));
+                  }
+                }}
+                className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Car className="w-4 h-4" />
+                <span>Customer Portal</span>
+              </button>
+            </div>
+
+            {/* Full Module Tabs Navigation List for Mobile */}
+            <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+              <div className="text-[10px] font-black uppercase text-slate-400 px-2 pt-1 pb-0.5">Workspace Operations</div>
+              {[...row1Items, ...row2Items]
+                .filter(item => isTabAllowedForRole(currentRole, item.id))
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={`m-tab-${item.id}`}
+                      onClick={() => {
+                        onTabChange(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4" />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.id === 'customer-portal' && pendingApprovals > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-[10px] text-white font-bold">
+                          {pendingApprovals}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Logout Action */}
+            {onLogout && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out of Mobile Session</span>
+                </button>
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* Desktop Navigation Tabs - Horizontal Scrollable Bar */}
+        <div className="hidden sm:block py-2 border-t border-slate-200/70 dark:border-slate-800 w-full max-w-full overflow-hidden">
           <nav className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {[...row1Items, ...row2Items]
               .filter(item => isTabAllowedForRole(currentRole, item.id))
@@ -527,8 +685,8 @@ export function HeaderNav({
           </nav>
         </div>
 
-
       </div>
     </header>
   );
 }
+
