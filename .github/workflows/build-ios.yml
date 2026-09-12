@@ -31,12 +31,12 @@ jobs:
           fi
           npx cap sync ios
 
-      - name: Build iOS App with Xcode (Unsigned / Simulator & Archive)
+      - name: Build iOS App with Xcode
         run: |
-          xcodebuild -workspace ios/App/App.xcworkspace \
+          xcodebuild -project ios/App/App.xcodeproj \
                      -scheme App \
                      -configuration Debug \
-                     -destination 'generic/platform=iOS' \
+                     -destination 'generic/platform=iOS Simulator' \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
@@ -45,7 +45,7 @@ jobs:
       - name: Prepare and Package iOS App Bundle
         run: |
           mkdir -p build-output
-          # Locate built App bundle and zip it
+          # Locate built App bundle inside Xcode DerivedData and package it
           find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d -exec cp -R {} build-output/ \;
           cd build-output
           zip -r FixoCar-iOS-App.zip App.app

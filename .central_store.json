@@ -1,0 +1,349 @@
+{
+  "employees": [
+    {
+      "id": "emp-admin",
+      "name": "Super Admin",
+      "role": "SUPER_ADMIN",
+      "phone": "9820011223",
+      "email": "admin@fixocar.com",
+      "specializedTeam": "Management",
+      "status": "AVAILABLE",
+      "activeJobsCount": 0,
+      "loginId": "admin@fixocar.com",
+      "password": "123456",
+      "baseSalary": 120000,
+      "employmentType": "PAYROLL"
+    },
+    {
+      "id": "emp-taifur",
+      "name": "Taifur",
+      "role": "ADMIN",
+      "phone": "9820011224",
+      "email": "taifur@fixocar.com",
+      "specializedTeam": "Management",
+      "status": "AVAILABLE",
+      "activeJobsCount": 0,
+      "loginId": "taifur@fixocar.com",
+      "password": "123456",
+      "baseSalary": 80000,
+      "employmentType": "PAYROLL"
+    }
+  ],
+  "jobCards": [
+    {
+      "id": "JC-2026-101",
+      "createdAt": "2026-08-21T20:11:22.264Z",
+      "estimatedCompletionDate": "2026-08-24T20:11:22.269Z",
+      "isUrgent": true,
+      "isCars24": true,
+      "cars24RefNo": "C24-MUM-8821",
+      "vehicle": {
+        "registrationNumber": "MH02CB9988",
+        "make": "Maruti Suzuki",
+        "model": "Swift VXi",
+        "year": 2022,
+        "color": "Arctic White",
+        "vin": "MA3FNE11S0029381",
+        "fuelLevel": 65,
+        "mileage": 34500
+      },
+      "customer": {
+        "id": "cust-101",
+        "name": "Cars24 Hub - Andheri West",
+        "phone": "+91 98200 11223",
+        "email": "hub.andheri@cars24.com",
+        "address": "Plot 14, MIDC Industrial Area, Andheri West, Mumbai"
+      },
+      "status": "IN_PROGRESS",
+      "serviceType": "ACCIDENT_BODYWORK",
+      "packageName": "Cars24 Panel Denting & Paint Refinishing",
+      "floorManagerId": "emp-101",
+      "floorManagerName": "Rajesh Sharma (Floor Manager)",
+      "cityName": "Mumbai",
+      "workshopName": "FixoCar Central Workshop - Andheri",
+      "tasks": [
+        {
+          "id": "task-101-1",
+          "jobCardId": "JC-2026-101",
+          "title": "Bonnet Panel Hydraulic Dent Leveling",
+          "category": "DENTING",
+          "assignedToId": "emp-104",
+          "assignedToName": "David O'Connor (Denter)",
+          "assignedType": "EMPLOYEE",
+          "estimatedCost": 350,
+          "customerPrice": 600,
+          "status": "COMPLETED",
+          "requiresCustomerApproval": false,
+          "completedAt": "2026-08-23T08:11:22.269Z",
+          "notes": "Hydraulic pull completed, primer ready."
+        },
+        {
+          "id": "task-101-2",
+          "jobCardId": "JC-2026-101",
+          "title": "Bonnet 2K Baked Clear Paint Refinish",
+          "category": "PAINT",
+          "assignedToId": "emp-105",
+          "assignedToName": "Kenji Sato (Painter)",
+          "assignedType": "EMPLOYEE",
+          "estimatedCost": 800,
+          "customerPrice": 1350,
+          "status": "IN_PROGRESS",
+          "requiresCustomerApproval": false,
+          "notes": "Currently in thermal paint booth for oven curing."
+        }
+      ],
+      "qcChecklist": [],
+      "qcPassed": false,
+      "pickupRequested": true,
+      "deliveryRequested": true,
+      "discount": 100,
+      "taxRate": 18,
+      "advancePaid": 500,
+      "isCheckedIn": true,
+      "checkInRecordId": "GATE-2026-101",
+      "checkedInAt": "2026-08-21 10:30 AM",
+      "checkInDriverName": "Ramesh Kumar",
+      "checkInDriverPhone": "+91 98200 99887",
+      "checkInPhotoWithDriverUrl": "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80"
+    },
+    {
+      "id": "JC-2026-102",
+      "createdAt": "2026-08-22T20:11:22.269Z",
+      "estimatedCompletionDate": "2026-08-25T20:11:22.269Z",
+      "isUrgent": false,
+      "isCars24": false,
+      "vehicle": {
+        "registrationNumber": "KA01MJ8821",
+        "make": "Hyundai",
+        "model": "Creta SX (O)",
+        "year": 2023,
+        "color": "Titan Grey",
+        "vin": "MALC181CLPM10293",
+        "fuelLevel": 40,
+        "mileage": 21800
+      },
+      "customer": {
+        "id": "cust-102",
+        "name": "Ananya Verma",
+        "phone": "+91 98765 43210",
+        "email": "ananya.verma@gmail.com",
+        "address": "Flat 402, Sunshine Apartments, HSR Layout, Bengaluru"
+      },
+      "status": "ESTIMATE_PENDING",
+      "serviceType": "STANDARD_PACKAGE",
+      "packageName": "Comprehensive Periodic Service & Brakes",
+      "floorManagerId": "emp-101",
+      "floorManagerName": "Rajesh Sharma (Floor Manager)",
+      "cityName": "Bengaluru",
+      "workshopName": "FixoCar Hub - HSR Layout",
+      "tasks": [
+        {
+          "id": "task-102-1",
+          "jobCardId": "JC-2026-102",
+          "title": "Synthetic Engine Oil & Filter Change",
+          "category": "MECHANICAL",
+          "assignedToId": "emp-103",
+          "assignedToName": "Suresh Patel (Mechanic)",
+          "assignedType": "EMPLOYEE",
+          "estimatedCost": 1800,
+          "customerPrice": 2800,
+          "status": "PENDING",
+          "requiresCustomerApproval": true,
+          "notes": "Awaiting customer estimate confirmation."
+        }
+      ],
+      "qcChecklist": [],
+      "qcPassed": false,
+      "pickupRequested": false,
+      "deliveryRequested": true,
+      "discount": 0,
+      "taxRate": 18,
+      "advancePaid": 0,
+      "isCheckedIn": true,
+      "checkInRecordId": "GATE-2026-102",
+      "checkedInAt": "2026-08-22 02:15 PM",
+      "checkInDriverName": "Ananya Verma (Self)",
+      "checkInDriverPhone": "+91 98765 43210",
+      "checkInPhotoWithDriverUrl": "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80"
+    },
+    {
+      "id": "JC-2026-103",
+      "createdAt": "2026-08-20T20:11:22.270Z",
+      "estimatedCompletionDate": "2026-08-23T14:11:22.270Z",
+      "isUrgent": false,
+      "isCars24": true,
+      "cars24RefNo": "C24-DEL-9912",
+      "vehicle": {
+        "registrationNumber": "DL03CE1234",
+        "make": "Honda",
+        "model": "City VX",
+        "year": 2021,
+        "color": "Golden Brown",
+        "vin": "MAKGM2680L001928",
+        "fuelLevel": 80,
+        "mileage": 42100
+      },
+      "customer": {
+        "id": "cust-103",
+        "name": "Cars24 Yard - Okhla Phase 3",
+        "phone": "+91 98112 33445",
+        "email": "okhla.yard@cars24.com",
+        "address": "Plot 88, Okhla Industrial Estate Phase 3, New Delhi"
+      },
+      "status": "READY_FOR_DELIVERY",
+      "serviceType": "ACCIDENT_BODYWORK",
+      "packageName": "Front & Rear Bumper Refinishing",
+      "floorManagerId": "emp-101",
+      "floorManagerName": "Rajesh Sharma (Floor Manager)",
+      "cityName": "Delhi NCR",
+      "workshopName": "FixoCar Mega Workshop - Okhla",
+      "tasks": [
+        {
+          "id": "task-103-1",
+          "jobCardId": "JC-2026-103",
+          "title": "Front Bumper Dent Repair & Refinishing",
+          "category": "PAINT",
+          "assignedToId": "emp-105",
+          "assignedToName": "Kenji Sato (Painter)",
+          "assignedType": "EMPLOYEE",
+          "estimatedCost": 750,
+          "customerPrice": 1350,
+          "status": "COMPLETED",
+          "requiresCustomerApproval": false,
+          "notes": "Final clear coat cured and polished."
+        }
+      ],
+      "qcChecklist": [],
+      "qcPassed": true,
+      "qcPassedAt": "2026-08-23T16:11:22.270Z",
+      "pickupRequested": true,
+      "deliveryRequested": true,
+      "discount": 50,
+      "taxRate": 18,
+      "advancePaid": 1000,
+      "isCheckedIn": true,
+      "checkInRecordId": "GATE-2026-103",
+      "checkedInAt": "2026-08-20 11:00 AM",
+      "checkInDriverName": "Vikram Singh (Logistics)",
+      "checkInDriverPhone": "+91 98112 99001",
+      "checkInPhotoWithDriverUrl": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80"
+    }
+  ],
+  "cities": [
+    {
+      "id": "city-mumbai",
+      "name": "Mumbai",
+      "state": "Maharashtra",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-delhi",
+      "name": "Delhi NCR",
+      "state": "Delhi",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-bengaluru",
+      "name": "Bengaluru",
+      "state": "Karnataka",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-hyderabad",
+      "name": "Hyderabad",
+      "state": "Telangana",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-pune",
+      "name": "Pune",
+      "state": "Maharashtra",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-chennai",
+      "name": "Chennai",
+      "state": "Tamil Nadu",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-jaipur",
+      "name": "Jaipur",
+      "state": "Rajasthan",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-ahmedabad",
+      "name": "Ahmedabad",
+      "state": "Gujarat",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-chandigarh",
+      "name": "Chandigarh",
+      "state": "Punjab",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-kolkata",
+      "name": "Kolkata",
+      "state": "West Bengal",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "city-lucknow",
+      "name": "Lucknow",
+      "state": "Uttar Pradesh",
+      "createdAt": "2025-01-01"
+    }
+  ],
+  "workshops": [
+    {
+      "id": "ws-mumbai-central",
+      "cityId": "city-mumbai",
+      "cityName": "Mumbai",
+      "name": "FixoCar Mumbai Central Workshop",
+      "code": "WS-MUM-01",
+      "address": "Andheri East, Mumbai, MH",
+      "phone": "022-88990011",
+      "isCars24Partner": true,
+      "managerName": "Taifur",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "ws-delhi-hub",
+      "cityId": "city-delhi",
+      "cityName": "Delhi NCR",
+      "name": "FixoCar Delhi NCR Hub",
+      "code": "WS-DEL-01",
+      "address": "Okhla Industrial Area, New Delhi",
+      "phone": "011-88990022",
+      "isCars24Partner": true,
+      "managerName": "Rajesh Kumar",
+      "createdAt": "2025-01-01"
+    },
+    {
+      "id": "ws-bengaluru-main",
+      "cityId": "city-bengaluru",
+      "cityName": "Bengaluru",
+      "name": "FixoCar Bengaluru Tech Park Hub",
+      "code": "WS-BLR-01",
+      "address": "Whitefield, Bengaluru, KA",
+      "phone": "080-88990033",
+      "isCars24Partner": true,
+      "managerName": "Anand V",
+      "createdAt": "2025-01-01"
+    }
+  ],
+  "vendors": [],
+  "vehicleCheckIns": [],
+  "standardJobs": [],
+  "carModels": [],
+  "jobCardHistory": [],
+  "inventoryItems": [],
+  "deliveryRecords": [],
+  "purchaseOrders": [],
+  "workshopExpenses": [],
+  "attendanceRecords": [],
+  "salaryRecords": []
+}
