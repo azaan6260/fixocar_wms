@@ -22,8 +22,10 @@ import {
   Check,
   X,
   Flame,
-  Users
+  Users,
+  Database
 } from 'lucide-react';
+import { getStoredSupabaseConfig } from '../lib/supabaseClient';
 import { respondToRequisition, resolveConcern, getEmployees } from '../lib/storage';
 import { 
   ComposedChart, 
@@ -47,6 +49,7 @@ interface DashboardOverviewProps {
   onSelectJobCard: (cardId: string) => void;
   onOpenAIDiagnostics: () => void;
   onNavigateTab: (tab: string) => void;
+  onOpenSupabaseModal?: () => void;
 }
 
 export function DashboardOverview({
@@ -56,6 +59,7 @@ export function DashboardOverview({
   onSelectJobCard,
   onOpenAIDiagnostics,
   onNavigateTab,
+  onOpenSupabaseModal
 }: DashboardOverviewProps) {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
@@ -184,8 +188,40 @@ export function DashboardOverview({
     huddleChartData.push({ name: 'No Tasks', value: 1, color: '#64748b' });
   }
 
+  const isSupabaseLinked = getStoredSupabaseConfig().isConfigured;
+
   return (
     <div className="space-y-6">
+      {!isSupabaseLinked && (
+        <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-900 dark:text-amber-100 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black tracking-tight">Live Supabase Database Not Connected Yet</h4>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                The app is currently displaying built-in local fallback data. Enter your Supabase Project URL & Anon Key to load data directly from your Supabase database tables!
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenSupabaseModal) {
+                onOpenSupabaseModal();
+              } else {
+                window.dispatchEvent(new CustomEvent('open-supabase-modal'));
+              }
+            }}
+            className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition-all shadow-md shrink-0 cursor-pointer flex items-center gap-2"
+          >
+            <Database className="w-4 h-4" />
+            <span>Connect Supabase Now</span>
+          </button>
+        </div>
+      )}
+
       {/* Daily Huddle Quick Entry Banner */}
       <div 
         onClick={() => onNavigateTab('daily-huddle')}

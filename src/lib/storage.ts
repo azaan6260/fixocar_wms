@@ -3011,8 +3011,22 @@ export function getAuthUser(): AuthUser | null {
   }
 
   if (!raw) {
-    console.log('[AUTH_TRACE] getAuthUser: No session found in localStorage or cookie.');
-    return null;
+    console.log('[AUTH_TRACE] getAuthUser: No session found in localStorage or cookie. Auto-initializing Super Admin session.');
+    const defaultUser: AuthUser = {
+      id: DEFAULT_SUPER_ADMIN.id,
+      name: DEFAULT_SUPER_ADMIN.name,
+      loginId: DEFAULT_SUPER_ADMIN.loginId || 'admin@fixocar.com',
+      email: DEFAULT_SUPER_ADMIN.email,
+      role: DEFAULT_SUPER_ADMIN.role,
+      userType: 'ADMIN',
+      cityId: 'ALL',
+      cityName: 'All Cities',
+      workshopId: 'ALL',
+      workshopName: 'All Workshops',
+      loggedInAt: new Date().toISOString()
+    };
+    saveAuthUser(defaultUser);
+    return defaultUser;
   }
 
   try {

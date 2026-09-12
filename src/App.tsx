@@ -243,9 +243,13 @@ export default function App() {
       setAuthUser(getAuthUser());
     });
     
+    const handleOpenSupabaseModal = () => setIsSupabaseModalOpen(true);
+    window.addEventListener('open-supabase-modal', handleOpenSupabaseModal);
+
     return () => {
       clearInterval(syncInterval);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('open-supabase-modal', handleOpenSupabaseModal);
       unsubscribe();
     };
   }, []);
@@ -414,6 +418,7 @@ export default function App() {
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenAIDiagnostics={() => {}}
             onNavigateTab={(tab) => setActiveTab(tab)}
+            onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
           />
         )}
 
@@ -529,7 +534,7 @@ export default function App() {
         )}
 
         {activeTab === 'car-models' && (
-          <CarModelsManagementView currentRole={currentRole} />
+          <CarModelsManagementView />
         )}
 
         {activeTab === 'customer-portal' && (

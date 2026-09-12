@@ -134,6 +134,7 @@ export function CreateJobCardModal({
 
   // Tasks List (starts completely empty until user selects or adds jobs)
   const [tasks, setTasks] = useState<{
+    id?: string;
     title: string;
     category: TaskCategory;
     team: SpecializedTeam;
@@ -143,6 +144,15 @@ export function CreateJobCardModal({
     estimatedCost: number;
     customerPrice: number;
     requiresCustomerApproval: boolean;
+    isContractBasis?: boolean;
+    painterPayout?: number;
+    denterPayout?: number;
+    pairedDenterId?: string;
+    pairedDenterName?: string;
+    standardJobId?: string;
+    panelKey?: string;
+    panelNameEn?: string;
+    paintScope?: string;
   }[]>([]);
 
   // When package changes on explicit user click, populate tasks
@@ -884,7 +894,7 @@ export function CreateJobCardModal({
                 {/* Vehicle Paint Batch Allotment Control */}
                 {tasks.some(t => t.category === 'PAINT') && (
                   <PaintBatchAllotmentControl
-                    paintTasks={tasks.filter(t => t.category === 'PAINT')}
+                    paintTasks={tasks.filter(t => t.category === 'PAINT').map((t, idx) => ({ ...t, id: t.id || `paint-task-${idx}` })) as any}
                     employees={employees}
                     vehicleReg={regNo}
                     isCars24={isCars24}

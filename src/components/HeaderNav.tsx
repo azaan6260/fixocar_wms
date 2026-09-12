@@ -284,6 +284,21 @@ export function HeaderNav({
               🚘 {t('action.customerPortal')}
             </button>
 
+            {/* Direct Supabase Database Configure & Connection Status Button */}
+            <button
+              type="button"
+              onClick={onOpenSupabaseModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-black transition-all shadow-2xs active:scale-95 cursor-pointer ${
+                supabaseConfig.isConfigured
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100'
+              }`}
+              title={supabaseConfig.isConfigured ? 'Live Supabase Connected. Click to manage credentials or run schema diagnostics.' : 'Click to enter Supabase URL & Anon Key to connect live database tables.'}
+            >
+              <Database className={`w-3.5 h-3.5 ${supabaseConfig.isConfigured ? 'text-emerald-600 dark:text-emerald-400 animate-pulse' : 'text-amber-600 dark:text-amber-400'}`} />
+              <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
+            </button>
+
             {/* Quick Manual Database Sync Button */}
             <button
               type="button"
@@ -534,6 +549,38 @@ export function HeaderNav({
                     <option key={`m-ws-${ws.id}`} value={ws.id}>📍 {ws.name}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Supabase Status & Sync Buttons for Mobile */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenSupabaseModal();
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all ${
+                    supabaseConfig.isConfigured
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                      : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                  }`}
+                >
+                  <Database className={`w-4 h-4 ${supabaseConfig.isConfigured ? 'text-emerald-500' : 'text-amber-500'}`} />
+                  <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerManualSync();
+                    setMobileMenuOpen(false);
+                  }}
+                  disabled={isSyncing}
+                  className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold"
+                >
+                  <RefreshCw className={`w-4 h-4 text-blue-500 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync Database'}</span>
+                </button>
               </div>
             </div>
 

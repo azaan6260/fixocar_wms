@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { 
   CustomerUser, CustomerVehicleRecord, JobCard, JobTask, 
-  CityServiceOffering, ServiceBookingRequest, AuthUser 
+  CityServiceOffering, ServiceBookingRequest, AuthUser, FuelType 
 } from '../types';
 import { 
   getCustomerVehicles, saveCustomerVehicles, getJobCards, 
@@ -109,7 +109,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       model: vehModel,
       year: Number(vehYear),
       color: vehColor,
-      fuelType: vehFuel,
+      fuelType: vehFuel as FuelType,
       mileage: Number(vehMileage),
       addedAt: new Date().toISOString().split('T')[0]
     };
@@ -726,7 +726,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   <div key={b.id} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="font-mono font-bold text-white text-sm">{b.vehicleRegistration}</span>
+                        <span className="font-mono font-bold text-white text-sm">{(b as any).vehicleRegistration || b.vehicleNumber}</span>
                         <h4 className="text-sm font-extrabold text-blue-400 mt-0.5">{b.serviceTitle}</h4>
                       </div>
                       <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black border border-emerald-500/20">
@@ -741,13 +741,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       </div>
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-400">Doorstep Pickup</span>
-                        <p className="text-emerald-400 font-semibold">{b.doorstepPickup ? 'Yes (Valet Pickup)' : 'Self Drop'}</p>
+                        <p className="text-emerald-400 font-semibold">{(b as any).doorstepPickup ?? b.pickupNeeded ? 'Yes (Valet Pickup)' : 'Self Drop'}</p>
                       </div>
                     </div>
 
-                    {b.pickupAddress && (
+                    {((b as any).pickupAddress || b.address) && (
                       <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 truncate">
-                        📍 {b.pickupAddress}
+                        📍 {(b as any).pickupAddress || b.address}
                       </p>
                     )}
                   </div>

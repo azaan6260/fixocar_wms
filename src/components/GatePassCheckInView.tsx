@@ -566,7 +566,7 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                             make: item.make,
                             model: item.model,
                             variant: item.variant,
-                            fuelType: item.fuelType,
+                            fuelType: item.fuelType as FuelType,
                             color: item.color,
                             customerName: item.customerName,
                             customerPhone: item.customerPhone,

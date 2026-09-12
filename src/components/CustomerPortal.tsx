@@ -1734,16 +1734,14 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
 
                 <div className="sm:col-span-2">
                   <CarModelSelector
-                    selectedMake={vehMake}
-                    selectedModel={vehModel}
-                    selectedVariant={vehVariant}
-                    selectedFuelType={vehFuel}
-                    onChange={(selection) => {
-                      setVehMake(selection.make);
-                      setVehModel(selection.model);
-                      if (selection.variant) setVehVariant(selection.variant);
-                      if (selection.fuelType) setVehFuel(selection.fuelType);
-                    }}
+                    make={vehMake}
+                    model={vehModel}
+                    variant={vehVariant}
+                    fuelType={vehFuel}
+                    onMakeChange={(m) => setVehMake(m)}
+                    onModelChange={(m) => setVehModel(m)}
+                    onVariantChange={(v) => setVehVariant(v)}
+                    onFuelTypeChange={(f) => setVehFuel(f as any)}
                   />
                 </div>
 

@@ -270,9 +270,9 @@ export function JobCardDetailView({
     const remaining = total - completedCount;
 
     const speech = `गाड़ी नंबर ${reg}. मॉडल ${model}. कुल ${total} काम में से ${completedCount} काम पूरा हो चुका है. ${remaining} काम बाकी है. वर्तमान चरण है ${
-      currentPhase === 'INSPECTION' ? 'प्रारंभिक जांच' :
-      currentPhase === 'ACTIVE_REPAIR' ? 'मरम्मत एवं पार्ट्स' :
-      currentPhase === 'QUALITY_CHECK' ? 'क्वालिटी चेक' : 'डिलीवरी एवं गेट पास'
+      (currentPhase as string) === 'ASSESSMENT' || (currentPhase as string) === 'INSPECTION' ? 'प्रारंभिक जांच' :
+      (currentPhase as string) === 'REPAIR' || (currentPhase as string) === 'ACTIVE_REPAIR' ? 'मरम्मत एवं पार्ट्स' :
+      (currentPhase as string) === 'QC' || (currentPhase as string) === 'QUALITY_CHECK' ? 'क्वालिटी चेक' : 'डिलीवरी एवं गेट पास'
     }.`;
 
     setIsPlayingHeaderAudio(true);
