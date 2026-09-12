@@ -1068,29 +1068,63 @@ Return valid JSON ONLY.`;
 
       if (client) {
         try {
-          // 1. Employees
+          // 1. Employees, Workshops & Cities
           const { data: supaEmps } = await client.from('employees').select('*');
+          let supaWsData: any[] | null = null;
+          let supaCitiesData: any[] | null = null;
+          try {
+            const wsRes = await client.from('workshops').select('*');
+            supaWsData = wsRes.data;
+          } catch {}
+          try {
+            const cityRes = await client.from('cities').select('*');
+            supaCitiesData = cityRes.data;
+          } catch {}
+
           if (supaEmps && supaEmps.length > 0) {
-            const mappedEmps = supaEmps.map((e: any) => ({
-              id: e.id,
-              name: e.name || e.employee_name || e.full_name || 'Staff',
-              role: e.role || 'MECHANIC',
-              phone: e.phone || e.mobile || '',
-              email: e.email || e.work_email || '',
-              specializedTeam: e.specialized_team || e.specializedTeam || 'Mechanical',
-              status: e.status || 'AVAILABLE',
-              avatarUrl: e.avatar_url || e.avatarUrl,
-              activeJobsCount: e.active_jobs_count || e.activeJobsCount || 0,
-              loginId: e.login_id || e.loginId || e.email,
-              password: e.password_hash || e.password || '123456',
-              baseSalary: e.base_salary || e.baseSalary || 0,
-              createdAt: e.created_at || e.createdAt,
-              employmentType: e.employment_type || e.employmentType || 'PAYROLL',
-              cityId: e.city_id || e.cityId,
-              cityName: e.city_name || e.cityName,
-              workshopId: e.workshop_id || e.workshopId,
-              workshopName: e.workshop_name || e.workshopName
-            }));
+            const mappedEmps = supaEmps.map((e: any) => {
+              let wId = e.workshop_id || e.workshopId;
+              let wName = e.workshop_name || e.workshopName;
+              let cId = e.city_id || e.cityId;
+              let cName = e.city_name || e.cityName;
+
+              if (wId && supaWsData) {
+                const matchedWs = supaWsData.find((w: any) => w.id === wId || (w.name && wName && w.name.toLowerCase() === wName.toLowerCase()));
+                if (matchedWs) {
+                  if (!wName || wName.trim() === '') wName = matchedWs.name || matchedWs.workshop_name;
+                  if (!cId) cId = matchedWs.city_id || matchedWs.cityId;
+                  if (!cName) cName = matchedWs.city_name || matchedWs.cityName;
+                }
+              }
+
+              if (cId && supaCitiesData && (!cName || cName.trim() === '')) {
+                const matchedCity = supaCitiesData.find((c: any) => c.id === cId || (c.name && cName && c.name.toLowerCase() === cName.toLowerCase()));
+                if (matchedCity) {
+                  cName = matchedCity.name || matchedCity.city_name;
+                }
+              }
+
+              return {
+                id: e.id,
+                name: e.name || e.employee_name || e.full_name || 'Staff',
+                role: e.role || 'MECHANIC',
+                phone: e.phone || e.mobile || '',
+                email: e.email || e.work_email || '',
+                specializedTeam: e.specialized_team || e.specializedTeam || 'Mechanical',
+                status: e.status || 'AVAILABLE',
+                avatarUrl: e.avatar_url || e.avatarUrl,
+                activeJobsCount: e.active_jobs_count || e.activeJobsCount || 0,
+                loginId: e.login_id || e.loginId || e.email,
+                password: e.password_hash || e.password || '123456',
+                baseSalary: typeof e.base_salary === 'number' ? e.base_salary : (e.base_salary ? Number(e.base_salary) : 0),
+                createdAt: e.created_at || e.createdAt,
+                employmentType: e.employment_type || e.employmentType || 'PAYROLL',
+                cityId: cId,
+                cityName: cName,
+                workshopId: wId,
+                workshopName: wName
+              };
+            });
             store.employees = mergeArrayItems(store.employees, mappedEmps, e => e.id || e.email || e.loginId || e.name);
           }
 

@@ -188,8 +188,31 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         if (Array.isArray(store.employees) && store.employees.length > 0) {
           const currentLocal = getEmployees();
           const empMap = new Map<string, Employee>();
+          const serverWorkshops = Array.isArray(store.workshops) ? store.workshops : [];
+          const serverCities = Array.isArray(store.cities) ? store.cities : [];
           
           for (const rawEmp of store.employees) {
+            let wId = rawEmp.workshopId || rawEmp.workshop_id;
+            let wName = rawEmp.workshopName || rawEmp.workshop_name;
+            let cId = rawEmp.cityId || rawEmp.city_id;
+            let cName = rawEmp.cityName || rawEmp.city_name;
+
+            if (wId) {
+              const matchedWs = serverWorkshops.find((w: any) => w.id === wId || (w.name && wName && w.name.toLowerCase() === wName.toLowerCase()));
+              if (matchedWs) {
+                if (!wName || wName.trim() === '') wName = matchedWs.name || matchedWs.workshop_name;
+                if (!cId) cId = matchedWs.city_id || matchedWs.cityId;
+                if (!cName) cName = matchedWs.city_name || matchedWs.cityName;
+              }
+            }
+
+            if (cId && (!cName || cName.trim() === '')) {
+              const matchedCity = serverCities.find((c: any) => c.id === cId || (c.name && cName && c.name.toLowerCase() === cName.toLowerCase()));
+              if (matchedCity) {
+                cName = matchedCity.name || matchedCity.city_name;
+              }
+            }
+
             const sEmp: Employee = {
               id: rawEmp.id,
               name: rawEmp.name || rawEmp.employee_name || rawEmp.full_name || 'Staff',
@@ -202,12 +225,12 @@ export async function syncFromSupabase(): Promise<SyncResult> {
               activeJobsCount: rawEmp.activeJobsCount || rawEmp.active_jobs_count || 0,
               loginId: rawEmp.loginId || rawEmp.login_id || rawEmp.email,
               password: rawEmp.password || rawEmp.password_hash || '123456',
-              baseSalary: rawEmp.baseSalary || rawEmp.base_salary || 0,
+              baseSalary: typeof rawEmp.baseSalary === 'number' ? rawEmp.baseSalary : (rawEmp.base_salary ? Number(rawEmp.base_salary) : 0),
               employmentType: rawEmp.employmentType || rawEmp.employment_type || 'PAYROLL',
-              cityId: rawEmp.cityId || rawEmp.city_id,
-              cityName: rawEmp.cityName || rawEmp.city_name,
-              workshopId: rawEmp.workshopId || rawEmp.workshop_id,
-              workshopName: rawEmp.workshopName || rawEmp.workshop_name
+              cityId: cId,
+              cityName: cName,
+              workshopId: wId,
+              workshopName: wName
             };
             const key = (sEmp.id || sEmp.email || sEmp.loginId || sEmp.name || '').toLowerCase().trim();
             if (key) empMap.set(key, sEmp);
@@ -471,30 +494,56 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
     // 1. EMPLOYEES (Chunked Fetch)
     const { data: employees, error: empErr } = await fetchTableInChunks<any>(client, 'employees', { chunkSize: 100 });
+    const { data: supaWorkshops } = await fetchTableInChunks<any>(client, 'workshops', { chunkSize: 100 }).catch(() => ({ data: null }));
+    const { data: supaCities } = await fetchTableInChunks<any>(client, 'cities', { chunkSize: 100 }).catch(() => ({ data: null }));
+
     if (empErr) {
       if (empErr.code === '42P01') missingTables.push('employees');
       errors.push(`Employees table error: ${empErr.message || empErr}`);
     } else if (employees !== null) {
-      const supaEmployees: Employee[] = employees.map((e: any) => ({
-        id: e.id,
-        name: e.name,
-        role: e.role,
-        phone: e.phone,
-        email: e.email || '',
-        specializedTeam: e.specialized_team,
-        status: e.status,
-        avatarUrl: e.avatar_url,
-        activeJobsCount: e.active_jobs_count || 0,
-        loginId: e.login_id,
-        password: e.password_hash || e.password,
-        baseSalary: e.base_salary,
-        createdAt: e.created_at,
-        employmentType: e.employment_type || 'PAYROLL',
-        cityId: e.city_id,
-        cityName: e.city_name,
-        workshopId: e.workshop_id,
-        workshopName: e.workshop_name
-      }));
+      const supaEmployees: Employee[] = employees.map((e: any) => {
+        let wId = e.workshop_id || e.workshopId;
+        let wName = e.workshop_name || e.workshopName;
+        let cId = e.city_id || e.cityId;
+        let cName = e.city_name || e.cityName;
+
+        if (wId && supaWorkshops) {
+          const matchedWs = supaWorkshops.find((w: any) => w.id === wId || (w.name && wName && w.name.toLowerCase() === wName.toLowerCase()));
+          if (matchedWs) {
+            if (!wName || wName.trim() === '') wName = matchedWs.name || matchedWs.workshop_name;
+            if (!cId) cId = matchedWs.city_id || matchedWs.cityId;
+            if (!cName) cName = matchedWs.city_name || matchedWs.cityName;
+          }
+        }
+
+        if (cId && supaCities && (!cName || cName.trim() === '')) {
+          const matchedCity = supaCities.find((c: any) => c.id === cId || (c.name && cName && c.name.toLowerCase() === cName.toLowerCase()));
+          if (matchedCity) {
+            cName = matchedCity.name || matchedCity.city_name;
+          }
+        }
+
+        return {
+          id: e.id,
+          name: e.name,
+          role: e.role,
+          phone: e.phone,
+          email: e.email || '',
+          specializedTeam: e.specialized_team || e.specializedTeam || 'Mechanical',
+          status: e.status || 'AVAILABLE',
+          avatarUrl: e.avatar_url || e.avatarUrl,
+          activeJobsCount: e.active_jobs_count || 0,
+          loginId: e.login_id || e.loginId,
+          password: e.password_hash || e.password || '123456',
+          baseSalary: typeof e.base_salary === 'number' ? e.base_salary : (e.base_salary ? Number(e.base_salary) : 0),
+          createdAt: e.created_at || e.createdAt,
+          employmentType: e.employment_type || e.employmentType || 'PAYROLL',
+          cityId: cId,
+          cityName: cName,
+          workshopId: wId,
+          workshopName: wName
+        };
+      });
 
       // Merge remote Supabase DB employees with local employees so no records are lost
       const currentLocal = getEmployees();
