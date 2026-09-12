@@ -14,19 +14,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
-      - name: Install NPM Dependencies
-        run: npm install
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
 
       - name: Build Web Application
         run: npm run build
@@ -37,9 +36,15 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
+          if [ -n "$ANDROID_HOME" ]; then
+            echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          fi
 
       - name: Grant Execute Permission to Gradle
         run: chmod +x android/gradlew
+
+      - name: Accept Android SDK Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Compile Android Debug APK
         run: |
