@@ -68,7 +68,7 @@ export function TechnicianQualityPhase({
       ...prev,
       qcChecklist: updated,
       qcPassed: allPassed,
-      status: allPassed ? 'READY_FOR_DELIVERY' : prev.status
+      status: allPassed ? 'RFC' : prev.status
     }));
   };
 
@@ -79,7 +79,7 @@ export function TechnicianQualityPhase({
       ...prev,
       qcChecklist: updated,
       qcPassed: true,
-      status: 'READY_FOR_DELIVERY'
+      status: 'RFC'
     }));
 
     dispatchToastNotification({

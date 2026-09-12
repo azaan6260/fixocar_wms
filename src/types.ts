@@ -182,6 +182,7 @@ export type JobCardStatus =
   | 'QC_PENDING'
   | 'READY_FOR_DELIVERY'
   | 'OUT_FOR_DELIVERY'
+  | 'RFC' // Ready for Collection / Checkout (RFC)
   | 'DELIVERED'
   | 'CLOSED';
 
@@ -586,6 +587,10 @@ export interface VehicleCheckIn {
   checkInPhotoWithDriverUrl?: string; // Photo of car with driver upon gate arrival
   checkInNotes?: string;
 
+  // Work Order Ref (e.g. customer-specific or B2B requests)
+  workOrderNo?: string;
+  workOrderNotes?: string;
+
   // Workshop Status
   status: CheckInStatus;
   jobCardId?: string; // Linked Job Card ID if created
@@ -597,6 +602,7 @@ export interface VehicleCheckIn {
   checkOutDriverName?: string;
   checkOutDriverPhone?: string;
   checkOutPhotoWithDriverUrl?: string; // Photo of car with driver upon gate exit
+  checkOutDriverSignatureUrl?: string; // Digital signature captured at gate
   checkOutNotes?: string;
 }
 
@@ -641,6 +647,8 @@ export interface JobCard {
   workshopName?: string;
   isCars24?: boolean; // Flag if this is a Cars24 fleet car
   cars24RefNo?: string;
+  workOrderNo?: string; // Optional customer work order or job reference number
+  workOrderNotes?: string; // List of customer-demanded tasks / symptoms / work orders
   tasks: JobTask[];
   qcChecklist: QCCheckitem[];
   qcPassed: boolean;
@@ -676,6 +684,7 @@ export interface JobCard {
   checkOutDriverName?: string;
   checkOutDriverPhone?: string;
   checkOutPhotoWithDriverUrl?: string;
+  checkOutDriverSignatureUrl?: string;
 }
 
 export type ExpenseCategory = 

@@ -25,7 +25,9 @@ import {
   MapPin,
   Layers,
   Camera,
-  AlertCircle
+  AlertCircle,
+  LogIn,
+  FileText
 } from 'lucide-react';
 
 interface CreateJobCardModalProps {
@@ -34,7 +36,7 @@ interface CreateJobCardModalProps {
   employees: Employee[];
   vendors: Vendor[];
   onCardCreated: (newCard: JobCard) => void;
-  prefilledRegNum?: string;
+  prefilledRegNum?: string | any;
 }
 
 export function CreateJobCardModal({
@@ -75,6 +77,9 @@ export function CreateJobCardModal({
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
 
+  const [workOrderNo, setWorkOrderNo] = useState('');
+  const [workOrderNotes, setWorkOrderNotes] = useState('');
+
   // Load cities & workshops on open
   useEffect(() => {
     if (isOpen) {
@@ -88,10 +93,12 @@ export function CreateJobCardModal({
         const cityWorkshops = loadedWorkshops.filter(w => w.cityId === loadedCities[0].id);
         if (cityWorkshops.length > 0) {
           setSelectedWorkshopId(cityWorkshops[0].id);
-          setIsCars24(!!cityWorkshops[0].isCars24Partner);
-          if (cityWorkshops[0].isCars24Partner && !customerName) {
-            setCustomerName('Cars24 Fleet Manager');
-            setCustomerPhone('+91 9876543210');
+          if (!prefilledRegNum || typeof prefilledRegNum !== 'object') {
+            setIsCars24(!!cityWorkshops[0].isCars24Partner);
+            if (cityWorkshops[0].isCars24Partner && !customerName) {
+              setCustomerName('Cars24 Fleet Manager');
+              setCustomerPhone('+91 9876543210');
+            }
           }
         }
       }
@@ -174,6 +181,18 @@ export function CreateJobCardModal({
     setTasks(mappedTasks);
   };
 
+  // Get all checked-in vehicles that don't have job cards yet
+  const availableCheckIns = React.useMemo(() => {
+    return getVehicleCheckIns().filter(c => !c.jobCardId && c.status !== 'CHECKED_OUT');
+  }, [isOpen]);
+
+  // Find matching check-in record for typed registration number
+  const typedCheckInMatch = React.useMemo(() => {
+    const cleanReg = regNo.toUpperCase().trim();
+    if (!cleanReg) return null;
+    return availableCheckIns.find(c => c.registrationNumber.toUpperCase().trim() === cleanReg);
+  }, [regNo, availableCheckIns]);
+
   // Reset form & clear tasks when modal opens
   React.useEffect(() => {
     if (isOpen) {
@@ -181,7 +200,43 @@ export function CreateJobCardModal({
       setTasks([]);
       setSelectedPackage(null);
       setSymptomsInput('');
-      setRegNo(prefilledRegNum || '');
+      
+      if (prefilledRegNum) {
+        if (typeof prefilledRegNum === 'object') {
+          setRegNo(prefilledRegNum.regNo || '');
+          setMake(prefilledRegNum.make || 'Toyota');
+          setModel(prefilledRegNum.model || 'Corolla Altis');
+          setVariant(prefilledRegNum.variant || '');
+          setFuelType(prefilledRegNum.fuelType || 'Petrol');
+          setColor(prefilledRegNum.color || 'Metallic Silver');
+          setCustomerName(prefilledRegNum.customerName || '');
+          setCustomerPhone(prefilledRegNum.customerPhone || '');
+          setIsCars24(!!prefilledRegNum.isCars24);
+          setCars24RefNo(prefilledRegNum.cars24RefNo || '');
+          setWorkOrderNo(prefilledRegNum.workOrderNo || '');
+          setWorkOrderNotes(prefilledRegNum.workOrderNotes || '');
+          if (prefilledRegNum.workOrderNotes) {
+            setSymptomsInput(prefilledRegNum.workOrderNotes);
+          }
+        } else {
+          setRegNo(prefilledRegNum || '');
+          setWorkOrderNo('');
+          setWorkOrderNotes('');
+        }
+      } else {
+        setRegNo('');
+        setMake('Toyota');
+        setModel('Corolla Altis');
+        setVariant('');
+        setFuelType('Petrol');
+        setColor('Metallic Silver');
+        setCustomerName('');
+        setCustomerPhone('');
+        setIsCars24(false);
+        setCars24RefNo('');
+        setWorkOrderNo('');
+        setWorkOrderNotes('');
+      }
     }
   }, [isOpen, prefilledRegNum]);
 
@@ -305,6 +360,8 @@ export function CreateJobCardModal({
       workshopName: selectedWorkshop?.name,
       isCars24,
       cars24RefNo: isCars24 ? (cars24RefNo || `C24-${Date.now().toString().slice(-6)}`) : undefined,
+      workOrderNo: workOrderNo.trim() || undefined,
+      workOrderNotes: workOrderNotes.trim() || undefined,
       estimatedCompletionDate: new Date(Date.now() + 86400000 * 2).toLocaleDateString(),
       vehicle: {
         registrationNumber: formattedRegNo,
@@ -417,6 +474,65 @@ export function CreateJobCardModal({
           
           {step === 1 && (
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto min-h-0">
+
+              {/* Quick prefill selector from Gate Pass */}
+              {availableCheckIns.length > 0 && (
+                <div className="bg-blue-500/10 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-500/20 dark:border-blue-900/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-blue-700 dark:text-blue-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <LogIn className="w-4 h-4" />
+                      Quick Prefill from Gate Check-In ({availableCheckIns.length} Vehicles Waiting)
+                    </h3>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Select a vehicle</span>
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                    {availableCheckIns.map((checkIn) => (
+                      <button
+                        key={checkIn.id}
+                        type="button"
+                        onClick={() => {
+                          setRegNo(checkIn.registrationNumber || '');
+                          setMake(checkIn.make || 'Toyota');
+                          setModel(checkIn.model || 'Corolla Altis');
+                          setVariant(checkIn.variant || '');
+                          setFuelType((checkIn.fuelType as FuelType) || 'Petrol');
+                          setColor(checkIn.color || 'Metallic Silver');
+                          setFuelLevel(checkIn.fuelLevel ?? 50);
+                          setMileage(checkIn.mileage ?? 35000);
+                          setIsCars24(!!checkIn.isCars24);
+                          setCars24RefNo(checkIn.cars24RefNo || '');
+                          setCustomerName(checkIn.customerName || '');
+                          setCustomerPhone(checkIn.customerPhone || '');
+                          setWorkOrderNo(checkIn.workOrderNo || '');
+                          setWorkOrderNotes(checkIn.workOrderNotes || '');
+                          if (checkIn.workOrderNotes) {
+                            setSymptomsInput(checkIn.workOrderNotes);
+                          }
+                        }}
+                        className={`px-3 py-2 text-left rounded-xl bg-white dark:bg-slate-900 border transition-all shrink-0 w-60 hover:border-blue-500 hover:shadow-xs group ${
+                          regNo.toUpperCase().trim() === checkIn.registrationNumber.toUpperCase().trim()
+                            ? 'border-blue-600 ring-2 ring-blue-500/20 dark:border-blue-500'
+                            : 'border-slate-200 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-mono font-black text-xs text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          <span>{checkIn.registrationNumber}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">{checkIn.id.split('-').pop()}</span>
+                        </div>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mt-0.5 truncate">
+                          {checkIn.make} {checkIn.model} {checkIn.variant ? `(${checkIn.variant})` : ''}
+                        </p>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-500 mt-1.5 border-t border-dashed border-slate-100 dark:border-slate-800/80 pt-1">
+                          <span className="truncate max-w-[120px] font-bold">{checkIn.customerName}</span>
+                          <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300 font-bold">
+                            {checkIn.isCars24 ? 'CARS24' : 'RETAIL'}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* City & Workshop Selection + Cars24 Tag */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
@@ -570,6 +686,42 @@ export function CreateJobCardModal({
                           <p className="text-[11px] mt-0.5">
                             Vehicle <strong className="font-mono">{regNo.toUpperCase()}</strong> already has an active Job Card with status <span className="font-bold underline">{activeDuplicateCard.status}</span>. Only 1 active job card is allowed per vehicle at a time.
                           </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {typedCheckInMatch && customerName !== typedCheckInMatch.customerName && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs flex items-start gap-2">
+                        <LogIn className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Gate Check-In Found!</p>
+                          <p className="text-[11px] mt-0.5">
+                            This vehicle is currently checked in at the gate. Would you like to prefill all vehicle & customer details?
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMake(typedCheckInMatch.make || 'Toyota');
+                              setModel(typedCheckInMatch.model || 'Corolla Altis');
+                              setVariant(typedCheckInMatch.variant || '');
+                              setFuelType((typedCheckInMatch.fuelType as FuelType) || 'Petrol');
+                              setColor(typedCheckInMatch.color || 'Metallic Silver');
+                              setFuelLevel(typedCheckInMatch.fuelLevel ?? 50);
+                              setMileage(typedCheckInMatch.mileage ?? 35000);
+                              setIsCars24(!!typedCheckInMatch.isCars24);
+                              setCars24RefNo(typedCheckInMatch.cars24RefNo || '');
+                              setCustomerName(typedCheckInMatch.customerName || '');
+                              setCustomerPhone(typedCheckInMatch.customerPhone || '');
+                              setWorkOrderNo(typedCheckInMatch.workOrderNo || '');
+                              setWorkOrderNotes(typedCheckInMatch.workOrderNotes || '');
+                              if (typedCheckInMatch.workOrderNotes) {
+                                setSymptomsInput(typedCheckInMatch.workOrderNotes);
+                              }
+                            }}
+                            className="mt-1.5 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] transition-colors"
+                          >
+                            Yes, Prefill Details
+                          </button>
                         </div>
                       </div>
                     )}

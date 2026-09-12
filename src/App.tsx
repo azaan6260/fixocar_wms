@@ -60,6 +60,8 @@ import { ToastContainer } from './components/ToastContainer';
 import { UnifiedLoginModal } from './components/UnifiedLoginModal';
 import { CommonHomePage } from './components/CommonHomePage';
 import { CustomerDashboard } from './components/CustomerDashboard';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { initMobileEnvironment } from './lib/mobileBridge';
 
 export default function App() {
   // Authentication state
@@ -81,6 +83,7 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('hashchange', handlePopState);
+    initMobileEnvironment();
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('hashchange', handlePopState);
@@ -110,7 +113,7 @@ export default function App() {
   // Modals state
   const [selectedJobCardId, setSelectedJobCardId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createModalPrefill, setCreateModalPrefill] = useState<string | undefined>();
+  const [createModalPrefill, setCreateModalPrefill] = useState<any>();
   const [customerPortalCardId, setCustomerPortalCardId] = useState<string | null>(null);
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
@@ -405,7 +408,7 @@ export default function App() {
       />
 
       {/* Main Viewport Content */}
-      <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 md:pb-8">
         
         {activeTab === 'dashboard' && (
           <DashboardOverview
@@ -436,7 +439,7 @@ export default function App() {
         {(activeTab === 'gatepass' || activeTab === 'gate-pass') && (
           <GatePassCheckInView
             onOpenCreateJobCardWithPrefill={(prefill) => {
-              setCreateModalPrefill(prefill.regNo);
+              setCreateModalPrefill(prefill);
               setIsCreateModalOpen(true);
             }}
           />
@@ -570,6 +573,16 @@ export default function App() {
           </div>
         </div>
       </footer>
+ 
+      {/* Mobile Floating Bottom Bar Dock */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onOpenScanner={() => setIsScannerOpen(true)}
+        onOpenNewJobCard={() => setIsCreateModalOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        currentRole={currentRole}
+      />
 
       {/* MODALS */}
 

@@ -44,6 +44,8 @@ interface GatePassCheckInViewProps {
     driverName: string;
     driverPhone: string;
     driverPhotoUrl?: string;
+    workOrderNo?: string;
+    workOrderNotes?: string;
   }) => void;
   onSelectJobCard?: (jobCardId: string) => void;
 }
@@ -91,6 +93,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const [photoUrl, setPhotoUrl] = useState(SAMPLE_DRIVER_CAR_PHOTOS[0].url);
   const [checkInNotes, setCheckInNotes] = useState('Arrived via driver. Waiting for Cars24 WSM preliminary inspection (PI) & estimate approval.');
   const [initialStatus, setInitialStatus] = useState<CheckInStatus>('IDLE_AWAITING_PI');
+  const [workOrderNo, setWorkOrderNo] = useState('');
+  const [workOrderNotes, setWorkOrderNotes] = useState('');
 
   // Check-Out Modal State
   const [checkOutItem, setCheckOutItem] = useState<VehicleCheckIn | null>(null);
@@ -133,6 +137,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
       checkInPhotoWithDriverUrl: photoUrl,
       checkInNotes,
       status: initialStatus,
+      workOrderNo: workOrderNo.trim() || undefined,
+      workOrderNotes: workOrderNotes.trim() || undefined,
     });
 
     refreshList();
@@ -158,6 +164,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
     setPhotoUrl(SAMPLE_DRIVER_CAR_PHOTOS[0].url);
     setCheckInNotes('Arrived via driver. Waiting for Cars24 WSM preliminary inspection (PI) & estimate approval.');
     setInitialStatus('IDLE_AWAITING_PI');
+    setWorkOrderNo('');
+    setWorkOrderNotes('');
   };
 
   const handleConfirmCheckOut = (e: React.FormEvent) => {
@@ -576,6 +584,8 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                             driverName: item.checkInDriverName,
                             driverPhone: item.checkInDriverPhone,
                             driverPhotoUrl: item.checkInPhotoWithDriverUrl,
+                            workOrderNo: item.workOrderNo,
+                            workOrderNotes: item.workOrderNotes,
                           });
                         }}
                         className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all w-full justify-center"
@@ -858,6 +868,38 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                         referrerPolicy="no-referrer"
                       />
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Work Order Details */}
+              <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-2xl space-y-3">
+                <span className="text-blue-800 dark:text-blue-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
+                  <FileText className="w-3.5 h-3.5 text-blue-500" />
+                  4. Associated Work Order (Optional)
+                </span>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Work Order / Ref Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. WO-2026-9918 (Leave blank if none)"
+                      value={workOrderNo}
+                      onChange={(e) => setWorkOrderNo(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Work Order Tasks / Symptoms / Customer Requests</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Describe the client-demanded tasks, diagnostic codes, or list of repairs specified in the work order..."
+                      value={workOrderNotes}
+                      onChange={(e) => setWorkOrderNotes(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
+                    />
                   </div>
                 </div>
               </div>

@@ -18,6 +18,8 @@ import {
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+import { DigitalSignaturePad } from './DigitalSignaturePad';
+import { triggerSuccessHaptic } from '../lib/mobileBridge';
 
 // Re-export mapping helpers for visual panel IDs to Standard Job IDs
 export { mapPanelToStandardJob, getPanelEnvironmentRates };
@@ -123,7 +125,7 @@ export function JobCardDetailView({
   }, [card.tasks]);
 
   const initialPhase: TechnicianRepairPhase = React.useMemo(() => {
-    if (card.status === 'DELIVERED' || card.status === 'READY_FOR_DELIVERY' || card.qcPassed) return 'QC';
+    if (card.status === 'DELIVERED' || card.status === 'READY_FOR_DELIVERY' || card.status === 'RFC' || card.qcPassed) return 'QC';
     if (card.tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'COMPLETED')) return 'REPAIR';
     if (card.tasks.some(t => t.requisitions && t.requisitions.length > 0)) return 'PARTS_REQUEST';
     return 'ASSESSMENT';
@@ -154,6 +156,7 @@ export function JobCardDetailView({
   const [gateDriverName, setGateDriverName] = useState(card.checkInDriverName || 'Cars24 Fleet Driver');
   const [gateDriverPhone, setGateDriverPhone] = useState(card.checkInDriverPhone || '+91 98200 11223');
   const [gateExitPhotoUrl, setGateExitPhotoUrl] = useState('https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80');
+  const [gateDriverSignature, setGateDriverSignature] = useState<string>(card.checkOutDriverSignatureUrl || '');
 
   // Counts & Progress
   const completedCount = card.tasks.filter(t => t.status === 'COMPLETED').length;
@@ -336,6 +339,7 @@ export function JobCardDetailView({
       checkOutDriverName: gateDriverName,
       checkOutDriverPhone: gateDriverPhone,
       checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
+      checkOutDriverSignatureUrl: gateDriverSignature || undefined,
     }));
 
     if (card.checkInRecordId) {
@@ -346,9 +350,11 @@ export function JobCardDetailView({
         checkOutDriverName: gateDriverName,
         checkOutDriverPhone: gateDriverPhone,
         checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
+        checkOutDriverSignatureUrl: gateDriverSignature || undefined,
       }));
     }
 
+    triggerSuccessHaptic();
     setIsGateCheckOutOpen(false);
     dispatchToastNotification({
       type: 'JOB_CARD_CREATED',
@@ -612,7 +618,7 @@ export function JobCardDetailView({
                 <div>
                   <span className="text-slate-400 font-medium">Floor Supervisor:</span>
                   <p className="font-bold text-white">{card.floorManagerName}</p>
-                  <p className="text-[11px] text-amber-400 font-semibold">Status: {card.status}</p>
+                  <p className="text-[11px] text-amber-400 font-semibold">Status: {formatJobCardStatus(card.status)}</p>
                 </div>
 
                 <div>
@@ -629,6 +635,122 @@ export function JobCardDetailView({
                   <p className="text-[11px] text-slate-400">Advance: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
                 </div>
               </div>
+
+              {/* Associated Gate Pass & Work Order Summary */}
+              {(card.workOrderNo || card.workOrderNotes || card.checkInDriverName) && (
+                <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <h3 className="font-black text-xs text-white uppercase tracking-wide flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-blue-400" />
+                      Associated Work Order & Gate Entry Pass
+                    </h3>
+                    <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-black uppercase">
+                      Gate-Checked
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    {/* Work Order Info */}
+                    <div className="md:col-span-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 font-medium">Work Order Ref:</span>
+                        <span className="font-mono font-black text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded text-[11px]">
+                          {card.workOrderNo || 'N/A (Direct Check-In)'}
+                        </span>
+                      </div>
+                      {card.workOrderNotes && (
+                        <div>
+                          <span className="text-slate-400 font-medium block mb-1">Customer-Demanded Tasks / Symptoms:</span>
+                          <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-slate-300 whitespace-pre-wrap leading-relaxed font-semibold">
+                            {card.workOrderNotes}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Gate Check-In Driver & Photo */}
+                    <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/80 space-y-2">
+                      <div className="flex items-start gap-2">
+                        {card.checkInPhotoWithDriverUrl && (
+                          <img
+                            src={card.checkInPhotoWithDriverUrl}
+                            alt="Gate Entry Photo"
+                            className="w-12 h-12 rounded-lg object-cover border border-slate-700 shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <span className="text-[10px] text-slate-500 font-black block uppercase">Arrival Driver</span>
+                          <p className="font-bold text-white truncate">{card.checkInDriverName || 'N/A'}</p>
+                          {card.checkInDriverPhone && (
+                            <p className="text-[10px] font-mono text-slate-400 mt-0.5">{card.checkInDriverPhone}</p>
+                          )}
+                        </div>
+                      </div>
+                      {card.checkedInAt && (
+                        <div className="text-[10px] text-slate-500 flex items-center justify-between border-t border-slate-800/60 pt-1.5 mt-1.5">
+                          <span>Gate Entry Time:</span>
+                          <span className="font-bold text-slate-400">{card.checkedInAt}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Gate Check-Out Driver, Photo & Digital Signature */}
+                    {card.checkedOutAt && (
+                      <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/30 space-y-2 col-span-full">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex items-start gap-2">
+                            {card.checkOutPhotoWithDriverUrl && (
+                              <img
+                                src={card.checkOutPhotoWithDriverUrl}
+                                alt="Gate Exit Photo"
+                                className="w-12 h-12 rounded-lg object-cover border border-emerald-500 shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                            <div>
+                              <span className="text-[10px] text-emerald-400 font-black block uppercase">Pickup Driver / Handover</span>
+                              <p className="font-bold text-white truncate">{card.checkOutDriverName || 'Driver'}</p>
+                              {card.checkOutDriverPhone && (
+                                <p className="text-[10px] font-mono text-slate-400 mt-0.5">{card.checkOutDriverPhone}</p>
+                              )}
+                              <p className="text-[10px] text-slate-400 mt-0.5">Dispatched: <strong className="text-emerald-400">{card.checkedOutAt}</strong></p>
+                            </div>
+                          </div>
+
+                          {card.checkOutDriverSignatureUrl && (
+                            <div className="bg-slate-950 p-1.5 rounded-lg border border-slate-800 flex flex-col items-center">
+                              <span className="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Verified Signature</span>
+                              <img
+                                src={card.checkOutDriverSignatureUrl}
+                                alt="Driver Signature"
+                                className="h-9 max-w-[120px] object-contain"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Ready for Checkout (RFC) informational box */}
+              {card.status === 'RFC' && (
+                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-300 flex items-start gap-3 text-xs">
+                  <div className="text-lg">ℹ️</div>
+                  <div className="space-y-1">
+                    <p className="font-extrabold text-blue-400 uppercase tracking-wide">Vehicle is in Ready for Checkout (RFC) state</p>
+                    <p className="font-semibold leading-relaxed">
+                      {isCars24 ? (
+                        "This vehicle is fully processed, invoice finalized, and PDI complete. As a CARS24 Fleet vehicle, it will remain parked inside the workshop until their designated driver performs the physical gate collection with the Gate Pass checkout."
+                      ) : (
+                        "This vehicle has completed all workshop repairs, passed quality check audits, and the invoice is fully generated. It is ready for final customer payout and gate pass clearance."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Priority & AI Estimator Strip */}
               <div className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -909,62 +1031,186 @@ export function JobCardDetailView({
                 <GSTInvoiceView card={card} currentRole={currentRole} />
               )}
 
-              {activeManagerTab === 'history' && (
-                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div>
-                      <h3 className="font-black text-sm text-white flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-amber-400" />
-                        <span>Job Card Status & Audit History Log</span>
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Complete chronological audit trail for Job Card <span className="font-mono text-amber-300">{card.id}</span>
-                      </p>
-                    </div>
-                    <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold rounded-lg">
-                      {getJobCardHistoryRecords(card.id).length} Logged Events
-                    </span>
-                  </div>
+              {activeManagerTab === 'history' && (() => {
+                const LIFECYCLE_STAGES = [
+                  { status: 'CREATED', label: 'Created', desc: 'Job card initialized' },
+                  { status: 'JOB_ALLOCATED', label: 'Allocated', desc: 'Tasks & staff allotted' },
+                  { status: 'IN_PROGRESS', label: 'In Progress', desc: 'Repairs ongoing' },
+                  { status: 'QC_PENDING', label: 'QC & PDI', desc: '12-point inspection' },
+                  { status: 'RFC', label: 'RFC (Ready to Go)', desc: 'Invoice made, ready for checkout' },
+                  { status: 'DELIVERED', label: 'Delivered', desc: 'Vehicle checked out' },
+                ];
+                
+                const currentStatusIndex = LIFECYCLE_STAGES.findIndex(s => s.status === card.status);
+                const activeIndex = card.status === 'CLOSED' ? 5 : (currentStatusIndex !== -1 ? currentStatusIndex : 0);
+                const historyRecords = getJobCardHistoryRecords(card.id);
 
-                  {getJobCardHistoryRecords(card.id).length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-xs">
-                      No status changes logged yet for this Job Card.
-                    </div>
-                  ) : (
-                    <div className="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-800">
-                      {getJobCardHistoryRecords(card.id).map((rec) => (
-                        <div key={rec.id} className="relative pl-8 text-xs">
-                          <div className="absolute left-2 top-1.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-slate-950 -translate-x-1/2 shadow-xs" />
-                          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-slate-200">
-                                {rec.previousStatus ? `${formatJobCardStatus(rec.previousStatus)} ➔ ` : ''}
-                                <span className="text-amber-400">{formatJobCardStatus(rec.newStatus)}</span>
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-mono">
-                                {new Date(rec.createdAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
-                              </span>
-                            </div>
-                            {rec.notes && (
-                              <p className="text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800/60 font-mono text-[11px]">
-                                {rec.notes}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-1">
-                              <User className="w-3 h-3 text-slate-500" />
-                              <span>By: <strong className="text-slate-300">{rec.changedByName || 'System'}</strong> ({rec.changedByRole || 'Staff'})</span>
-                              <span className="text-slate-600">•</span>
-                              <span className="uppercase text-[9px] font-bold px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">
-                                {rec.actionType || 'STATUS_CHANGE'}
-                              </span>
-                            </div>
-                          </div>
+                return (
+                  <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 space-y-6">
+                    {/* Visual Status Node Line */}
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-black text-xs text-slate-300 uppercase tracking-wide">Vehicle Lifecycle Timeline Progress</h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Real-time tracking of the car through key workshop milestones.</p>
+                      </div>
+
+                      {/* Desktop Node Row */}
+                      <div className="hidden md:grid grid-cols-6 gap-2 relative pt-2">
+                        {/* Connecting line */}
+                        <div className="absolute top-[26px] left-[8%] right-[8%] h-1 bg-slate-800 z-0">
+                          <div 
+                            className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 transition-all duration-500"
+                            style={{ width: `${(activeIndex / 5) * 100}%` }}
+                          />
                         </div>
-                      ))}
+
+                        {LIFECYCLE_STAGES.map((stage, idx) => {
+                          const isCompleted = idx < activeIndex;
+                          const isActive = idx === activeIndex;
+
+                          let circleClass = '';
+                          let textClass = '';
+                          let icon = null;
+
+                          if (isCompleted) {
+                            circleClass = 'bg-emerald-500 text-slate-950 border-emerald-400';
+                            textClass = 'text-emerald-400 font-bold';
+                            icon = <Check className="w-3.5 h-3.5 stroke-[3]" />;
+                          } else if (isActive) {
+                            circleClass = 'bg-amber-500 text-slate-950 border-amber-400 ring-4 ring-amber-500/20 animate-pulse';
+                            textClass = 'text-amber-400 font-extrabold';
+                            icon = <span className="w-2 h-2 rounded-full bg-slate-950" />;
+                          } else {
+                            circleClass = 'bg-slate-800 text-slate-500 border-slate-700';
+                            textClass = 'text-slate-500 font-medium';
+                            icon = <span className="text-[10px] font-mono">{idx + 1}</span>;
+                          }
+
+                          return (
+                            <div key={stage.status} className="flex flex-col items-center text-center z-10 relative">
+                              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${circleClass}`}>
+                                {icon}
+                              </div>
+                              <p className={`text-xs mt-2 truncate max-w-full ${textClass}`}>
+                                {stage.label}
+                              </p>
+                              <p className="text-[10px] text-slate-500 mt-0.5 max-w-[120px] leading-tight">
+                                {stage.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Mobile Node Row */}
+                      <div className="md:hidden space-y-2 pl-2">
+                        {LIFECYCLE_STAGES.map((stage, idx) => {
+                          const isCompleted = idx < activeIndex;
+                          const isActive = idx === activeIndex;
+                          
+                          let indicator = '';
+                          let textStyle = '';
+                          if (isCompleted) {
+                            indicator = '🟢 Completed';
+                            textStyle = 'text-emerald-400';
+                          } else if (isActive) {
+                            indicator = '🟡 Active Phase';
+                            textStyle = 'text-amber-400 font-bold';
+                          } else {
+                            indicator = '⚪ Pending';
+                            textStyle = 'text-slate-500';
+                          }
+
+                          return (
+                            <div key={stage.status} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-950/40 border border-slate-800/60">
+                              <span className={`font-bold ${textStyle}`}>{idx + 1}. {stage.label}</span>
+                              <span className="text-[10px] text-slate-400">{indicator}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    <hr className="border-slate-800" />
+
+                    {/* Detailed Change Audit Log */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-black text-xs text-slate-300 uppercase tracking-wide">Detailed Change Audit Logs</h4>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Every system action, manual transition, and user approval record.</p>
+                        </div>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono font-bold">
+                          {historyRecords.length} EVENTS
+                        </span>
+                      </div>
+
+                      {historyRecords.length === 0 ? (
+                        <div className="py-8 text-center text-slate-500 text-xs">
+                          No status changes logged yet for this Job Card.
+                        </div>
+                      ) : (
+                        <div className="space-y-4 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-800">
+                          {historyRecords.map((rec) => (
+                            <div key={rec.id} className="relative pl-8 text-xs group">
+                              {/* Left dot indicator */}
+                              <div className="absolute left-2 top-2.5 w-3 h-3 rounded-full bg-amber-500 border-2 border-slate-900 -translate-x-1/2 transition-transform group-hover:scale-125" />
+                              
+                              <div className="bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition-all shadow-xs space-y-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-900 pb-2">
+                                  {/* Title of transition */}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-black text-slate-200">
+                                      {rec.previousStatus ? (
+                                        <>
+                                          <span className="text-slate-400 line-through mr-1 font-semibold">{formatJobCardStatus(rec.previousStatus)}</span>
+                                          <span className="text-slate-500">➔</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-slate-400 font-semibold mr-1">Initialized ➔</span>
+                                      )}
+                                      <span className="text-amber-400 font-extrabold ml-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                                        {formatJobCardStatus(rec.newStatus)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Timestamp */}
+                                  <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1 shrink-0">
+                                    📅 {new Date(rec.createdAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                                  </span>
+                                </div>
+
+                                {/* Notes/Comments */}
+                                {rec.notes && (
+                                  <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 text-slate-300 font-semibold leading-relaxed">
+                                    {rec.notes}
+                                  </div>
+                                )}
+
+                                {/* Performed By & Metadata */}
+                                <div className="flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-2 pt-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <User className="w-3.5 h-3.5 text-slate-500" />
+                                    <span>
+                                      Performed By: <strong className="text-slate-300">{rec.changedByName || 'System Process'}</strong> 
+                                      <span className="text-slate-500 font-medium ml-1">({rec.changedByRole || 'Staff'})</span>
+                                    </span>
+                                  </div>
+                                  
+                                  <span className="uppercase text-[9px] font-black px-2 py-0.5 bg-slate-800 text-slate-400 rounded-md border border-slate-700">
+                                    {rec.actionType || 'STATUS_CHANGE'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}
@@ -1129,13 +1375,41 @@ export function JobCardDetailView({
                   <span className="flex items-center gap-1">
                     <Camera className="w-3.5 h-3.5 text-emerald-500" /> Departure Photo of Car with Driver
                   </span>
+                  <label 
+                    htmlFor="departure-cam-input" 
+                    className="cursor-pointer text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 active:scale-95 transition-all"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Snap Photo</span>
+                  </label>
                 </label>
+
+                <input
+                  id="departure-cam-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) {
+                          setGateExitPhotoUrl(ev.target.result as string);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
 
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
                     value={gateExitPhotoUrl}
                     onChange={(e) => setGateExitPhotoUrl(e.target.value)}
+                    placeholder="Photo URL or snap with camera button above"
                     className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-mono text-[11px] text-white"
                   />
 
@@ -1148,6 +1422,17 @@ export function JobCardDetailView({
                     />
                   )}
                 </div>
+              </div>
+
+              {/* Digital Signature Pad for Driver / Handover */}
+              <div className="pt-1">
+                <DigitalSignaturePad
+                  label="Pickup Driver / Customer Digital Signature"
+                  signeeName={gateDriverName}
+                  initialSignature={gateDriverSignature}
+                  height={130}
+                  onSave={(dataUrl) => setGateDriverSignature(dataUrl)}
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

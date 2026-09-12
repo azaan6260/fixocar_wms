@@ -27,6 +27,7 @@ import {
   Check
 } from 'lucide-react';
 import { PartRequisitionModal } from './PartRequisitionModal';
+import { triggerLightHaptic, triggerMediumHaptic } from '../lib/mobileBridge';
 
 interface VehicleStatusPipelineViewProps {
   jobCards: JobCard[];
@@ -148,8 +149,8 @@ const PIPELINE_COLUMNS: StatusColumnConfig[] = [
       headerBg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-900 dark:text-emerald-300',
       accent: 'text-emerald-500',
     },
-    statuses: ['READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY'],
-    description: 'QC cleared, final bill generated, ready for customer handover.',
+    statuses: ['READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'RFC'],
+    description: 'QC cleared, final bill generated, ready for checkout / driver collection.',
   },
   {
     id: 'delivered',
@@ -178,8 +179,9 @@ const ALL_STATUS_OPTIONS: { value: JobCardStatus; label: string }[] = [
   { value: 'QC_PENDING', label: '6. PDI / QC Pending' },
   { value: 'READY_FOR_DELIVERY', label: '7. Ready for Delivery' },
   { value: 'OUT_FOR_DELIVERY', label: '8. Out for Delivery' },
-  { value: 'DELIVERED', label: '9. Delivered' },
-  { value: 'CLOSED', label: '10. Closed' },
+  { value: 'RFC', label: '9. Ready for Checkout (RFC)' },
+  { value: 'DELIVERED', label: '10. Delivered' },
+  { value: 'CLOSED', label: '11. Closed' },
 ];
 
 export function VehicleStatusPipelineView({
@@ -342,7 +344,10 @@ export function VehicleStatusPipelineView({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             <button
               type="button"
-              onClick={() => setSelectedMobileColumn('ALL')}
+              onClick={() => {
+                triggerLightHaptic();
+                setSelectedMobileColumn('ALL');
+              }}
               className={`min-h-[36px] px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap ${
                 selectedMobileColumn === 'ALL'
                   ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
@@ -355,7 +360,10 @@ export function VehicleStatusPipelineView({
               <button
                 key={col.id}
                 type="button"
-                onClick={() => setSelectedMobileColumn(col.id)}
+                onClick={() => {
+                  triggerLightHaptic();
+                  setSelectedMobileColumn(col.id);
+                }}
                 className={`min-h-[36px] px-3 py-1 rounded-xl text-xs font-extrabold whitespace-nowrap flex items-center gap-1.5 ${
                   selectedMobileColumn === col.id
                     ? 'bg-blue-600 text-white shadow-xs'

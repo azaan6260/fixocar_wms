@@ -31,6 +31,7 @@ export const STATUS_LABELS: Record<string, string> = {
   QC_PENDING: 'PDI & QC Audit',
   READY_FOR_DELIVERY: 'Ready for Delivery',
   OUT_FOR_DELIVERY: 'Out for Delivery',
+  RFC: 'Ready for Checkout (RFC)',
   DELIVERED: 'Handed Over & Delivered',
   CLOSED: 'Job Card Closed',
 };
