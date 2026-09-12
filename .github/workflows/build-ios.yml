@@ -1,0 +1,59 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Initialize iOS Native Project with Capacitor
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+          npx cap sync ios
+
+      - name: Build iOS App with Xcode (Unsigned / Simulator & Archive)
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+                     -scheme App \
+                     -configuration Debug \
+                     -destination 'generic/platform=iOS' \
+                     CODE_SIGN_IDENTITY="" \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO \
+                     build
+
+      - name: Prepare and Package iOS App Bundle
+        run: |
+          mkdir -p build-output
+          # Locate built App bundle and zip it
+          find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d -exec cp -R {} build-output/ \;
+          cd build-output
+          zip -r FixoCar-iOS-App.zip App.app
+
+      - name: Upload iOS App Bundle as Downloadable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FixoCar-iOS-App
+          path: build-output/FixoCar-iOS-App.zip
+          retention-days: 30
