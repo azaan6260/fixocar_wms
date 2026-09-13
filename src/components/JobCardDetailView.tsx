@@ -808,11 +808,13 @@ export function JobCardDetailView({
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-slate-400 font-medium">Est. Total Bill:</span>
-                  <p className="font-extrabold text-sm text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
-                  <p className="text-[11px] text-slate-400">Advance: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
-                </div>
+                {isManagerOrHigher && (
+                  <div>
+                    <span className="text-slate-400 font-medium">Est. Total Bill:</span>
+                    <p className="font-extrabold text-sm text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
+                    <p className="text-[11px] text-slate-400">Advance: ₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
+                  </div>
+                )}
               </div>
 
               {/* Associated Gate Pass & Work Order Summary */}
@@ -1451,7 +1453,9 @@ export function JobCardDetailView({
                       <div key={task.id} className="p-4 rounded-2xl border border-slate-800 bg-slate-900 flex items-center justify-between">
                         <div>
                           <p className="font-bold text-sm text-white">{task.title}</p>
-                          <p className="text-xs text-slate-400">Price: ₹{task.customerPrice.toLocaleString('en-IN')}</p>
+                          {isManagerOrHigher && (
+                            <p className="text-xs text-slate-400">Price: ₹{task.customerPrice.toLocaleString('en-IN')}</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <button

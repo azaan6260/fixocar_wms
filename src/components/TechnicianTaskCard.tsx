@@ -264,8 +264,8 @@ export function TechnicianTaskCard({
             {task.title}
           </h3>
 
-          {/* Linked Body Panel & Paint Scope Badges */}
-          {(task.panelNameEn || task.paintScope) && (
+          {/* Linked Body Panel, Paint Scope & Sanctioned Payout Badges */}
+          {((task.panelNameEn || task.paintScope) || ((currentRole === 'PAINTER' ? (task.painterPayout || task.contractorPayout) : currentRole === 'DENTER' ? (task.denterPayout || task.contractorPayout) : (task.contractorPayout || task.painterPayout || task.denterPayout)) && (currentRole === 'PAINTER' ? (task.painterPayout || task.contractorPayout) : currentRole === 'DENTER' ? (task.denterPayout || task.contractorPayout) : (task.contractorPayout || task.painterPayout || task.denterPayout))! > 0)) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               {task.panelNameEn && (
                 <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-extrabold text-xs flex items-center gap-1">
@@ -279,6 +279,19 @@ export function TechnicianTaskCard({
                    task.paintScope === 'FULL_OUTER_AND_INSIDE' ? '🌟 Full Outer + Inside Paint' : '✨ Full Outer Paint'}
                 </span>
               )}
+              {(() => {
+                const payout = currentRole === 'PAINTER' 
+                  ? (task.painterPayout || task.contractorPayout || 0)
+                  : currentRole === 'DENTER' 
+                  ? (task.denterPayout || task.contractorPayout || 0)
+                  : (task.contractorPayout || task.painterPayout || task.denterPayout || 0);
+                if (payout <= 0) return null;
+                return (
+                  <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-xs flex items-center gap-1">
+                    💰 स्वीकृत भुगतान (Sanctioned Payout): ₹{payout.toLocaleString('en-IN')}
+                  </span>
+                );
+              })()}
             </div>
           )}
 
