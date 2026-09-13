@@ -130,7 +130,7 @@
     {
       "id": "JC-2026-101",
       "createdAt": "2026-09-13T05:00:53.713954+00:00",
-      "isUrgent": true,
+      "isUrgent": false,
       "isCars24": true,
       "cars24RefNo": "C24-MUM-8821",
       "vehicle": {
@@ -350,7 +350,8 @@
       "tasks": [],
       "qcChecklist": [],
       "comments": [],
-      "createdAt": "2026-09-12T18:12:02.447872+00:00"
+      "createdAt": "2026-09-12T18:12:02.447872+00:00",
+      "isUrgent": false
     },
     {
       "id": "JC-2026-105",
@@ -389,18 +390,18 @@
       "cars24RefNo": "C24-562179",
       "tasks": [
         {
-          "id": "task-std-1789222610544-540",
+          "id": "task-std-1789222606673-976",
           "jobCardId": "JC-2026-105",
-          "title": "Boot Lid / Dicky Door (Full Outer Paint)",
+          "title": "Front Bumper (Full Outer Paint)",
           "category": "PAINT",
           "assignedToId": "emp-3814",
           "assignedToName": "Imran",
           "assignedType": "EMPLOYEE",
-          "estimatedCost": 1270,
+          "estimatedCost": 1250,
           "customerPrice": 1350,
           "status": "PENDING",
           "requiresCustomerApproval": false,
-          "notes": "⚡ Cars24 Fleet Contract Rate applied. Boot lid / tailgate surface dent straightening, anti-rust primer & glossy finish. | Batch re-allotted: Painter set to Imran & Denter set to Atif on 19:47:20",
+          "notes": "⚡ Cars24 Fleet Contract Rate applied. Front bumper dismounting, plastic primer, metallic color match & baked clear coat. | Batch re-allotted: Painter set to Imran & Denter set to Atif on 19:47:20",
           "isAdditionalWork": false,
           "approvalStatus": "PENDING"
         },
@@ -417,6 +418,22 @@
           "status": "PENDING",
           "requiresCustomerApproval": false,
           "notes": "⚡ Cars24 Fleet Contract Rate applied. Rear bumper dismounting, plastic primer, metallic color match & baked clear coat. | Batch re-allotted: Painter set to Imran & Denter set to Atif on 19:47:20",
+          "isAdditionalWork": false,
+          "approvalStatus": "PENDING"
+        },
+        {
+          "id": "task-std-1789222610544-540",
+          "jobCardId": "JC-2026-105",
+          "title": "Boot Lid / Dicky Door (Full Outer Paint)",
+          "category": "PAINT",
+          "assignedToId": "emp-3814",
+          "assignedToName": "Imran",
+          "assignedType": "EMPLOYEE",
+          "estimatedCost": 1270,
+          "customerPrice": 1350,
+          "status": "PENDING",
+          "requiresCustomerApproval": false,
+          "notes": "⚡ Cars24 Fleet Contract Rate applied. Boot lid / tailgate surface dent straightening, anti-rust primer & glossy finish. | Batch re-allotted: Painter set to Imran & Denter set to Atif on 19:47:20",
           "isAdditionalWork": false,
           "approvalStatus": "PENDING"
         },
@@ -449,27 +466,12 @@
           "requiresCustomerApproval": true,
           "isAdditionalWork": true,
           "approvalStatus": "PENDING"
-        },
-        {
-          "id": "task-std-1789222606673-976",
-          "jobCardId": "JC-2026-105",
-          "title": "Front Bumper (Full Outer Paint)",
-          "category": "PAINT",
-          "assignedToId": "emp-3814",
-          "assignedToName": "Imran",
-          "assignedType": "EMPLOYEE",
-          "estimatedCost": 1250,
-          "customerPrice": 1350,
-          "status": "PENDING",
-          "requiresCustomerApproval": false,
-          "notes": "⚡ Cars24 Fleet Contract Rate applied. Front bumper dismounting, plastic primer, metallic color match & baked clear coat. | Batch re-allotted: Painter set to Imran & Denter set to Atif on 19:47:20",
-          "isAdditionalWork": false,
-          "approvalStatus": "PENDING"
         }
       ],
       "qcChecklist": [],
       "comments": [],
-      "createdAt": "2026-09-12T14:16:02.552116+00:00"
+      "createdAt": "2026-09-12T14:16:02.552116+00:00",
+      "isUrgent": false
     }
   ],
   "cities": [

@@ -92,11 +92,7 @@ import { PartRequisitionModal } from './PartRequisitionModal';
 import { AIPrioritySuggestionBox } from './AIPrioritySuggestionBox';
 import { AICostEstimatorModal } from './AICostEstimatorModal';
 
-import { TechnicianStepperNav, TechnicianRepairPhase } from './technician/TechnicianStepperNav';
-import { TechnicianInspectionPhase } from './technician/TechnicianInspectionPhase';
-import { TechnicianPartsRequestPhase } from './technician/TechnicianPartsRequestPhase';
-import { TechnicianRepairPhase as TechnicianRepairWorkPhase } from './technician/TechnicianRepairPhase';
-import { TechnicianQualityPhase } from './technician/TechnicianQualityPhase';
+// Remove unused Stepper imports
 
 interface JobCardDetailViewProps {
   card: JobCard;
@@ -123,24 +119,9 @@ export function JobCardDetailView({
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
   const isCars24 = isCars24JobCard(card);
   
-  // Default to technician mode for a technician-first experience
-  const [viewMode, setViewMode] = useState<'TECHNICIAN' | 'MANAGER'>(
-    isManagerOrHigher ? 'MANAGER' : 'TECHNICIAN'
-  );
-
-  // Stepper phase state for technician workflow
   const totalRequisitionsCount = React.useMemo(() => {
     return card.tasks.reduce((sum, t) => sum + (t.requisitions?.length || 0), 0);
   }, [card.tasks]);
-
-  const initialPhase: TechnicianRepairPhase = React.useMemo(() => {
-    if (card.status === 'DELIVERED' || card.status === 'READY_FOR_DELIVERY' || card.status === 'RFC' || card.qcPassed) return 'QC';
-    if (card.tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'COMPLETED')) return 'REPAIR';
-    if (card.tasks.some(t => t.requisitions && t.requisitions.length > 0)) return 'PARTS_REQUEST';
-    return 'ASSESSMENT';
-  }, [card.status, card.qcPassed, card.tasks]);
-
-  const [currentPhase, setCurrentPhase] = useState<TechnicianRepairPhase>(initialPhase);
   const [isPlayingHeaderAudio, setIsPlayingHeaderAudio] = useState(false);
 
   // Modals
@@ -433,11 +414,7 @@ export function JobCardDetailView({
     const total = card.tasks.length;
     const remaining = total - completedCount;
 
-    const speech = `गाड़ी नंबर ${reg}. मॉडल ${model}. कुल ${total} काम में से ${completedCount} काम पूरा हो चुका है. ${remaining} काम बाकी है. वर्तमान चरण है ${
-      (currentPhase as string) === 'ASSESSMENT' || (currentPhase as string) === 'INSPECTION' ? 'प्रारंभिक जांच' :
-      (currentPhase as string) === 'REPAIR' || (currentPhase as string) === 'ACTIVE_REPAIR' ? 'मरम्मत एवं पार्ट्स' :
-      (currentPhase as string) === 'QC' || (currentPhase as string) === 'QUALITY_CHECK' ? 'क्वालिटी चेक' : 'डिलीवरी एवं गेट पास'
-    }.`;
+    const speech = `गाड़ी नंबर ${reg}. मॉडल ${model}. कुल ${total} काम में से ${completedCount} काम पूरा हो चुका है. ${remaining} काम बाकी है. स्थिति: ${formatJobCardStatus(card.status)}.`;
 
     setIsPlayingHeaderAudio(true);
     speakTechnicianPrompt(speech, () => {
@@ -637,37 +614,6 @@ export function JobCardDetailView({
               <span>{isPlayingHeaderAudio ? 'आवाज बंद करें' : '🔊 बोलकर सुनें'}</span>
             </button>
 
-            {/* View Mode Toggle: Technician Stepper vs Manager Suite */}
-            {isManagerOrHigher && (
-              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('TECHNICIAN')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    viewMode === 'TECHNICIAN'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>👷</span>
-                  <span>मिस्त्री मोड (Stepper)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setViewMode('MANAGER')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    viewMode === 'MANAGER'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>👔</span>
-                  <span>मैनेजर मोड (Full)</span>
-                </button>
-              </div>
-            )}
-
             {/* Delete Job Card Button */}
             {isManagerOrHigher && (
               <button
@@ -698,84 +644,9 @@ export function JobCardDetailView({
 
         </div>
 
-        {/* =========================================================================
-            TECHNICIAN-FIRST 4-PHASE STEPPER NAVIGATION (High-Contrast & Tactile)
-           ========================================================================= */}
-        {viewMode === 'TECHNICIAN' && (
-          <TechnicianStepperNav
-            currentPhase={currentPhase}
-            onPhaseChange={(phase) => setCurrentPhase(phase)}
-            completedTasksCount={completedCount}
-            totalTasksCount={card.tasks.length}
-            requisitionsCount={totalRequisitionsCount}
-            qcPassed={Boolean(card.qcPassed)}
-            isDelivered={isDelivered}
-            vehicleReg={card.vehicle.registrationNumber}
-            vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-            isCars24={isCars24}
-          />
-        )}
-
-        {/* =========================================================================
-            VIEW CONTAINER: STEPPER PHASES (REVEALS ONLY ACTIVE PHASE FIELDS)
-           ========================================================================= */}
+        {/* VIEW CONTAINER */}
         <div className="p-4 sm:p-6 overflow-y-auto grow space-y-5 bg-slate-950">
-          
-          {/* 👷 TECHNICIAN STEPPER WORKFLOW */}
-          {viewMode === 'TECHNICIAN' && (
-            <div>
-              {/* STEP 1: ASSESSMENT & AR BODY PANELS */}
-              {currentPhase === 'ASSESSMENT' && (
-                <TechnicianInspectionPhase
-                  card={card}
-                  employees={employees}
-                  vendors={vendors}
-                  currentRole={currentRole}
-                  onProceedToPartsRequest={() => setCurrentPhase('PARTS_REQUEST')}
-                  onOpenStandardJobs={() => setIsStandardCatalogOpen(true)}
-                />
-              )}
-
-              {/* STEP 2: PARTS REQUEST & STORE ISSUES */}
-              {currentPhase === 'PARTS_REQUEST' && (
-                <TechnicianPartsRequestPhase
-                  card={card}
-                  onOpenRequisitionModal={() => setIsReqModalOpen(true)}
-                  onProceedToRepair={() => setCurrentPhase('REPAIR')}
-                  onBackToAssessment={() => setCurrentPhase('ASSESSMENT')}
-                />
-              )}
-
-              {/* STEP 3: REPAIR ACTION HUB & TASK EXECUTION */}
-              {currentPhase === 'REPAIR' && (
-                <TechnicianRepairWorkPhase
-                  card={card}
-                  employees={employees}
-                  vendors={vendors}
-                  currentRole={currentRole}
-                  onRequestParts={() => setIsReqModalOpen(true)}
-                  onAddNewTask={() => setShowAddTask(true)}
-                  onOpenStandardCatalog={() => setIsStandardCatalogOpen(true)}
-                  onProceedToQC={() => setCurrentPhase('QC')}
-                  onBackToPartsRequest={() => setCurrentPhase('PARTS_REQUEST')}
-                />
-              )}
-
-              {/* STEP 4: QC AUDIT, PROOF & GATE EXIT HANDOVER */}
-              {currentPhase === 'QC' && (
-                <TechnicianQualityPhase
-                  card={card}
-                  onOpenQCModal={onOpenQCModal}
-                  onOpenGateCheckOut={() => setIsGateCheckOutOpen(true)}
-                  onBackToRepair={() => setCurrentPhase('REPAIR')}
-                />
-              )}
-            </div>
-          )}
-
-          {/* 👔 MANAGER SUITE TABS (Detailed Invoices, AI Estimators, Requisitions, Sublet Vendors) */}
-          {viewMode === 'MANAGER' && (
-            <div className="space-y-6">
+          <div className="space-y-6">
               
               {/* Manager Metrics Strip */}
               <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -933,113 +804,115 @@ export function JobCardDetailView({
                 </div>
               )}
 
-              {/* Priority, Urgency & AI Estimator Strip */}
-              <div className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Urgent toggle */}
-                  <button
-                    type="button"
-                    onClick={handleToggleUrgent}
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
-                      card.isUrgent
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md animate-pulse'
-                        : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-amber-500/50 hover:text-white'
-                    }`}
-                  >
-                    <Flame className={`w-3.5 h-3.5 ${card.isUrgent ? 'fill-current' : 'text-amber-500'}`} />
-                    <span>{card.isUrgent ? '🔥 MARKED URGENT' : 'Mark Urgent'}</span>
-                  </button>
+              {/* Priority, Urgency & AI Estimator Strip (Managers only) */}
+              {isManagerOrHigher && (
+                <div className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Urgent toggle */}
+                    <button
+                      type="button"
+                      onClick={handleToggleUrgent}
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
+                        card.isUrgent
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md animate-pulse'
+                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-amber-500/50 hover:text-white'
+                      }`}
+                    >
+                      <Flame className={`w-3.5 h-3.5 ${card.isUrgent ? 'fill-current' : 'text-amber-500'}`} />
+                      <span>{card.isUrgent ? '🔥 MARKED URGENT' : 'Mark Urgent'}</span>
+                    </button>
 
-                  {/* Target Today Button */}
-                  <button
-                    type="button"
-                    onClick={handleSetTargetToday}
-                    title="Promised delivery today & mark urgent for standup"
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
-                      deadlineInfo.isToday
-                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                        : 'bg-slate-800 text-emerald-300 border-slate-700 hover:border-emerald-500/50 hover:text-white'
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{deadlineInfo.isToday ? '⏰ Due Today' : 'Target Today'}</span>
-                  </button>
+                    {/* Target Today Button */}
+                    <button
+                      type="button"
+                      onClick={handleSetTargetToday}
+                      title="Promised delivery today & mark urgent for standup"
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
+                        deadlineInfo.isToday
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                          : 'bg-slate-800 text-emerald-300 border-slate-700 hover:border-emerald-500/50 hover:text-white'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{deadlineInfo.isToday ? '⏰ Due Today' : 'Target Today'}</span>
+                    </button>
 
-                  {/* Target Tomorrow Button */}
-                  <button
-                    type="button"
-                    onClick={handleSetTargetTomorrow}
-                    title="Promised delivery tomorrow & mark urgent for standup"
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
-                      deadlineInfo.status === 'TOMORROW'
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                        : 'bg-slate-800 text-blue-300 border-slate-700 hover:border-blue-500/50 hover:text-white'
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{deadlineInfo.status === 'TOMORROW' ? '📅 Due Tomorrow' : 'Target Tomorrow'}</span>
-                  </button>
+                    {/* Target Tomorrow Button */}
+                    <button
+                      type="button"
+                      onClick={handleSetTargetTomorrow}
+                      title="Promised delivery tomorrow & mark urgent for standup"
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
+                        deadlineInfo.status === 'TOMORROW'
+                          ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                          : 'bg-slate-800 text-blue-300 border-slate-700 hover:border-blue-500/50 hover:text-white'
+                      }`}
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{deadlineInfo.status === 'TOMORROW' ? '📅 Due Tomorrow' : 'Target Tomorrow'}</span>
+                    </button>
 
-                  {/* Deadline Status Badge */}
-                  <button
-                    type="button"
-                    onClick={() => setActiveManagerTab('huddle')}
-                    className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-all ${deadlineInfo.color}`}
-                    title="Click to manage Daily Huddle & Urgency settings"
-                  >
-                    <Clock className="w-3 h-3" />
-                    <span className="font-black text-xs">{deadlineInfo.label}</span>
-                    <span className="opacity-80 text-[10px] font-medium font-mono hidden sm:inline">{deadlineInfo.subtext}</span>
-                  </button>
+                    {/* Deadline Status Badge */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveManagerTab('huddle')}
+                      className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-all ${deadlineInfo.color}`}
+                      title="Click to manage Daily Huddle & Urgency settings"
+                    >
+                      <Clock className="w-3 h-3" />
+                      <span className="font-black text-xs">{deadlineInfo.label}</span>
+                      <span className="opacity-80 text-[10px] font-medium font-mono hidden sm:inline">{deadlineInfo.subtext}</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsAIEstimatorOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-                    <span>AI Cost Estimator</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAIEstimatorOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>AI Cost Estimator</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveManagerTab('huddle')}
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border transition-all ${
+                        activeManagerTab === 'huddle'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm'
+                          : 'bg-slate-800 text-amber-300 border-amber-500/30 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Huddle Tab</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsReqModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5" />
+                      <span>+ Requisition</span>
+                    </button>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveManagerTab('huddle')}
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border transition-all ${
-                      activeManagerTab === 'huddle'
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm'
-                        : 'bg-slate-800 text-amber-300 border-amber-500/30 hover:bg-slate-700'
-                    }`}
-                  >
-                    <Flame className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Huddle Tab</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsReqModalOpen(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5"
-                  >
-                    <PackageCheck className="w-3.5 h-3.5" />
-                    <span>+ Requisition</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* Manager Tab Switcher */}
               <div className="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
                 {[
-                  { id: 'huddle', label: `🔥 Daily Huddle & Urgency${card.isUrgent ? ' (URGENT)' : ''}`, icon: Flame },
-                  { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench },
-                  { id: 'proof', label: `📸 Proof & Attachments (${totalMediaCount})`, icon: Camera },
-                  { id: 'consumption', label: `Part Consumption (${consumedItemsList.length})`, icon: PackageCheck },
-                  { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle },
-                  { id: 'qc', label: `QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck },
-                  { id: 'delivery', label: 'Pick & Delivery', icon: Truck },
-                  { id: 'invoice', label: 'GST Bill & Invoice', icon: FileText },
-                  { id: 'history', label: '📜 Status Audit Trail', icon: Clock },
-                ].map((tab) => {
+                  { id: 'huddle', label: `🔥 Daily Huddle & Urgency${card.isUrgent ? ' (URGENT)' : ''}`, icon: Flame, managerOnly: true },
+                  { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench, managerOnly: false },
+                  { id: 'proof', label: `📸 Proof & Attachments (${totalMediaCount})`, icon: Camera, managerOnly: false },
+                  { id: 'consumption', label: `Part Consumption (${consumedItemsList.length})`, icon: PackageCheck, managerOnly: false },
+                  { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle, managerOnly: true },
+                  { id: 'qc', label: `QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck, managerOnly: false },
+                  { id: 'delivery', label: 'Pick & Delivery', icon: Truck, managerOnly: true },
+                  { id: 'invoice', label: 'GST Bill & Invoice', icon: FileText, managerOnly: true },
+                  { id: 'history', label: '📜 Status Audit Trail', icon: Clock, managerOnly: true },
+                ].filter(tab => isManagerOrHigher || !tab.managerOnly).map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeManagerTab === tab.id;
                   return (
@@ -1767,7 +1640,6 @@ export function JobCardDetailView({
               })()}
 
             </div>
-          )}
 
         </div>
 
