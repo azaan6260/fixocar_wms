@@ -85,7 +85,26 @@ export async function triggerWarningHaptic(): Promise<void> {
 }
 
 /**
- * Initialize native status bar styling on mobile devices
+ * Request camera and microphone permissions cleanly by invoking a brief getUserMedia stream
+ * and immediately stopping all tracks. This prompts the Android OS permission dialog.
+ */
+export async function requestCameraAndMicPermissions(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.warn('navigator.mediaDevices.getUserMedia is not supported on this platform');
+    return false;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    stream.getTracks().forEach(track => track.stop());
+    return true;
+  } catch (err) {
+    console.warn('Camera/Mic permission denied or unavailable:', err);
+    return false;
+  }
+}
+
+/**
+ * Initialize native status bar styling on mobile devices and request camera/mic permissions
  */
 export async function initMobileEnvironment(): Promise<void> {
   if (isNativeMobile()) {
@@ -97,5 +116,17 @@ export async function initMobileEnvironment(): Promise<void> {
     } catch (e) {
       console.warn('Status bar initialization bypassed:', e);
     }
+  }
+
+  // Pre-request permissions on first install/launch so permissions are active
+  const hasPrompted = localStorage.getItem('fixocar_permissions_prompted');
+  if (!hasPrompted) {
+    // Run after a slight delay to allow the UI to load smoothly
+    setTimeout(async () => {
+      const granted = await requestCameraAndMicPermissions();
+      if (granted) {
+        localStorage.setItem('fixocar_permissions_prompted', 'true');
+      }
+    }, 1500);
   }
 }

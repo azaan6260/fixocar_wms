@@ -122,6 +122,102 @@ export default function App() {
   const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
 
+  // Keep a mutable ref of current UI state to avoid recreating the back button event listener repeatedly.
+  const uiStateRef = React.useRef({
+    selectedJobCardId,
+    isCreateModalOpen,
+    customerPortalCardId,
+    qcModalCardId,
+    isSupabaseModalOpen,
+    qrModalCardId,
+    isScannerOpen,
+    isLoginModalOpen,
+    activeTab,
+    currentRole
+  });
+
+  useEffect(() => {
+    uiStateRef.current = {
+      selectedJobCardId,
+      isCreateModalOpen,
+      customerPortalCardId,
+      qcModalCardId,
+      isSupabaseModalOpen,
+      qrModalCardId,
+      isScannerOpen,
+      isLoginModalOpen,
+      activeTab,
+      currentRole
+    };
+  }, [
+    selectedJobCardId,
+    isCreateModalOpen,
+    customerPortalCardId,
+    qcModalCardId,
+    isSupabaseModalOpen,
+    qrModalCardId,
+    isScannerOpen,
+    isLoginModalOpen,
+    activeTab,
+    currentRole
+  ]);
+
+  // Handle Capacitor native Android back button clicks
+  useEffect(() => {
+    let backListener: any = null;
+
+    const setupBackButton = async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+        
+        backListener = await CapApp.addListener('backButton', () => {
+          const state = uiStateRef.current;
+
+          // 1. Close any active modal or detailed screen
+          if (state.selectedJobCardId !== null) {
+            setSelectedJobCardId(null);
+          } else if (state.isCreateModalOpen) {
+            setIsCreateModalOpen(false);
+          } else if (state.customerPortalCardId !== null) {
+            setCustomerPortalCardId(null);
+          } else if (state.qcModalCardId !== null) {
+            setQcModalCardId(null);
+          } else if (state.qrModalCardId !== null) {
+            setQrModalCardId(null);
+          } else if (state.isScannerOpen) {
+            setIsScannerOpen(false);
+          } else if (state.isSupabaseModalOpen) {
+            setIsSupabaseModalOpen(false);
+          } else if (state.isLoginModalOpen) {
+            setIsLoginModalOpen(false);
+          }
+          // 2. If no modal is open, but they are not on the default dashboard/home tab, navigate back to 'dashboard'
+          else if (state.activeTab !== 'dashboard') {
+            setActiveTab('dashboard');
+          }
+          // 3. Otherwise, exit the app
+          else {
+            CapApp.exitApp();
+          }
+        });
+      } catch (err) {
+        console.warn('Capacitor App back button listener skipped on this platform:', err);
+      }
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (backListener) {
+        backListener.then((listener: any) => {
+          if (listener && typeof listener.remove === 'function') {
+            listener.remove();
+          }
+        }).catch(() => {});
+      }
+    };
+  }, []);
+
   const handleGlobalScan = (scannedPlate: string) => {
     setIsScannerOpen(false);
     const cleanReg = scannedPlate.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
