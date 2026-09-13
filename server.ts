@@ -8,6 +8,10 @@ import { createClient } from '@supabase/supabase-js';
 // Server-side persistent Supabase config file path
 const CONFIG_FILE_PATH = path.join(process.cwd(), '.supabase_config.json');
 
+const DEFAULT_SUPABASE_URL = 'https://bacclguxbbdmbutnoylw.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhY2NsZ3V4YmJkbWJ1dG5veWx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzMzMTYsImV4cCI6MjEwMDY0OTMxNn0.AMmwCOtCZ9hV75RL_-o4W5VODyl-uxqhXV3BB8NwvFI';
+const DEFAULT_SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhY2NsZ3V4YmJkbWJ1dG5veWx3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA3MzMxNiwiZXhwIjoyMTAwNjQ5MzE2fQ.EXIPEzzxKfLZ_pGUGmiix1uGHLFtKW-74ZK9VJ7eO0k';
+
 function loadPersistedSupabaseConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE_PATH)) {
@@ -28,7 +32,23 @@ function loadPersistedSupabaseConfig() {
   } catch (err) {
     console.warn('Could not load persisted supabase config:', err);
   }
-  return null;
+
+  // Fallback to default project credentials
+  if (!process.env.SUPABASE_URL) {
+    process.env.SUPABASE_URL = DEFAULT_SUPABASE_URL;
+    process.env.VITE_SUPABASE_URL = DEFAULT_SUPABASE_URL;
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = DEFAULT_SUPABASE_SERVICE_KEY;
+  }
+  if (!process.env.VITE_SUPABASE_ANON_KEY) {
+    process.env.VITE_SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
+  }
+  return {
+    supabaseUrl: DEFAULT_SUPABASE_URL,
+    supabaseAnonKey: DEFAULT_SUPABASE_ANON_KEY,
+    supabaseServiceKey: DEFAULT_SUPABASE_SERVICE_KEY
+  };
 }
 
 function savePersistedSupabaseConfig(url: string, anonKey: string, serviceKey?: string) {

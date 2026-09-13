@@ -44,15 +44,19 @@ const STORAGE_KEY_URL = 'autocraft_supabase_url';
 const STORAGE_KEY_ANON = 'autocraft_supabase_anon_key';
 const STORAGE_KEY_SERVICE_ROLE = 'autocraft_supabase_service_role_key';
 
+const DEFAULT_SUPABASE_URL = 'https://bacclguxbbdmbutnoylw.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhY2NsZ3V4YmJkbWJ1dG5veWx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzMzMTYsImV4cCI6MjEwMDY0OTMxNn0.AMmwCOtCZ9hV75RL_-o4W5VODyl-uxqhXV3BB8NwvFI';
+const DEFAULT_SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhY2NsZ3V4YmJkbWJ1dG5veWx3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA3MzMxNiwiZXhwIjoyMTAwNjQ5MzE2fQ.EXIPEzzxKfLZ_pGUGmiix1uGHLFtKW-74ZK9VJ7eO0k';
+
 export function getStoredSupabaseConfig() {
   const metaEnv = (import.meta as any).env || {};
   const envUrl = metaEnv.VITE_SUPABASE_URL || '';
   const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '';
   const envServiceKey = metaEnv.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
   
-  const savedUrl = localStorage.getItem(STORAGE_KEY_URL) || envUrl;
-  const savedAnon = localStorage.getItem(STORAGE_KEY_ANON) || envAnon;
-  const savedService = localStorage.getItem(STORAGE_KEY_SERVICE_ROLE) || envServiceKey;
+  const savedUrl = localStorage.getItem(STORAGE_KEY_URL) || envUrl || DEFAULT_SUPABASE_URL;
+  const savedAnon = localStorage.getItem(STORAGE_KEY_ANON) || envAnon || DEFAULT_SUPABASE_ANON_KEY;
+  const savedService = localStorage.getItem(STORAGE_KEY_SERVICE_ROLE) || envServiceKey || DEFAULT_SUPABASE_SERVICE_KEY;
 
   return {
     supabaseUrl: savedUrl,
