@@ -67,6 +67,8 @@ export function MobileBottomNav({
     onTabChange(tabKey);
   };
 
+  const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
+
   const navItems = [
     {
       key: 'dashboard',
@@ -75,13 +77,13 @@ export function MobileBottomNav({
       badge: 0
     },
     {
-      key: 'gate_pass',
+      key: 'gate-pass',
       label: 'Gate Pass',
       icon: Truck,
       badge: gateInCount
     },
     {
-      key: 'pipeline',
+      key: 'status-pipeline',
       label: 'Pipeline',
       icon: Layers,
       badge: activeJobsCount
@@ -167,55 +169,63 @@ export function MobileBottomNav({
               
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <button
-                  onClick={() => handleTabClick('job_cards')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
+                  type="button"
+                  onClick={() => handleTabClick('job-cards')}
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
                 >
                   <FileText className="w-4 h-4 text-sky-400" />
                   <span className="text-[11px] font-bold">Job Cards</span>
                 </button>
 
                 <button
-                  onClick={() => handleTabClick('huddle')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
+                  type="button"
+                  onClick={() => handleTabClick('daily-huddle')}
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
                 >
                   <Flame className="w-4 h-4 text-orange-400" />
                   <span className="text-[11px] font-bold">Daily Huddle</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleTabClick('inventory')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
                 >
                   <Boxes className="w-4 h-4 text-amber-400" />
                   <span className="text-[11px] font-bold">Inventory</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleTabClick('invoices')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
                 >
                   <Receipt className="w-4 h-4 text-emerald-400" />
                   <span className="text-[11px] font-bold">Invoices</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleTabClick('employees')}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
                 >
                   <Users className="w-4 h-4 text-purple-400" />
-                  <span className="text-[11px] font-bold">Staff / Attendance</span>
+                  <span className="text-[11px] font-bold">Staff / Access</span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setQuickMenuOpen(false);
-                    onOpenSupabaseModal();
-                  }}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200"
-                >
-                  <Settings className="w-4 h-4 text-slate-400" />
-                  <span className="text-[11px] font-bold">Cloud Sync</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickMenuOpen(false);
+                      onOpenSupabaseModal();
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 flex flex-col items-center text-center gap-1 text-slate-200 cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                    <span className="text-[11px] font-bold">Cloud DB</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -230,7 +240,7 @@ export function MobileBottomNav({
         <div className="grid grid-cols-5 items-center justify-between max-w-md mx-auto">
           {navItems.map((item) => {
             const isTabActive = !item.isMenu && (
-              item.key === 'rfc_quick' ? (activeTab === 'pipeline' && rfcCount > 0) : activeTab === item.key
+              item.key === 'rfc_quick' ? (activeTab === 'rfc_quick' || activeTab === 'rfc') : (activeTab === item.key || activeTab === item.key.replace(/-/g, '_'))
             );
             const Icon = item.icon;
 
@@ -243,12 +253,12 @@ export function MobileBottomNav({
                     triggerLightHaptic();
                     setQuickMenuOpen(!quickMenuOpen);
                   } else if (item.key === 'rfc_quick') {
-                    handleTabClick('pipeline');
+                    handleTabClick('rfc_quick');
                   } else {
                     handleTabClick(item.key);
                   }
                 }}
-                className={`flex flex-col items-center justify-center py-1 px-1 rounded-2xl relative transition-all active:scale-90 ${
+                className={`flex flex-col items-center justify-center py-1 px-1 rounded-2xl relative transition-all active:scale-90 cursor-pointer ${
                   isTabActive 
                     ? 'text-amber-400 font-bold' 
                     : item.isMenu && quickMenuOpen 

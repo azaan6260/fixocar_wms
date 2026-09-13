@@ -86,6 +86,7 @@ export function HeaderNav({
   const { t, language, setLanguage } = useI18n();
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
 
   useEffect(() => {
     setAuthUser(getAuthUser());
@@ -205,14 +206,14 @@ export function HeaderNav({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full">
-      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 w-full max-w-full">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full pt-[max(env(safe-area-inset-top,0px),8px)]">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full max-w-full">
         {/* Top Header Bar: Logo & Actions */}
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-3 w-full">
+        <div className="flex items-center justify-between min-h-[56px] sm:h-16 gap-1.5 sm:gap-3 w-full py-1">
           
           {/* Brand Logo & Title */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            <div className="bg-blue-600 p-1.5 sm:p-2 rounded-xl text-white shadow-md shadow-blue-600/20 flex items-center justify-center shrink-0">
+            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md shadow-blue-600/20 flex items-center justify-center shrink-0">
               <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
@@ -552,22 +553,24 @@ export function HeaderNav({
               </div>
 
               {/* Supabase Status & Sync Buttons for Mobile */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenSupabaseModal();
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all ${
-                    supabaseConfig.isConfigured
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-                      : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                  }`}
-                >
-                  <Database className={`w-4 h-4 ${supabaseConfig.isConfigured ? 'text-emerald-500' : 'text-amber-500'}`} />
-                  <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
-                </button>
+              <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenSupabaseModal();
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all ${
+                      supabaseConfig.isConfigured
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                        : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                    }`}
+                  >
+                    <Database className={`w-4 h-4 ${supabaseConfig.isConfigured ? 'text-emerald-500' : 'text-amber-500'}`} />
+                    <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -585,7 +588,7 @@ export function HeaderNav({
             </div>
 
             {/* Quick Actions Grid */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-2'} gap-2`}>
               <button
                 type="button"
                 onClick={() => {
@@ -612,21 +615,23 @@ export function HeaderNav({
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenSupabaseModal();
-                }}
-                className={`p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border ${
-                  supabaseConfig.isConfigured 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                    : 'bg-slate-800 text-slate-300 border-slate-700'
-                }`}
-              >
-                <Database className="w-4 h-4" />
-                <span>DB Settings</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenSupabaseModal();
+                  }}
+                  className={`p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border ${
+                    supabaseConfig.isConfigured 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  <Database className="w-4 h-4" />
+                  <span>DB Settings</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -639,7 +644,7 @@ export function HeaderNav({
                     window.dispatchEvent(new Event('popstate'));
                   }
                 }}
-                className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5"
+                className={`p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5 ${!isAdmin ? 'col-span-1' : ''}`}
               >
                 <Car className="w-4 h-4" />
                 <span>Customer Portal</span>

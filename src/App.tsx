@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, JobCard, Employee, Vendor, AuthUser, isTabAllowedForRole, getDefaultTabForRole } from './types';
+import { UserRole, JobCard, Employee, Vendor, AuthUser, isTabAllowedForRole, getDefaultTabForRole, normalizeTabId } from './types';
 import { 
   getJobCards, 
   getAllJobCards,
@@ -286,8 +286,8 @@ export default function App() {
   const activeCardForQC = qcModalCardId ? getJobCardById(qcModalCardId) : null;
   const activeCardForQR = qrModalCardId ? getJobCardById(qrModalCardId) : null;
 
-  // VIEW 1A: NOT AUTHENTICATED & NAVIGATED TO /wms -> DEDICATED STAFF & ADMIN LOGIN
-  if (!authUser && isWmsRoute) {
+  // VIEW 1: NOT AUTHENTICATED -> DIRECT SIGN IN SCREEN
+  if (!authUser) {
     return (
       <div className="min-h-screen bg-slate-950 font-sans flex flex-col justify-center items-center p-4 relative overflow-hidden">
         {/* Background glow */}
@@ -301,68 +301,29 @@ export default function App() {
                 <Wrench className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-white tracking-tight">FixoCar <span className="text-blue-500">WMS</span></h1>
+                <h1 className="text-xl font-black text-white tracking-tight">Fixo<span className="text-blue-500">Car</span> WMS</h1>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Workshop Operating System</p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.history.pushState({}, '', '/');
-                  setRoutePath('/');
-                }
-              }}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Home className="w-3.5 h-3.5 text-blue-400" />
-              <span>Customer Site (/)</span>
-            </button>
+            <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold">
+              Secure Sign In
+            </span>
           </div>
 
           <UnifiedLoginModal
             isOpen={true}
-            forcedMode="STAFF"
-            onClose={() => {
-              if (typeof window !== 'undefined') {
-                window.history.pushState({}, '', '/');
-                setRoutePath('/');
-              }
-            }}
+            initialTab="STAFF"
+            onClose={() => {}}
             onLoginSuccess={handleLoginSuccess}
           />
 
           <div className="mt-4 text-center">
             <p className="text-xs text-slate-500">
-              This login portal (<span className="font-mono text-slate-400">/wms</span>) is restricted to authorized workshop managers, mechanics, and technicians.
+              Authorized credentials are created and managed by the Workshop Administrator.
             </p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // VIEW 1B: NOT AUTHENTICATED -> COMMON HOME PAGE FOR CUSTOMERS
-  if (!authUser) {
-    return (
-      <div className="min-h-screen bg-slate-950 font-sans">
-        <CommonHomePage
-          onOpenLogin={() => {
-            setIsLoginModalOpen(true);
-          }}
-          onBookService={() => {
-            setIsLoginModalOpen(true);
-          }}
-        />
-
-        {/* Customer Authentication Modal */}
-        <UnifiedLoginModal
-          isOpen={isLoginModalOpen}
-          forcedMode="CUSTOMER"
-          onClose={() => setIsLoginModalOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
       </div>
     );
   }
@@ -387,6 +348,8 @@ export default function App() {
   }
 
   // VIEW 3: AUTHENTICATED AS STAFF / CONTRACTOR / ADMIN -> WORKSHOP MANAGEMENT SYSTEM (WMS)
+  const normalizedTab = normalizeTabId(activeTab);
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
       
@@ -410,7 +373,7 @@ export default function App() {
       {/* Main Viewport Content */}
       <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 md:pb-8">
         
-        {activeTab === 'dashboard' && (
+        {normalizedTab === 'dashboard' && (
           <DashboardOverview
             jobCards={jobCards}
             currentRole={currentRole}
@@ -425,7 +388,7 @@ export default function App() {
           />
         )}
 
-        {(activeTab === 'huddle' || activeTab === 'daily-huddle') && (
+        {normalizedTab === 'daily-huddle' && (
           <DailyHuddleView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -436,16 +399,17 @@ export default function App() {
           />
         )}
 
-        {(activeTab === 'gatepass' || activeTab === 'gate-pass') && (
+        {normalizedTab === 'gate-pass' && (
           <GatePassCheckInView
             onOpenCreateJobCardWithPrefill={(prefill) => {
               setCreateModalPrefill(prefill);
               setIsCreateModalOpen(true);
             }}
+            onSelectJobCard={(id) => setSelectedJobCardId(id)}
           />
         )}
 
-        {(activeTab === 'jobs' || activeTab === 'job-cards' || activeTab === 'job-cards-history') && (
+        {normalizedTab === 'job-cards' && (
           <JobCardList
             jobCards={jobCards}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
@@ -457,21 +421,21 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'outsourced-jobs' && (
+        {normalizedTab === 'outsourced-jobs' && (
           <OutsourcedJobsView
             currentRole={currentRole}
             onOpenJobCard={(id) => setSelectedJobCardId(id)}
           />
         )}
 
-        {activeTab === 'part-basket' && (
+        {normalizedTab === 'part-basket' && (
           <PartOrderBasketView
             currentRole={currentRole}
             onOpenJobCard={(id) => setSelectedJobCardId(id)}
           />
         )}
 
-        {(activeTab === 'pipeline' || activeTab === 'status-pipeline') && (
+        {normalizedTab === 'status-pipeline' && (
           <VehicleStatusPipelineView
             jobCards={jobCards}
             currentRole={currentRole}
@@ -479,6 +443,7 @@ export default function App() {
             onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
+            initialFilter={activeTab === 'rfc_quick' || activeTab === 'rfc' ? 'RFC' : undefined}
           />
         )}
 

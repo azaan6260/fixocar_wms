@@ -1,8 +1,33 @@
 @import "tailwindcss";
 
 @layer base {
-  html, body {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
+
+  html {
     max-width: 100vw;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    background-color: #020617;
   }
 }
+
+.safe-top-padding {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+
+.safe-bottom-padding {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+

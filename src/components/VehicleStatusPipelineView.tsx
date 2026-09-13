@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { JobCard, JobCardStatus, UserRole } from '../types';
 import { updateJobCard, getJobCards } from '../lib/storage';
 import { 
@@ -36,6 +36,7 @@ interface VehicleStatusPipelineViewProps {
   onOpenNewJobCardModal: () => void;
   onOpenCustomerApprovalPortal: (id: string) => void;
   onOpenQCModal: (id: string) => void;
+  initialFilter?: 'ACTIVE' | 'ALL' | 'CARS24' | 'URGENT' | 'RFC';
 }
 
 export interface StatusColumnConfig {
@@ -191,10 +192,20 @@ export function VehicleStatusPipelineView({
   onOpenNewJobCardModal,
   onOpenCustomerApprovalPortal,
   onOpenQCModal,
+  initialFilter,
 }: VehicleStatusPipelineViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterMode, setFilterMode] = useState<'ACTIVE' | 'ALL' | 'CARS24' | 'URGENT'>('ACTIVE');
-  const [selectedMobileColumn, setSelectedMobileColumn] = useState<string>('ALL');
+  const [filterMode, setFilterMode] = useState<'ACTIVE' | 'ALL' | 'CARS24' | 'URGENT' | 'RFC'>(initialFilter || 'ACTIVE');
+  const [selectedMobileColumn, setSelectedMobileColumn] = useState<string>(initialFilter === 'RFC' ? 'ready_delivery' : 'ALL');
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterMode(initialFilter);
+      if (initialFilter === 'RFC') {
+        setSelectedMobileColumn('ready_delivery');
+      }
+    }
+  }, [initialFilter]);
   
   // Requisition Modal State
   const [requisitionCard, setRequisitionCard] = useState<JobCard | null>(null);
@@ -221,6 +232,9 @@ export function VehicleStatusPipelineView({
       // Filter modes
       if (filterMode === 'ACTIVE') {
         return card.status !== 'DELIVERED' && card.status !== 'CLOSED';
+      }
+      if (filterMode === 'RFC') {
+        return card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY' || card.status === 'RFC';
       }
       if (filterMode === 'CARS24') {
         return card.isCars24;
@@ -315,6 +329,7 @@ export function VehicleStatusPipelineView({
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
             {[
               { id: 'ACTIVE', label: `Active (${totalActiveVehicles})` },
+              { id: 'RFC', label: `RFC Ready (${jobCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY' || c.status === 'RFC').length})` },
               { id: 'ALL', label: `All Cards (${jobCards.length})` },
               { id: 'CARS24', label: `Cars24 Partner (${jobCards.filter(c => c.isCars24).length})` },
               { id: 'URGENT', label: `Urgent (${jobCards.filter(c => c.isUrgent).length})` },

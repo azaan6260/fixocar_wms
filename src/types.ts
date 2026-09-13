@@ -718,12 +718,22 @@ export interface WorkshopExpense {
 }
 
 export function normalizeTabId(tabId: string): string {
-  if (tabId === 'huddle' || tabId === 'daily-huddle') return 'daily-huddle';
-  if (tabId === 'gatepass' || tabId === 'gate-pass') return 'gate-pass';
-  if (tabId === 'jobs' || tabId === 'job-cards') return 'job-cards';
-  if (tabId === 'pipeline' || tabId === 'status-pipeline') return 'status-pipeline';
-  if (tabId === 'accounting' || tabId === 'accounting-expenses') return 'accounting-expenses';
-  return tabId;
+  if (!tabId) return 'dashboard';
+  const lower = tabId.toLowerCase().trim();
+  if (lower === 'huddle' || lower === 'daily-huddle' || lower === 'daily_huddle') return 'daily-huddle';
+  if (lower === 'gatepass' || lower === 'gate-pass' || lower === 'gate_pass' || lower === 'gate') return 'gate-pass';
+  if (lower === 'jobs' || lower === 'job-cards' || lower === 'job_cards' || lower === 'jobcards') return 'job-cards';
+  if (lower === 'pipeline' || lower === 'status-pipeline' || lower === 'status_pipeline') return 'status-pipeline';
+  if (lower === 'rfc' || lower === 'rfc_quick' || lower === 'rfc-ready' || lower === 'rfc_ready') return 'status-pipeline';
+  if (lower === 'accounting' || lower === 'accounting-expenses' || lower === 'accounting_expenses') return 'accounting-expenses';
+  if (lower === 'contractor-payouts' || lower === 'contractor_payouts') return 'contractor-payouts';
+  if (lower === 'standard-jobs' || lower === 'standard_jobs') return 'standard-jobs';
+  if (lower === 'part-basket' || lower === 'part_basket') return 'part-basket';
+  if (lower === 'outsourced-jobs' || lower === 'outsourced_jobs') return 'outsourced-jobs';
+  if (lower === 'role-workspace' || lower === 'role_workspace') return 'role-workspace';
+  if (lower === 'car-models' || lower === 'car_models') return 'car-models';
+  if (lower === 'customer-portal' || lower === 'customer_portal') return 'customer-portal';
+  return lower;
 }
 
 export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
