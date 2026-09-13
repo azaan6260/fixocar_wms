@@ -18,6 +18,9 @@ import {
   Paintbrush
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
+import { ProofMediaGallery } from '../ProofMediaGallery';
+import { ProofOfWorkModal } from '../ProofOfWorkModal';
+import { getAuthUser } from '../../lib/storage';
 
 interface TechnicianInspectionPhaseProps {
   card: JobCard;
@@ -37,6 +40,9 @@ export function TechnicianInspectionPhase({
   onOpenStandardJobs
 }: TechnicianInspectionPhaseProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [showVehiclePhotosModal, setShowVehiclePhotosModal] = useState(false);
+  const [showProofUploadModal, setShowProofUploadModal] = useState(false);
+  const currentUser = getAuthUser();
 
   const dentingTasksCount = card.tasks.filter(t => 
     t.category === 'DENTING' || 
@@ -145,18 +151,30 @@ export function TechnicianInspectionPhase({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleVoiceInspectionSummary}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
-              isPlayingAudio 
-                ? 'bg-rose-500 text-white animate-pulse' 
-                : 'bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/40'
-            }`}
-          >
-            {isPlayingAudio ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-            <span>{isPlayingAudio ? 'रोकें' : '🔊 जांच रिपोर्ट सुनें'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowVehiclePhotosModal(true)}
+              className="px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/40 transition-all cursor-pointer"
+              title="गाड़ी के सभी फोटो देखें (View Vehicle Photos)"
+            >
+              <Camera className="w-3.5 h-3.5 text-blue-400" />
+              <span>वाहन फोटो ({card.proofMedia?.length || 0})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleVoiceInspectionSummary}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
+                isPlayingAudio 
+                  ? 'bg-rose-500 text-white animate-pulse' 
+                  : 'bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/40'
+              }`}
+            >
+              {isPlayingAudio ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              <span>{isPlayingAudio ? 'रोकें' : '🔊 जांच रिपोर्ट सुनें'}</span>
+            </button>
+          </div>
         </div>
 
         <TechnicianBodyPanelAssessmentChart
@@ -203,6 +221,31 @@ export function TechnicianInspectionPhase({
         </div>
       </div>
 
+      {/* Vehicle Photos Gallery Modal for Inspection Phase */}
+      {showVehiclePhotosModal && (
+        <ProofMediaGallery
+          jobCard={card}
+          currentUser={currentUser}
+          isModal={true}
+          isOpen={showVehiclePhotosModal}
+          onClose={() => setShowVehiclePhotosModal(false)}
+          onOpenAddModal={() => {
+            setShowVehiclePhotosModal(false);
+            setShowProofUploadModal(true);
+          }}
+        />
+      )}
+
+      {/* Proof of Work Capture Modal */}
+      {showProofUploadModal && (
+        <ProofOfWorkModal
+          isOpen={showProofUploadModal}
+          onClose={() => setShowProofUploadModal(false)}
+          jobCard={card}
+          currentUser={currentUser}
+          initialCategory="INTAKE"
+        />
+      )}
     </div>
   );
 }

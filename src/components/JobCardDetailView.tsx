@@ -14,12 +14,15 @@ import {
   deleteJobCardTask,
   isCars24JobCard,
   getJobCardHistoryRecords,
-  formatJobCardStatus
+  formatJobCardStatus,
+  getAuthUser
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { triggerSuccessHaptic } from '../lib/mobileBridge';
+import { ProofMediaGallery } from './ProofMediaGallery';
+import { ProofOfWorkModal } from './ProofOfWorkModal';
 
 // Re-export mapping helpers for visual panel IDs to Standard Job IDs
 export { mapPanelToStandardJob, getPanelEnvironmentRates };
@@ -116,6 +119,7 @@ export function JobCardDetailView({
   onOpenQCModal,
   onOpenQRModal,
 }: JobCardDetailViewProps) {
+  const currentUser = getAuthUser();
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
   const isCars24 = isCars24JobCard(card);
   
@@ -145,9 +149,12 @@ export function JobCardDetailView({
   const [isStandardCatalogOpen, setIsStandardCatalogOpen] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [isGateCheckOutOpen, setIsGateCheckOutOpen] = useState(false);
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [selectedProofTaskId, setSelectedProofTaskId] = useState<string | undefined>(undefined);
+  const [isVehiclePhotosModalOpen, setIsVehiclePhotosModalOpen] = useState(false);
 
   // Manager Tabs
-  const [activeManagerTab, setActiveManagerTab] = useState<'huddle' | 'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
+  const [activeManagerTab, setActiveManagerTab] = useState<'huddle' | 'tasks' | 'approvals' | 'proof' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
 
   // Urgency & Target Completion State
   const [targetDateInput, setTargetDateInput] = useState<string>(() => {
@@ -389,6 +396,17 @@ export function JobCardDetailView({
     return items;
   }, [card]);
 
+  const totalMediaCount = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (Array.isArray(card.proofMedia)) {
+      card.proofMedia.forEach(p => ids.add(p.id || p.url));
+    }
+    if (Array.isArray(card.attachments)) {
+      card.attachments.forEach(a => ids.add(a.id || a.url));
+    }
+    return ids.size;
+  }, [card.proofMedia, card.attachments]);
+
   const totalConsumedCost = consumedItemsList.reduce((sum, item) => sum + item.totalCost, 0);
 
   // Billing calculations
@@ -590,6 +608,20 @@ export function JobCardDetailView({
           {/* Right: Audio Speaker Button + View Mode Switch + Close */}
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
             
+            {/* 📸 वाहन के फोटो व वीडियो प्रमाण (Vehicle Photos & Proof Gallery Modal) */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProofTaskId(undefined);
+                setIsVehiclePhotosModalOpen(true);
+              }}
+              className="px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 hover:border-amber-400 active:scale-95 shadow-xs cursor-pointer"
+              title="गाड़ी के सभी फोटो व वीडियो देखें (Open Vehicle Photos & Work Proof)"
+            >
+              <Camera className="w-4 h-4 text-amber-400" />
+              <span>वाहन फोटो ({card.proofMedia?.length || 0})</span>
+            </button>
+
             {/* 🔊 Hindi Speech Summary Button */}
             <button
               type="button"
@@ -994,6 +1026,7 @@ export function JobCardDetailView({
                 {[
                   { id: 'huddle', label: `🔥 Daily Huddle & Urgency${card.isUrgent ? ' (URGENT)' : ''}`, icon: Flame },
                   { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench },
+                  { id: 'proof', label: `📸 Proof & Attachments (${totalMediaCount})`, icon: Camera },
                   { id: 'consumption', label: `Part Consumption (${consumedItemsList.length})`, icon: PackageCheck },
                   { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle },
                   { id: 'qc', label: `QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck },
@@ -1495,6 +1528,17 @@ export function JobCardDetailView({
                 </div>
               )}
 
+              {activeManagerTab === 'proof' && (
+                <ProofMediaGallery
+                  jobCard={card}
+                  currentUser={currentUser}
+                  onOpenAddModal={(taskId?: string) => {
+                    setSelectedProofTaskId(taskId);
+                    setIsProofModalOpen(true);
+                  }}
+                />
+              )}
+
               {activeManagerTab === 'qc' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -1974,6 +2018,39 @@ export function JobCardDetailView({
           card={card}
           isOpen={isAIEstimatorOpen}
           onClose={() => setIsAIEstimatorOpen(false)}
+        />
+      )}
+
+      {/* Dedicated Vehicle Photos & Proofs Modal (Accessible from anywhere in the Job Card) */}
+      {isVehiclePhotosModalOpen && (
+        <ProofMediaGallery
+          jobCard={card}
+          currentUser={currentUser}
+          isModal={true}
+          isOpen={isVehiclePhotosModalOpen}
+          initialFilterTaskId={selectedProofTaskId}
+          onClose={() => {
+            setIsVehiclePhotosModalOpen(false);
+            setSelectedProofTaskId(undefined);
+          }}
+          onOpenAddModal={(taskId?: string) => {
+            setSelectedProofTaskId(taskId);
+            setIsProofModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Proof of Work Media Modal (Photos & Videos on Supabase Storage) */}
+      {isProofModalOpen && (
+        <ProofOfWorkModal
+          isOpen={isProofModalOpen}
+          onClose={() => {
+            setIsProofModalOpen(false);
+            setSelectedProofTaskId(undefined);
+          }}
+          jobCard={card}
+          currentUser={currentUser}
+          initialTaskId={selectedProofTaskId}
         />
       )}
     </div>

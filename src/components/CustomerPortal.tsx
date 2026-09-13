@@ -62,6 +62,7 @@ import {
 import { GSTInvoiceView } from './GSTInvoiceView';
 import { FuelTypeBadge } from './FuelTypeBadge';
 import { CarModelSelector } from './CarModelSelector';
+import { ProofMediaGallery } from './ProofMediaGallery';
 
 interface CustomerPortalProps {
   currentRole: UserRole;
@@ -1382,6 +1383,17 @@ export function CustomerPortal({ currentRole, onOpenApprovalModal }: CustomerPor
                         </table>
                       </div>
                     </div>
+
+                    {/* Proof of Work Photos & Videos (Supabase Cloud Storage) */}
+                    {Array.isArray(card.proofMedia) && card.proofMedia.length > 0 && (
+                      <div className="pt-2">
+                        <ProofMediaGallery
+                          jobCard={card}
+                          onOpenAddModal={() => {}}
+                          readOnly={true}
+                        />
+                      </div>
+                    )}
 
                     {/* Summary Footer */}
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">

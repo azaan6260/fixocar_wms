@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
@@ -531,6 +531,172 @@ export function addJobCardComment(jobCardId: string, comment: Omit<JobCardCommen
     };
   });
   return createdComment!;
+}
+
+export function addProofMediaToJobCard(jobCardId: string, mediaItem: ProofMediaItem): JobCard | null {
+  let updatedCard: JobCard | null = null;
+  updateJobCard(jobCardId, (card) => {
+    const existing = Array.isArray(card.proofMedia) ? card.proofMedia : [];
+    // Avoid duplicate IDs
+    const filtered = existing.filter(m => m.id !== mediaItem.id);
+    const updatedMedia = [mediaItem, ...filtered];
+
+    // If mediaItem is linked to a specific job/task, also sync into task.proofMedia
+    let updatedTasks = card.tasks;
+    if (mediaItem.taskId && Array.isArray(card.tasks)) {
+      updatedTasks = card.tasks.map(t => {
+        if (t.id === mediaItem.taskId) {
+          const tExisting = Array.isArray(t.proofMedia) ? t.proofMedia : [];
+          const tFiltered = tExisting.filter(m => m.id !== mediaItem.id);
+          return {
+            ...t,
+            proofMedia: [mediaItem, ...tFiltered]
+          };
+        }
+        return t;
+      });
+    }
+
+    const newCard: JobCard = {
+      ...card,
+      proofMedia: updatedMedia,
+      tasks: updatedTasks
+    };
+    updatedCard = newCard;
+    return newCard;
+  });
+  return updatedCard;
+}
+
+export function deleteProofMediaFromJobCard(jobCardId: string, mediaId: string, storagePath?: string): boolean {
+  let success = false;
+  updateJobCard(jobCardId, (card) => {
+    const existing = Array.isArray(card.proofMedia) ? card.proofMedia : [];
+    const updatedMedia = existing.filter(m => m.id !== mediaId);
+
+    // Also remove from task.proofMedia if present
+    const updatedTasks = Array.isArray(card.tasks)
+      ? card.tasks.map(t => {
+          if (Array.isArray(t.proofMedia)) {
+            return {
+              ...t,
+              proofMedia: t.proofMedia.filter(m => m.id !== mediaId)
+            };
+          }
+          return t;
+        })
+      : card.tasks;
+
+    success = true;
+    return {
+      ...card,
+      proofMedia: updatedMedia,
+      tasks: updatedTasks
+    };
+  });
+
+  // Also notify server / Supabase storage asynchronously
+  if (storagePath || mediaId) {
+    fetch('/api/supabase/storage/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobCardId, mediaId, storagePath })
+    }).catch(err => console.warn('Async delete from storage error:', err));
+  }
+
+  return success;
+}
+
+export function getProofMediaForJobCard(jobCardId: string): ProofMediaItem[] {
+  const cards = getJobCards();
+  const card = cards.find(c => c.id === jobCardId);
+  return Array.isArray(card?.proofMedia) ? card.proofMedia : [];
+}
+
+/**
+ * Add a Supabase Storage attachment metadata item to JobCard ('job-attachments' bucket)
+ */
+export function addAttachmentToJobCard(jobCardId: string, attachment: JobAttachment): JobCard | null {
+  let updatedCard: JobCard | null = null;
+  updateJobCard(jobCardId, (card) => {
+    const existing = Array.isArray(card.attachments) ? card.attachments : [];
+    const filtered = existing.filter(a => a.id !== attachment.id);
+    const updatedAttachments = [attachment, ...filtered];
+
+    // Synchronize into proofMedia as well for unified media galleries
+    const existingProof = Array.isArray(card.proofMedia) ? card.proofMedia : [];
+    const proofExists = existingProof.some(p => p.id === attachment.id || p.url === attachment.url);
+    let updatedProofMedia = existingProof;
+    if (!proofExists) {
+      const mirrorProof: ProofMediaItem = {
+        id: attachment.id,
+        jobCardId: attachment.jobCardId,
+        taskId: attachment.taskId,
+        taskTitle: attachment.taskTitle,
+        vehicleNumber: card.vehicle?.registrationNumber,
+        customerName: card.customer?.name,
+        customerPhone: card.customer?.phone,
+        mediaType: attachment.fileType,
+        url: attachment.url,
+        storagePath: attachment.storagePath,
+        storageBucket: attachment.storageBucket,
+        title: attachment.caption || attachment.fileName,
+        category: (attachment.category as any) || 'DURING_REPAIR',
+        notes: attachment.caption || '',
+        capturedByEmployeeId: attachment.uploader?.id,
+        capturedByEmployeeName: attachment.uploader?.name,
+        capturedAt: attachment.timestamp,
+        fileSize: attachment.fileSize,
+        mimeType: attachment.mimeType
+      };
+      updatedProofMedia = [mirrorProof, ...existingProof];
+    }
+
+    const newCard: JobCard = {
+      ...card,
+      attachments: updatedAttachments,
+      proofMedia: updatedProofMedia
+    };
+    updatedCard = newCard;
+    return newCard;
+  });
+  return updatedCard;
+}
+
+export function deleteAttachmentFromJobCard(jobCardId: string, attachmentId: string, storagePath?: string, bucket: string = 'job-attachments'): boolean {
+  let success = false;
+  updateJobCard(jobCardId, (card) => {
+    const existing = Array.isArray(card.attachments) ? card.attachments : [];
+    const updatedAttachments = existing.filter(a => a.id !== attachmentId);
+
+    // Also remove from proofMedia if mirrored
+    const existingProof = Array.isArray(card.proofMedia) ? card.proofMedia : [];
+    const updatedProof = existingProof.filter(p => p.id !== attachmentId);
+
+    success = true;
+    return {
+      ...card,
+      attachments: updatedAttachments,
+      proofMedia: updatedProof
+    };
+  });
+
+  // Notify server / Supabase storage asynchronously
+  if (storagePath || attachmentId) {
+    fetch('/api/supabase/storage/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobCardId, mediaId: attachmentId, storagePath, bucket })
+    }).catch(err => console.warn('Async delete from storage error:', err));
+  }
+
+  return success;
+}
+
+export function getAttachmentsForJobCard(jobCardId: string): JobAttachment[] {
+  const cards = getJobCards();
+  const card = cards.find(c => c.id === jobCardId);
+  return Array.isArray(card?.attachments) ? card.attachments : [];
 }
 
 export function updateJobCardGSTInvoice(

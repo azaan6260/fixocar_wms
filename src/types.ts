@@ -323,6 +323,7 @@ export interface JobTask {
   outsourceChallanNumber?: string;
   outsourcedAt?: string;
   receivedBackAt?: string;
+  proofMedia?: ProofMediaItem[]; // Attached photos and videos for this specific task
 }
 
 export interface QCCheckitem {
@@ -686,6 +687,73 @@ export interface JobCard {
   checkOutDriverPhone?: string;
   checkOutPhotoWithDriverUrl?: string;
   checkOutDriverSignatureUrl?: string;
+
+  // Supabase Proof of Work Media (HD Photos & Videos)
+  proofMedia?: ProofMediaItem[];
+
+  // Supabase Storage Job Attachments ('job-attachments' bucket)
+  attachments?: JobAttachment[];
+}
+
+export interface JobAttachmentUploader {
+  id?: string;
+  name: string;
+  role?: string;
+}
+
+export interface JobAttachment {
+  id: string;
+  jobCardId: string;
+  taskId?: string;
+  taskTitle?: string;
+  url: string; // Public Supabase Storage URL
+  storagePath: string; // Path within 'job-attachments' bucket e.g. "JC-2026-104/1726210000_photo.jpg"
+  storageBucket: string; // 'job-attachments'
+  fileName: string;
+  fileType: 'image' | 'video';
+  mimeType?: string;
+  fileSize?: number; // compressed file size in bytes
+  originalSize?: number; // uncompressed original size in bytes
+  compressionRatio?: number; // percentage saved e.g. 74 (%)
+  timestamp: string; // ISO string upload time
+  uploader: JobAttachmentUploader;
+  caption?: string;
+  category?: ProofMediaCategory | string;
+}
+
+export type ProofMediaCategory = 
+  | 'INTAKE'
+  | 'BEFORE_REPAIR'
+  | 'DURING_REPAIR'
+  | 'AFTER_REPAIR_QC'
+  | 'DEFECTIVE_PART'
+  | 'GATE_EXIT'
+  | 'CUSTOMER_APPROVAL_NEEDED'
+  | 'OTHER';
+
+export interface ProofMediaItem {
+  id: string;
+  jobCardId: string;
+  taskId?: string; // Optional specific job/task within the job card
+  taskTitle?: string; // e.g. "Brake Pads Replacement"
+  vehicleNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
+  mediaType: 'image' | 'video';
+  url: string; // Public Supabase Storage URL
+  storagePath?: string; // Path in bucket e.g. "proof-of-work/JC-2026-104/1726210000-photo.jpg"
+  storageBucket?: string; // "proof-of-work"
+  title: string;
+  category: ProofMediaCategory;
+  notes?: string;
+  capturedByEmployeeId?: string;
+  capturedByEmployeeName?: string;
+  capturedAt: string; // ISO string
+  fileSize?: number;
+  originalSize?: number;
+  compressionRatio?: number;
+  durationSeconds?: number;
+  mimeType?: string;
 }
 
 export type ExpenseCategory = 

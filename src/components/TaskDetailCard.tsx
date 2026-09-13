@@ -12,8 +12,10 @@ import {
   consumeInventoryItemForTask,
   updateJobCardTask,
   deleteJobCardTask,
-  reassignAllPaintTasksForJobCard
+  reassignAllPaintTasksForJobCard,
+  getAuthUser
 } from '../lib/storage';
+import { ProofOfWorkModal } from './ProofOfWorkModal';
 import { 
   User, 
   UserCheck, 
@@ -37,7 +39,8 @@ import {
   Hammer,
   Paintbrush,
   ExternalLink,
-  Truck
+  Truck,
+  Camera
 } from 'lucide-react';
 
 interface TaskDetailCardProps {
@@ -61,6 +64,8 @@ export function TaskDetailCard({
   onRemoveTask
 }: TaskDetailCardProps) {
   const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
+  const currentUser = getAuthUser();
+  const [showProofModal, setShowProofModal] = useState(false);
 
   // Re-allot state
   const [isReallotting, setIsReallotting] = useState(false);
@@ -329,6 +334,16 @@ export function TaskDetailCard({
             {/* Re-allot, Edit Job & Delete Buttons for Managers/Admin */}
             {isManager && (
               <>
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(true)}
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  title="Upload or view proof photos and videos for this task"
+                >
+                  <Camera className="w-3 h-3" />
+                  <span>Proof ({task.proofMedia?.length || 0})</span>
+                </button>
+
                 <button
                   onClick={() => { setIsReallotting(!isReallotting); setIsEditingTask(false); }}
                   className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
@@ -641,6 +656,70 @@ export function TaskDetailCard({
             </button>
           </div>
         </form>
+      )}
+
+      {/* TASK-LEVEL PROOF OF WORK (PHOTOS & VIDEOS) */}
+      <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/40 space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <span className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Camera className="w-3.5 h-3.5 text-blue-500" />
+            Task Proof of Work ({task.proofMedia?.length || 0})
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowProofModal(true)}
+            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 shadow-xs transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            <Camera className="w-3 h-3" />
+            <span>+ Add Proof Photo/Video</span>
+          </button>
+        </div>
+
+        {task.proofMedia && task.proofMedia.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5">
+            {task.proofMedia.map((m) => (
+              <div 
+                key={m.id} 
+                onClick={() => setShowProofModal(true)}
+                className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 border border-blue-400/40 bg-slate-950 cursor-pointer group shadow-xs"
+                title={`${m.title} (${m.category})`}
+              >
+                {m.mediaType === 'video' ? (
+                  <video src={m.url} className="w-full h-full object-cover" />
+                ) : (
+                  <img 
+                    src={m.url} 
+                    alt={m.title} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                    referrerPolicy="no-referrer" 
+                  />
+                )}
+                <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold">
+                  View
+                </div>
+                <span className="absolute bottom-1 right-1 px-1 rounded bg-slate-950/80 text-[8px] text-white font-bold">
+                  {m.mediaType === 'video' ? '▶' : '📷'}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+            No work proof attached yet for this job. Upload photos or videos to document repair progress.
+          </p>
+        )}
+      </div>
+
+      {showProofModal && (
+        <ProofOfWorkModal
+          isOpen={showProofModal}
+          onClose={() => setShowProofModal(false)}
+          jobCard={card}
+          currentUser={currentUser}
+          initialTaskId={task.id}
+          initialCategory="DURING_REPAIR"
+        />
       )}
 
       {/* PARTS & CONSUMABLES LISTED UNDER THIS JOB */}

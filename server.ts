@@ -290,8 +290,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '25mb' }));
-  app.use(express.urlencoded({ limit: '25mb', extended: true }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // API Endpoints
   app.get('/api/health', (req, res) => {
@@ -1929,6 +1929,306 @@ Return valid JSON ONLY.`;
       configured: Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey)),
       config: saved
     });
+  });
+
+  // =======================================================
+  // =======================================================
+  // SUPABASE STORAGE: JOB ATTACHMENTS & PROOF MEDIA
+  // =======================================================
+
+  async function ensureStorageBucket(client: any, bucketName: string = 'job-attachments'): Promise<boolean> {
+    if (!client || !client.storage) return false;
+    try {
+      const { data: buckets, error: listErr } = await client.storage.listBuckets();
+      if (listErr) {
+        console.warn(`[SUPABASE_STORAGE] Error listing buckets for ${bucketName}:`, listErr);
+        return false;
+      }
+      const exists = buckets?.some((b: any) => b.name === bucketName);
+      if (!exists) {
+        const { error: createErr } = await client.storage.createBucket(bucketName, {
+          public: true,
+          fileSizeLimit: 52428800 // 50MB max per media file
+        });
+        if (createErr) {
+          console.warn(`[SUPABASE_STORAGE] Error creating ${bucketName} bucket:`, createErr);
+          return false;
+        }
+        console.log(`[SUPABASE_STORAGE] Created public bucket "${bucketName}" successfully.`);
+      }
+      return true;
+    } catch (err) {
+      console.warn(`[SUPABASE_STORAGE] Exception ensuring bucket ${bucketName}:`, err);
+      return false;
+    }
+  }
+
+  // GET storage bucket status and health
+  app.get('/api/supabase/storage/status', async (req, res) => {
+    const client = getSupabaseAdminClient();
+    if (!client) {
+      return res.json({ success: false, configured: false, error: 'Supabase client not configured' });
+    }
+    try {
+      await ensureStorageBucket(client, 'job-attachments');
+      await ensureStorageBucket(client, 'proof-of-work');
+      const { data: buckets } = await client.storage.listBuckets();
+      const attachmentsBucket = buckets?.find((b: any) => b.name === 'job-attachments');
+      
+      const persisted = loadPersistedSupabaseConfig() || {};
+      const url = persisted.supabaseUrl || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+
+      res.json({
+        success: true,
+        configured: true,
+        bucketReady: Boolean(attachmentsBucket),
+        bucket: attachmentsBucket || { name: 'job-attachments', public: true },
+        publicBaseUrl: `${url}/storage/v1/object/public/job-attachments`
+      });
+    } catch (err: any) {
+      res.json({ success: false, error: err.message });
+    }
+  });
+
+  // POST upload attachment / proof photo or video to Supabase Storage
+  app.post('/api/supabase/storage/upload', async (req, res) => {
+    try {
+      const {
+        bucket = 'job-attachments',
+        jobCardId,
+        taskId,
+        taskTitle,
+        fileName,
+        contentType,
+        fileBase64,
+        title,
+        category,
+        notes,
+        capturedByEmployeeId,
+        capturedByEmployeeName,
+        mediaType = 'image',
+        uploader,
+        originalSize,
+        compressedSize,
+        compressionRatio,
+        durationSeconds
+      } = req.body;
+
+      if (!jobCardId || !fileBase64) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Missing required parameters: jobCardId and fileBase64 are required.' 
+        });
+      }
+
+      const client = getSupabaseAdminClient();
+      let publicUrl = '';
+      let storagePath = '';
+      let fileSize = 0;
+
+      // Clean base64 string
+      const base64Data = fileBase64.replace(/^data:[^;]+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Data, 'base64');
+      fileSize = fileBuffer.length;
+
+      const safeJobCardId = String(jobCardId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const ext = fileName && fileName.includes('.') 
+        ? fileName.split('.').pop() 
+        : (mediaType === 'video' ? 'mp4' : 'jpg');
+      const safeFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      storagePath = `${safeJobCardId}/${safeFileName}`;
+
+      const mime = contentType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+
+      if (client && client.storage) {
+        await ensureStorageBucket(client, bucket);
+        const { error: uploadErr } = await client.storage
+          .from(bucket)
+          .upload(storagePath, fileBuffer, {
+            contentType: mime,
+            upsert: true
+          });
+
+        if (uploadErr) {
+          console.warn('[SUPABASE_STORAGE] Upload error:', uploadErr);
+          throw new Error(`Supabase Storage upload error: ${uploadErr.message}`);
+        }
+
+        const { data: urlData } = client.storage.from(bucket).getPublicUrl(storagePath);
+        publicUrl = urlData.publicUrl;
+      } else {
+        throw new Error('Supabase client is not configured.');
+      }
+
+      // Find job card in central store to append attachment & proof media
+      const store = loadCentralStore();
+      const jcIndex = store.jobCards.findIndex(j => j.id === jobCardId);
+      let vehicleNumber = '';
+      let customerName = '';
+      let customerPhone = '';
+      let matchedTaskTitle = taskTitle || '';
+
+      if (jcIndex !== -1) {
+        const targetCard = store.jobCards[jcIndex];
+        vehicleNumber = targetCard.vehicle?.registrationNumber || '';
+        customerName = targetCard.customer?.name || '';
+        customerPhone = targetCard.customer?.phone || '';
+
+        if (taskId && !matchedTaskTitle && Array.isArray(targetCard.tasks)) {
+          const matchedTask = targetCard.tasks.find((t: any) => t.id === taskId);
+          if (matchedTask) matchedTaskTitle = matchedTask.title;
+        }
+      }
+
+      const activeUploader = uploader || {
+        id: capturedByEmployeeId,
+        name: capturedByEmployeeName || 'Workshop Staff',
+        role: 'STAFF'
+      };
+
+      const newAttachment = {
+        id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        jobCardId,
+        taskId: taskId || undefined,
+        taskTitle: matchedTaskTitle || undefined,
+        url: publicUrl,
+        storagePath,
+        storageBucket: bucket,
+        fileName: fileName || safeFileName,
+        fileType: (mediaType as 'image' | 'video'),
+        mimeType: mime,
+        fileSize: compressedSize || fileSize,
+        originalSize: originalSize || fileSize,
+        compressionRatio: compressionRatio || 0,
+        timestamp: new Date().toISOString(),
+        uploader: activeUploader,
+        caption: notes || title || '',
+        category: category || 'DURING_REPAIR'
+      };
+
+      const newMediaItem = {
+        id: newAttachment.id,
+        jobCardId,
+        taskId: taskId || undefined,
+        taskTitle: matchedTaskTitle || undefined,
+        vehicleNumber,
+        customerName,
+        customerPhone,
+        mediaType: mediaType as 'image' | 'video',
+        url: publicUrl,
+        storagePath,
+        storageBucket: bucket,
+        title: title || (mediaType === 'video' ? 'Work Inspection Video' : 'Attachment Photo'),
+        category: category || 'DURING_REPAIR',
+        notes: notes || '',
+        capturedByEmployeeId: activeUploader.id || '',
+        capturedByEmployeeName: activeUploader.name || '',
+        capturedAt: newAttachment.timestamp,
+        fileSize: newAttachment.fileSize,
+        durationSeconds: durationSeconds || (mediaType === 'video' ? 10 : undefined),
+        mimeType: mime
+      };
+
+      if (jcIndex !== -1) {
+        // Save to attachments array
+        if (!Array.isArray(store.jobCards[jcIndex].attachments)) {
+          store.jobCards[jcIndex].attachments = [];
+        }
+        store.jobCards[jcIndex].attachments.unshift(newAttachment);
+
+        // Save to proofMedia array
+        if (!Array.isArray(store.jobCards[jcIndex].proofMedia)) {
+          store.jobCards[jcIndex].proofMedia = [];
+        }
+        store.jobCards[jcIndex].proofMedia.unshift(newMediaItem);
+
+        // Also add to the specific task if taskId provided
+        if (taskId && Array.isArray(store.jobCards[jcIndex].tasks)) {
+          const tIndex = store.jobCards[jcIndex].tasks.findIndex((t: any) => t.id === taskId);
+          if (tIndex !== -1) {
+            if (!Array.isArray(store.jobCards[jcIndex].tasks[tIndex].proofMedia)) {
+              store.jobCards[jcIndex].tasks[tIndex].proofMedia = [];
+            }
+            store.jobCards[jcIndex].tasks[tIndex].proofMedia.unshift(newMediaItem);
+          }
+        }
+
+        saveCentralStore(store);
+      }
+
+      res.json({
+        success: true,
+        attachment: newAttachment,
+        mediaItem: newMediaItem,
+        publicUrl
+      });
+    } catch (err: any) {
+      console.error('[SUPABASE_STORAGE] Upload exception:', err);
+      res.status(500).json({ success: false, error: err.message || 'Failed to upload attachment' });
+    }
+  });
+
+  // POST delete attachment or proof media from Supabase Storage and Job Card
+  app.post('/api/supabase/storage/delete', async (req, res) => {
+    try {
+      const { jobCardId, mediaId, storagePath, bucket = 'job-attachments' } = req.body;
+      const client = getSupabaseAdminClient();
+      if (client && client.storage && storagePath) {
+        await client.storage.from(bucket).remove([storagePath]);
+        // Also attempt removal from fallback bucket
+        if (bucket === 'job-attachments') {
+          client.storage.from('proof-of-work').remove([storagePath]).catch(() => {});
+        }
+      }
+
+      const store = loadCentralStore();
+      const jcIndex = store.jobCards.findIndex(j => j.id === jobCardId);
+      if (jcIndex !== -1) {
+        // Remove from attachments
+        if (Array.isArray(store.jobCards[jcIndex].attachments)) {
+          store.jobCards[jcIndex].attachments = store.jobCards[jcIndex].attachments.filter(
+            (a: any) => a.id !== mediaId
+          );
+        }
+
+        // Remove from proofMedia
+        if (Array.isArray(store.jobCards[jcIndex].proofMedia)) {
+          store.jobCards[jcIndex].proofMedia = store.jobCards[jcIndex].proofMedia.filter(
+            (m: any) => m.id !== mediaId
+          );
+        }
+
+        // Also delete from task proofMedia if present
+        if (Array.isArray(store.jobCards[jcIndex].tasks)) {
+          store.jobCards[jcIndex].tasks.forEach((t: any) => {
+            if (Array.isArray(t.proofMedia)) {
+              t.proofMedia = t.proofMedia.filter((m: any) => m.id !== mediaId);
+            }
+          });
+        }
+
+        saveCentralStore(store);
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // GET list proof of work media for a specific job card
+  app.get('/api/supabase/storage/list/:jobCardId', async (req, res) => {
+    try {
+      const { jobCardId } = req.params;
+      const store = loadCentralStore();
+      const card = store.jobCards.find(j => j.id === jobCardId);
+      res.json({
+        success: true,
+        proofMedia: card?.proofMedia || []
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // Helper: Post-Signup Hook to auto-push new users from auth layer to public.employees

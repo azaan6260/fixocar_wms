@@ -23,6 +23,8 @@ import {
 import { updateJobCard, dispatchToastNotification } from '../../lib/storage';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
 import { GSTInvoiceView } from '../GSTInvoiceView';
+import { ProofMediaGallery } from '../ProofMediaGallery';
+import { ProofOfWorkModal } from '../ProofOfWorkModal';
 
 interface TechnicianQualityPhaseProps {
   card: JobCard;
@@ -39,6 +41,7 @@ export function TechnicianQualityPhase({
 }: TechnicianQualityPhaseProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [showFullInvoice, setShowFullInvoice] = useState(false);
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
 
   // Billing calculations
   const totalTaskPrice = card.tasks
@@ -207,46 +210,12 @@ export function TechnicianQualityPhase({
         ))}
       </div>
 
-      {/* 3. Photo Proof Upload Preview */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="font-extrabold text-xs sm:text-sm text-white flex items-center gap-2">
-            <Camera className="w-4 h-4 text-amber-400" />
-            <span>काम का फोटो प्रमाण (Work Proof & Final Photos)</span>
-          </h4>
-          <span className="text-[10px] text-slate-400 font-mono">2 Photos Attached</span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="aspect-video rounded-2xl overflow-hidden border border-slate-700 relative group bg-slate-950">
-            <img 
-              src="https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&w=400&q=80" 
-              alt="Repaired Body Proof"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-slate-950/80 text-[9px] font-bold text-emerald-400 rounded-md">
-              ✓ Paint Finished
-            </span>
-          </div>
-
-          <div className="aspect-video rounded-2xl overflow-hidden border border-slate-700 relative group bg-slate-950">
-            <img 
-              src="https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=400&q=80" 
-              alt="Engine Bay Proof"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-slate-950/80 text-[9px] font-bold text-emerald-400 rounded-md">
-              ✓ Engine Tuned
-            </span>
-          </div>
-
-          <div className="aspect-video rounded-2xl border-2 border-dashed border-slate-700 hover:border-amber-400 text-slate-400 hover:text-amber-300 flex flex-col items-center justify-center p-2 cursor-pointer transition-colors bg-slate-800/40">
-            <Camera className="w-5 h-5 mb-1" />
-            <span className="text-[10px] font-bold">+ और फोटो जोड़ें</span>
-          </div>
-        </div>
+      {/* 3. Photo & Video Proof of Work (Supabase Cloud Storage) */}
+      <div className="space-y-3">
+        <ProofMediaGallery
+          jobCard={card}
+          onOpenAddModal={() => setIsProofModalOpen(true)}
+        />
       </div>
 
       {/* 4. FAST GATE CHECK-OUT & DELIVERY HANDOVER CARD */}
@@ -348,6 +317,16 @@ export function TechnicianQualityPhase({
         </div>
 
       </div>
+
+      {/* Proof of Work Capture Modal (Supabase Cloud Storage) */}
+      {isProofModalOpen && (
+        <ProofOfWorkModal
+          isOpen={isProofModalOpen}
+          onClose={() => setIsProofModalOpen(false)}
+          jobCard={card}
+          initialCategory="AFTER_REPAIR_QC"
+        />
+      )}
 
     </div>
   );

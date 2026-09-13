@@ -5,8 +5,10 @@ import {
   addRequisitionToTask, 
   addConcernToTask,
   updateJobCardTask,
-  dispatchToastNotification 
+  dispatchToastNotification,
+  getAuthUser
 } from '../lib/storage';
+import { ProofOfWorkModal } from './ProofOfWorkModal';
 import { 
   getVernacularTaskInfo, 
   CATEGORY_HINDI_MAP, 
@@ -80,7 +82,6 @@ export function TechnicianTaskCard({
   const [showPartReqModal, setShowPartReqModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [photoUrlInput, setPhotoUrlInput] = useState('');
   const [showDetails, setShowDetails] = useState(false);
 
   // Quick Part Requisition State
@@ -204,27 +205,6 @@ export function TechnicianTaskCard({
 
     setShowIssueModal(false);
     setCustomIssueText('');
-  };
-
-  // Add Photo Proof
-  const handleSavePhotoProof = () => {
-    if (!photoUrlInput.trim()) return;
-
-    // Attach as task note / proof
-    updateJobCardTask(card.id, task.id, {
-      notes: `${task.notes ? task.notes + '\n' : ''}[PHOTO PROOF]: ${photoUrlInput.trim()}`
-    });
-
-    dispatchToastNotification({
-      type: 'JOB_CARD_CREATED',
-      title: `📸 Photo Proof Saved (फोटो सेव हुई)`,
-      message: `Attached photo evidence to ${task.title}.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
-
-    setShowPhotoModal(false);
-    setPhotoUrlInput('');
   };
 
   return (
@@ -393,7 +373,7 @@ export function TechnicianTaskCard({
             className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-blue-500/10 dark:hover:bg-blue-500/20 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
           >
             <Camera className="w-4 h-4 text-blue-500" />
-            <span>📸 फोटो लें</span>
+            <span>📸 फोटो प्रमाण {task.proofMedia && task.proofMedia.length > 0 ? `(${task.proofMedia.length})` : ''}</span>
           </button>
 
           {/* Button 3: Raise Issue */}
@@ -406,6 +386,50 @@ export function TechnicianTaskCard({
             <span>⚠️ समस्या / मदद</span>
           </button>
         </div>
+
+        {/* Task-Specific Proof Media Thumbnail Strip */}
+        {task.proofMedia && task.proofMedia.length > 0 && (
+          <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-blue-500" />
+                <span>इस कार्य के फोटो/वीडियो प्रमाण ({task.proofMedia.length}):</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPhotoModal(true)}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                + और फोटो लें
+              </button>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {task.proofMedia.map((m) => (
+                <div 
+                  key={m.id} 
+                  onClick={() => setShowPhotoModal(true)}
+                  className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-blue-500/40 bg-slate-950 cursor-pointer group shadow-xs"
+                  title={`${m.title} - Click to open`}
+                >
+                  {m.mediaType === 'video' ? (
+                    <video src={m.url} className="w-full h-full object-cover" />
+                  ) : (
+                    <img 
+                      src={m.url} 
+                      alt={m.title} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                      referrerPolicy="no-referrer" 
+                    />
+                  )}
+                  <span className="absolute bottom-1 right-1 px-1 rounded bg-slate-950/85 text-[9px] text-white font-bold">
+                    {m.mediaType === 'video' ? '▶' : '📷'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Existing Parts / Requisitions / Issues Counter */}
         {((task.partsList && task.partsList.length > 0) || (task.requisitions && task.requisitions.length > 0) || (task.concerns && task.concerns.length > 0)) && (
@@ -661,83 +685,19 @@ export function TechnicianTaskCard({
         </div>
       )}
 
-      {/* POPUP 3: QUICK PHOTO PROOF ATTACH MODAL */}
+      {/* POPUP 3: PROOF OF WORK MODAL (Supabase Storage, Camera, Task-level binding & WhatsApp Sharing) */}
       {showPhotoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-3 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-5 space-y-4 shadow-2xl">
-            
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center font-bold">
-                  📸
-                </div>
-                <div>
-                  <h4 className="font-black text-slate-900 dark:text-white text-base">काम का फोटो जोड़ें</h4>
-                  <p className="text-xs text-slate-400">काम की पुष्टि के लिए फोटो का लिंक डालें</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowPhotoModal(false)}
-                className="p-2 text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {/* Quick sample photo presets for instant tap */}
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
-                फ़ोटो का लिंक या सैंपल चुनें:
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { name: 'नया पार्ट फिटिंग', url: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=600&q=80' },
-                  { name: 'डेंटिंग / प्राइमर', url: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=600&q=80' },
-                  { name: 'पेंट फाइनल फ़िनिश', url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80' },
-                  { name: 'इंजन ऑयल बदला', url: 'https://images.unsplash.com/photo-1580273916550-e323be2ae537?auto=format&fit=crop&w=600&q=80' }
-                ].map((sample, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setPhotoUrlInput(sample.url)}
-                    className="p-2 rounded-xl text-left text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-slate-800 dark:text-slate-200 font-medium truncate"
-                  >
-                    📸 {sample.name}
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="text"
-                value={photoUrlInput}
-                onChange={(e) => setPhotoUrlInput(e.target.value)}
-                placeholder="या फ़ोटो URL पेस्ट करें..."
-                className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white mt-2 focus:outline-hidden focus:border-blue-500"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowPhotoModal(false)}
-                className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
-              >
-                रद्द करें
-              </button>
-              <button
-                type="button"
-                onClick={handleSavePhotoProof}
-                disabled={!photoUrlInput.trim()}
-                className="w-2/3 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50"
-              >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>फ़ोटो सेव करें</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
+        <ProofOfWorkModal
+          isOpen={showPhotoModal}
+          onClose={() => setShowPhotoModal(false)}
+          jobCard={card}
+          currentUser={getAuthUser()}
+          initialTaskId={task.id}
+          initialCategory="DURING_REPAIR"
+          onUploaded={() => {
+            if (onStatusUpdated) onStatusUpdated();
+          }}
+        />
       )}
 
     </div>
