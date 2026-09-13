@@ -1264,20 +1264,22 @@ export function JobCardDetailView({
                       <h4 className="font-extrabold text-sm text-white">Department Task Allotments</h4>
                       <p className="text-xs text-slate-400">Manage labor contractor payouts and assigned mechanics</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setIsStandardCatalogOpen(true)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs"
-                      >
-                        ⚡ 1-Click Standard Jobs
-                      </button>
-                      <button
-                        onClick={() => setShowAddTask(true)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs"
-                      >
-                        + Custom Task
-                      </button>
-                    </div>
+                    {isManagerOrHigher && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsStandardCatalogOpen(true)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs"
+                        >
+                          ⚡ 1-Click Standard Jobs
+                        </button>
+                        <button
+                          onClick={() => setShowAddTask(true)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs"
+                        >
+                          + Custom Task
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">

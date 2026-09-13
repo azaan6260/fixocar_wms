@@ -419,15 +419,17 @@ export function TaskDetailCard({
             </button>
           ))}
 
-          <button
-            type="button"
-            onClick={handleDeleteTaskSubmit}
-            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1 shadow-xs shrink-0"
-            title="Remove job from card"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Remove</span>
-          </button>
+          {isManager && (
+            <button
+              type="button"
+              onClick={handleDeleteTaskSubmit}
+              className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1 shadow-xs shrink-0"
+              title="Remove job from card"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1210,8 +1212,8 @@ export function TaskDetailCard({
         </div>
       )}
 
-      {/* 🛠️ AR VEHICLE BODY INSPECTION MARKUP (For Painters & Denters) */}
-      {(currentRole === 'PAINTER' || currentRole === 'DENTER') && (
+      {/* 🛠️ AR VEHICLE BODY INSPECTION MARKUP (Only for Painting & Denting Jobs) */}
+      {(task.category === 'PAINT' || task.category === 'DENTING') && (currentRole === 'PAINTER' || currentRole === 'DENTER' || isManager) && (
         <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
           <button
             type="button"
