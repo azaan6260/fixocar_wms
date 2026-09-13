@@ -15,6 +15,7 @@ import {
   reassignAllPaintTasksForJobCard,
   getAuthUser
 } from '../lib/storage';
+import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { ProofOfWorkModal } from './ProofOfWorkModal';
 import { 
   User, 
@@ -66,6 +67,7 @@ export function TaskDetailCard({
   const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
   const currentUser = getAuthUser();
   const [showProofModal, setShowProofModal] = useState(false);
+  const [showARMap, setShowARMap] = useState(true);
 
   // Re-allot state
   const [isReallotting, setIsReallotting] = useState(false);
@@ -384,9 +386,11 @@ export function TaskDetailCard({
               </>
             )}
 
-            <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-              Billing: ₹{(task.customerPrice || 0).toLocaleString('en-IN')}
-            </div>
+            {isManager && (
+              <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                Billing: ₹{(task.customerPrice || 0).toLocaleString('en-IN')}
+              </div>
+            )}
 
             {(task.isContractBasis || (task.contractorPayout && task.contractorPayout > 0)) && (
               <div className="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-black flex items-center gap-1">
@@ -1203,6 +1207,49 @@ export function TaskDetailCard({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 🛠️ AR VEHICLE BODY INSPECTION MARKUP (For Painters & Denters) */}
+      {(currentRole === 'PAINTER' || currentRole === 'DENTER') && (
+        <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowARMap(!showARMap)}
+            className="w-full flex items-center justify-between text-left font-extrabold text-xs text-amber-400 uppercase tracking-wider bg-slate-900/60 p-2 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-900"
+          >
+            <span className="flex items-center gap-1.5">
+              <span>🎯</span>
+              <span>Allotted {currentRole === 'PAINTER' ? 'Painting' : 'Denting'} Panels (AR View)</span>
+            </span>
+            <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-md font-mono">
+              {showARMap ? 'Hide AR Image ⬆' : 'Show AR Image ⬇'}
+            </span>
+          </button>
+
+          {showARMap && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="border border-slate-800 rounded-2xl bg-slate-900/40 p-2 overflow-hidden">
+                <InteractiveVehicleInspectionChart
+                  mode="VIEW"
+                  selectedPanelIds={
+                    card.tasks
+                      .filter(t => t.panelKey && (
+                        (currentRole === 'PAINTER' && t.category === 'PAINT') ||
+                        (currentRole === 'DENTER' && t.category === 'DENTING')
+                      ))
+                      .map(t => t.panelKey as string)
+                  }
+                  compact={true}
+                  currentRole={currentRole}
+                  vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 italic text-center">
+                Highlighted panels show the complete {currentRole === 'PAINTER' ? 'painting' : 'denting'} workload for {card.vehicle.registrationNumber}.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

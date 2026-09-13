@@ -169,17 +169,7 @@ export function RoleWorkspaceView({
         />
       )}
 
-      {/* DENTER / PAINTER INTERACTIVE AR BODY PANEL SKETCH & DAMAGE CHART */}
-      {(currentRole === 'DENTER' || currentRole === 'PAINTER') && (
-        <InteractiveVehicleInspectionChart
-          currentRole={currentRole}
-          mode="VIEW"
-          selectedPanelIds={selectedPanel ? [selectedPanel] : []}
-          onPanelToggle={(panelId) => {
-            setSelectedPanel(prev => prev === panelId ? null : panelId);
-          }}
-        />
-      )}
+
 
       {/* Role Tasks List */}
       <div className="space-y-4">

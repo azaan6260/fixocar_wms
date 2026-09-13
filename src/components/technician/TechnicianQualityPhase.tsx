@@ -20,7 +20,7 @@ import {
   Truck,
   Printer
 } from 'lucide-react';
-import { updateJobCard, dispatchToastNotification } from '../../lib/storage';
+import { updateJobCard, dispatchToastNotification, getAuthUser } from '../../lib/storage';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
 import { GSTInvoiceView } from '../GSTInvoiceView';
 import { ProofMediaGallery } from '../ProofMediaGallery';
@@ -42,6 +42,9 @@ export function TechnicianQualityPhase({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [showFullInvoice, setShowFullInvoice] = useState(false);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+
+  const currentUser = getAuthUser();
+  const isManager = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentUser?.role || '');
 
   // Billing calculations
   const totalTaskPrice = card.tasks
@@ -263,25 +266,27 @@ export function TechnicianQualityPhase({
       </div>
 
       {/* 5. Bill Summary & WhatsApp customer notification */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">कुल बिल (Total Bill)</span>
-          <p className="text-xl font-black font-mono text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">GST 18% सहित कुल राशि</span>
-        </div>
+      {isManager && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">कुल बिल (Total Bill)</span>
+            <p className="text-xl font-black font-mono text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">GST 18% सहित कुल राशि</span>
+          </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">एडवांस प्राप्त (Advance Paid)</span>
-          <p className="text-xl font-black font-mono text-blue-400">₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">जमा एडवांस रकम</span>
-        </div>
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">एडवांस प्राप्त (Advance Paid)</span>
+            <p className="text-xl font-black font-mono text-blue-400">₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">जमा एडवांस रकम</span>
+          </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">बाकी भुगतान (Balance Due)</span>
-          <p className="text-xl font-black font-mono text-amber-400">₹{balanceDue.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">{balanceDue === 0 ? '✓ पूरा चुकता (Paid)' : 'डिलीवरी पर देय'}</span>
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">बाकी भुगतान (Balance Due)</span>
+            <p className="text-xl font-black font-mono text-amber-400">₹{balanceDue.toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">{balanceDue === 0 ? '✓ पूरा चुकता (Paid)' : 'डिलीवरी पर देय'}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 6. Stepper Bottom Navigation */}
       <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border-2 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">

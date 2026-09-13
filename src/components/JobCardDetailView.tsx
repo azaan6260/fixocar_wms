@@ -638,49 +638,53 @@ export function JobCardDetailView({
             </button>
 
             {/* View Mode Toggle: Technician Stepper vs Manager Suite */}
-            <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
-              <button
-                type="button"
-                onClick={() => setViewMode('TECHNICIAN')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  viewMode === 'TECHNICIAN'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <span>👷</span>
-                <span>मिस्त्री मोड (Stepper)</span>
-              </button>
+            {isManagerOrHigher && (
+              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('TECHNICIAN')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    viewMode === 'TECHNICIAN'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>👷</span>
+                  <span>मिस्त्री मोड (Stepper)</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setViewMode('MANAGER')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  viewMode === 'MANAGER'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <span>👔</span>
-                <span>मैनेजर मोड (Full)</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('MANAGER')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    viewMode === 'MANAGER'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>👔</span>
+                  <span>मैनेजर मोड (Full)</span>
+                </button>
+              </div>
+            )}
 
             {/* Delete Job Card Button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm(`🗑️ Delete Job Card ${card.id}?\n\nVehicle: ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model})\nCustomer: ${card.customer.name}\nStatus: ${card.status}\n\nAre you sure you want to permanently delete this job card? This action cannot be undone.`)) {
-                  deleteJobCard(card.id);
-                  onClose();
-                }
-              }}
-              className="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500 text-rose-400 hover:text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
-              title="Delete this active Job Card"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span className="hidden md:inline">Delete Job Card</span>
-            </button>
+            {isManagerOrHigher && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`🗑️ Delete Job Card ${card.id}?\n\nVehicle: ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model})\nCustomer: ${card.customer.name}\nStatus: ${card.status}\n\nAre you sure you want to permanently delete this job card? This action cannot be undone.`)) {
+                    deleteJobCard(card.id);
+                    onClose();
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500 text-rose-400 hover:text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                title="Delete this active Job Card"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden md:inline">Delete Job Card</span>
+              </button>
+            )}
 
             {/* Close modal */}
             <button

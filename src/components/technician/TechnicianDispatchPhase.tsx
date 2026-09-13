@@ -17,6 +17,7 @@ import {
   Car
 } from 'lucide-react';
 import { GSTInvoiceView } from '../GSTInvoiceView';
+import { getAuthUser } from '../../lib/storage';
 
 interface TechnicianDispatchPhaseProps {
   card: JobCard;
@@ -30,6 +31,9 @@ export function TechnicianDispatchPhase({
   onBackToQC
 }: TechnicianDispatchPhaseProps) {
   const [showFullInvoice, setShowFullInvoice] = useState(false);
+
+  const currentUser = getAuthUser();
+  const isManager = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentUser?.role || '');
 
   // Billing calculations
   const totalTaskPrice = card.tasks
@@ -92,68 +96,70 @@ export function TechnicianDispatchPhase({
       </div>
 
       {/* 2. Bill Settlement & Accounting Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">कुल बिल (Total Bill)</span>
-          <p className="text-xl font-black font-mono text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">GST 18% सहित कुल राशि</span>
-        </div>
+      {isManager && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">कुल बिल (Total Bill)</span>
+            <p className="text-xl font-black font-mono text-emerald-400">₹{grandTotal.toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">GST 18% सहित कुल राशि</span>
+          </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">एडवांस प्राप्त (Advance Paid)</span>
-          <p className="text-xl font-black font-mono text-blue-400">₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">जमा एडवांस रकम</span>
-        </div>
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">एडवांस प्राप्त (Advance Paid)</span>
+            <p className="text-xl font-black font-mono text-blue-400">₹{(card.advancePaid || 0).toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">जमा एडवांस रकम</span>
+          </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">बाकी भुगतान (Balance Due)</span>
-          <p className="text-xl font-black font-mono text-amber-400">₹{balanceDue.toLocaleString('en-IN')}</p>
-          <span className="text-[11px] text-slate-400">{balanceDue === 0 ? '✓ पूरा चुकता (Paid)' : 'डिलीवरी पर देय'}</span>
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-white space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">बाकी भुगतान (Balance Due)</span>
+            <p className="text-xl font-black font-mono text-amber-400">₹{balanceDue.toLocaleString('en-IN')}</p>
+            <span className="text-[11px] text-slate-400">{balanceDue === 0 ? '✓ पूरा चुकता (Paid)' : 'डिलीवरी पर देय'}</span>
+          </div>
         </div>
-
-      </div>
+      )}
 
       {/* 3. Fast Actions: WhatsApp Customer & GST Invoice */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-amber-400" />
-              <span>जीएसटी इनवॉइस व ग्राहक सूचना (GST Bill & Customer Receipt)</span>
-            </h4>
-            <p className="text-xs text-slate-400 mt-0.5">
-              ग्राहक {card.customer.name} ({card.customer.phone})
-            </p>
+      {isManager && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400" />
+                <span>जीएसटी इनवॉइस व ग्राहक सूचना (GST Bill & Customer Receipt)</span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                ग्राहक {card.customer.name} ({card.customer.phone})
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <a
+                href={`https://wa.me/${card.customer.phone.replace(/[^0-9]/g, '')}?text=Namaste%20${encodeURIComponent(card.customer.name)},%20your%20vehicle%20${encodeURIComponent(card.vehicle.registrationNumber)}%20is%20repaired%20and%20ready%20for%20delivery!%20Total%20Bill:%20INR%20${grandTotal}.`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>WhatsApp पर भेजें</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setShowFullInvoice(prev => !prev)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-slate-700"
+              >
+                {showFullInvoice ? 'इनवॉइस छुपाएं' : '📄 पूरा इनवॉइस देखें'}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <a
-              href={`https://wa.me/${card.customer.phone.replace(/[^0-9]/g, '')}?text=Namaste%20${encodeURIComponent(card.customer.name)},%20your%20vehicle%20${encodeURIComponent(card.vehicle.registrationNumber)}%20is%20repaired%20and%20ready%20for%20delivery!%20Total%20Bill:%20INR%20${grandTotal}.`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>WhatsApp पर भेजें</span>
-            </a>
-
-            <button
-              type="button"
-              onClick={() => setShowFullInvoice(prev => !prev)}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs border border-slate-700"
-            >
-              {showFullInvoice ? 'इनवॉइस छुपाएं' : '📄 पूरा इनवॉइस देखें'}
-            </button>
-          </div>
+          {showFullInvoice && (
+            <div className="pt-3 border-t border-slate-800">
+              <GSTInvoiceView card={card} currentRole="FLOOR_MANAGER" />
+            </div>
+          )}
         </div>
-
-        {showFullInvoice && (
-          <div className="pt-3 border-t border-slate-800">
-            <GSTInvoiceView card={card} currentRole="FLOOR_MANAGER" />
-          </div>
-        )}
-      </div>
+      )}
 
       {/* 4. Stepper Bottom Navigation */}
       <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border-2 border-slate-800 flex items-center justify-between gap-4 shadow-xl">
