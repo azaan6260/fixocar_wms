@@ -810,6 +810,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           workshopName: c.workshop_name || c.workshopName,
           isCars24: Boolean(c.is_cars24 ?? c.isCars24),
           cars24RefNo: c.cars24_ref_no || c.cars24RefNo,
+          isUrgent: Boolean(c.is_urgent ?? c.isUrgent),
+          huddleNotes: c.huddle_notes || c.notes || c.huddleNotes || undefined,
           tasks,
           qcChecklist,
           comments,
@@ -819,7 +821,20 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       });
 
       const currentLocal = getAllJobCards();
-      const mergedCards = [...supaCards];
+      const localMap = new Map<string, JobCard>(currentLocal.map(c => [String(c.id), c]));
+
+      const mergedCards = supaCards.map(sc => {
+        const local = localMap.get(String(sc.id));
+        if (!local) return sc;
+        return {
+          ...sc,
+          // Preserve local target completion date and urgency if remote is empty
+          estimatedCompletionDate: sc.estimatedCompletionDate || local.estimatedCompletionDate,
+          isUrgent: sc.isUrgent !== undefined ? sc.isUrgent : Boolean(local.isUrgent),
+          huddleNotes: sc.huddleNotes || local.huddleNotes
+        };
+      });
+
       for (const loc of currentLocal) {
         if (!mergedCards.some(m => String(m.id) === String(loc.id))) {
           mergedCards.push(loc);

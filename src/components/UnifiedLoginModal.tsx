@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2, Zap
+  X, Lock, Mail, User, ShieldCheck, Wrench, AlertCircle, ArrowRight, Phone, MapPin, Building2, Fingerprint, ScanFace, Smartphone, CheckCircle2
 } from 'lucide-react';
 import { AuthUser } from '../types';
 import { authenticateUser, saveAuthUser, getCities, getEmployees, saveEmployees } from '../lib/storage';
@@ -21,6 +21,7 @@ interface UnifiedLoginModalProps {
   initialTab?: 'STAFF' | 'CUSTOMER';
   defaultTab?: 'STAFF' | 'CUSTOMER';
   forcedMode?: 'STAFF' | 'CUSTOMER';
+  isEmbedded?: boolean;
 }
 
 export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
@@ -30,6 +31,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
   initialTab = 'CUSTOMER',
   defaultTab,
   forcedMode,
+  isEmbedded = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'STAFF' | 'CUSTOMER'>(forcedMode || defaultTab || initialTab);
   const [identifier, setIdentifier] = useState('');
@@ -207,64 +209,65 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative">
-        
-        {/* Dynamic Database Sync & Login Progress Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 z-50 bg-slate-950/95 flex flex-col items-center justify-center p-6 space-y-4">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Wrench className="w-6 h-6 text-blue-400 animate-pulse" />
-              </div>
+  const modalContent = (
+    <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative">
+      
+      {/* Dynamic Database Sync & Login Progress Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-50 bg-slate-950/95 flex flex-col items-center justify-center p-6 space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Wrench className="w-6 h-6 text-blue-400 animate-pulse" />
             </div>
-            <div className="text-center space-y-1.5">
-              <h3 className="text-base font-black text-white tracking-tight">
-                Preparing Workspace
-              </h3>
-              <p className="text-xs text-slate-400 font-medium px-4 max-w-xs mx-auto">
-                {syncStatus || 'Loading operations database...'}
-              </p>
-            </div>
-            <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '100%' }} />
-            </div>
-            <p className="text-[10px] text-slate-500 font-mono">
-              Do not close or refresh this page
+          </div>
+          <div className="text-center space-y-1.5">
+            <h3 className="text-base font-black text-white tracking-tight">
+              Preparing Workspace
+            </h3>
+            <p className="text-xs text-slate-400 font-medium px-4 max-w-xs mx-auto">
+              {syncStatus || 'Loading operations database...'}
             </p>
           </div>
-        )}
-
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-800/80 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              {activeTab === 'STAFF' ? (
-                <ShieldCheck className="w-5 h-5 text-white" />
-              ) : (
-                <User className="w-5 h-5 text-white" />
-              )}
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-white tracking-tight">
-                {activeTab === 'STAFF' ? 'WMS Staff & Admin Login' : 'Customer Portal Sign In'}
-              </h2>
-              <p className="text-xs text-slate-400">
-                {activeTab === 'STAFF' 
-                  ? 'Access allotted tasks & workshop operations' 
-                  : 'Track your car live, view invoices & book services'}
-              </p>
-            </div>
+          <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '100%' }} />
           </div>
+          <p className="text-[10px] text-slate-500 font-mono">
+            Do not close or refresh this page
+          </p>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="px-6 pt-6 pb-4 border-b border-slate-800/80 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            {activeTab === 'STAFF' ? (
+              <ShieldCheck className="w-5 h-5 text-white" />
+            ) : (
+              <User className="w-5 h-5 text-white" />
+            )}
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-white tracking-tight">
+              {activeTab === 'STAFF' ? 'WMS Staff & Admin Login' : 'Customer Portal Sign In'}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {activeTab === 'STAFF' 
+                ? 'Access allotted tasks & workshop operations' 
+                : 'Track your car live, view invoices & book services'}
+            </p>
+          </div>
+        </div>
+        {!isEmbedded && (
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
-        </div>
+        )}
+      </div>
 
         {/* Tab Selection (only if not forced) */}
         {!forcedMode && (
@@ -427,39 +430,13 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                   </div>
                 </div>
 
-                {/* 1-Tap Quick Demo Admin Login */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIdentifier('admin@fixocar.com');
-                    setPassword('123456');
-                    setIsLoading(true);
-                    setError(null);
-                    const res = authenticateUser('admin@fixocar.com', '123456', { isCustomerLogin: false });
-                    if (res.success && res.user) {
-                      saveAuthUser(res.user);
-                      try { await syncFromSupabase(); } catch {}
-                      setIsLoading(false);
-                      onLoginSuccess(res.user);
-                      onClose();
-                    } else {
-                      setIsLoading(false);
-                      setError('Failed to authenticate demo admin.');
-                    }
-                  }}
-                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 text-amber-300 fill-amber-300 animate-bounce" />
-                  <span>1-Tap Demo Admin Sign-In (Load All Mobile Data)</span>
-                </button>
-
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2.5">
+                <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
-                    <div className="text-white font-bold">Default Work Emails for Sign In:</div>
-                    <div>• Super Admin: <span className="text-emerald-300 font-mono font-bold">admin@fixocar.com</span></div>
-                    <div>• Admin: <span className="text-emerald-300 font-mono font-bold">taifur@fixocar.com</span></div>
-                    <div>• Work Password: <span className="text-white font-mono font-bold">123456</span></div>
+                    <div className="text-white font-bold">Standard Workshop Credentials:</div>
+                    <div className="text-[10px] text-slate-400">
+                      You can also type any team member email from the Staff Directory. Password: <span className="text-white font-mono font-bold">123456</span>
+                    </div>
                   </div>
                 </div>
               </>
@@ -552,6 +529,19 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         </div>
 
       </div>
+  );
+
+  if (isEmbedded) {
+    return (
+      <div className="w-full">
+        {modalContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+      {modalContent}
     </div>
   );
 };

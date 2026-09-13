@@ -180,6 +180,12 @@ export default function App() {
   const handleLogout = () => {
     logoutAuthUser();
     setAuthUser(null);
+    setCurrentRole('MECHANIC');
+    setActiveTab('dashboard');
+    setSelectedJobCardId(null);
+    setCustomerPortalCardId(null);
+    setQcModalCardId(null);
+    setQrModalCardId(null);
   };
 
   // Subscribe to storage updates & sync from Supabase on startup and periodically
@@ -313,6 +319,7 @@ export default function App() {
 
           <UnifiedLoginModal
             isOpen={true}
+            isEmbedded={true}
             initialTab="STAFF"
             onClose={() => {}}
             onLoginSuccess={handleLoginSuccess}
@@ -546,6 +553,7 @@ export default function App() {
         onOpenScanner={() => setIsScannerOpen(true)}
         onOpenNewJobCard={() => setIsCreateModalOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onLogout={handleLogout}
         currentRole={currentRole}
       />
 

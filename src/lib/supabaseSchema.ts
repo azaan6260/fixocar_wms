@@ -289,6 +289,8 @@ ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_id text;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS floor_manager_name text;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS is_cars24 boolean DEFAULT false;
 ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS cars24_ref_no text;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS is_urgent boolean DEFAULT false;
+ALTER TABLE public.job_cards ADD COLUMN IF NOT EXISTS estimated_completion_date timestamp with time zone;
 ALTER TABLE public.job_cards ALTER COLUMN status TYPE text USING status::text;
 
 CREATE TABLE IF NOT EXISTS public.job_card_history (

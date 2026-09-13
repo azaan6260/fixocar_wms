@@ -230,6 +230,9 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
           advance_paid: card.advancePaid || 0,
           qc_passed: card.qcPassed || false,
           qc_notes: card.qcNotes || null,
+          is_urgent: Boolean(card.isUrgent),
+          estimated_completion_date: card.estimatedCompletionDate || null,
+          notes: card.notes || card.huddleNotes || null,
           updated_at: new Date().toISOString()
         };
 
@@ -3011,22 +3014,7 @@ export function getAuthUser(): AuthUser | null {
   }
 
   if (!raw) {
-    console.log('[AUTH_TRACE] getAuthUser: No session found in localStorage or cookie. Auto-initializing Super Admin session.');
-    const defaultUser: AuthUser = {
-      id: DEFAULT_SUPER_ADMIN.id,
-      name: DEFAULT_SUPER_ADMIN.name,
-      loginId: DEFAULT_SUPER_ADMIN.loginId || 'admin@fixocar.com',
-      email: DEFAULT_SUPER_ADMIN.email,
-      role: DEFAULT_SUPER_ADMIN.role,
-      userType: 'ADMIN',
-      cityId: 'ALL',
-      cityName: 'All Cities',
-      workshopId: 'ALL',
-      workshopName: 'All Workshops',
-      loggedInAt: new Date().toISOString()
-    };
-    saveAuthUser(defaultUser);
-    return defaultUser;
+    return null;
   }
 
   try {

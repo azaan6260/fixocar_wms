@@ -634,6 +634,7 @@ export interface JobCard {
   createdAt: string;
   estimatedCompletionDate: string;
   isUrgent?: boolean; // Flag to prioritize job card in Daily Standup Huddle
+  huddleNotes?: string; // Specific daily standup notes, impediments or blockers for this vehicle
   vehicle: Vehicle;
   customer: Customer;
   status: JobCardStatus;

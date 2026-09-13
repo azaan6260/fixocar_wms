@@ -15,7 +15,8 @@ import {
   Receipt,
   Users,
   Settings,
-  Flame
+  Flame,
+  LogOut
 } from 'lucide-react';
 import { getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { triggerLightHaptic, triggerMediumHaptic } from '../lib/mobileBridge';
@@ -26,6 +27,7 @@ interface MobileBottomNavProps {
   onOpenScanner: () => void;
   onOpenNewJobCard: () => void;
   onOpenSupabaseModal: () => void;
+  onLogout?: () => void;
   currentRole: string;
 }
 
@@ -35,6 +37,7 @@ export function MobileBottomNav({
   onOpenScanner,
   onOpenNewJobCard,
   onOpenSupabaseModal,
+  onLogout,
   currentRole
 }: MobileBottomNavProps) {
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
@@ -224,6 +227,21 @@ export function MobileBottomNav({
                   >
                     <Settings className="w-4 h-4 text-slate-400" />
                     <span className="text-[11px] font-bold">Cloud DB</span>
+                  </button>
+                )}
+
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerMediumHaptic();
+                      setQuickMenuOpen(false);
+                      onLogout();
+                    }}
+                    className="p-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/40 flex flex-col items-center text-center gap-1 text-rose-300 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    <span className="text-[11px] font-bold">Sign Out</span>
                   </button>
                 )}
               </div>

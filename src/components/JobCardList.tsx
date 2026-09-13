@@ -23,11 +23,25 @@ import {
   Clock,
   Archive,
   Check,
-  Trash2
+  Trash2,
+  ArrowUpDown
 } from 'lucide-react';
 import { deleteJobCard } from '../lib/storage';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
+import { 
+  getDeadlineInfo, 
+  calculateJobCardPriorityScore, 
+  calculateJobCardStatusRank, 
+  parseDateOnly 
+} from '../lib/urgencyHelper';
+
+export type JobCardSortOption = 
+  | 'PRIORITY'
+  | 'TARGET_DATE_ASC'
+  | 'DATE_NEWEST'
+  | 'DATE_OLDEST'
+  | 'STATUS';
 
 interface JobCardListProps {
   jobCards: JobCard[];
@@ -65,6 +79,7 @@ export function JobCardList({
   const [searchTerm, setSearchTerm] = useState('');
   const [mainSection, setMainSection] = useState<'ACTIVE' | 'HISTORY'>(initialSection);
   const [activeSubFilter, setActiveSubFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<JobCardSortOption>('PRIORITY');
   const [requisitionModalCard, setRequisitionModalCard] = useState<JobCard | null>(null);
 
   useEffect(() => {
@@ -106,6 +121,41 @@ export function JobCardList({
     }
 
     return true;
+  });
+
+  // Sort filtered cards by manager preference
+  const sortedCards = [...filteredCards].sort((a, b) => {
+    if (sortBy === 'PRIORITY') {
+      const aScore = calculateJobCardPriorityScore(a);
+      const bScore = calculateJobCardPriorityScore(b);
+      return bScore - aScore;
+    }
+    if (sortBy === 'TARGET_DATE_ASC') {
+      if (!a.estimatedCompletionDate && !b.estimatedCompletionDate) return 0;
+      if (!a.estimatedCompletionDate) return 1;
+      if (!b.estimatedCompletionDate) return -1;
+      const aDate = parseDateOnly(a.estimatedCompletionDate)?.getTime() || 0;
+      const bDate = parseDateOnly(b.estimatedCompletionDate)?.getTime() || 0;
+      return aDate - bDate;
+    }
+    if (sortBy === 'DATE_NEWEST') {
+      const aTime = new Date(a.createdAt).getTime() || 0;
+      const bTime = new Date(b.createdAt).getTime() || 0;
+      if (aTime && bTime) return bTime - aTime;
+      return b.id.localeCompare(a.id);
+    }
+    if (sortBy === 'DATE_OLDEST') {
+      const aTime = new Date(a.createdAt).getTime() || 0;
+      const bTime = new Date(b.createdAt).getTime() || 0;
+      if (aTime && bTime) return aTime - bTime;
+      return a.id.localeCompare(b.id);
+    }
+    if (sortBy === 'STATUS') {
+      const aRank = calculateJobCardStatusRank(a.status);
+      const bRank = calculateJobCardStatusRank(b.status);
+      return aRank - bRank;
+    }
+    return 0;
   });
 
   return (
@@ -185,21 +235,41 @@ export function JobCardList({
         </div>
 
         {/* Filter Controls & Search Input */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
           
-          <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search Reg No, Customer, Make, Model..."
-              className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
+            <div className="relative w-full sm:w-80 shrink-0">
+              <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search Reg No, Customer, Make, Model..."
+                className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              />
+            </div>
+
+            {/* Sort By Dropdown */}
+            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Sort By:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as JobCardSortOption)}
+                aria-label="Sort Job Cards"
+                className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="PRIORITY">🔥 Urgency & Priority (Most Urgent)</option>
+                <option value="TARGET_DATE_ASC">⏰ Target Delivery Date (Earliest)</option>
+                <option value="DATE_NEWEST">📅 Created Date (Newest First)</option>
+                <option value="DATE_OLDEST">📅 Created Date (Oldest First)</option>
+                <option value="STATUS">🚦 Workflow Pipeline Status</option>
+              </select>
+            </div>
           </div>
 
           {/* Sub-Filter Pills */}
-          <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1.5 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
             {mainSection === 'ACTIVE' ? (
               [
                 { id: 'ALL', label: `All Active (${activeCards.length})` },
@@ -250,7 +320,7 @@ export function JobCardList({
       </div>
 
       {/* Cards Responsive Grid */}
-      {filteredCards.length === 0 ? (
+      {sortedCards.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
           <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
           <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
@@ -264,7 +334,7 @@ export function JobCardList({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-          {filteredCards.map((card) => {
+          {sortedCards.map((card) => {
             const statusStyle = STATUS_BADGES[card.status] || STATUS_BADGES.IN_PROGRESS;
             const completedCount = card.tasks.filter((t) => t.status === 'COMPLETED').length;
             const progress = card.tasks.length ? Math.round((completedCount / card.tasks.length) * 100) : 0;
@@ -272,6 +342,7 @@ export function JobCardList({
             const totalBill = card.tasks.reduce((acc, t) => acc + (t.customerPrice || 0), 0);
             const hasSublet = card.tasks.some(t => t.category === 'SUBLET_VENDOR' || t.category === 'WASHING');
             const isDeliveredOrClosed = card.status === 'DELIVERED' || card.status === 'CLOSED';
+            const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
 
             return (
               <div
@@ -353,6 +424,19 @@ export function JobCardList({
                       </a>
                     </div>
                   </div>
+
+                  {/* Urgency & Promised Delivery Badge */}
+                  {(card.isUrgent || card.estimatedCompletionDate) && (
+                    <div className={`px-2.5 py-1.5 rounded-xl border flex items-center justify-between text-xs ${deadlineInfo.color}`}>
+                      <div className="flex items-center gap-1.5 font-black text-[11px] truncate">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{deadlineInfo.label}</span>
+                      </div>
+                      <span className="text-[10px] font-bold opacity-85 shrink-0 ml-2 font-mono">
+                        {deadlineInfo.subtext}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Tasks Progress Bar */}
                   <div>

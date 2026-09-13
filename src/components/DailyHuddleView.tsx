@@ -13,6 +13,7 @@ import {
   getEmployees, 
   getVendors 
 } from '../lib/storage';
+import { getLocalDateString } from '../lib/urgencyHelper';
 import { 
   Users, 
   Clock, 
@@ -59,11 +60,12 @@ export function DailyHuddleView({
 }: DailyHuddleViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<'ALL' | 'BODYSHOP' | 'MECHANICAL' | 'WASHING' | 'SUBLET' | 'QC'>('ALL');
-  const [deadlineFilter, setDeadlineFilter] = useState<'ALL' | 'URGENT_DEADLINE' | 'DELIVERY_TODAY' | 'OVERDUE' | 'UNASSIGNED'>('ALL');
+  const [deadlineFilter, setDeadlineFilter] = useState<'ALL' | 'URGENT_DEADLINE' | 'DELIVERY_TODAY' | 'TARGET_TOMORROW' | 'OVERDUE' | 'UNASSIGNED'>('ALL');
   const [sortBy, setSortBy] = useState<'URGENCY' | 'PROGRESS' | 'NEWEST'>('URGENCY');
   
   // Daily Standup Huddle Notes state saved per date
-  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todayDateStr = getLocalDateString(0);
+  const tomorrowDateStr = getLocalDateString(1);
   const [huddleNotes, setHuddleNotes] = useState<string>(() => {
     try {
       return localStorage.getItem(`fixocar_huddle_notes_${todayDateStr}`) || '';
@@ -173,6 +175,11 @@ export function DailyHuddleView({
     return info.isToday || c.isUrgent;
   });
 
+  const tomorrowCards = activeJobCards.filter(c => {
+    const info = getDeadlineInfo(c.estimatedCompletionDate, c.isUrgent);
+    return info.status === 'TOMORROW';
+  });
+
   const urgentDeadlineCount = activeJobCards.filter(c => {
     const info = getDeadlineInfo(c.estimatedCompletionDate, c.isUrgent);
     return info.isOverdue || info.isToday || c.isUrgent;
@@ -220,8 +227,9 @@ export function DailyHuddleView({
     // 2. Deadline / Urgency filter
     const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
     if (deadlineFilter === 'URGENT_DEADLINE' && !card.isUrgent && !deadlineInfo.isOverdue && !deadlineInfo.isToday) return false;
-    if (deadlineFilter === 'OVERDUE' && !deadlineInfo.isOverdue) return false;
     if (deadlineFilter === 'DELIVERY_TODAY' && !deadlineInfo.isToday && !card.isUrgent) return false;
+    if (deadlineFilter === 'TARGET_TOMORROW' && deadlineInfo.status !== 'TOMORROW') return false;
+    if (deadlineFilter === 'OVERDUE' && !deadlineInfo.isOverdue) return false;
     if (deadlineFilter === 'UNASSIGNED' && !card.tasks.some(t => !t.assignedToId && t.status !== 'COMPLETED')) return false;
 
     // 3. Department filter
@@ -631,6 +639,18 @@ export function DailyHuddleView({
 
             <button
               type="button"
+              onClick={() => setDeadlineFilter('TARGET_TOMORROW')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 ${
+                deadlineFilter === 'TARGET_TOMORROW'
+                  ? 'bg-blue-600 text-white font-black'
+                  : 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30'
+              }`}
+            >
+              <Calendar className="w-3 h-3" /> Tomorrow ({tomorrowCards.length})
+            </button>
+
+            <button
+              type="button"
               onClick={() => setDeadlineFilter('OVERDUE')}
               className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 ${
                 deadlineFilter === 'OVERDUE'
@@ -792,6 +812,27 @@ export function DailyHuddleView({
                       >
                         <Clock className="w-3.5 h-3.5 text-emerald-500" />
                         <span>{deadlineInfo.isToday ? 'Due Today' : 'Target Today'}</span>
+                      </button>
+
+                      {/* Set Target Delivery Tomorrow */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateJobCard(card.id, (prev) => ({ 
+                            ...prev,
+                            estimatedCompletionDate: tomorrowDateStr,
+                            isUrgent: true 
+                          }));
+                        }}
+                        title="Set target completion to Tomorrow & mark urgent"
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                          deadlineInfo.status === 'TOMORROW'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600'
+                        }`}
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                        <span>{deadlineInfo.status === 'TOMORROW' ? 'Due Tomorrow' : 'Target Tomorrow'}</span>
                       </button>
                     </div>
 

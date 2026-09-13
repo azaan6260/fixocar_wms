@@ -24,6 +24,11 @@ import { triggerSuccessHaptic } from '../lib/mobileBridge';
 // Re-export mapping helpers for visual panel IDs to Standard Job IDs
 export { mapPanelToStandardJob, getPanelEnvironmentRates };
 import { 
+  getDeadlineInfo, 
+  getLocalDateString, 
+  parseDateOnly 
+} from '../lib/urgencyHelper';
+import { 
   speakTechnicianPrompt, 
   stopTechnicianSpeech 
 } from '../lib/technicianVoiceHelper';
@@ -142,7 +147,145 @@ export function JobCardDetailView({
   const [isGateCheckOutOpen, setIsGateCheckOutOpen] = useState(false);
 
   // Manager Tabs
-  const [activeManagerTab, setActiveManagerTab] = useState<'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
+  const [activeManagerTab, setActiveManagerTab] = useState<'huddle' | 'tasks' | 'approvals' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
+
+  // Urgency & Target Completion State
+  const [targetDateInput, setTargetDateInput] = useState<string>(() => {
+    if (card.estimatedCompletionDate) {
+      const d = parseDateOnly(card.estimatedCompletionDate);
+      if (d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+    }
+    return '';
+  });
+  const [cardHuddleNotes, setCardHuddleNotes] = useState<string>(card.huddleNotes || card.notes || '');
+  const [isHuddleSaved, setIsHuddleSaved] = useState(false);
+
+  // Keep targetDateInput and cardHuddleNotes synced when card updates
+  React.useEffect(() => {
+    if (card.estimatedCompletionDate) {
+      const d = parseDateOnly(card.estimatedCompletionDate);
+      if (d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        setTargetDateInput(`${y}-${m}-${day}`);
+      }
+    } else {
+      setTargetDateInput('');
+    }
+    setCardHuddleNotes(card.huddleNotes || card.notes || '');
+  }, [card.id, card.estimatedCompletionDate, card.huddleNotes, card.notes]);
+
+  const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
+
+  const handleSetTargetToday = () => {
+    const todayStr = getLocalDateString(0);
+    setTargetDateInput(todayStr);
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      estimatedCompletionDate: todayStr,
+      isUrgent: true
+    }));
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: '⏰ Target Today Assigned',
+      message: `${card.vehicle.registrationNumber} set for Today (${todayStr}) and marked Urgent for Daily Huddle.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
+
+  const handleSetTargetTomorrow = () => {
+    const tomorrowStr = getLocalDateString(1);
+    setTargetDateInput(tomorrowStr);
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      estimatedCompletionDate: tomorrowStr,
+      isUrgent: true
+    }));
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: '📅 Target Tomorrow Assigned',
+      message: `${card.vehicle.registrationNumber} set for Tomorrow (${tomorrowStr}) and marked Urgent for Daily Huddle.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
+
+  const handleSetCustomTargetDate = (dateStr: string) => {
+    setTargetDateInput(dateStr);
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      estimatedCompletionDate: dateStr
+    }));
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: 'Promised Delivery Date Set',
+      message: `Promised date updated to ${dateStr}.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
+
+  const handleClearDeadline = () => {
+    setTargetDateInput('');
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      estimatedCompletionDate: ''
+    }));
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: 'Deadline Cleared',
+      message: `Promised delivery date cleared for ${card.vehicle.registrationNumber}.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
+
+  const handleToggleUrgent = () => {
+    const newUrgent = !card.isUrgent;
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      isUrgent: newUrgent
+    }));
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: newUrgent ? '🔥 Marked Urgent for Daily Huddle' : 'Urgency Flag Removed',
+      message: newUrgent 
+        ? `${card.vehicle.registrationNumber} prioritized for floor team & morning standup.`
+        : `${card.vehicle.registrationNumber} normal workflow priority restored.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
+
+  const handleSaveHuddleNotes = () => {
+    updateJobCard(card.id, (prev) => ({
+      ...prev,
+      huddleNotes: cardHuddleNotes,
+      notes: cardHuddleNotes
+    }));
+    setIsHuddleSaved(true);
+    setTimeout(() => setIsHuddleSaved(false), 2500);
+    triggerSuccessHaptic();
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: 'Daily Huddle Notes Saved',
+      message: `Standup notes for ${card.vehicle.registrationNumber} saved.`,
+      vehicleReg: card.vehicle.registrationNumber,
+      jobCardId: card.id
+    });
+  };
 
   // Custom task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -752,22 +895,63 @@ export function JobCardDetailView({
                 </div>
               )}
 
-              {/* Priority & AI Estimator Strip */}
-              <div className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3 flex-wrap">
+              {/* Priority, Urgency & AI Estimator Strip */}
+              <div className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Urgent toggle */}
                   <button
                     type="button"
-                    onClick={() => {
-                      updateJobCard(card.id, (prev) => ({ ...prev, isUrgent: !prev.isUrgent }));
-                    }}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border ${
+                    onClick={handleToggleUrgent}
+                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
                       card.isUrgent
-                        ? 'bg-rose-500 text-white border-rose-400 shadow-xs'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md animate-pulse'
                         : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-amber-500/50 hover:text-white'
                     }`}
                   >
-                    <Flame className="w-3.5 h-3.5 fill-current" />
+                    <Flame className={`w-3.5 h-3.5 ${card.isUrgent ? 'fill-current' : 'text-amber-500'}`} />
                     <span>{card.isUrgent ? '🔥 MARKED URGENT' : 'Mark Urgent'}</span>
+                  </button>
+
+                  {/* Target Today Button */}
+                  <button
+                    type="button"
+                    onClick={handleSetTargetToday}
+                    title="Promised delivery today & mark urgent for standup"
+                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
+                      deadlineInfo.isToday
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-slate-800 text-emerald-300 border-slate-700 hover:border-emerald-500/50 hover:text-white'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{deadlineInfo.isToday ? '⏰ Due Today' : 'Target Today'}</span>
+                  </button>
+
+                  {/* Target Tomorrow Button */}
+                  <button
+                    type="button"
+                    onClick={handleSetTargetTomorrow}
+                    title="Promised delivery tomorrow & mark urgent for standup"
+                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all border ${
+                      deadlineInfo.status === 'TOMORROW'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                        : 'bg-slate-800 text-blue-300 border-slate-700 hover:border-blue-500/50 hover:text-white'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{deadlineInfo.status === 'TOMORROW' ? '📅 Due Tomorrow' : 'Target Tomorrow'}</span>
+                  </button>
+
+                  {/* Deadline Status Badge */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveManagerTab('huddle')}
+                    className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition-all ${deadlineInfo.color}`}
+                    title="Click to manage Daily Huddle & Urgency settings"
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span className="font-black text-xs">{deadlineInfo.label}</span>
+                    <span className="opacity-80 text-[10px] font-medium font-mono hidden sm:inline">{deadlineInfo.subtext}</span>
                   </button>
 
                   <button
@@ -783,6 +967,19 @@ export function JobCardDetailView({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setActiveManagerTab('huddle')}
+                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border transition-all ${
+                      activeManagerTab === 'huddle'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm'
+                        : 'bg-slate-800 text-amber-300 border-amber-500/30 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Huddle Tab</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setIsReqModalOpen(true)}
                     className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5"
                   >
@@ -795,6 +992,7 @@ export function JobCardDetailView({
               {/* Manager Tab Switcher */}
               <div className="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
                 {[
+                  { id: 'huddle', label: `🔥 Daily Huddle & Urgency${card.isUrgent ? ' (URGENT)' : ''}`, icon: Flame },
                   { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench },
                   { id: 'consumption', label: `Part Consumption (${consumedItemsList.length})`, icon: PackageCheck },
                   { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle },
@@ -821,6 +1019,310 @@ export function JobCardDetailView({
                   );
                 })}
               </div>
+
+              {/* Manager Tab Contents */}
+              {activeManagerTab === 'huddle' && (
+                <div className="space-y-4">
+                  {/* Banner: Current Delivery Urgency Status */}
+                  <div className={`p-4 rounded-3xl border ${deadlineInfo.color} space-y-2`}>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-2xl bg-black/20">
+                          {deadlineInfo.isOverdue ? (
+                            <AlertTriangle className="w-6 h-6 text-rose-500 animate-bounce" />
+                          ) : deadlineInfo.isToday ? (
+                            <Clock className="w-6 h-6 text-amber-400" />
+                          ) : (
+                            <Calendar className="w-6 h-6 text-blue-400" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-black text-sm text-white flex items-center gap-2">
+                            <span>{deadlineInfo.label}</span>
+                            {card.isUrgent && (
+                              <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                                🔥 HIGH PRIORITY
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-xs text-slate-300 font-medium">
+                            {deadlineInfo.subtext}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Clear deadline button if set */}
+                      {card.estimatedCompletionDate && (
+                        <button
+                          type="button"
+                          onClick={handleClearDeadline}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors"
+                        >
+                          Clear Deadline
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 1-Click Target Date Presets & Custom Date Picker */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4">
+                    <div>
+                      <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-400" />
+                        <span>Promised Delivery Target Date</span>
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Set the customer promised delivery timeline. Updating this will update the Daily Standup Huddle view and manager dashboard.
+                      </p>
+                    </div>
+
+                    {/* Quick 1-Click Buttons */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleSetTargetToday}
+                        className={`p-3 rounded-2xl border text-xs font-black flex flex-col items-center justify-center gap-1.5 transition-all ${
+                          deadlineInfo.isToday
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                            : 'bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-emerald-950/40 hover:border-emerald-500/50 hover:text-emerald-300'
+                        }`}
+                      >
+                        <Clock className="w-4 h-4 text-emerald-400" />
+                        <span>⏰ Target Today</span>
+                        <span className="text-[10px] font-mono opacity-75">{getLocalDateString(0)}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSetTargetTomorrow}
+                        className={`p-3 rounded-2xl border text-xs font-black flex flex-col items-center justify-center gap-1.5 transition-all ${
+                          deadlineInfo.status === 'TOMORROW'
+                            ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-500/30'
+                            : 'bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-blue-950/40 hover:border-blue-500/50 hover:text-blue-300'
+                        }`}
+                      >
+                        <Calendar className="w-4 h-4 text-blue-400" />
+                        <span>📅 Target Tomorrow</span>
+                        <span className="text-[10px] font-mono opacity-75">{getLocalDateString(1)}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetCustomTargetDate(getLocalDateString(2))}
+                        className="p-3 rounded-2xl border bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-slate-700/80 hover:text-white text-xs font-black flex flex-col items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Calendar className="w-4 h-4 text-indigo-400" />
+                        <span>🗓️ +2 Days</span>
+                        <span className="text-[10px] font-mono opacity-75">{getLocalDateString(2)}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetCustomTargetDate(getLocalDateString(3))}
+                        className="p-3 rounded-2xl border bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-slate-700/80 hover:text-white text-xs font-black flex flex-col items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Calendar className="w-4 h-4 text-purple-400" />
+                        <span>🗓️ +3 Days</span>
+                        <span className="text-[10px] font-mono opacity-75">{getLocalDateString(3)}</span>
+                      </button>
+                    </div>
+
+                    {/* Custom Date Input Row */}
+                    <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                          Custom Promised Date:
+                        </label>
+                        <input
+                          type="date"
+                          value={targetDateInput}
+                          onChange={(e) => setTargetDateInput(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 font-bold text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div className="sm:self-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (targetDateInput) {
+                              handleSetCustomTargetDate(targetDateInput);
+                            }
+                          }}
+                          disabled={!targetDateInput}
+                          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs transition-all shadow-md active:scale-95"
+                        >
+                          Save Promised Date
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daily Standup Urgency Toggle */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Flame className={`w-5 h-5 ${card.isUrgent ? 'text-amber-500 fill-current' : 'text-slate-500'}`} />
+                        <h4 className="font-black text-sm text-white">Daily Standup Urgency Priority</h4>
+                        {card.isUrgent && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-extrabold text-[10px] border border-amber-500/40">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 max-w-xl">
+                        When enabled, this vehicle is marked with a flame badge across all lists, prioritized in search filters, and placed at the top of the Morning Huddle dashboard.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleUrgent}
+                      className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0 ${
+                        card.isUrgent
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      }`}
+                    >
+                      <Flame className="w-4 h-4" />
+                      <span>{card.isUrgent ? 'Urgent Priority Active' : 'Enable Urgent Priority'}</span>
+                    </button>
+                  </div>
+
+                  {/* Standup Blockers & Bay Notes */}
+                  <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-400" />
+                          <span>Daily Huddle Discussion & Blocker Notes</span>
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Log vehicle impediments discussed during floor standup (parts pending, paint drying, test drive issues, etc.).
+                        </p>
+                      </div>
+
+                      {isHuddleSaved && (
+                        <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold text-xs border border-emerald-500/40 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Saved!</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Quick 1-tap blocker tag chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-400 mr-1">Quick Tags:</span>
+                      {[
+                        '⚠️ Awaiting Spare Parts',
+                        '🎨 Paint Booth Drying',
+                        '📞 Customer Approval Pending',
+                        '🏎️ Road Test Required',
+                        '⚡ VIP Handover Today',
+                        '🧼 Final Washing & Detailing',
+                        '🔧 Lathe Work Sublet Pending'
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            setCardHuddleNotes((prev) => {
+                              const trimmed = prev.trim();
+                              if (!trimmed) return tag;
+                              if (trimmed.includes(tag)) return trimmed;
+                              return `${trimmed} | ${tag}`;
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 text-[11px] font-bold border border-slate-700 transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={cardHuddleNotes}
+                      onChange={(e) => setCardHuddleNotes(e.target.value)}
+                      placeholder="e.g. Front bumper paint clear coat curing until 2 PM. Delivery requested at 4:30 PM. Customer wants wheel alignment report."
+                      className="w-full p-3 rounded-2xl bg-slate-800 border border-slate-700 font-medium text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveHuddleNotes}
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition-all shadow-md active:scale-95 flex items-center gap-2"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Save Huddle Notes</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Readiness & Department Status Quick Overview */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Unassigned Tasks */}
+                    <div 
+                      onClick={() => setActiveManagerTab('tasks')}
+                      className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer space-y-1 transition-all"
+                    >
+                      <span className="text-[11px] font-bold text-slate-400">Technician Allocation</span>
+                      <p className="text-sm font-black text-white">
+                        {card.tasks.filter(t => !t.assignedToId && t.status !== 'COMPLETED').length > 0 ? (
+                          <span className="text-amber-400">
+                            ⚠️ {card.tasks.filter(t => !t.assignedToId && t.status !== 'COMPLETED').length} Tasks Unassigned
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400">
+                            ✅ All Tasks Assigned
+                          </span>
+                        )}
+                      </p>
+                      <span className="text-[10px] text-slate-500">Click to view Task Allotments</span>
+                    </div>
+
+                    {/* Customer Approvals */}
+                    <div 
+                      onClick={() => setActiveManagerTab('approvals')}
+                      className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer space-y-1 transition-all"
+                    >
+                      <span className="text-[11px] font-bold text-slate-400">Customer Estimate</span>
+                      <p className="text-sm font-black text-white">
+                        {card.tasks.filter(t => t.requiresCustomerApproval && t.isCustomerApproved === null).length > 0 ? (
+                          <span className="text-rose-400">
+                            🚨 {card.tasks.filter(t => t.requiresCustomerApproval && t.isCustomerApproved === null).length} Pending Approval
+                          </span>
+                        ) : (
+                          <span className="text-emerald-400">
+                            ✅ Approvals Clear
+                          </span>
+                        )}
+                      </p>
+                      <span className="text-[10px] text-slate-500">Click to view Customer Portal</span>
+                    </div>
+
+                    {/* QC Audit */}
+                    <div 
+                      onClick={() => setActiveManagerTab('qc')}
+                      className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer space-y-1 transition-all"
+                    >
+                      <span className="text-[11px] font-bold text-slate-400">Floor QC Inspection</span>
+                      <p className="text-sm font-black text-white">
+                        {card.qcPassed ? (
+                          <span className="text-emerald-400">
+                            ✅ QC Passed
+                          </span>
+                        ) : (
+                          <span className="text-amber-400">
+                            ⏳ QC Audit Pending
+                          </span>
+                        )}
+                      </p>
+                      <span className="text-[10px] text-slate-500">Click to perform QC Inspection</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Manager Tab Contents */}
               {activeManagerTab === 'tasks' && (
