@@ -85,7 +85,6 @@ export function HeaderNav({
   const supabaseConfig = getStoredSupabaseConfig();
   const { t, language, setLanguage } = useI18n();
   const [pendingApprovals, setPendingApprovals] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
 
   useEffect(() => {
@@ -173,37 +172,6 @@ export function HeaderNav({
     { id: 'vendors', label: t('nav.vendors'), icon: Building2 },
     { id: 'employees', label: t('nav.employees'), icon: Users },
   ];
-
-  const triggerManualSync = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await syncFromSupabase();
-      const cardsCount = getAllJobCards().length;
-      const staffCount = getAllEmployees().length;
-      
-      if (res.errors && res.errors.length > 0) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_DECLINED',
-          title: '⚠️ Sync Finished with Warnings',
-          message: `Database sync complete but encountered errors: ${res.errors.slice(0, 2).join('; ')}`
-        });
-      } else {
-        dispatchToastNotification({
-          type: 'JOB_CARD_CREATED',
-          title: '✅ Central Database Synced',
-          message: `Successfully updated local database. Active Records: ${cardsCount} Job Cards, ${staffCount} Staff.`
-        });
-      }
-    } catch (err: any) {
-      dispatchToastNotification({
-        type: 'ESTIMATE_DECLINED',
-        title: '⚠️ Database Sync Warning',
-        message: err.message || 'Check network connection or try again.'
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full pt-[max(env(safe-area-inset-top,0px),8px)]">
@@ -294,22 +262,10 @@ export function HeaderNav({
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100'
                   : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100'
               }`}
-              title={supabaseConfig.isConfigured ? 'Live Supabase Connected. Click to manage credentials or run schema diagnostics.' : 'Click to enter Supabase URL & Anon Key to connect live database tables.'}
+              title={supabaseConfig.isConfigured ? 'Live Supabase Connected.' : 'Click to enter Supabase URL & Anon Key.'}
             >
-              <Database className={`w-3.5 h-3.5 ${supabaseConfig.isConfigured ? 'text-emerald-600 dark:text-emerald-400 animate-pulse' : 'text-amber-600 dark:text-amber-400'}`} />
+              <Database className={`w-3.5 h-3.5 ${supabaseConfig.isConfigured ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
               <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
-            </button>
-
-            {/* Quick Manual Database Sync Button */}
-            <button
-              type="button"
-              onClick={triggerManualSync}
-              disabled={isSyncing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-extrabold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Sync All Tables from Supabase & Central Server Database"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync DB'}</span>
             </button>
 
             {/* Direct Hotline Call Button */}
@@ -485,18 +441,6 @@ export function HeaderNav({
 
           {/* Mobile Right Controls: Compact Buttons & Hamburger Toggle */}
           <div className="flex sm:hidden items-center gap-1.5 shrink-0">
-            {/* Sync DB Button */}
-            <button
-              type="button"
-              onClick={triggerManualSync}
-              disabled={isSyncing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-black cursor-pointer disabled:opacity-50"
-              title="Sync Database"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Sync</span>
-            </button>
-
             {/* Notification Drawer */}
             <NotificationDrawer onSelectJobCard={onSelectJobCard} />
 
@@ -552,16 +496,16 @@ export function HeaderNav({
                 </select>
               </div>
 
-              {/* Supabase Status & Sync Buttons for Mobile */}
-              <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
-                {isAdmin && (
+              {/* Supabase Status for Mobile (Admin only) */}
+              {isAdmin && (
+                <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => {
                       onOpenSupabaseModal();
                       setMobileMenuOpen(false);
                     }}
-                    className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all ${
+                    className={`w-full flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all ${
                       supabaseConfig.isConfigured
                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
                         : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
@@ -570,21 +514,8 @@ export function HeaderNav({
                     <Database className={`w-4 h-4 ${supabaseConfig.isConfigured ? 'text-emerald-500' : 'text-amber-500'}`} />
                     <span>{supabaseConfig.isConfigured ? 'Supabase Live' : 'Connect Supabase'}</span>
                   </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerManualSync();
-                    setMobileMenuOpen(false);
-                  }}
-                  disabled={isSyncing}
-                  className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold"
-                >
-                  <RefreshCw className={`w-4 h-4 text-blue-500 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Syncing...' : 'Sync Database'}</span>
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Quick Actions Grid */}
