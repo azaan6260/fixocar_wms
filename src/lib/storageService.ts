@@ -490,14 +490,17 @@ export async function uploadJobAttachment(
       })
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Storage upload failed: ${errText || res.statusText}`);
+    const responseText = await res.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error('[STORAGE_UPLOAD] Non-JSON response received:', responseText.substring(0, 160));
+      throw new Error(`Server returned non-JSON response (${res.status} ${res.statusText}). Please retry.`);
     }
 
-    const data = await res.json();
-    if (!data.success || !data.publicUrl) {
-      throw new Error(data.error || 'Server storage upload rejected');
+    if (!res.ok || !data.success || !data.publicUrl) {
+      throw new Error(data?.error || `Storage upload rejected (${res.status} ${res.statusText})`);
     }
     publicUrl = data.publicUrl;
   }

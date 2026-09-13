@@ -3081,6 +3081,23 @@ Return valid JSON ONLY.`;
     }
   });
 
+  // Explicit API 404 handler - ensure NO /api/* call ever falls through to HTML or Vite SPA
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: `API endpoint not found: ${req.method} ${req.originalUrl}`
+    });
+  });
+
+  // Error handling middleware specifically for /api routes to always return structured JSON
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[API ERROR] ${req.method} ${req.originalUrl}:`, err);
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'Internal API Server Error'
+    });
+  });
+
   // Vite middleware setup for Development vs Production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

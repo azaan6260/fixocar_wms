@@ -652,9 +652,19 @@ export function ProofOfWorkModal({
 
           {/* Upload Error Banner */}
           {uploadError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{uploadError}</span>
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span className="font-medium">{uploadError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={isUploading || !selectedFile}
+                className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-[11px] shrink-0 cursor-pointer"
+              >
+                पुनः प्रयास (Retry)
+              </button>
             </div>
           )}
 

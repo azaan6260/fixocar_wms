@@ -216,14 +216,17 @@ export async function uploadProofMedia(params: UploadProofMediaParams): Promise<
       })
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Upload failed: ${errText || res.statusText}`);
+    const responseText = await res.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error('[STORAGE_UPLOAD] Received non-JSON response:', responseText.substring(0, 160));
+      throw new Error(`Server returned HTML (${res.status} ${res.statusText}) instead of JSON. The backend server is initializing or route is loading. Please tap Retry.`);
     }
 
-    const data = await res.json();
-    if (!data.success || !data.mediaItem) {
-      throw new Error(data.error || 'Server rejected media upload');
+    if (!res.ok || !data.success || !data.mediaItem) {
+      throw new Error(data?.error || `Upload failed with status ${res.status}: ${res.statusText}`);
     }
 
     if (onProgress) onProgress(100);
