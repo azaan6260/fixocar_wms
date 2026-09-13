@@ -21,7 +21,7 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install --legacy-peer-deps
-          npm install --no-save @rollup/rollup-darwin-arm64 @esbuild/darwin-arm64 || true
+          npm install --no-save @rollup/rollup-darwin-arm64 @esbuild/darwin-arm64 lightningcss-darwin-arm64 || true
 
       - name: Build Web Application
         run: npm run build
