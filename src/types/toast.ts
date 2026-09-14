@@ -3,6 +3,7 @@ export type ToastType =
   | 'ESTIMATE_APPROVED'
   | 'ESTIMATE_DECLINED'
   | 'JOB_CARD_CREATED'
+  | 'PAYMENT_COLLECTED'
   | 'SUCCESS'
   | 'INFO'
   | 'WARNING';

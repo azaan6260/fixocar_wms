@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Vendor, PurchaseOrder } from '../types';
 import { getVendors, createVendor, getPurchaseOrders, createPurchaseOrder, saveVendors, subscribeToStore } from '../lib/storage';
+import { RecordPaymentModal } from './RecordPaymentModal';
+import { AccountBillingLedgerModal } from './AccountBillingLedgerModal';
 import { 
   Building2, 
   Plus, 
@@ -11,12 +13,27 @@ import {
   FileCheck, 
   Star,
   CheckCircle2,
-  X
+  X,
+  Receipt
 } from 'lucide-react';
 
 export function VendorManagementView() {
   const [vendors, setVendors] = useState<Vendor[]>(() => getVendors());
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => getPurchaseOrders());
+
+  // Modal States
+  const [recordPaymentModalState, setRecordPaymentModalState] = useState<{
+    isOpen: boolean;
+    vendorId?: string;
+    vendorName?: string;
+    suggestedAmount?: number;
+  }>({ isOpen: false });
+
+  const [ledgerModalState, setLedgerModalState] = useState<{
+    isOpen: boolean;
+    vendorIdOrName?: string;
+    vendorDisplayName?: string;
+  }>({ isOpen: false });
 
   // New Vendor Form
   const [showAddVendor, setShowAddVendor] = useState(false);
@@ -182,14 +199,30 @@ export function VendorManagementView() {
                   <p className="font-bold text-rose-500 font-mono">₹{v.outstandingBalance.toLocaleString('en-IN')}</p>
                 </div>
 
-                {v.outstandingBalance > 0 && (
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleSettleBalance(v.id)}
+                    onClick={() => setLedgerModalState({
+                      isOpen: true,
+                      vendorIdOrName: v.id,
+                      vendorDisplayName: v.name
+                    })}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-emerald-500" /> Ledger
+                  </button>
+
+                  <button
+                    onClick={() => setRecordPaymentModalState({
+                      isOpen: true,
+                      vendorId: v.id,
+                      vendorName: v.name,
+                      suggestedAmount: v.outstandingBalance
+                    })}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
                   >
-                    Settle Pay
+                    Pay Vendor
                   </button>
-                )}
+                </div>
               </div>
             </div>
           ))}
@@ -346,6 +379,30 @@ export function VendorManagementView() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Vendor Account Ledger Modal */}
+      {ledgerModalState.isOpen && ledgerModalState.vendorIdOrName && (
+        <AccountBillingLedgerModal
+          isOpen={ledgerModalState.isOpen}
+          onClose={() => setLedgerModalState({ isOpen: false })}
+          accountType="VENDOR"
+          accountIdOrName={ledgerModalState.vendorIdOrName}
+          accountDisplayName={ledgerModalState.vendorDisplayName}
+        />
+      )}
+
+      {/* Record Vendor Payment Sub-Modal */}
+      {recordPaymentModalState.isOpen && (
+        <RecordPaymentModal
+          isOpen={recordPaymentModalState.isOpen}
+          onClose={() => setRecordPaymentModalState({ isOpen: false })}
+          targetType="VENDOR"
+          targetId={recordPaymentModalState.vendorId}
+          targetName={recordPaymentModalState.vendorName}
+          suggestedAmount={recordPaymentModalState.suggestedAmount}
+          onPaymentRecorded={refreshData}
+        />
       )}
 
     </div>

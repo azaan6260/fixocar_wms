@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { UserRole, JobCard } from '../types';
-import { getEmployees, getVendors, getAuthUser } from '../lib/storage';
+import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
 import { TechnicianTaskCard } from './TechnicianTaskCard';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
+import { AccountBillingLedgerModal } from './AccountBillingLedgerModal';
 import { useI18n } from '../lib/i18n';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { RequestAdditionalWorkModal } from './RequestAdditionalWorkModal';
@@ -17,7 +18,9 @@ import {
   ChevronUp, 
   Camera, 
   Filter,
-  Plus
+  Plus,
+  Receipt,
+  CreditCard
 } from 'lucide-react';
 
 interface RoleWorkspaceViewProps {
@@ -35,7 +38,23 @@ export function RoleWorkspaceView({
 }: RoleWorkspaceViewProps) {
   const isAdminOrManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
   const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(!isAdminOrManager);
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
   const authUser = getAuthUser();
+  
+  // Account summary for logged-in contractor / vendor / technician
+  const userAccountName = authUser?.name || authUser?.employeeId || authUser?.vendorId || '';
+  const isContractorOrVendor = currentRole === 'PAINTER' || currentRole === 'DENTER' || currentRole === 'MECHANIC' || currentRole === 'VENDOR';
+
+  let accountNetBalance = 0;
+  if (isContractorOrVendor && userAccountName) {
+    if (currentRole === 'VENDOR') {
+      const vs = getVendorAccountSummary(authUser?.vendorId || userAccountName);
+      accountNetBalance = vs.netOutstandingBalance;
+    } else {
+      const cs = getContractorAccountSummary(authUser?.employeeId || userAccountName);
+      accountNetBalance = cs.netBalancePayable;
+    }
+  }
   
   // Use global i18n
   const { t } = useI18n();
@@ -173,6 +192,23 @@ export function RoleWorkspaceView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Account Ledger Button for Contractors & Vendors */}
+          {userAccountName && (
+            <button
+              type="button"
+              onClick={() => setShowLedgerModal(true)}
+              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs px-3.5 py-2 rounded-xl font-black transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-emerald-500" />
+              <span>My Account Billing &amp; Receipts</span>
+              {accountNetBalance > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[10px]">
+                  Due: ₹{accountNetBalance.toLocaleString('en-IN')}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* My Tasks Toggle Button */}
           {authUser && (authUser.employeeId || authUser.vendorId) && (
             <button
@@ -382,6 +418,18 @@ export function RoleWorkspaceView({
           card={requestWorkCard}
           isOpen={Boolean(requestWorkCard)}
           onClose={() => setRequestWorkCard(null)}
+          currentRole={currentRole}
+        />
+      )}
+
+      {/* Account Ledger Modal for logged-in user */}
+      {showLedgerModal && userAccountName && (
+        <AccountBillingLedgerModal
+          isOpen={showLedgerModal}
+          onClose={() => setShowLedgerModal(false)}
+          accountType={currentRole === 'VENDOR' ? 'VENDOR' : 'CONTRACTOR'}
+          accountIdOrName={authUser?.vendorId || authUser?.employeeId || userAccountName}
+          accountDisplayName={userAccountName}
           currentRole={currentRole}
         />
       )}

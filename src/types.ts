@@ -139,6 +139,87 @@ export type VendorCategory =
   | 'ALIGNMENT'
   | 'OTHER';
 
+export type PaymentMode = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'OTHER';
+
+export interface ContractorPayoutRecord {
+  jobCardId: string;
+  jobCardNumber: string;
+  vehicleReg: string;
+  vehicleModel: string;
+  isCars24: boolean;
+  taskId: string;
+  taskTitle: string;
+  category: string;
+  assignedToName?: string;
+  assignedToId?: string;
+  customerPrice: number;
+  contractorPayout: number;
+  painterPayout: number;
+  denterPayout: number;
+  workshopMargin: number;
+  taskStatus: string;
+  jobCardStatus: string;
+  billFinalizedAt?: string;
+}
+
+export interface ContractorPaymentRecord {
+  id: string; // e.g. "CPAY-2026-101"
+  contractorId: string; // Employee ID or Vendor ID or Name key
+  contractorName: string;
+  roleOrCategory?: string; // e.g. "PAINTER" | "DENTER" | "MECHANIC" | "VENDOR"
+  amount: number;
+  paymentMode: PaymentMode;
+  transactionRef?: string;
+  notes?: string;
+  paidByEmployeeId: string;
+  paidByEmployeeName: string;
+  paidAt: string; // ISO string
+  workshopId?: string;
+  workshopName?: string;
+}
+
+export interface VendorPaymentRecord {
+  id: string; // e.g. "VPAY-2026-101"
+  vendorId: string;
+  vendorName: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  transactionRef?: string;
+  notes?: string;
+  paidByEmployeeId: string;
+  paidByEmployeeName: string;
+  paidAt: string; // ISO string
+  workshopId?: string;
+  workshopName?: string;
+}
+
+export interface ContractorAccountSummary {
+  contractorId: string;
+  contractorName: string;
+  roleOrCategory: string;
+  phone?: string;
+  totalAccruedEarnings: number;
+  totalPaymentsReceived: number;
+  netBalancePayable: number;
+  taskAllotments: ContractorPayoutRecord[];
+  paymentHistory: ContractorPaymentRecord[];
+}
+
+export interface VendorAccountSummary {
+  vendorId: string;
+  vendorName: string;
+  category: VendorCategory | string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  totalAccruedBills: number;
+  totalPaymentsMade: number;
+  netOutstandingBalance: number;
+  purchaseOrders: PurchaseOrder[];
+  outsourcedTasks: JobTask[];
+  paymentHistory: VendorPaymentRecord[];
+}
+
 export interface Vendor {
   id: string;
   name: string;

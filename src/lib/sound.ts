@@ -1,5 +1,7 @@
+import { ToastType } from '../types/toast';
+
 // Web Audio API soft chime for toast notifications
-export function playNotificationChime(type: 'STATUS_CHANGE' | 'ESTIMATE_APPROVED' | 'ESTIMATE_DECLINED' | 'JOB_CARD_CREATED' | 'SUCCESS' | 'INFO' | 'WARNING' = 'INFO') {
+export function playNotificationChime(type: ToastType = 'INFO') {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;

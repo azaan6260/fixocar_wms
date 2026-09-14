@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment, PaymentMode, ContractorPaymentRecord, VendorPaymentRecord, ContractorAccountSummary, VendorAccountSummary, ContractorPayoutRecord } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
@@ -74,6 +74,8 @@ const STORAGE_KEYS = {
   VEHICLE_CHECKINS: 'fixocar_vehicle_checkins_v4',
   WORKSHOP_EXPENSES: 'fixocar_workshop_expenses_v4',
   CAR_MODELS: 'fixocar_car_models_v4',
+  CONTRACTOR_PAYMENTS: 'fixocar_contractor_payments_v4',
+  VENDOR_PAYMENTS: 'fixocar_vendor_payments_v4',
   AUTH_USER: 'fixocar_auth_user_v4',
   ACTIVE_WORKSHOP: 'fixocar_active_workshop_v4',
 };
@@ -2765,27 +2767,6 @@ export function addStandardJobToJobCard(
   return createdTasks;
 }
 
-export interface ContractorPayoutRecord {
-  jobCardId: string;
-  jobCardNumber: string;
-  vehicleReg: string;
-  vehicleModel: string;
-  isCars24: boolean;
-  taskId: string;
-  taskTitle: string;
-  category: string;
-  assignedToName?: string;
-  assignedToId?: string;
-  customerPrice: number;
-  contractorPayout: number;
-  painterPayout: number;
-  denterPayout: number;
-  workshopMargin: number;
-  taskStatus: string;
-  jobCardStatus: string;
-  billFinalizedAt?: string;
-}
-
 export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
   const cards = getJobCards();
   const records: ContractorPayoutRecord[] = [];
@@ -2823,6 +2804,205 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
   });
 
   return records;
+}
+
+// -------------------------------------------------------------
+// CONTRACTOR & VENDOR PAYOUT & BILLING PAYMENT LEDGER STORAGE
+// -------------------------------------------------------------
+
+export function getContractorPaymentRecords(): ContractorPaymentRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.CONTRACTOR_PAYMENTS);
+  if (!local) return [];
+  try {
+    return JSON.parse(local);
+  } catch {
+    return [];
+  }
+}
+
+export function saveContractorPaymentRecords(records: ContractorPaymentRecord[]) {
+  localStorage.setItem(STORAGE_KEYS.CONTRACTOR_PAYMENTS, JSON.stringify(records));
+  notifyStoreChange();
+}
+
+export function recordContractorPayment(data: {
+  contractorId: string;
+  contractorName: string;
+  roleOrCategory?: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  transactionRef?: string;
+  notes?: string;
+  paidByEmployeeId?: string;
+  paidByEmployeeName?: string;
+}): ContractorPaymentRecord {
+  const records = getContractorPaymentRecords();
+  const authUser = getAuthUser();
+  const newPayment: ContractorPaymentRecord = {
+    id: `CPAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    contractorId: data.contractorId,
+    contractorName: data.contractorName,
+    roleOrCategory: data.roleOrCategory || 'CONTRACTOR',
+    amount: Number(data.amount),
+    paymentMode: data.paymentMode,
+    transactionRef: data.transactionRef || '',
+    notes: data.notes || '',
+    paidByEmployeeId: data.paidByEmployeeId || authUser?.id || 'admin-01',
+    paidByEmployeeName: data.paidByEmployeeName || authUser?.name || 'Workshop Admin',
+    paidAt: new Date().toISOString(),
+    workshopId: getActiveWorkshopId()
+  };
+
+  const updated = [newPayment, ...records];
+  saveContractorPaymentRecords(updated);
+
+  dispatchToastNotification({
+    type: 'PAYMENT_COLLECTED',
+    title: `💵 Payment Disbursed to ${data.contractorName}`,
+    message: `₹${Number(data.amount).toLocaleString('en-IN')} paid via ${data.paymentMode}. Account bill updated.`,
+  });
+
+  return newPayment;
+}
+
+export function getVendorPaymentRecords(): VendorPaymentRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.VENDOR_PAYMENTS);
+  if (!local) return [];
+  try {
+    return JSON.parse(local);
+  } catch {
+    return [];
+  }
+}
+
+export function saveVendorPaymentRecords(records: VendorPaymentRecord[]) {
+  localStorage.setItem(STORAGE_KEYS.VENDOR_PAYMENTS, JSON.stringify(records));
+  notifyStoreChange();
+}
+
+export function recordVendorPayment(data: {
+  vendorId: string;
+  vendorName: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  transactionRef?: string;
+  notes?: string;
+  paidByEmployeeId?: string;
+  paidByEmployeeName?: string;
+}): VendorPaymentRecord {
+  const records = getVendorPaymentRecords();
+  const authUser = getAuthUser();
+  const newPayment: VendorPaymentRecord = {
+    id: `VPAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    vendorId: data.vendorId,
+    vendorName: data.vendorName,
+    amount: Number(data.amount),
+    paymentMode: data.paymentMode,
+    transactionRef: data.transactionRef || '',
+    notes: data.notes || '',
+    paidByEmployeeId: data.paidByEmployeeId || authUser?.id || 'admin-01',
+    paidByEmployeeName: data.paidByEmployeeName || authUser?.name || 'Workshop Admin',
+    paidAt: new Date().toISOString(),
+    workshopId: getActiveWorkshopId()
+  };
+
+  const updated = [newPayment, ...records];
+  saveVendorPaymentRecords(updated);
+
+  // Update vendor.outstandingBalance
+  const vendors = getVendors();
+  const idx = vendors.findIndex(v => v.id === data.vendorId || v.name.toLowerCase() === data.vendorName.toLowerCase());
+  if (idx !== -1) {
+    vendors[idx].outstandingBalance = Math.max(0, (vendors[idx].outstandingBalance || 0) - Number(data.amount));
+    saveVendors(vendors);
+  }
+
+  dispatchToastNotification({
+    type: 'PAYMENT_COLLECTED',
+    title: `💳 Vendor Payment Recorded for ${data.vendorName}`,
+    message: `₹${Number(data.amount).toLocaleString('en-IN')} paid via ${data.paymentMode}. Outstanding balance reduced.`,
+  });
+
+  return newPayment;
+}
+
+export function getContractorAccountSummary(contractorIdOrName: string): ContractorAccountSummary {
+  const payoutsReport = getContractorPayoutsReport();
+  const allPayments = getContractorPaymentRecords();
+  const employees = getEmployees();
+  const emp = employees.find(e => e.id === contractorIdOrName || e.name.toLowerCase() === contractorIdOrName.toLowerCase());
+
+  const matchedPayouts = payoutsReport.filter(r => 
+    r.assignedToId === contractorIdOrName || 
+    (r.assignedToName && r.assignedToName.toLowerCase() === contractorIdOrName.toLowerCase()) ||
+    (emp && r.assignedToName && r.assignedToName.toLowerCase() === emp.name.toLowerCase())
+  );
+
+  const matchedPayments = allPayments.filter(p =>
+    p.contractorId === contractorIdOrName ||
+    p.contractorName.toLowerCase() === contractorIdOrName.toLowerCase() ||
+    (emp && p.contractorName.toLowerCase() === emp.name.toLowerCase())
+  );
+
+  const totalAccruedEarnings = matchedPayouts.reduce((sum, r) => sum + r.contractorPayout, 0);
+  const totalPaymentsReceived = matchedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  return {
+    contractorId: emp?.id || contractorIdOrName,
+    contractorName: emp?.name || contractorIdOrName,
+    roleOrCategory: emp?.role || 'CONTRACTOR',
+    phone: emp?.phone,
+    totalAccruedEarnings,
+    totalPaymentsReceived,
+    netBalancePayable: totalAccruedEarnings - totalPaymentsReceived,
+    taskAllotments: matchedPayouts,
+    paymentHistory: matchedPayments
+  };
+}
+
+export function getVendorAccountSummary(vendorIdOrName: string): VendorAccountSummary {
+  const vendors = getVendors();
+  const vendor = vendors.find(v => v.id === vendorIdOrName || v.name.toLowerCase() === vendorIdOrName.toLowerCase());
+  const nameToMatch = vendor?.name || vendorIdOrName;
+  const idToMatch = vendor?.id || vendorIdOrName;
+
+  const pos = getPurchaseOrders().filter(po => po.vendorId === idToMatch || po.vendorName.toLowerCase() === nameToMatch.toLowerCase());
+  
+  const cards = getJobCards();
+  const outsourcedTasks: JobTask[] = [];
+  cards.forEach(c => {
+    c.tasks.forEach(t => {
+      if (t.outsourcedVendorId === idToMatch || (t.assignedToName && t.assignedToName.toLowerCase() === nameToMatch.toLowerCase())) {
+        outsourcedTasks.push(t);
+      }
+    });
+  });
+
+  const allVendorPayments = getVendorPaymentRecords().filter(p => 
+    p.vendorId === idToMatch || p.vendorName.toLowerCase() === nameToMatch.toLowerCase()
+  );
+
+  const poTotal = pos.reduce((sum, po) => sum + po.amount, 0);
+  const outsourcedTotal = outsourcedTasks.reduce((sum, t) => sum + (t.outsourcedCost || t.contractorPayout || t.estimatedCost || 0), 0);
+  
+  const initialBalance = vendor ? (vendor.outstandingBalance || 0) : 0;
+  const totalPaymentsMade = allVendorPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalAccruedBills = Math.max(initialBalance + totalPaymentsMade, poTotal + outsourcedTotal);
+
+  return {
+    vendorId: idToMatch,
+    vendorName: nameToMatch,
+    category: vendor?.category || 'PARTS_SUPPLIER',
+    contactPerson: vendor?.contactPerson,
+    phone: vendor?.phone,
+    email: vendor?.email,
+    totalAccruedBills,
+    totalPaymentsMade,
+    netOutstandingBalance: Math.max(0, totalAccruedBills - totalPaymentsMade),
+    purchaseOrders: pos,
+    outsourcedTasks,
+    paymentHistory: allVendorPayments
+  };
 }
 
 // -------------------------------------------------------------

@@ -1,7 +1,32 @@
-import React, { useState } from 'react';
-import { UserRole } from '../types';
-import { getContractorPayoutsReport, ContractorPayoutRecord, getEmployees, getVendors } from '../lib/storage';
-import { DollarSign, Palette, Hammer, ShieldCheck, Tag, CheckCircle2, AlertCircle, Users, Download, Filter, Search, Award } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UserRole, ContractorPayoutRecord } from '../types';
+import { 
+  getContractorPayoutsReport, 
+  getEmployees, 
+  getVendors,
+  getContractorPaymentRecords,
+  getContractorAccountSummary,
+  subscribeToStore
+} from '../lib/storage';
+import { RecordPaymentModal } from './RecordPaymentModal';
+import { AccountBillingLedgerModal } from './AccountBillingLedgerModal';
+import { 
+  DollarSign, 
+  Palette, 
+  Hammer, 
+  ShieldCheck, 
+  Tag, 
+  CheckCircle2, 
+  AlertCircle, 
+  Users, 
+  Download, 
+  Filter, 
+  Search, 
+  Award,
+  Plus,
+  Receipt,
+  ArrowRight
+} from 'lucide-react';
 
 interface ContractorPayoutsViewProps {
   currentRole: UserRole;
@@ -9,16 +34,34 @@ interface ContractorPayoutsViewProps {
 
 export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProps) {
   const [payoutRecords, setPayoutRecords] = useState<ContractorPayoutRecord[]>(() => getContractorPayoutsReport());
+  const [contractorPayments, setContractorPayments] = useState(() => getContractorPaymentRecords());
   const [selectedContractor, setSelectedContractor] = useState<string>('ALL');
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const employees = getEmployees();
-  const vendors = getVendors();
+  // Modals state
+  const [recordPaymentModalState, setRecordPaymentModalState] = useState<{
+    isOpen: boolean;
+    contractorId?: string;
+    contractorName?: string;
+    suggestedAmount?: number;
+  }>({ isOpen: false });
+
+  const [ledgerModalState, setLedgerModalState] = useState<{
+    isOpen: boolean;
+    contractorName?: string;
+  }>({ isOpen: false });
 
   const refreshReport = () => {
     setPayoutRecords(getContractorPayoutsReport());
+    setContractorPayments(getContractorPaymentRecords());
   };
+
+  useEffect(() => {
+    refreshReport();
+    const unsubscribe = subscribeToStore(refreshReport);
+    return () => { unsubscribe(); };
+  }, []);
 
   // Filter contractor list for denting & painting
   const contractorsList = Array.from(new Set(payoutRecords.map(r => r.assignedToName).filter(Boolean)));
@@ -34,11 +77,18 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
 
   // Calculate Aggregates
   const totalCustomerRevenue = filtered.reduce((acc, r) => acc + r.customerPrice, 0);
-  const totalContractorPayouts = filtered.reduce((acc, r) => acc + r.contractorPayout, 0);
-  const totalWorkshopMargin = totalCustomerRevenue - totalContractorPayouts;
+  const totalContractorAccrued = filtered.reduce((acc, r) => acc + r.contractorPayout, 0);
+  
+  // Total payments made to contractors in filter
+  const totalPaymentsPaid = contractorPayments
+    .filter(p => selectedContractor === 'ALL' || p.contractorName === selectedContractor)
+    .reduce((acc, p) => acc + p.amount, 0);
+
+  const netRemainingPayable = Math.max(0, totalContractorAccrued - totalPaymentsPaid);
+  const totalWorkshopMargin = totalCustomerRevenue - totalContractorAccrued;
   const completedCount = filtered.filter(r => r.taskStatus === 'COMPLETED' || r.jobCardStatus === 'CLOSED').length;
 
-  const isContractorRole = currentRole === 'PAINTER' || currentRole === 'DENTER' || currentRole === 'VENDOR';
+  const isAdminOrManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
 
   return (
     <div className="space-y-6">
@@ -46,20 +96,31 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-purple-900/40">
         <div>
           <div className="flex items-center gap-2 text-purple-300 text-xs font-bold uppercase tracking-widest mb-1">
-            <Palette className="w-4 h-4 text-purple-400" /> Denting & Painting Contract Payout Desk
+            <Palette className="w-4 h-4 text-purple-400" /> Denting & Painting Contract Payout & Ledger Desk
           </div>
-          <h1 className="text-2xl font-black">Contractor Payouts & Margin Statement</h1>
+          <h1 className="text-2xl font-black">Contractor Billing & Payout Management</h1>
           <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            Contract-basis painting and denting job payouts directly linked to job cards. Allotted painters, denters, and sublet vendors can view their accrued payouts upon billing.
+            Contract-basis painting and denting job payouts directly linked to job cards. Record admin/manager payments and let contractors inspect their billing statement in real-time.
           </p>
         </div>
 
-        <button
-          onClick={refreshReport}
-          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-md flex items-center gap-1.5 self-start md:self-auto transition-colors"
-        >
-          <Award className="w-4 h-4" /> Refresh Payout Records
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdminOrManager && (
+            <button
+              onClick={() => setRecordPaymentModalState({ isOpen: true })}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Disburse / Record Payment
+            </button>
+          )}
+
+          <button
+            onClick={refreshReport}
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-md flex items-center gap-1.5 transition-colors"
+          >
+            <Award className="w-4 h-4" /> Refresh Records
+          </button>
+        </div>
       </div>
 
       {/* Analytics Metric Cards */}
@@ -70,7 +131,7 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
             <Tag className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            ₹{totalCustomerRevenue.toLocaleString()}
+            ₹{totalCustomerRevenue.toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-slate-400 mt-1 font-semibold">
             Billed for {filtered.length} Contract Jobs
@@ -79,40 +140,40 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
 
         <div className="p-5 rounded-2xl bg-purple-500/10 border border-purple-500/30 shadow-sm">
           <div className="flex items-center justify-between text-xs font-extrabold text-purple-700 dark:text-purple-300 uppercase">
-            <span>Contractor Payouts</span>
+            <span>Contractor Accruals</span>
             <DollarSign className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-2xl font-black text-purple-700 dark:text-purple-300 mt-2">
-            ₹{totalContractorPayouts.toLocaleString()}
+            ₹{totalContractorAccrued.toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-purple-600/80 dark:text-purple-400 mt-1 font-semibold">
-            Due to Painters, Denters & Vendors
+            Accrued by Painters & Denters
           </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 shadow-sm">
           <div className="flex items-center justify-between text-xs font-extrabold text-emerald-700 dark:text-emerald-300 uppercase">
-            <span>Workshop Gross Margin</span>
-            <Award className="w-4 h-4 text-emerald-500" />
+            <span>Payments Paid to Date</span>
+            <Receipt className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-2">
-            ₹{totalWorkshopMargin.toLocaleString()}
+            ₹{totalPaymentsPaid.toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-emerald-600/80 dark:text-emerald-400 mt-1 font-semibold">
-            {totalCustomerRevenue > 0 ? `${Math.round((totalWorkshopMargin / totalCustomerRevenue) * 100)}% Margin` : '0%'}
+            Disbursed by Admin / Manager
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase">
-            <span>Jobs Completed</span>
-            <CheckCircle2 className="w-4 h-4 text-blue-500" />
+        <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-extrabold text-amber-700 dark:text-amber-300 uppercase">
+            <span>Remaining Net Payable</span>
+            <CheckCircle2 className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            {completedCount} / {filtered.length}
+          <div className="text-2xl font-black text-amber-700 dark:text-amber-300 mt-2">
+            ₹{netRemainingPayable.toLocaleString('en-IN')}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1 font-semibold">
-            Active in Workshop & Billed
+          <div className="text-[11px] text-amber-600/80 dark:text-amber-400 mt-1 font-semibold">
+            Outstanding Account Balance Due
           </div>
         </div>
       </div>
@@ -154,6 +215,15 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
+
+          {selectedContractor !== 'ALL' && (
+            <button
+              onClick={() => setLedgerModalState({ isOpen: true, contractorName: selectedContractor })}
+              className="px-3 py-2 rounded-xl bg-purple-600 text-white font-extrabold flex items-center gap-1 shadow-sm hover:bg-purple-500"
+            >
+              <Receipt className="w-3.5 h-3.5" /> View {selectedContractor.split(' ')[0]}'s Account Statement
+            </button>
+          )}
         </div>
       </div>
 
@@ -170,13 +240,13 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                 <th className="px-4 py-3.5 text-right">Painter / Denter Share</th>
                 <th className="px-4 py-3.5 text-right">Total Payout</th>
                 <th className="px-4 py-3.5 text-right">Workshop Margin</th>
-                <th className="px-4 py-3.5 text-center">Status</th>
+                <th className="px-4 py-3.5 text-center">Account Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400 font-semibold">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400 font-semibold">
                     No contract payouts found matching your filter options.
                   </td>
                 </tr>
@@ -219,12 +289,12 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                         <Users className="w-3.5 h-3.5 text-purple-500" />
                         {record.assignedToName || 'Unassigned'}
                       </div>
-                      <div className="text-[10px] text-slate-400">Contractor / Vendor</div>
+                      <div className="text-[10px] text-slate-400">Contractor / Staff</div>
                     </td>
 
                     {/* Customer Price */}
                     <td className="px-4 py-3.5 text-right font-bold text-slate-900 dark:text-white">
-                      ₹{record.customerPrice.toLocaleString()}
+                      ₹{record.customerPrice.toLocaleString('en-IN')}
                     </td>
 
                     {/* Painter / Denter Share */}
@@ -239,23 +309,42 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
 
                     {/* Contractor Payout */}
                     <td className="px-4 py-3.5 text-right font-black text-purple-700 dark:text-purple-300 text-sm">
-                      ₹{record.contractorPayout.toLocaleString()}
+                      ₹{record.contractorPayout.toLocaleString('en-IN')}
                     </td>
 
                     {/* Margin */}
                     <td className="px-4 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
-                      ₹{record.workshopMargin.toLocaleString()}
+                      ₹{record.workshopMargin.toLocaleString('en-IN')}
                     </td>
 
-                    {/* Status */}
+                    {/* Account Actions */}
                     <td className="px-4 py-3.5 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        record.taskStatus === 'COMPLETED' || record.jobCardStatus === 'CLOSED'
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                          : 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                      }`}>
-                        {record.taskStatus === 'COMPLETED' || record.jobCardStatus === 'CLOSED' ? 'ACCRUED & BILLED' : record.taskStatus}
-                      </span>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => setLedgerModalState({ 
+                            isOpen: true, 
+                            contractorName: record.assignedToName || 'Contractor' 
+                          })}
+                          className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-extrabold text-[11px] border border-purple-500/20 transition-all flex items-center gap-1"
+                        >
+                          <Receipt className="w-3 h-3" /> Account Ledger
+                        </button>
+
+                        {isAdminOrManager && (
+                          <button
+                            onClick={() => setRecordPaymentModalState({
+                              isOpen: true,
+                              contractorId: record.assignedToId || record.assignedToName,
+                              contractorName: record.assignedToName,
+                              suggestedAmount: record.contractorPayout
+                            })}
+                            className="px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-black text-[11px] border border-emerald-500/20 transition-all"
+                            title="Record payment to contractor"
+                          >
+                            Pay ₹
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -264,6 +353,32 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
           </table>
         </div>
       </div>
+
+      {/* Account Ledger Modal */}
+      {ledgerModalState.isOpen && ledgerModalState.contractorName && (
+        <AccountBillingLedgerModal
+          isOpen={ledgerModalState.isOpen}
+          onClose={() => setLedgerModalState({ isOpen: false })}
+          accountType="CONTRACTOR"
+          accountIdOrName={ledgerModalState.contractorName}
+          accountDisplayName={ledgerModalState.contractorName}
+          currentRole={currentRole}
+        />
+      )}
+
+      {/* Record Payment Sub-Modal */}
+      {recordPaymentModalState.isOpen && (
+        <RecordPaymentModal
+          isOpen={recordPaymentModalState.isOpen}
+          onClose={() => setRecordPaymentModalState({ isOpen: false })}
+          targetType="CONTRACTOR"
+          targetId={recordPaymentModalState.contractorId}
+          targetName={recordPaymentModalState.contractorName}
+          suggestedAmount={recordPaymentModalState.suggestedAmount}
+          onPaymentRecorded={refreshReport}
+        />
+      )}
     </div>
   );
 }
+
