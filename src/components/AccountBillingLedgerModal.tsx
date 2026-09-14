@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   getContractorAccountSummary, 
   getVendorAccountSummary, 
@@ -21,7 +21,10 @@ import {
   ArrowUpRight,
   TrendingUp,
   ShieldCheck,
-  Plus
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  Car
 } from 'lucide-react';
 
 interface AccountBillingLedgerModalProps {
@@ -47,6 +50,11 @@ export function AccountBillingLedgerModal({
 
   const [contractorSummary, setContractorSummary] = useState<ContractorAccountSummary | null>(null);
   const [vendorSummary, setVendorSummary] = useState<VendorAccountSummary | null>(null);
+  const [collapsedVehicles, setCollapsedVehicles] = useState<Record<string, boolean>>({});
+
+  const toggleVehicle = (key: string) => {
+    setCollapsedVehicles(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const loadSummaryData = () => {
     if (!accountIdOrName) return;
@@ -58,6 +66,41 @@ export function AccountBillingLedgerModal({
       setVendorSummary(summary);
     }
   };
+
+  // Group contractor task allotments by vehicle
+  const vehicleGroups = useMemo(() => {
+    if (!contractorSummary?.taskAllotments) return [];
+    const map = new Map<string, {
+      key: string;
+      vehicleReg: string;
+      vehicleModel: string;
+      jobCardNumber: string;
+      tasks: typeof contractorSummary.taskAllotments;
+      totalCustomerPrice: number;
+      totalContractorPayout: number;
+    }>();
+
+    contractorSummary.taskAllotments.forEach((task) => {
+      const key = `${task.vehicleReg || 'N/A'}-${task.jobCardNumber || task.jobCardId || 'JC'}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          vehicleReg: task.vehicleReg || 'N/A',
+          vehicleModel: task.vehicleModel || 'Vehicle',
+          jobCardNumber: task.jobCardNumber || task.jobCardId,
+          tasks: [],
+          totalCustomerPrice: 0,
+          totalContractorPayout: 0
+        });
+      }
+      const group = map.get(key)!;
+      group.tasks.push(task);
+      group.totalCustomerPrice += task.customerPrice || 0;
+      group.totalContractorPayout += task.contractorPayout || 0;
+    });
+
+    return Array.from(map.values());
+  }, [contractorSummary]);
 
   useEffect(() => {
     loadSummaryData();
@@ -214,69 +257,105 @@ export function AccountBillingLedgerModal({
 
         </div>
 
-        {/* Tab Content Body */}
-        <div className="p-5 overflow-y-auto max-h-[50vh]">
+        {/* Tab Content Body (Scrollable X & Y) */}
+        <div className="p-5 overflow-x-auto overflow-y-auto max-h-[60vh] space-y-4">
           {activeTab === 'ACCROUED_JOBS' ? (
             accountType === 'CONTRACTOR' ? (
-              /* Contractor Tasks List */
-              <div className="space-y-3">
-                {contractorSummary?.taskAllotments.length === 0 ? (
+              /* Vehicle-Wise Contractor Tasks List */
+              <div className="space-y-4 min-w-[320px]">
+                {vehicleGroups.length === 0 ? (
                   <div className="p-8 text-center bg-slate-950 rounded-2xl border border-slate-800 text-slate-400 text-xs">
                     No task allotments found for this contractor account yet.
                   </div>
                 ) : (
-                  <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800">
-                        <tr>
-                          <th className="px-4 py-3">Vehicle &amp; Job Card</th>
-                          <th className="px-4 py-3">Task Title</th>
-                          <th className="px-4 py-3 text-right">Customer Price</th>
-                          <th className="px-4 py-3 text-right">Contractor Payout</th>
-                          <th className="px-4 py-3 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800 font-medium text-slate-300">
-                        {contractorSummary?.taskAllotments.map((task, idx) => (
-                          <tr key={`${task.taskId}-${idx}`} className="hover:bg-slate-900/60 transition-colors">
-                            <td className="px-4 py-3">
-                              <span className="font-mono font-bold text-amber-400 block">{task.vehicleReg}</span>
-                              <span className="text-[11px] text-slate-400">{task.vehicleModel} • #{task.jobCardNumber}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="font-extrabold text-white block">{task.taskTitle}</span>
-                              <span className="text-[10px] uppercase font-bold text-slate-500">{task.category}</span>
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-slate-300">
-                              ₹{task.customerPrice.toLocaleString('en-IN')}
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono font-black text-purple-400 text-sm">
-                              ₹{task.contractorPayout.toLocaleString('en-IN')}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                task.taskStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                              }`}>
-                                {task.taskStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/90 font-bold border-t border-slate-700 text-white">
-                        <tr>
-                          <td colSpan={2} className="px-4 py-3 text-xs uppercase text-slate-400">Total Account Summary ({contractorSummary?.taskAllotments.length || 0} Tasks)</td>
-                          <td className="px-4 py-3 text-right font-mono text-slate-300">
-                            ₹{contractorSummary?.taskAllotments.reduce((sum, t) => sum + t.customerPrice, 0).toLocaleString('en-IN')}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-amber-400 font-black text-sm">
-                            ₹{contractorSummary?.taskAllotments.reduce((sum, t) => sum + t.contractorPayout, 0).toLocaleString('en-IN')}
-                          </td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                  vehicleGroups.map((group) => {
+                    const isCollapsed = !!collapsedVehicles[group.key];
+                    return (
+                      <div key={group.key} className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-sm">
+                        {/* Vehicle Header Card */}
+                        <div 
+                          onClick={() => toggleVehicle(group.key)}
+                          className="p-3.5 bg-slate-900/90 hover:bg-slate-900 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-[200px]">
+                            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                              <Car className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-black text-amber-400 text-sm tracking-wide">{group.vehicleReg}</span>
+                                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">
+                                  #{group.jobCardNumber}
+                                </span>
+                              </div>
+                              <div className="text-xs font-semibold text-slate-400 mt-0.5">
+                                {group.vehicleModel} • <span className="text-emerald-400 font-bold">{group.tasks.length} {group.tasks.length === 1 ? 'Task' : 'Tasks'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-xs ml-auto">
+                            <div className="text-right">
+                              <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Customer Job Value</span>
+                              <span className="font-mono font-bold text-slate-300">₹{group.totalCustomerPrice.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="text-right pl-3 border-l border-slate-800">
+                              <span className="text-[10px] font-extrabold uppercase text-amber-500/80 block">Contractor Share</span>
+                              <span className="font-mono font-black text-amber-400 text-base">₹{group.totalContractorPayout.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+                              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Vehicle Tasks Breakdown Table */}
+                        {!isCollapsed && (
+                          <div className="overflow-x-auto overflow-y-auto max-h-[300px]">
+                            <table className="w-full text-left text-xs min-w-[620px]">
+                              <thead className="bg-slate-900/60 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[11px]">
+                                <tr>
+                                  <th className="px-4 py-2.5">Task Title</th>
+                                  <th className="px-4 py-2.5">Category</th>
+                                  <th className="px-4 py-2.5 text-right">Job Price</th>
+                                  <th className="px-4 py-2.5 text-right">Contractor Payout</th>
+                                  <th className="px-4 py-2.5 text-center">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800/80 font-medium text-slate-300">
+                                {group.tasks.map((task, idx) => (
+                                  <tr key={`${task.taskId}-${idx}`} className="hover:bg-slate-900/40 transition-colors">
+                                    <td className="px-4 py-3">
+                                      <span className="font-extrabold text-white block">{task.taskTitle}</span>
+                                      <span className="text-[10px] font-mono text-slate-500">ID: {task.taskId}</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] uppercase">
+                                        {task.category}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono text-slate-300">
+                                      ₹{task.customerPrice.toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono font-black text-purple-400 text-sm">
+                                      ₹{task.contractorPayout.toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                        task.taskStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                      }`}>
+                                        {task.taskStatus}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             ) : (

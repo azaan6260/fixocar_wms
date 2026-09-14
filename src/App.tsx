@@ -115,19 +115,11 @@ export default function App() {
     window.addEventListener('hashchange', handlePopState);
     initMobileEnvironment();
 
-    setupNativeBackButton(() => {
-      // Exit app if on root homepage '/' or on '/wms' when no detail view or modal is open
-      const path = window.location.pathname.toLowerCase();
-      const isHome = path === '/' || path === '/index.html' || path === '';
-      const isWmsRoot = path.includes('wms') && !selectedJobCardId && !isCreateModalOpen && !isLoginModalOpen && !isAppVersionModalOpen;
-      return isHome || isWmsRoot;
-    });
-
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('hashchange', handlePopState);
     };
-  }, [selectedJobCardId, isCreateModalOpen, isLoginModalOpen, isAppVersionModalOpen]);
+  }, []);
 
   // QR Code Modals State
   const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);
@@ -140,11 +132,13 @@ export default function App() {
     customerPortalCardId,
     qcModalCardId,
     isSupabaseModalOpen,
+    isAppVersionModalOpen,
     qrModalCardId,
     isScannerOpen,
     isLoginModalOpen,
     activeTab,
-    currentRole
+    currentRole,
+    routePath
   });
 
   useEffect(() => {
@@ -154,11 +148,13 @@ export default function App() {
       customerPortalCardId,
       qcModalCardId,
       isSupabaseModalOpen,
+      isAppVersionModalOpen,
       qrModalCardId,
       isScannerOpen,
       isLoginModalOpen,
       activeTab,
-      currentRole
+      currentRole,
+      routePath
     };
   }, [
     selectedJobCardId,
@@ -166,11 +162,13 @@ export default function App() {
     customerPortalCardId,
     qcModalCardId,
     isSupabaseModalOpen,
+    isAppVersionModalOpen,
     qrModalCardId,
     isScannerOpen,
     isLoginModalOpen,
     activeTab,
-    currentRole
+    currentRole,
+    routePath
   ]);
 
   // Handle Capacitor native Android back button clicks
@@ -183,8 +181,9 @@ export default function App() {
         
         backListener = await CapApp.addListener('backButton', () => {
           const state = uiStateRef.current;
+          const openModalsInDom = document.querySelectorAll('.fixed.inset-0.z-50, .fixed.inset-0.z-40, [role="dialog"]');
 
-          // 1. Close any active modal or detailed screen
+          // 1. Close any active modal or detailed screen first
           if (state.selectedJobCardId !== null) {
             setSelectedJobCardId(null);
           } else if (state.isCreateModalOpen) {
@@ -199,14 +198,24 @@ export default function App() {
             setIsScannerOpen(false);
           } else if (state.isSupabaseModalOpen) {
             setIsSupabaseModalOpen(false);
+          } else if (state.isAppVersionModalOpen) {
+            setIsAppVersionModalOpen(false);
           } else if (state.isLoginModalOpen) {
             setIsLoginModalOpen(false);
+          } else if (openModalsInDom.length > 0) {
+            // Trigger Escape key event to close nested child modals
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
           }
-          // 2. If no modal is open, but they are not on the default dashboard/home tab, navigate back to 'dashboard'
-          else if (state.activeTab !== 'dashboard') {
+          // 2. If no modal is open, but inside WMS and not on default 'dashboard' tab, navigate back to 'dashboard' tab
+          else if (state.routePath.includes('wms') && state.activeTab !== 'dashboard') {
             setActiveTab('dashboard');
           }
-          // 3. Otherwise, exit the app
+          // 3. If no modal is open and on WMS dashboard tab, navigate back to home screen '/'
+          else if (state.routePath.includes('wms')) {
+            window.history.pushState({}, '', '/');
+            setRoutePath('/');
+          }
+          // 4. If already on home screen '/' with no modals open, exit the native application
           else {
             CapApp.exitApp();
           }
