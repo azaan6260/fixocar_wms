@@ -62,7 +62,7 @@ import { CommonHomePage } from './components/CommonHomePage';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { AppVersionModal } from './components/AppVersionModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { initMobileEnvironment } from './lib/mobileBridge';
+import { initMobileEnvironment, setupNativeBackButton } from './lib/mobileBridge';
 
 export default function App() {
   // Authentication state
@@ -77,19 +77,6 @@ export default function App() {
     }
     return '/';
   });
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setRoutePath(window.location.pathname.toLowerCase() + window.location.hash.toLowerCase() + window.location.search.toLowerCase());
-    };
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('hashchange', handlePopState);
-    initMobileEnvironment();
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('hashchange', handlePopState);
-    };
-  }, []);
 
   const isWmsRoute = routePath.includes('wms');
 
@@ -119,6 +106,28 @@ export default function App() {
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAppVersionModalOpen, setIsAppVersionModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoutePath(window.location.pathname.toLowerCase() + window.location.hash.toLowerCase() + window.location.search.toLowerCase());
+    };
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    initMobileEnvironment();
+
+    setupNativeBackButton(() => {
+      // Exit app if on root homepage '/' or on '/wms' when no detail view or modal is open
+      const path = window.location.pathname.toLowerCase();
+      const isHome = path === '/' || path === '/index.html' || path === '';
+      const isWmsRoot = path.includes('wms') && !selectedJobCardId && !isCreateModalOpen && !isLoginModalOpen && !isAppVersionModalOpen;
+      return isHome || isWmsRoot;
+    });
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, [selectedJobCardId, isCreateModalOpen, isLoginModalOpen, isAppVersionModalOpen]);
 
   // QR Code Modals State
   const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);

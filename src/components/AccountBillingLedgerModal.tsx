@@ -126,21 +126,21 @@ export function AccountBillingLedgerModal({
           {/* Total Accrued */}
           <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
             <div className="flex items-center justify-between text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-              <span>Total Accrued Bills</span>
+              <span>{accountType === 'CONTRACTOR' ? 'Contractor Billed Earnings' : 'Total Accrued Bills'}</span>
               <TrendingUp className="w-4 h-4 text-amber-400" />
             </div>
-            <div className="text-2xl font-black text-white font-mono">
+            <div className="text-2xl font-black text-amber-400 font-mono">
               ₹{totalAccrued.toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] text-slate-500 font-semibold">
-              Gross value of completed tasks / POs
+              {accountType === 'CONTRACTOR' ? 'Accrued contractor share from completed tasks' : 'Gross value of completed tasks / POs'}
             </div>
           </div>
 
           {/* Total Payments Made */}
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
             <div className="flex items-center justify-between text-xs font-extrabold text-emerald-400 uppercase tracking-wider">
-              <span>Total Payments Received</span>
+              <span>Total Payments Disbursed</span>
               <ArrowDownRight className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-black text-emerald-400 font-mono">
@@ -158,14 +158,14 @@ export function AccountBillingLedgerModal({
               : 'bg-slate-900 border-slate-800 text-slate-300'
           }`}>
             <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider">
-              <span>Net Account Balance Due</span>
+              <span>Net Balance Payable</span>
               <DollarSign className="w-4 h-4" />
             </div>
             <div className="text-2xl font-black font-mono">
               ₹{netBalance.toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] font-semibold opacity-80">
-              {netBalance > 0 ? 'Remaining payable by workshop' : 'Fully Settled Account'}
+              {netBalance > 0 ? 'Remaining amount due to contractor' : 'Fully Settled Account'}
             </div>
           </div>
 
@@ -263,6 +263,18 @@ export function AccountBillingLedgerModal({
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot className="bg-slate-900/90 font-bold border-t border-slate-700 text-white">
+                        <tr>
+                          <td colSpan={2} className="px-4 py-3 text-xs uppercase text-slate-400">Total Account Summary ({contractorSummary?.taskAllotments.length || 0} Tasks)</td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-300">
+                            ₹{contractorSummary?.taskAllotments.reduce((sum, t) => sum + t.customerPrice, 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-amber-400 font-black text-sm">
+                            ₹{contractorSummary?.taskAllotments.reduce((sum, t) => sum + t.contractorPayout, 0).toLocaleString('en-IN')}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 )}

@@ -390,7 +390,6 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
                     <span>Work Email Address</span>
-                    <span className="text-[10px] text-blue-400 font-normal">e.g. admin@fixocar.com</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -400,7 +399,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                       type="email"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. admin@fixocar.com or taifur@fixocar.com"
+                      placeholder="Enter work email"
                       required
                       autoFocus
                       autoCapitalize="none"
@@ -427,16 +426,6 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
                       required
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                     />
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <div className="text-white font-bold">Standard Workshop Credentials:</div>
-                    <div className="text-[10px] text-slate-400">
-                      You can also type any team member email from the Staff Directory. Password: <span className="text-white font-mono font-bold">123456</span>
-                    </div>
                   </div>
                 </div>
               </>

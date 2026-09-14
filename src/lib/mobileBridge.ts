@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
@@ -10,6 +11,25 @@ export function isNativeMobile(): boolean {
     return Capacitor.isNativePlatform();
   } catch {
     return false;
+  }
+}
+
+/**
+ * Register hardware back button listener for native Android exit
+ */
+export function setupNativeBackButton(canExitFn: () => boolean): void {
+  if (isNativeMobile()) {
+    try {
+      CapApp.addListener('backButton', (state) => {
+        if (canExitFn() || !state.canGoBack) {
+          CapApp.exitApp();
+        } else {
+          window.history.back();
+        }
+      });
+    } catch (e) {
+      console.warn('Native back button listener failed to bind:', e);
+    }
   }
 }
 

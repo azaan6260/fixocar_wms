@@ -160,7 +160,7 @@ export function AppVersionModal({ isOpen, onClose }: AppVersionModalProps) {
             </div>
             
             <p className="text-xs text-slate-300 leading-relaxed">
-              When installing a new APK file on an Android device without uninstalling the existing application, Android OS enforces two strict security rules:
+              When updating an APK file on Android, Android OS enforces strict installation policies:
             </p>
 
             <div className="space-y-2 text-xs">
@@ -168,15 +168,23 @@ export function AppVersionModal({ isOpen, onClose }: AppVersionModalProps) {
                 <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</div>
                 <div>
                   <span className="font-bold text-amber-300 block">Strict versionCode Increment</span>
-                  <span className="text-slate-400">The new APK's <code className="text-amber-300 font-mono">versionCode</code> must be strictly greater than the currently installed APK's <code className="text-amber-300 font-mono">versionCode</code> (e.g. 3 &gt; 2). If <code className="text-amber-300 font-mono">versionCode</code> is equal or lower, Android aborts installation with "App Not Installed".</span>
+                  <span className="text-slate-400">The new APK's <code className="text-amber-300 font-mono">versionCode</code> must be strictly greater than the installed build's <code className="text-amber-300 font-mono">versionCode</code>. Press "Bump versionCode" above before generating a new APK.</span>
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-blue-500/20 flex items-start gap-2.5">
                 <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</div>
                 <div>
-                  <span className="font-bold text-amber-300 block">Keystore Signature Matching</span>
-                  <span className="text-slate-400">Both builds must be signed using the exact same keystore certificate (<code className="text-amber-300 font-mono">debug.keystore</code> or production key). Our Gradle config is configured to fall back to a consistent keystore to avoid signature mismatch conflicts.</span>
+                  <span className="font-bold text-amber-300 block">Keystore Signature Conflict Fix</span>
+                  <span className="text-slate-400">If Android displays <i>"App not installed"</i> or <i>"Signature mismatch"</i>, uninstall the previous development build once from your phone settings, then install the updated APK cleanly.</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-blue-500/20 flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</div>
+                <div>
+                  <span className="font-bold text-amber-300 block">Allow "Install Unknown Apps"</span>
+                  <span className="text-slate-400">Ensure your Chrome or Files app has <b>"Install Unknown Apps"</b> allowed under Android Settings &gt; Apps &gt; Special App Access.</span>
                 </div>
               </div>
             </div>
