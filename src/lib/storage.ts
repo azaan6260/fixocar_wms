@@ -2769,22 +2769,54 @@ export function addStandardJobToJobCard(
 
 export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
   const cards = getJobCards();
+  const stdJobs = getStandardJobs();
   const records: ContractorPayoutRecord[] = [];
 
   cards.forEach(card => {
+    // CRITICAL REQUIREMENT: Billing is visible ONLY when RFC (Ready For Completion/Delivery/Closed) is done for the vehicle.
+    // Work in progress vehicles are excluded from contractor account accruals.
+    const isRfcDone = 
+      card.status === 'RFC' || 
+      card.status === 'READY_FOR_DELIVERY' || 
+      card.status === 'OUT_FOR_DELIVERY' || 
+      card.status === 'DELIVERED' || 
+      card.status === 'CLOSED';
+
+    if (!isRfcDone) {
+      return;
+    }
+
     card.tasks.forEach(task => {
       // Contract basis tasks (Denting, Paint, Sublet or marked isContractBasis)
       if (task.isContractBasis || task.category === 'DENTING' || task.category === 'PAINT' || (task.contractorPayout && task.contractorPayout > 0)) {
-        const painter = task.painterPayout ?? (task.category === 'PAINT' ? Math.round(task.customerPrice * 0.45) : 0);
-        const denter = task.denterPayout ?? (task.category === 'DENTING' ? Math.round(task.customerPrice * 0.35) : (task.category === 'PAINT' ? 150 : 0));
-        const payout = task.contractorPayout || (painter + denter) || Math.round(task.customerPrice * 0.5);
+        // Look up standard job rate if standardJobId or panelKey matches
+        let stdJob = stdJobs.find(j => j.id === task.standardJobId || (j.panelKey && j.panelKey === task.panelKey));
+        if (!stdJob) {
+          stdJob = INITIAL_STANDARD_JOBS.find(j => j.id === task.standardJobId || (j.panelKey && j.panelKey === task.panelKey));
+        }
+
+        const isCars24 = card.isCars24 || false;
+        let stdPayout = 0;
+        if (stdJob) {
+          stdPayout = isCars24
+            ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? ((stdJob.cars24PainterPayout ?? 0) + (stdJob.cars24DenterPayout ?? 0)))
+            : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? ((stdJob.retailPainterPayout ?? 0) + (stdJob.retailDenterPayout ?? 0)));
+        }
+
+        const painter = task.painterPayout ?? (task.category === 'PAINT' ? Math.round((task.contractorPayout || stdPayout) * 0.8) : 0);
+        const denter = task.denterPayout ?? (task.category === 'DENTING' ? Math.round((task.contractorPayout || stdPayout) * 0.8) : (task.category === 'PAINT' ? 150 : 0));
+        
+        // Payout priority: 1) Admin/Manager fed task.contractorPayout, 2) Standard jobs catalog rate, 3) Painter + Denter split
+        const payout = (task.contractorPayout && task.contractorPayout > 0)
+          ? task.contractorPayout
+          : (stdPayout > 0 ? stdPayout : ((painter + denter) || 0));
 
         records.push({
           jobCardId: card.id,
           jobCardNumber: card.id,
           vehicleReg: card.vehicle.registrationNumber,
           vehicleModel: `${card.vehicle.make} ${card.vehicle.model}`,
-          isCars24: card.isCars24 || false,
+          isCars24,
           taskId: task.id,
           taskTitle: task.title,
           category: task.category,
@@ -2794,7 +2826,7 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
           contractorPayout: payout,
           painterPayout: painter,
           denterPayout: denter,
-          workshopMargin: task.customerPrice - payout,
+          workshopMargin: Math.max(0, task.customerPrice - payout),
           taskStatus: task.status,
           jobCardStatus: card.status,
           billFinalizedAt: card.createdAt

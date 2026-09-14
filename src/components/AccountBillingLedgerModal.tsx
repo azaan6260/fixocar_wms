@@ -296,10 +296,6 @@ export function AccountBillingLedgerModal({
 
                           <div className="flex items-center gap-4 text-xs ml-auto">
                             <div className="text-right">
-                              <span className="text-[10px] font-extrabold uppercase text-slate-500 block">Customer Job Value</span>
-                              <span className="font-mono font-bold text-slate-300">₹{group.totalCustomerPrice.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="text-right pl-3 border-l border-slate-800">
                               <span className="text-[10px] font-extrabold uppercase text-amber-500/80 block">Contractor Share</span>
                               <span className="font-mono font-black text-amber-400 text-base">₹{group.totalContractorPayout.toLocaleString('en-IN')}</span>
                             </div>
@@ -312,12 +308,11 @@ export function AccountBillingLedgerModal({
                         {/* Vehicle Tasks Breakdown Table */}
                         {!isCollapsed && (
                           <div className="overflow-x-auto overflow-y-auto max-h-[300px]">
-                            <table className="w-full text-left text-xs min-w-[620px]">
+                            <table className="w-full text-left text-xs min-w-[500px]">
                               <thead className="bg-slate-900/60 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800 text-[11px]">
                                 <tr>
                                   <th className="px-4 py-2.5">Task Title</th>
                                   <th className="px-4 py-2.5">Category</th>
-                                  <th className="px-4 py-2.5 text-right">Job Price</th>
                                   <th className="px-4 py-2.5 text-right">Contractor Payout</th>
                                   <th className="px-4 py-2.5 text-center">Status</th>
                                 </tr>
@@ -333,9 +328,6 @@ export function AccountBillingLedgerModal({
                                       <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px] uppercase">
                                         {task.category}
                                       </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-right font-mono text-slate-300">
-                                      ₹{task.customerPrice.toLocaleString('en-IN')}
                                     </td>
                                     <td className="px-4 py-3 text-right font-mono font-black text-purple-400 text-sm">
                                       ₹{task.contractorPayout.toLocaleString('en-IN')}

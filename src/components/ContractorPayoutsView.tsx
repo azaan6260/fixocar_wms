@@ -125,18 +125,33 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
 
       {/* Analytics Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase">
-            <span>Customer Revenue</span>
-            <Tag className="w-4 h-4 text-emerald-500" />
+        {isAdminOrManager ? (
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase">
+              <span>Customer Revenue</span>
+              <Tag className="w-4 h-4 text-emerald-500" />
+            </div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+              ₹{totalCustomerRevenue.toLocaleString('en-IN')}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 font-semibold">
+              Billed for {filtered.length} Contract Jobs
+            </div>
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-            ₹{totalCustomerRevenue.toLocaleString('en-IN')}
+        ) : (
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase">
+              <span>Completed RFC Jobs</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+              {filtered.length} Jobs
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 font-semibold">
+              Ready For Collection (RFC)
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1 font-semibold">
-            Billed for {filtered.length} Contract Jobs
-          </div>
-        </div>
+        )}
 
         <div className="p-5 rounded-2xl bg-purple-500/10 border border-purple-500/30 shadow-sm">
           <div className="flex items-center justify-between text-xs font-extrabold text-purple-700 dark:text-purple-300 uppercase">
@@ -236,17 +251,17 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                 <th className="px-4 py-3.5">Vehicle & Job Card</th>
                 <th className="px-4 py-3.5">Task / Contract Job</th>
                 <th className="px-4 py-3.5">Allotted Contractor</th>
-                <th className="px-4 py-3.5 text-right">Customer Price</th>
+                {isAdminOrManager && <th className="px-4 py-3.5 text-right">Customer Price</th>}
                 <th className="px-4 py-3.5 text-right">Painter / Denter Share</th>
                 <th className="px-4 py-3.5 text-right">Total Payout</th>
-                <th className="px-4 py-3.5 text-right">Workshop Margin</th>
+                {isAdminOrManager && <th className="px-4 py-3.5 text-right">Workshop Margin</th>}
                 <th className="px-4 py-3.5 text-center">Account Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400 font-semibold">
+                  <td colSpan={isAdminOrManager ? 8 : 6} className="px-4 py-8 text-center text-slate-400 font-semibold">
                     No contract payouts found matching your filter options.
                   </td>
                 </tr>
@@ -292,10 +307,12 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                       <div className="text-[10px] text-slate-400">Contractor / Staff</div>
                     </td>
 
-                    {/* Customer Price */}
-                    <td className="px-4 py-3.5 text-right font-bold text-slate-900 dark:text-white">
-                      ₹{record.customerPrice.toLocaleString('en-IN')}
-                    </td>
+                    {/* Customer Price (Admin/Manager only) */}
+                    {isAdminOrManager && (
+                      <td className="px-4 py-3.5 text-right font-bold text-slate-900 dark:text-white">
+                        ₹{record.customerPrice.toLocaleString('en-IN')}
+                      </td>
+                    )}
 
                     {/* Painter / Denter Share */}
                     <td className="px-4 py-3.5 text-right font-semibold text-slate-700 dark:text-slate-300">
@@ -312,10 +329,12 @@ export function ContractorPayoutsView({ currentRole }: ContractorPayoutsViewProp
                       ₹{record.contractorPayout.toLocaleString('en-IN')}
                     </td>
 
-                    {/* Margin */}
-                    <td className="px-4 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
-                      ₹{record.workshopMargin.toLocaleString('en-IN')}
-                    </td>
+                    {/* Margin (Admin/Manager only) */}
+                    {isAdminOrManager && (
+                      <td className="px-4 py-3.5 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
+                        ₹{record.workshopMargin.toLocaleString('en-IN')}
+                      </td>
+                    )}
 
                     {/* Account Actions */}
                     <td className="px-4 py-3.5 text-center">

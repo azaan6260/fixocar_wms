@@ -304,8 +304,8 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
   // Rear Area
   {
     id: 'boot_trunk',
-    code: 'BOOT',
-    nameEn: 'Boot Lid / Dicky Door (Outer Panel)',
+    code: 'DICKY',
+    nameEn: 'Dicky Door / Boot Lid (Outer Panel)',
     nameHi: 'डिक्की का दरवाजा / बूट लिड (Dicky Door)',
     standardJobId: 'std-boot-trunk-full',
     view: 'TOP',
@@ -318,7 +318,7 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
   },
   {
     id: 'boot_floor',
-    code: 'B-FLR',
+    code: 'DICKY FLR',
     nameEn: 'Dicky Boot Floor / Underbody (Internal Panel)',
     nameHi: 'डिक्की का फर्श (Dicky Boot Floor)',
     standardJobId: 'std-boot-floor-full',
@@ -461,6 +461,169 @@ export function InteractiveVehicleInspectionChart({
         return sum + (isCars24 ? 1350 : (p.defaultPrice || 1350));
       }, 0);
   }, [selectedPanelIds, inspections, effectiveStandardJobs, isCars24]);
+
+  if (compact) {
+    return (
+      <div className="w-full bg-slate-950 text-white rounded-2xl border border-slate-800 p-4 sm:p-6 flex flex-col items-center justify-center relative shadow-inner">
+        {/* Top Orientation Bar */}
+        <div className="w-full max-w-[500px] flex items-center justify-between text-xs text-slate-400 mb-3 px-3 font-mono font-bold">
+          <span className="flex items-center gap-1.5 text-amber-400">
+            <span>⬆️ FRONT (आगे - BONNET)</span>
+          </span>
+          <span className="text-[11px] text-slate-500 font-semibold">
+            (LHS बायां • RHS दायां)
+          </span>
+          <span className="flex items-center gap-1.5 text-amber-400">
+            <span>⬇️ REAR (पीछे - DICKY)</span>
+          </span>
+        </div>
+
+        {/* SVG Vehicle Blueprint Sketch - Enlarged for maximum panel clarity */}
+        <div className="w-full max-w-[460px] sm:max-w-[520px] aspect-[440/440] relative flex items-center justify-center my-2">
+          <svg
+            viewBox="0 0 440 440"
+            className="w-full h-full drop-shadow-2xl select-none"
+          >
+            <defs>
+              <pattern id="tirePattern" width="10" height="10" patternUnits="userSpaceOnUse">
+                <path d="M 0 5 L 10 5 M 5 0 L 5 10" stroke="#334155" strokeWidth="1" />
+              </pattern>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* Ground Shadow & Car Chassis Underbody Outline */}
+            <path
+              d="M 125 45 C 125 20, 315 20, 315 45 L 325 110 C 330 140, 330 290, 325 330 L 315 395 C 315 415, 125 415, 125 395 L 115 330 C 110 290, 110 140, 115 110 Z"
+              fill="#0f172a"
+              stroke="#334155"
+              strokeWidth="2.5"
+              strokeDasharray="4 2"
+            />
+
+            {/* 4 Tires (Wheels) */}
+            <rect x="94" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+            <rect x="322" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+            <rect x="94" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+            <rect x="322" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+
+            {/* Side Mirrors */}
+            <path d="M 120 135 C 100 135, 100 150, 120 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
+            <path d="M 320 135 C 340 135, 340 150, 320 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
+
+            {/* Headlights */}
+            <path d="M 142 32 C 150 25, 165 25, 175 34 L 165 48 C 155 45, 145 42, 142 32 Z" fill="#fbbf24" opacity="0.8" />
+            <path d="M 298 32 C 290 25, 275 25, 265 34 L 275 48 C 285 45, 295 42, 298 32 Z" fill="#fbbf24" opacity="0.8" />
+
+            {/* Tail-lights */}
+            <path d="M 142 390 C 150 396, 165 396, 175 390 L 168 378 C 158 382, 148 384, 142 390 Z" fill="#ef4444" opacity="0.8" />
+            <path d="M 298 390 C 290 396, 275 396, 265 390 L 272 378 C 282 382, 292 384, 298 390 Z" fill="#ef4444" opacity="0.8" />
+
+            {/* Interactive Panels */}
+            {VEHICLE_PANELS.map((panel) => {
+              const isActive = isPanelActive(panel.id);
+              const isHovered = activeHoveredPanel?.id === panel.id;
+
+              let fillColor = '#1e293b';
+              let strokeColor = '#475569';
+              let strokeWidth = '1.8';
+
+              if (isActive) {
+                fillColor = '#f59e0b';
+                strokeColor = '#fef08a';
+                strokeWidth = '2.5';
+              } else if (isHovered) {
+                fillColor = '#334155';
+                strokeColor = '#fbbf24';
+                strokeWidth = '2.5';
+              }
+
+              if (panel.id.includes('windshield')) {
+                fillColor = isActive ? '#38bdf8' : '#0f172a';
+                strokeColor = isActive ? '#bae6fd' : '#334155';
+              }
+
+              return (
+                <g
+                  key={panel.id}
+                  className="cursor-pointer transition-all duration-200"
+                  onMouseEnter={() => setActiveHoveredPanel(panel)}
+                  onMouseLeave={() => setActiveHoveredPanel(null)}
+                  onClick={() => handlePanelClick(panel)}
+                >
+                  {panel.svgShape.type === 'path' && (
+                    <path
+                      d={panel.svgShape.d}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={strokeWidth}
+                      filter={isActive ? 'url(#glow)' : undefined}
+                      className="transition-colors duration-150"
+                    />
+                  )}
+
+                  {panel.svgShape.type === 'rect' && (
+                    <rect
+                      x={panel.svgShape.x}
+                      y={panel.svgShape.y}
+                      width={panel.svgShape.width}
+                      height={panel.svgShape.height}
+                      rx={panel.svgShape.rx || 4}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={strokeWidth}
+                      className="transition-colors duration-150"
+                    />
+                  )}
+
+                  {/* Panel Label Pill on SVG */}
+                  <text
+                    x={panel.labelPos.x}
+                    y={panel.labelPos.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={isActive ? '#020617' : '#e2e8f0'}
+                    fontSize={panel.id === 'roof' ? '11' : panel.id === 'boot_trunk' ? '10' : '9'}
+                    fontWeight="900"
+                    fontFamily="system-ui, -apple-system, sans-serif"
+                    className="pointer-events-none select-none"
+                  >
+                    {isActive ? `✓ ${panel.code}` : panel.code}
+                  </text>
+
+                  {/* Active tick badge */}
+                  {isActive && (
+                    <circle
+                      cx={panel.labelPos.x + 22}
+                      cy={panel.labelPos.y - 10}
+                      r="5"
+                      fill="#10b981"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Minimal Sketch Visual Legend */}
+        <div className="w-full max-w-[500px] mt-2 pt-2 border-t border-slate-800 flex items-center justify-center gap-6 text-xs flex-wrap font-semibold">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded bg-slate-800 border border-slate-600 inline-block" />
+            <span className="text-slate-400">Regular Panel</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded bg-amber-500 border border-amber-300 inline-block" />
+            <span className="text-amber-300 font-bold">🎯 Allotted Panel ({selectedCount})</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-900 text-white rounded-3xl border border-slate-800 overflow-hidden shadow-2xl flex flex-col">

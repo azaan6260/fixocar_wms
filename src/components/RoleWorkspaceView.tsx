@@ -339,31 +339,14 @@ export function RoleWorkspaceView({
                       
                       {/* 1. AR VEHICLE PANEL MAP (For Painters & Denters) */}
                       {showARMap && (
-                        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 shadow-inner">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase tracking-wider">
-                              <span>🎯</span>
-                              <span>Allotted {currentRole === 'PAINTER' ? 'Painting' : currentRole === 'DENTER' ? 'Denting' : 'Vehicle'} Panels (AR View)</span>
-                            </div>
-                            <div className="text-[11px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-lg font-mono">
-                              {allottedPanelIds.length} Panel{allottedPanelIds.length === 1 ? '' : 's'} Highlighted
-                            </div>
-                          </div>
-
-                          {/* Interactive Vehicle Diagram */}
-                          <div className="border border-slate-800 rounded-2xl bg-slate-900/60 p-2 overflow-hidden shadow-lg">
-                            <InteractiveVehicleInspectionChart
-                              mode="VIEW"
-                              selectedPanelIds={allottedPanelIds}
-                              compact={true}
-                              currentRole={currentRole}
-                              vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-                            />
-                          </div>
-
-                          <p className="text-[11px] text-slate-400 italic text-center">
-                            Highlighted panels in gold show all {currentRole === 'PAINTER' ? 'painting' : currentRole === 'DENTER' ? 'denting' : 'assigned'} work allotted to you for {card.vehicle.registrationNumber}.
-                          </p>
+                        <div className="p-2 sm:p-3 rounded-2xl bg-slate-950 border border-slate-800 shadow-inner overflow-hidden">
+                          <InteractiveVehicleInspectionChart
+                            mode="VIEW"
+                            selectedPanelIds={allottedPanelIds}
+                            compact={true}
+                            currentRole={currentRole}
+                            vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+                          />
                         </div>
                       )}
 
