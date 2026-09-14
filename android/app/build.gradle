@@ -1,5 +1,20 @@
 apply plugin: 'com.android.application'
 
+def versionPropertiesFile = file('version.properties')
+def versionProps = new Properties()
+
+if (versionPropertiesFile.exists()) {
+    versionProps.load(new FileInputStream(versionPropertiesFile))
+}
+
+def appVersionCode = project.hasProperty('versionCode') ? 
+    Integer.parseInt(project.property('versionCode')) : 
+    Integer.parseInt(versionProps['VERSION_CODE'] ?: '3')
+
+def appVersionName = project.hasProperty('versionName') ? 
+    project.property('versionName') : 
+    (versionProps['VERSION_NAME'] ?: '1.0.2')
+
 android {
     namespace = "com.fixocar.workshop"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +22,8 @@ android {
         applicationId "com.fixocar.workshop"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,12 +32,25 @@ android {
         }
     }
     signingConfigs {
+        debug {
+            if (file('debug.keystore').exists()) {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
         release {
             if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
                 storeFile file(MYAPP_RELEASE_STORE_FILE)
                 storePassword MYAPP_RELEASE_STORE_PASSWORD
                 keyAlias MYAPP_RELEASE_KEY_ALIAS
                 keyPassword MYAPP_RELEASE_KEY_PASSWORD
+            } else if (file('debug.keystore').exists()) {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
             }
         }
     }
@@ -30,9 +58,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
-                signingConfig signingConfigs.release
-            }
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
 }

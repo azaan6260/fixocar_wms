@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -9,6 +9,8 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "bump:version": "node scripts/bump-version.js",
+    "build:apk": "node scripts/bump-version.js && vite build && cap sync android",
     "cap:sync": "cap sync",
     "cap:copy": "cap copy",
     "cap:open:android": "cap open android",

@@ -53,6 +53,7 @@ interface HeaderNavProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onOpenSupabaseModal: () => void;
+  onOpenAppVersionModal?: () => void;
   onOpenNewJobCardModal: () => void;
   onSwitchToCustomerPortal?: () => void;
   onOpenScanner?: () => void;
@@ -67,6 +68,7 @@ export function HeaderNav({
   activeTab,
   onTabChange,
   onOpenSupabaseModal,
+  onOpenAppVersionModal,
   onOpenNewJobCardModal,
   onSwitchToCustomerPortal,
   onOpenScanner,
@@ -547,21 +549,37 @@ export function HeaderNav({
               )}
 
               {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenSupabaseModal();
-                  }}
-                  className={`p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border ${
-                    supabaseConfig.isConfigured 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}
-                >
-                  <Database className="w-4 h-4" />
-                  <span>DB Settings</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenSupabaseModal();
+                    }}
+                    className={`p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border ${
+                      supabaseConfig.isConfigured 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>DB Settings</span>
+                  </button>
+
+                  {onOpenAppVersionModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        onOpenAppVersionModal();
+                      }}
+                      className="p-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    >
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      <span>📱 APK Version</span>
+                    </button>
+                  )}
+                </>
               )}
 
               <button

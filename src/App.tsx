@@ -60,6 +60,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { UnifiedLoginModal } from './components/UnifiedLoginModal';
 import { CommonHomePage } from './components/CommonHomePage';
 import { CustomerDashboard } from './components/CustomerDashboard';
+import { AppVersionModal } from './components/AppVersionModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { initMobileEnvironment } from './lib/mobileBridge';
 
@@ -117,6 +118,7 @@ export default function App() {
   const [customerPortalCardId, setCustomerPortalCardId] = useState<string | null>(null);
   const [qcModalCardId, setQcModalCardId] = useState<string | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isAppVersionModalOpen, setIsAppVersionModalOpen] = useState(false);
 
   // QR Code Modals State
   const [qrModalCardId, setQrModalCardId] = useState<string | null>(null);
@@ -466,6 +468,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onOpenAppVersionModal={() => setIsAppVersionModalOpen(true)}
         onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
         onOpenScanner={() => setIsScannerOpen(true)}
         onSelectJobCard={(id) => setSelectedJobCardId(id)}
@@ -721,6 +724,12 @@ export default function App() {
       <SupabaseSettingsModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
+      />
+
+      {/* Android APK Version Manager Modal */}
+      <AppVersionModal
+        isOpen={isAppVersionModalOpen}
+        onClose={() => setIsAppVersionModalOpen(false)}
       />
 
     </div>
