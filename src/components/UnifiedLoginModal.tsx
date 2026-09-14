@@ -44,6 +44,9 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
   const [isBiometricScanning, setIsBiometricScanning] = useState(false);
   const [savedBinding, setSavedBinding] = useState<BiometricBinding | null>(null);
   const [biometricNotice, setBiometricNotice] = useState<string | null>(null);
+  const [postLoginUser, setPostLoginUser] = useState<AuthUser | null>(null);
+  const [isRegisteringPostLogin, setIsRegisteringPostLogin] = useState(false);
+  const [postLoginSuccessMsg, setPostLoginSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (forcedMode) {
@@ -55,6 +58,8 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
     }
     setError(null);
     setBiometricNotice(null);
+    setPostLoginUser(null);
+    setPostLoginSuccessMsg(null);
     setIdentifier('');
     setPassword('');
     setSavedBinding(getSavedBiometricBinding());
@@ -195,6 +200,14 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
 
         setIsLoading(false);
         setSyncStatus(null);
+
+        // Check if biometric credential is already registered on this device for this employee
+        const currentBinding = getSavedBiometricBinding();
+        if (activeTab === 'STAFF' && (!currentBinding || currentBinding.userId !== result.user.id)) {
+          setPostLoginUser(result.user);
+          return;
+        }
+
         onLoginSuccess(result.user);
         onClose();
       } else {
@@ -208,6 +221,96 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
       setError('An unexpected login error occurred. Please try again.');
     }
   };
+
+  if (postLoginUser) {
+    const promptContent = (
+      <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-5 text-center relative overflow-hidden">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+          <Fingerprint className="w-8 h-8 text-white animate-pulse" />
+        </div>
+
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-black text-white">Enable 1-Tap Biometric Sign-In?</h3>
+          <p className="text-xs text-slate-300">
+            Welcome <span className="font-bold text-amber-400">{postLoginUser.name}</span>! Link your Fingerprint / Touch ID / Face ID on this device so you won't need to type your password next time.
+          </p>
+        </div>
+
+        {postLoginSuccessMsg ? (
+          <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>{postLoginSuccessMsg}</span>
+          </div>
+        ) : (
+          <div className="space-y-2.5 pt-2">
+            <button
+              type="button"
+              disabled={isRegisteringPostLogin}
+              onClick={async () => {
+                setIsRegisteringPostLogin(true);
+                try {
+                  const regRes = await registerBiometricForUser(postLoginUser);
+                  setIsRegisteringPostLogin(false);
+                  if (regRes.success) {
+                    setPostLoginSuccessMsg(`Biometrics linked for ${postLoginUser.name}!`);
+                    setTimeout(() => {
+                      onLoginSuccess(postLoginUser);
+                      onClose();
+                    }, 1100);
+                  } else {
+                    onLoginSuccess(postLoginUser);
+                    onClose();
+                  }
+                } catch {
+                  setIsRegisteringPostLogin(false);
+                  onLoginSuccess(postLoginUser);
+                  onClose();
+                }
+              }}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              {isRegisteringPostLogin ? (
+                <>
+                  <ScanFace className="w-4 h-4 animate-spin" />
+                  <span>Scanning Biometrics...</span>
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="w-4 h-4" />
+                  <span>Register Fingerprint / Face ID Now</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onLoginSuccess(postLoginUser);
+                onClose();
+              }}
+              className="w-full py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-all"
+            >
+              Skip for Now & Proceed to App
+            </button>
+          </div>
+        )}
+
+        <p className="text-[10px] text-slate-500">
+          You can also register or manage biometrics anytime from the top bar header.
+        </p>
+      </div>
+    );
+
+    if (isEmbedded) {
+      return <div className="w-full flex justify-center">{promptContent}</div>;
+    }
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+        {promptContent}
+      </div>
+    );
+  }
 
   const modalContent = (
     <div className="bg-slate-900 border border-slate-800 text-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative">

@@ -87,11 +87,53 @@ export function HeaderNav({
   const supabaseConfig = getStoredSupabaseConfig();
   const { t, language, setLanguage } = useI18n();
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [biometricBinding, setBiometricBinding] = useState(() => getSavedBiometricBinding());
+  const [isBiometricRegistering, setIsBiometricRegistering] = useState(false);
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
 
   useEffect(() => {
     setAuthUser(getAuthUser());
+    setBiometricBinding(getSavedBiometricBinding());
   }, [currentRole]);
+
+  const handleRegisterBiometric = async () => {
+    if (!authUser) {
+      dispatchToastNotification({
+        type: 'WARNING',
+        title: 'Sign-In Required',
+        message: 'Please sign in with your work password first before registering biometric credentials.'
+      });
+      return;
+    }
+
+    setIsBiometricRegistering(true);
+    try {
+      const res = await registerBiometricForUser(authUser);
+      setIsBiometricRegistering(false);
+
+      if (res.success && res.binding) {
+        setBiometricBinding(res.binding);
+        dispatchToastNotification({
+          type: 'SUCCESS',
+          title: 'Biometrics Registered!',
+          message: `Fingerprint / Touch ID / Face ID successfully linked for ${authUser.name} on this device.`
+        });
+      } else {
+        dispatchToastNotification({
+          type: 'WARNING',
+          title: 'Biometric Scanner Notice',
+          message: res.message || 'Biometric scan could not be completed.'
+        });
+      }
+    } catch (err: any) {
+      setIsBiometricRegistering(false);
+      dispatchToastNotification({
+        type: 'WARNING',
+        title: 'Biometric Setup Notice',
+        message: err?.message || 'Biometric registration failed. Please try again.'
+      });
+    }
+  };
 
   useEffect(() => {
     const syncHeaderStore = () => {
@@ -426,6 +468,30 @@ export function HeaderNav({
               )}
             </div>
 
+            {/* Quick Biometric Fingerprint Binding Button */}
+            {authUser && (
+              <button
+                type="button"
+                onClick={handleRegisterBiometric}
+                disabled={isBiometricRegistering}
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                  biometricBinding?.userId === authUser.id
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800/60'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
+                }`}
+                title={
+                  biometricBinding?.userId === authUser.id
+                    ? `Biometrics registered for ${authUser.name}. Click to re-scan.`
+                    : 'Register Fingerprint / Face ID for 1-tap quick sign-in on this device'
+                }
+              >
+                <Fingerprint className="w-3.5 h-3.5 text-emerald-500" />
+                <span>
+                  {isBiometricRegistering ? 'Scanning...' : biometricBinding?.userId === authUser.id ? 'Biometrics Registered ✓' : 'Bind Fingerprint'}
+                </span>
+              </button>
+            )}
+
             {/* Sign Out Button */}
             {onLogout && (
               <button
@@ -475,6 +541,34 @@ export function HeaderNav({
                 </div>
                 <RoleBadge role={currentRole} hideLabelOnMobile={false} />
               </div>
+
+              {/* Biometric Mobile Quick Registration Card */}
+              {authUser && (
+                <div className="p-2.5 rounded-xl bg-slate-900 border border-blue-500/30 text-white flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <Fingerprint className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                    <div className="truncate">
+                      <div className="text-[11px] font-bold text-white">
+                        {biometricBinding?.userId === authUser.id ? 'Biometrics Registered ✓' : 'Register Biometrics'}
+                      </div>
+                      <div className="text-[9px] text-slate-400 truncate">
+                        {biometricBinding?.userId === authUser.id ? `Bound on this device` : 'Fingerprint/Face ID 1-tap sign in'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleRegisterBiometric();
+                    }}
+                    disabled={isBiometricRegistering}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shrink-0 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isBiometricRegistering ? 'Scanning...' : biometricBinding?.userId === authUser.id ? 'Re-Scan' : 'Bind Now'}
+                  </button>
+                </div>
+              )}
 
               {/* Scope Selector */}
               <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
