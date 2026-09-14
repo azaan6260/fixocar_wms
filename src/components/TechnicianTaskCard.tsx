@@ -9,6 +9,7 @@ import {
   getAuthUser
 } from '../lib/storage';
 import { ProofOfWorkModal } from './ProofOfWorkModal';
+import { RequestAdditionalWorkModal } from './RequestAdditionalWorkModal';
 import { 
   getVernacularTaskInfo, 
   CATEGORY_HINDI_MAP, 
@@ -82,6 +83,7 @@ export function TechnicianTaskCard({
   const [showPartReqModal, setShowPartReqModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showAddWorkModal, setShowAddWorkModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   // Quick Part Requisition State
@@ -366,8 +368,8 @@ export function TechnicianTaskCard({
           )}
         </div>
 
-        {/* Row 4: 1-Tap Workshop Assistant Buttons (Need Parts / Take Photo / Report Problem) */}
-        <div className="grid grid-cols-3 gap-2 pt-1">
+        {/* Row 4: 1-Tap Workshop Assistant Buttons (Need Parts / Take Photo / Report Problem / Request Extra Work) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
           
           {/* Button 1: Request Parts */}
           <button
@@ -397,6 +399,17 @@ export function TechnicianTaskCard({
           >
             <AlertTriangle className="w-4 h-4 text-rose-500" />
             <span>⚠️ समस्या / मदद</span>
+          </button>
+
+          {/* Button 4: Request Additional Work */}
+          <button
+            type="button"
+            onClick={() => setShowAddWorkModal(true)}
+            className="p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
+            title="Request additional work/job for manager approval"
+          >
+            <Plus className="w-4 h-4 text-amber-500" />
+            <span>➕ नया काम (Extra Work)</span>
           </button>
         </div>
 
@@ -698,7 +711,7 @@ export function TechnicianTaskCard({
         </div>
       )}
 
-      {/* POPUP 3: PROOF OF WORK MODAL (Supabase Storage, Camera, Task-level binding & WhatsApp Sharing) */}
+      {/* POPUP 3: PROOF OF WORK MODAL */}
       {showPhotoModal && (
         <ProofOfWorkModal
           isOpen={showPhotoModal}
@@ -710,6 +723,17 @@ export function TechnicianTaskCard({
           onUploaded={() => {
             if (onStatusUpdated) onStatusUpdated();
           }}
+        />
+      )}
+
+      {/* POPUP 4: REQUEST ADDITIONAL WORK MODAL */}
+      {showAddWorkModal && (
+        <RequestAdditionalWorkModal
+          card={card}
+          isOpen={showAddWorkModal}
+          onClose={() => setShowAddWorkModal(false)}
+          initialCategory={task.category}
+          initialTaskId={task.id}
         />
       )}
 

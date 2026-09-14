@@ -7,6 +7,7 @@ import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectio
 import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { useI18n } from '../lib/i18n';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
+import { RequestAdditionalWorkModal } from './RequestAdditionalWorkModal';
 import { matchTaskToPanelDef } from '../lib/panelMappingHelper';
 import { 
   Wrench, 
@@ -15,7 +16,8 @@ import {
   ChevronDown, 
   ChevronUp, 
   Camera, 
-  Filter
+  Filter,
+  Plus
 } from 'lucide-react';
 
 interface RoleWorkspaceViewProps {
@@ -127,6 +129,7 @@ export function RoleWorkspaceView({
   };
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [requestWorkCard, setRequestWorkCard] = useState<JobCard | null>(null);
 
   const handleScannedPlate = (regNum: string) => {
     const activeCard = jobCards.find(
@@ -270,6 +273,20 @@ export function RoleWorkspaceView({
                         <span>{completedCount}/{assignedTasks.length} Done</span>
                       </div>
 
+                      {/* Request Additional Work Button (Available to Employees & All Roles) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRequestWorkCard(card);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-sm transition-all"
+                        title="Submit request for additional job/work for manager approval"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Request Extra Work</span>
+                      </button>
+
                       {/* Expand/Collapse Toggle Button */}
                       <button
                         type="button"
@@ -359,6 +376,15 @@ export function RoleWorkspaceView({
         onClose={() => setIsScannerOpen(false)}
         onScanComplete={handleScannedPlate}
       />
+
+      {requestWorkCard && (
+        <RequestAdditionalWorkModal
+          card={requestWorkCard}
+          isOpen={Boolean(requestWorkCard)}
+          onClose={() => setRequestWorkCard(null)}
+          currentRole={currentRole}
+        />
+      )}
     </div>
   );
 }

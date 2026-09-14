@@ -89,6 +89,7 @@ import { TaskDetailCard } from './TaskDetailCard';
 import { StandardJobsCatalogModal } from './StandardJobsCatalogModal';
 import { GSTInvoiceView } from './GSTInvoiceView';
 import { PartRequisitionModal } from './PartRequisitionModal';
+import { RequestAdditionalWorkModal } from './RequestAdditionalWorkModal';
 import { AIPrioritySuggestionBox } from './AIPrioritySuggestionBox';
 import { AICostEstimatorModal } from './AICostEstimatorModal';
 
@@ -126,6 +127,7 @@ export function JobCardDetailView({
 
   // Modals
   const [isReqModalOpen, setIsReqModalOpen] = useState(false);
+  const [isRequestAddWorkOpen, setIsRequestAddWorkOpen] = useState(false);
   const [isAIEstimatorOpen, setIsAIEstimatorOpen] = useState(false);
   const [isStandardCatalogOpen, setIsStandardCatalogOpen] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -1264,7 +1266,7 @@ export function JobCardDetailView({
                       <h4 className="font-extrabold text-sm text-white">Department Task Allotments</h4>
                       <p className="text-xs text-slate-400">Manage labor contractor payouts and assigned mechanics</p>
                     </div>
-                    {isManagerOrHigher && (
+                    {isManagerOrHigher ? (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setIsStandardCatalogOpen(true)}
@@ -1279,6 +1281,16 @@ export function JobCardDetailView({
                           + Custom Task
                         </button>
                       </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsRequestAddWorkOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95 transition-all"
+                        title="Submit request for additional job for manager approval"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Request Additional Work</span>
+                      </button>
                     )}
                   </div>
 
@@ -1891,6 +1903,16 @@ export function JobCardDetailView({
           card={card}
           isOpen={isReqModalOpen}
           onClose={() => setIsReqModalOpen(false)}
+        />
+      )}
+
+      {/* Request Additional Work Modal */}
+      {isRequestAddWorkOpen && (
+        <RequestAdditionalWorkModal
+          card={card}
+          isOpen={isRequestAddWorkOpen}
+          onClose={() => setIsRequestAddWorkOpen(false)}
+          currentRole={currentRole}
         />
       )}
 
