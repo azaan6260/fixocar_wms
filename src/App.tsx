@@ -21,6 +21,7 @@ import {
   getJobCardById, 
   subscribeToStore,
   getAuthUser,
+  saveAuthUser,
   logoutAuthUser,
   validateLocalStorageIntegrity
 } from './lib/storage';
@@ -269,17 +270,52 @@ export default function App() {
     setIsCreateModalOpen(true);
   };
 
+  // Secondary validation helper against the employee database master record
+  const validateUserMasterRole = (user: AuthUser): { validatedUser: AuthUser; validatedRole: UserRole } => {
+    let validatedUser = { ...user };
+    let validatedRole = user.role;
+
+    if (user.userType !== 'CUSTOMER') {
+      const allMasterEmps = getAllEmployees();
+      const masterEmp = allMasterEmps.find(emp => 
+        (emp.id && (emp.id === user.id || emp.id === user.employeeId)) ||
+        (user.loginId && emp.loginId?.toLowerCase() === user.loginId.toLowerCase()) ||
+        (user.email && emp.email?.toLowerCase() === user.email.toLowerCase())
+      );
+
+      if (masterEmp && masterEmp.role) {
+        validatedRole = masterEmp.role;
+        if (validatedUser.role !== masterEmp.role) {
+          validatedUser = {
+            ...validatedUser,
+            role: masterEmp.role,
+            employeeId: masterEmp.id,
+            specializedTeam: masterEmp.specializedTeam
+          };
+          saveAuthUser(validatedUser);
+        }
+      }
+    }
+
+    return { validatedUser, validatedRole };
+  };
+
   // Keep track of active user ID to ensure currentRole automatically syncs on sign-in
-  const prevAuthUserIdRef = React.useRef<string | null>(authUser?.id || null);
+  const prevAuthUserIdRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     const currentUserId = authUser?.id || null;
     if (currentUserId !== prevAuthUserIdRef.current) {
       prevAuthUserIdRef.current = currentUserId;
-      if (authUser && authUser.role) {
-        setCurrentRole(authUser.role);
-        setActiveTab(getDefaultTabForRole(authUser.role));
-      } else if (!authUser) {
+      if (authUser) {
+        // Perform secondary validation against employee database
+        const { validatedUser, validatedRole } = validateUserMasterRole(authUser);
+        if (validatedUser.role !== authUser.role) {
+          setAuthUser(validatedUser);
+        }
+        setCurrentRole(validatedRole);
+        setActiveTab(getDefaultTabForRole(validatedRole));
+      } else {
         setCurrentRole('MECHANIC');
         setActiveTab('dashboard');
       }
@@ -288,18 +324,23 @@ export default function App() {
 
   // Handle Login Success
   const handleLoginSuccess = (user: AuthUser) => {
-    setAuthUser(user);
+    // Perform secondary validation against master employee database upon login
+    const { validatedUser, validatedRole } = validateUserMasterRole(user);
+
+    setAuthUser(validatedUser);
     setJobCards(getJobCards());
     setEmployees(getEmployees());
     setVendors(getVendors());
     setIsLoginModalOpen(false);
-    if (user.role) {
-      setCurrentRole(user.role);
-      setActiveTab(getDefaultTabForRole(user.role));
+
+    if (validatedRole) {
+      setCurrentRole(validatedRole);
+      setActiveTab(getDefaultTabForRole(validatedRole));
     }
+
     // Route enforcement based on user type upon login
     if (typeof window !== 'undefined') {
-      if (user.userType === 'CUSTOMER') {
+      if (validatedUser.userType === 'CUSTOMER') {
         window.history.pushState({}, '', '/');
         setRoutePath('/');
       } else {
