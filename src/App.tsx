@@ -269,6 +269,23 @@ export default function App() {
     setIsCreateModalOpen(true);
   };
 
+  // Keep track of active user ID to ensure currentRole automatically syncs on sign-in
+  const prevAuthUserIdRef = React.useRef<string | null>(authUser?.id || null);
+
+  useEffect(() => {
+    const currentUserId = authUser?.id || null;
+    if (currentUserId !== prevAuthUserIdRef.current) {
+      prevAuthUserIdRef.current = currentUserId;
+      if (authUser && authUser.role) {
+        setCurrentRole(authUser.role);
+        setActiveTab(getDefaultTabForRole(authUser.role));
+      } else if (!authUser) {
+        setCurrentRole('MECHANIC');
+        setActiveTab('dashboard');
+      }
+    }
+  }, [authUser]);
+
   // Handle Login Success
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);

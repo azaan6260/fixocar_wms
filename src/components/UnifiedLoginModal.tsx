@@ -202,13 +202,13 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         setSyncStatus(null);
 
         // Check if biometric credential is already registered on this device for this employee
+        onLoginSuccess(result.user);
         const currentBinding = getSavedBiometricBinding();
         if (activeTab === 'STAFF' && (!currentBinding || currentBinding.userId !== result.user.id)) {
           setPostLoginUser(result.user);
           return;
         }
 
-        onLoginSuccess(result.user);
         onClose();
       } else {
         setIsLoading(false);
