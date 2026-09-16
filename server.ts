@@ -348,7 +348,7 @@ Rules:
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-2.5-flash',
         contents: [
           {
             role: 'user',
@@ -378,6 +378,20 @@ Rules:
             required: ['detected', 'plateNumber']
           }
         }
+      }).catch(async () => {
+        // Fallback model attempt if 2.5 fails
+        return await ai.models.generateContent({
+          model: 'gemini-1.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                { inlineData: { data: base64Data, mimeType } }
+              ]
+            }
+          ]
+        }).catch(() => null);
       });
 
       const rawText = aiResponse.text?.trim() || '';

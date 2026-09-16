@@ -22,8 +22,8 @@ import {
   Flame,
   Gauge
 } from 'lucide-react';
-import { VehicleCheckIn, CheckInStatus, FuelType } from '../types';
-import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, subscribeToStore } from '../lib/storage';
+import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop } from '../types';
+import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, subscribeToStore, getAuthUser, getCities, getWorkshops } from '../lib/storage';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -103,6 +103,85 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const [exitPhotoUrl, setExitPhotoUrl] = useState(SAMPLE_DRIVER_CAR_PHOTOS[1].url);
   const [exitNotes, setExitNotes] = useState('Work completed & inspected. Car handed over to delivery driver.');
 
+  // Camera & File Upload State
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<'checkIn' | 'checkOut'>('checkIn');
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const cameraVideoRef = React.useRef<HTMLVideoElement>(null);
+  const checkInFileInputRef = React.useRef<HTMLInputElement>(null);
+  const checkInCameraInputRef = React.useRef<HTMLInputElement>(null);
+  const checkOutFileInputRef = React.useRef<HTMLInputElement>(null);
+  const checkOutCameraInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Photo File Upload Handler
+  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isExit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        if (isExit) {
+          setExitPhotoUrl(dataUrl);
+        } else {
+          setPhotoUrl(dataUrl);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Live Camera Stream Handlers
+  const startCamera = async (target: 'checkIn' | 'checkOut') => {
+    setCameraTarget(target);
+    setCameraError(null);
+    setIsCameraModalOpen(true);
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      setCameraStream(mediaStream);
+      if (cameraVideoRef.current) {
+        cameraVideoRef.current.srcObject = mediaStream;
+      }
+    } catch (err: any) {
+      console.warn('Camera access error:', err);
+      setCameraError('Camera stream access unavailable or permission denied. Use file upload or camera app button.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraModalOpen(false);
+  };
+
+  const capturePhotoFromStream = () => {
+    if (!cameraVideoRef.current) return;
+    const video = cameraVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      if (cameraTarget === 'checkOut') {
+        setExitPhotoUrl(dataUrl);
+      } else {
+        setPhotoUrl(dataUrl);
+      }
+    }
+    stopCamera();
+  };
+
   const refreshList = () => {
     setCheckIns(getVehicleCheckIns());
   };
@@ -114,9 +193,62 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
   const readyDispatchCount = checkIns.filter(c => c.status === 'READY_PENDING_DISPATCH').length;
   const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
 
+  // Auth & Workshop Assignment Rules
+  const authUser = getAuthUser();
+  const isSuperAdmin = authUser?.role === 'SUPER_ADMIN';
+
+  const citiesList = getCities();
+  const workshopsList = getWorkshops();
+
+  // Determine assigned workshop / city for current user
+  const assignedWorkshop = workshopsList.find(w => w.id === authUser?.workshopId) || workshopsList[0];
+  const assignedCity = citiesList.find(c => c.id === authUser?.cityId || c.name.toLowerCase() === assignedWorkshop?.cityName.toLowerCase()) || citiesList[0];
+
+  const [selectedCityId, setSelectedCityId] = useState<string>(assignedCity?.id || '');
+  const [selectedCityName, setSelectedCityName] = useState<string>(assignedCity?.name || 'Mumbai');
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>(assignedWorkshop?.id || '');
+  const [selectedWorkshopName, setSelectedWorkshopName] = useState<string>(assignedWorkshop?.name || 'Andheri West Hub');
+
+  // Customer Email for Retail Customer
+  const [customerEmail, setCustomerEmail] = useState('');
+
+  // Auto-update workshop selection if city changes (for Super Admin)
+  const handleCityChange = (newCityId: string) => {
+    const cityObj = citiesList.find(c => c.id === newCityId);
+    if (!cityObj) return;
+    setSelectedCityId(cityObj.id);
+    setSelectedCityName(cityObj.name);
+
+    const filteredWorkshops = workshopsList.filter(w => w.cityId === newCityId || w.cityName.toLowerCase() === cityObj.name.toLowerCase());
+    if (filteredWorkshops.length > 0) {
+      setSelectedWorkshopId(filteredWorkshops[0].id);
+      setSelectedWorkshopName(filteredWorkshops[0].name);
+    } else {
+      setSelectedWorkshopId('');
+      setSelectedWorkshopName('');
+    }
+  };
+
+  const handleWorkshopChange = (newWorkshopId: string) => {
+    const wsObj = workshopsList.find(w => w.id === newWorkshopId);
+    if (!wsObj) return;
+    setSelectedWorkshopId(wsObj.id);
+    setSelectedWorkshopName(wsObj.name);
+  };
+
+  const activeWorkshopsForSelectedCity = workshopsList.filter(
+    w => !selectedCityId || w.cityId === selectedCityId || w.cityName.toLowerCase() === selectedCityName.toLowerCase()
+  );
+
   const handleCreateCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regNo.trim() || !driverName.trim()) return;
+    if (!regNo.trim()) return;
+
+    const stampedTime = new Date().toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    const stampedBy = `${authUser?.name || 'Gate Security'} (${authUser?.role || 'Security'})`;
 
     createVehicleCheckIn({
       registrationNumber: regNo.toUpperCase().trim(),
@@ -128,15 +260,20 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
       fuelLevel,
       mileage,
       isCars24,
-      cars24RefNo: isCars24 ? cars24RefNo : undefined,
-      customerName: isCars24 ? (customerName || 'Cars24 Hub') : customerName,
-      customerPhone,
-      checkedInByName: 'Gate Security / Manager',
-      checkInDriverName: driverName,
-      checkInDriverPhone: driverPhone,
+      cars24RefNo: isCars24 ? (cars24RefNo.trim() || undefined) : undefined,
+      customerName: isCars24 ? 'Cars24 Fleet Partner' : (customerName.trim() || 'Retail Customer'),
+      customerPhone: isCars24 ? 'N/A' : (customerPhone.trim() || 'N/A'),
+      customerEmail: isCars24 ? undefined : (customerEmail.trim() || undefined),
+      cityId: selectedCityId,
+      cityName: selectedCityName,
+      workshopId: selectedWorkshopId,
+      workshopName: selectedWorkshopName,
+      checkedInByName: stampedBy,
+      checkInDriverName: driverName.trim() || (authUser?.name ? `${authUser.name} (Gate)` : 'Gate Driver'),
+      checkInDriverPhone: driverPhone.trim() || 'N/A',
       checkInPhotoWithDriverUrl: photoUrl,
       checkInNotes,
-      status: initialStatus,
+      status: isCars24 ? 'IDLE_AWAITING_PI' : 'AWAITING_JOB_CARD',
       workOrderNo: workOrderNo.trim() || undefined,
       workOrderNotes: workOrderNotes.trim() || undefined,
     });
@@ -157,15 +294,26 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
     setMileage(35000);
     setIsCars24(true);
     setCars24RefNo('C24-MUM-' + Math.floor(1000 + Math.random() * 9000));
-    setCustomerName('Cars24 Hub - Andheri');
-    setCustomerPhone('+91 98200 11223');
-    setDriverName('Ramesh Kumar (Logistics)');
+    setCustomerName('Cars24 Fleet Partner');
+    setCustomerPhone('N/A');
+    setCustomerEmail('');
+    setDriverName(authUser?.name ? `${authUser.name} (Gate)` : 'Ramesh Kumar (Logistics)');
     setDriverPhone('+91 98200 99887');
     setPhotoUrl(SAMPLE_DRIVER_CAR_PHOTOS[0].url);
-    setCheckInNotes('Arrived via driver. Waiting for Cars24 WSM preliminary inspection (PI) & estimate approval.');
+    setCheckInNotes('Arrived at gate check-in.');
     setInitialStatus('IDLE_AWAITING_PI');
     setWorkOrderNo('');
     setWorkOrderNotes('');
+
+    // Reset City / Workshop to assigned location
+    if (assignedWorkshop) {
+      setSelectedWorkshopId(assignedWorkshop.id);
+      setSelectedWorkshopName(assignedWorkshop.name);
+    }
+    if (assignedCity) {
+      setSelectedCityId(assignedCity.id);
+      setSelectedCityName(assignedCity.name);
+    }
   };
 
   const handleConfirmCheckOut = (e: React.FormEvent) => {
@@ -632,127 +780,339 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
       {/* NEW VEHICLE GATE CHECK-IN MODAL */}
       {isCheckInModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
                   <LogIn className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black">Gate Entry - Vehicle Check-In</h2>
-                  <p className="text-xs text-slate-400">Record physical car entry & capture photo with driver</p>
+                  <p className="text-xs text-slate-400">Simplified Gate Check-In & Stamped Entry Pass</p>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsCheckInModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateCheckIn} className="p-6 space-y-5 text-xs overflow-y-auto">
-              {/* Fleet / Ownership Selector */}
+              {/* 1. Workshop & City Selection */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-amber-500" />
+                    1. Workshop Location & City Assignment
+                  </span>
+                  {isSuperAdmin ? (
+                    <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 font-black text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-amber-500" /> Super Admin Access (All Workshops)
+                    </span>
+                  ) : (
+                    <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-slate-500" /> Employee Restricted
+                    </span>
+                  )}
+                </div>
+
+                {isSuperAdmin ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Select City</label>
+                      <select
+                        value={selectedCityId}
+                        onChange={(e) => handleCityChange(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                      >
+                        {citiesList.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Select Workshop</label>
+                      <select
+                        value={selectedWorkshopId}
+                        onChange={(e) => handleWorkshopChange(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                      >
+                        {activeWorkshopsForSelectedCity.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name} ({w.code || 'HUB'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                          {selectedCityName} • {selectedWorkshopName}
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Assigned Workshop Location (Locked to logged-in employee assignment)
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+                      🔒 Locked
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Photo Click / Upload */}
+              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3">
+                <span className="text-amber-900 dark:text-amber-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-amber-500" />
+                  2. Vehicle & Driver Photo Capture *
+                </span>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={checkInCameraInputRef}
+                  onChange={(e) => handlePhotoFileUpload(e, false)}
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={checkInFileInputRef}
+                  onChange={(e) => handlePhotoFileUpload(e, false)}
+                  className="hidden"
+                />
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startCamera('checkIn')}
+                    className="px-3.5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                  >
+                    <Camera className="w-4 h-4 stroke-[2.5]" />
+                    <span>Take Live Photo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => checkInFileInputRef.current?.click()}
+                    className="px-3.5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                  >
+                    <Upload className="w-4 h-4 stroke-[2.5]" />
+                    <span>Upload Photo File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => checkInCameraInputRef.current?.click()}
+                    className="px-3 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Camera App</span>
+                  </button>
+                </div>
+
+                {/* Photo Preview Box */}
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  {photoUrl ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative shrink-0">
+                        <img
+                          src={photoUrl}
+                          alt="Vehicle check-in preview"
+                          className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500 shadow-md"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPhotoUrl('')}
+                          title="Remove photo"
+                          className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Vehicle Photo Attached</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
+                          {photoUrl.startsWith('data:image') ? 'Captured Photo (Base64)' : photoUrl}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => startCamera('checkIn')}
+                          className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 pt-0.5"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Retake Photo
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
+                      <Camera className="w-8 h-8 text-slate-400 mx-auto" />
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Click or Upload Vehicle Photo</p>
+                      <p className="text-[10px] text-slate-400">Capture car entry image with driver or vehicle front</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Customer / Source Type */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
                 <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
-                  1. Fleet / Source Type
+                  3. Customer / Ownership Type
                 </span>
-                
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 font-bold cursor-pointer">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label
+                    className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${
+                      isCars24
+                        ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
                     <input
                       type="radio"
-                      name="fleetType"
+                      name="customerType"
                       checked={isCars24}
                       onChange={() => {
                         setIsCars24(true);
-                        setCustomerName('Cars24 Hub - Andheri');
-                        setCustomerPhone('+91 98200 11223');
-                        setInitialStatus('IDLE_AWAITING_PI');
+                        setCustomerName('Cars24 Fleet Partner');
+                        setCustomerPhone('N/A');
+                        setCustomerEmail('');
                       }}
                       className="text-amber-500 focus:ring-amber-500"
                     />
-                    <span className="text-amber-600 dark:text-amber-400 font-black">Cars24 Fleet Partner Vehicle</span>
+                    <div>
+                      <span className="font-black text-amber-700 dark:text-amber-300 block">Cars24 Vehicle</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Fleet partner car (Customer details not required)</span>
+                    </div>
                   </label>
 
-                  <label className="flex items-center gap-2 font-bold cursor-pointer">
+                  <label
+                    className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${
+                      !isCars24
+                        ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                    }`}
+                  >
                     <input
                       type="radio"
-                      name="fleetType"
+                      name="customerType"
                       checked={!isCars24}
                       onChange={() => {
                         setIsCars24(false);
                         setCustomerName('');
                         setCustomerPhone('');
-                        setInitialStatus('AWAITING_JOB_CARD');
+                        setCustomerEmail('');
                       }}
                       className="text-blue-600 focus:ring-blue-500"
                     />
-                    <span>Retail Customer Car</span>
+                    <div>
+                      <span className="font-black text-blue-700 dark:text-blue-300 block">Retail Customer</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Direct owner car (Name, phone & email required)</span>
+                    </div>
                   </label>
                 </div>
 
-                {isCars24 && (
-                  <div className="grid grid-cols-2 gap-3 pt-2">
+                {/* Conditional Fields */}
+                {!isCars24 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                     <div>
-                      <label className="text-slate-500 font-bold block mb-1">Cars24 Reference ID</label>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Name *</label>
                       <input
                         type="text"
-                        value={cars24RefNo}
-                        onChange={(e) => setCars24RefNo(e.target.value)}
+                        placeholder="e.g. Rahul Sharma"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        required
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Phone *</label>
+                      <input
+                        type="text"
+                        placeholder="+91 98200 12345"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        required
                         className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold"
                       />
                     </div>
+
                     <div>
-                      <label className="text-slate-500 font-bold block mb-1">Cars24 Hub / Yard Name</label>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Email ID</label>
+                      <input
+                        type="email"
+                        placeholder="customer@email.com"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-center justify-between">
+                    <span className="text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-amber-500" />
+                      Cars24 Vehicle Selected — Customer name, phone & email details not required.
+                    </span>
+                    <div className="w-48 shrink-0">
                       <input
                         type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
+                        placeholder="Cars24 Ref No (Optional)"
+                        value={cars24RefNo}
+                        onChange={(e) => setCars24RefNo(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-[11px] font-bold"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Vehicle Specs */}
+              {/* 4. Registration Number & Make / Model */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
-                  2. Vehicle Make, Model, Variant & Powertrain
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
+                    4. Registration Number & Vehicle Make/Model
+                  </span>
 
-                <CarModelSelector
-                  make={make}
-                  model={model}
-                  variant={variant}
-                  fuelType={fuelType}
-                  onMakeChange={setMake}
-                  onModelChange={setModel}
-                  onVariantChange={setVariant}
-                  onFuelTypeChange={setFuelType}
-                  required
-                />
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 font-black text-xs flex items-center gap-1 transition-all border border-amber-500/40"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Scan License Plate</span>
+                  </button>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block">Registration No *</label>
-                      <button
-                        type="button"
-                        onClick={() => setIsScannerOpen(true)}
-                        className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Scan</span>
-                      </button>
-                    </div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Registration No *</label>
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="e.g. MH02CB8811"
+                        placeholder="e.g. MH12AB1234"
                         value={regNo}
                         onChange={(e) => setRegNo(e.target.value)}
                         required
@@ -761,7 +1121,7 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                       <button
                         type="button"
                         onClick={() => setIsScannerOpen(true)}
-                        title="Scan license plate with live camera"
+                        title="Scan license plate"
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
                       >
                         <Camera className="w-4 h-4" />
@@ -781,155 +1141,56 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                   </div>
 
                   <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Fuel Gauge ({fuelLevel}%)</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={fuelLevel}
-                      onChange={(e) => setFuelLevel(Number(e.target.value))}
-                      className="w-full mt-2 accent-amber-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Driver Details & Verification Photo */}
-              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3">
-                <span className="text-amber-800 dark:text-amber-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
-                  <UserCheck className="w-3.5 h-3.5 text-amber-500" />
-                  3. Arrival Driver & Photo Verification
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Name *</label>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Name (Brought Car)</label>
                     <input
                       type="text"
-                      placeholder="Driver name who brought the car"
+                      placeholder="Driver name"
                       value={driverName}
                       onChange={(e) => setDriverName(e.target.value)}
-                      required
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
                     />
                   </div>
-
-                  <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Phone Number</label>
-                    <input
-                      type="text"
-                      placeholder="+91 98200 00000"
-                      value={driverPhone}
-                      onChange={(e) => setDriverPhone(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono"
-                    />
-                  </div>
                 </div>
 
-                {/* Driver + Car Photo Selector */}
-                <div>
-                  <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Camera className="w-3.5 h-3.5 text-amber-500" /> Photo of Car with Driver
-                    </span>
-                    <span className="text-slate-400 font-normal text-[11px]">Select sample preset or enter photo URL</span>
-                  </label>
-
-                  <div className="flex items-center gap-2 mb-2 overflow-x-auto pb-1">
-                    {SAMPLE_DRIVER_CAR_PHOTOS.map((sample, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setPhotoUrl(sample.url)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold shrink-0 border transition-all ${
-                          photoUrl === sample.url
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs'
-                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400'
-                        }`}
-                      >
-                        Preset {idx + 1}: {sample.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      value={photoUrl}
-                      onChange={(e) => setPhotoUrl(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-[11px]"
-                    />
-
-                    {photoUrl && (
-                      <img 
-                        src={photoUrl} 
-                        alt="Driver car preview"
-                        className="w-12 h-12 rounded-xl object-cover border-2 border-amber-500 shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Work Order Details */}
-              <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-2xl space-y-3">
-                <span className="text-blue-800 dark:text-blue-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
-                  <FileText className="w-3.5 h-3.5 text-blue-500" />
-                  4. Associated Work Order (Optional)
-                </span>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Work Order / Ref Number</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. WO-2026-9918 (Leave blank if none)"
-                      value={workOrderNo}
-                      onChange={(e) => setWorkOrderNo(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Work Order Tasks / Symptoms / Customer Requests</label>
-                    <textarea
-                      rows={3}
-                      placeholder="Describe the client-demanded tasks, diagnostic codes, or list of repairs specified in the work order..."
-                      value={workOrderNotes}
-                      onChange={(e) => setWorkOrderNotes(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Status & Gate Notes */}
-              <div>
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Initial Workshop Status</label>
-                <select
-                  value={initialStatus}
-                  onChange={(e) => setInitialStatus(e.target.value as CheckInStatus)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
-                >
-                  <option value="IDLE_AWAITING_PI">⏳ Idle - Awaiting Cars24 WSM Preliminary Inspection (PI) & Estimate Approval</option>
-                  <option value="AWAITING_JOB_CARD">📋 Inspection Done - Waiting for Job Card Creation</option>
-                  <option value="JOB_CARD_CREATED">🔧 Direct Job Card Creation</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Gate Notes / Observations</label>
-                <textarea
-                  rows={2}
-                  value={checkInNotes}
-                  onChange={(e) => setCheckInNotes(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
+                <CarModelSelector
+                  make={make}
+                  model={model}
+                  variant={variant}
+                  fuelType={fuelType}
+                  onMakeChange={setMake}
+                  onModelChange={setModel}
+                  onVariantChange={setVariant}
+                  onFuelTypeChange={setFuelType}
+                  required
                 />
               </div>
 
+              {/* 5. Stamped Date & Time & Done By */}
+              <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-2">
+                <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  5. Gate Check-In Stamp Metadata
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Stamped Date & Time</span>
+                    <span className="font-mono font-black text-amber-300 text-xs">
+                      {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Gate Check-In Done By</span>
+                    <span className="font-bold text-white text-xs">
+                      {authUser?.name || 'Gate Security Staff'} ({authUser?.role || 'Gate Staff'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsCheckInModalOpen(false)}
@@ -1009,30 +1270,107 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                 />
               </div>
 
-              {/* Exit Driver + Photo Selector */}
-              <div>
+              {/* Exit Driver + Photo Selector with Live Camera & File Upload */}
+              <div className="space-y-2">
                 <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Camera className="w-3.5 h-3.5 text-emerald-500" /> Departure Photo of Car with Driver
+                  <span className="flex items-center gap-1 font-bold text-xs">
+                    <Camera className="w-4 h-4 text-emerald-500" /> Departure Photo of Car with Driver
                   </span>
+                  <span className="text-slate-500 font-normal text-[11px]">Click live photo or upload image file</span>
                 </label>
 
-                <div className="flex items-center gap-3">
+                {/* Hidden File Inputs for Check Out */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={checkOutCameraInputRef}
+                  onChange={(e) => handlePhotoFileUpload(e, true)}
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={checkOutFileInputRef}
+                  onChange={(e) => handlePhotoFileUpload(e, true)}
+                  className="hidden"
+                />
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startCamera('checkOut')}
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                  >
+                    <Camera className="w-4 h-4 stroke-[2.5]" />
+                    <span>Take Live Photo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => checkOutFileInputRef.current?.click()}
+                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                  >
+                    <Upload className="w-4 h-4 stroke-[2.5]" />
+                    <span>Upload File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => checkOutCameraInputRef.current?.click()}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Camera App</span>
+                  </button>
+                </div>
+
+                {/* Preview Card */}
+                <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                  {exitPhotoUrl ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative shrink-0">
+                        <img 
+                          src={exitPhotoUrl} 
+                          alt="Exit photo preview"
+                          className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shrink-0 shadow-md"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setExitPhotoUrl('')}
+                          title="Clear exit photo"
+                          className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Departure Photo Attached</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
+                          {exitPhotoUrl.startsWith('data:image') ? 'Captured Photo (Base64 Image)' : exitPhotoUrl}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
+                      <Camera className="w-6 h-6 text-slate-400 mx-auto" />
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No Departure Photo</p>
+                    </div>
+                  )}
+
                   <input
                     type="text"
+                    placeholder="Or enter departure photo URL..."
                     value={exitPhotoUrl}
                     onChange={(e) => setExitPhotoUrl(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-[11px]"
+                    className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-[11px]"
                   />
-
-                  {exitPhotoUrl && (
-                    <img 
-                      src={exitPhotoUrl} 
-                      alt="Exit photo preview"
-                      className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-500 shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                  )}
                 </div>
               </div>
 
@@ -1067,6 +1405,83 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
           </div>
         </div>
       )}
+
+      {/* LIVE CAMERA CAPTURE MODAL */}
+      {isCameraModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5 text-amber-400 animate-pulse" />
+                <h3 className="font-black text-sm">
+                  {cameraTarget === 'checkIn' ? 'Gate Check-In Photo' : 'Gate Departure Photo'} - Live Camera
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-black flex flex-col items-center justify-center relative min-h-[300px]">
+              {cameraError ? (
+                <div className="text-center p-6 space-y-3">
+                  <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
+                  <p className="text-xs text-slate-300">{cameraError}</p>
+                  <div className="flex items-center justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCamera();
+                        if (cameraTarget === 'checkOut') {
+                          checkOutCameraInputRef.current?.click();
+                        } else {
+                          checkInCameraInputRef.current?.click();
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+                    >
+                      Open Native Camera App
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={cameraVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full max-h-[360px] object-cover rounded-2xl border border-slate-800"
+                  />
+                  <div className="mt-4 flex items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={capturePhotoFromStream}
+                      className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg shadow-amber-500/30 transition-transform active:scale-95 cursor-pointer"
+                    >
+                      <Camera className="w-5 h-5" />
+                      <span>Capture Vehicle Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="px-4 py-3 rounded-2xl bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold text-xs cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CAMERA LICENSE PLATE SCANNER MODAL */}
       <LicensePlateScannerModal
         isOpen={isScannerOpen}

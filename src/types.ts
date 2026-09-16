@@ -657,6 +657,13 @@ export interface VehicleCheckIn {
   cars24RefNo?: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
+
+  // City & Workshop Assignment
+  cityId?: string;
+  cityName?: string;
+  workshopId?: string;
+  workshopName?: string;
 
   // Gate Check-In Details
   checkedInAt: string;

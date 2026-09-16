@@ -51,34 +51,86 @@ export function CreateJobCardModal({
 
   const [step, setStep] = useState<1 | 2>(1);
 
+  // Helper to safely parse prefilled object or string prop
+  const parsePrefill = (prefill: any) => {
+    if (!prefill) {
+      return {
+        regNo: '',
+        make: 'Toyota',
+        model: 'Corolla Altis',
+        variant: '',
+        fuelType: 'Petrol' as FuelType,
+        color: 'Metallic Silver',
+        customerName: '',
+        customerPhone: '',
+        isCars24: false,
+        cars24RefNo: '',
+        workOrderNo: '',
+        workOrderNotes: '',
+      };
+    }
+    if (typeof prefill === 'string') {
+      return {
+        regNo: prefill,
+        make: 'Toyota',
+        model: 'Corolla Altis',
+        variant: '',
+        fuelType: 'Petrol' as FuelType,
+        color: 'Metallic Silver',
+        customerName: '',
+        customerPhone: '',
+        isCars24: false,
+        cars24RefNo: '',
+        workOrderNo: '',
+        workOrderNotes: '',
+      };
+    }
+    return {
+      regNo: typeof prefill.regNo === 'string' ? prefill.regNo : '',
+      make: prefill.make || 'Toyota',
+      model: prefill.model || 'Corolla Altis',
+      variant: prefill.variant || '',
+      fuelType: (prefill.fuelType as FuelType) || 'Petrol',
+      color: prefill.color || 'Metallic Silver',
+      customerName: prefill.customerName || '',
+      customerPhone: prefill.customerPhone || '',
+      isCars24: !!prefill.isCars24,
+      cars24RefNo: prefill.cars24RefNo || '',
+      workOrderNo: prefill.workOrderNo || '',
+      workOrderNotes: prefill.workOrderNotes || '',
+    };
+  };
+
+  const initialParsed = parsePrefill(prefilledRegNum);
+
   // Cities & Workshops
   const [cities, setCities] = useState<City[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string>('');
   const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>('');
-  const [isCars24, setIsCars24] = useState<boolean>(false);
-  const [cars24RefNo, setCars24RefNo] = useState<string>('');
+  const [isCars24, setIsCars24] = useState<boolean>(initialParsed.isCars24);
+  const [cars24RefNo, setCars24RefNo] = useState<string>(initialParsed.cars24RefNo);
 
   // Form State
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [regNo, setRegNo] = useState(prefilledRegNum || '');
-  const [make, setMake] = useState('Toyota');
-  const [model, setModel] = useState('Corolla Altis');
-  const [variant, setVariant] = useState('');
-  const [fuelType, setFuelType] = useState<FuelType>('Petrol');
+  const [regNo, setRegNo] = useState<string>(initialParsed.regNo);
+  const [make, setMake] = useState<string>(initialParsed.make);
+  const [model, setModel] = useState<string>(initialParsed.model);
+  const [variant, setVariant] = useState<string>(initialParsed.variant);
+  const [fuelType, setFuelType] = useState<FuelType>(initialParsed.fuelType);
   const [year, setYear] = useState(2022);
-  const [color, setColor] = useState('Metallic Silver');
+  const [color, setColor] = useState<string>(initialParsed.color);
   const [vin, setVin] = useState('');
   const [fuelLevel, setFuelLevel] = useState(50);
   const [mileage, setMileage] = useState(35000);
 
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState<string>(initialParsed.customerName);
+  const [customerPhone, setCustomerPhone] = useState<string>(initialParsed.customerPhone);
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
 
-  const [workOrderNo, setWorkOrderNo] = useState('');
-  const [workOrderNotes, setWorkOrderNotes] = useState('');
+  const [workOrderNo, setWorkOrderNo] = useState<string>(initialParsed.workOrderNo);
+  const [workOrderNotes, setWorkOrderNotes] = useState<string>(initialParsed.workOrderNotes);
 
   // Load cities & workshops on open
   useEffect(() => {
@@ -187,11 +239,13 @@ export function CreateJobCardModal({
   }, [isOpen]);
 
   // Find matching check-in record for typed registration number
+  const safeRegStr = typeof regNo === 'string' ? regNo : ((regNo as any)?.regNo || '');
+
   const typedCheckInMatch = React.useMemo(() => {
-    const cleanReg = regNo.toUpperCase().trim();
+    const cleanReg = safeRegStr.toUpperCase().trim();
     if (!cleanReg) return null;
     return availableCheckIns.find(c => c.registrationNumber.toUpperCase().trim() === cleanReg);
-  }, [regNo, availableCheckIns]);
+  }, [safeRegStr, availableCheckIns]);
 
   // Reset form & clear tasks when modal opens
   React.useEffect(() => {
@@ -305,16 +359,16 @@ export function CreateJobCardModal({
     setTasks(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const activeDuplicateCard = getActiveJobCardForRegNo(regNo);
+  const activeDuplicateCard = getActiveJobCardForRegNo(safeRegStr);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regNo.trim() || !customerName.trim() || !customerPhone.trim()) {
+    if (!safeRegStr.trim() || !customerName.trim() || !customerPhone.trim()) {
       alert('Please fill in vehicle registration number, customer name, and phone number.');
       return;
     }
 
-    const formattedRegNo = regNo.toUpperCase().trim();
+    const formattedRegNo = safeRegStr.toUpperCase().trim();
     const existingActive = getActiveJobCardForRegNo(formattedRegNo);
     if (existingActive) {
       alert(`🚫 Duplicate Job Card Blocked!\nVehicle ${formattedRegNo} already has an active Job Card (${existingActive.id} - Status: ${existingActive.status}).\n\nOnly 1 active job card is allowed per vehicle at a time. Please complete or close the existing card first.`);

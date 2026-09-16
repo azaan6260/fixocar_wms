@@ -3,17 +3,19 @@ apply plugin: 'com.android.application'
 def versionPropertiesFile = file('version.properties')
 def versionProps = new Properties()
 
-if (versionPropertiesFile.exists()) {
-    versionProps.load(new FileInputStream(versionPropertiesFile))
+if (!versionPropertiesFile.exists()) {
+    versionPropertiesFile.text = "VERSION_CODE=5\nVERSION_NAME=1.0.3\nBUILD_NUMBER=5\nAPPLICATION_ID=com.fixocar.workshop\nLAST_UPDATED=" + new Date().format("yyyy-MM-dd") + "\n"
 }
+
+versionProps.load(new FileInputStream(versionPropertiesFile))
 
 def appVersionCode = project.hasProperty('versionCode') ? 
     Integer.parseInt(project.property('versionCode')) : 
-    Integer.parseInt(versionProps['VERSION_CODE'] ?: '3')
+    Integer.parseInt(versionProps['VERSION_CODE'] ?: '5')
 
 def appVersionName = project.hasProperty('versionName') ? 
     project.property('versionName') : 
-    (versionProps['VERSION_NAME'] ?: '1.0.2')
+    (versionProps['VERSION_NAME'] ?: '1.0.3')
 
 android {
     namespace = "com.fixocar.workshop"
