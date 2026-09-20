@@ -850,7 +850,41 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
         const cardIdStr = String(c.id || c.job_card_id || c.jobCardId);
         const relTasks = (jobTasks || []).filter((t: any) => String(t.job_card_id || t.jobCardId) === cardIdStr);
-        const rawTasks = relTasks.length > 0 ? relTasks : rowTasks;
+
+        // Merge rowTasks (JSON from job_cards) and relTasks (from job_tasks table)
+        const taskMap = new Map<string, any>();
+        for (const t of rowTasks) {
+          if (t && t.id) taskMap.set(String(t.id).toLowerCase().trim(), t);
+        }
+        for (const t of relTasks) {
+          if (!t || !t.id) continue;
+          const k = String(t.id).toLowerCase().trim();
+          const existingTask = taskMap.get(k);
+          if (!existingTask) {
+            taskMap.set(k, t);
+          } else {
+            const isExDone = existingTask.status === 'COMPLETED';
+            const isTDone = t.status === 'COMPLETED';
+            const finalTaskStatus = (isExDone || isTDone) ? 'COMPLETED' : (existingTask.status === 'IN_PROGRESS' || t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (t.status || existingTask.status || 'PENDING'));
+            const finalCompletedAt = existingTask.completedAt || existingTask.completed_at || t.completed_at || t.completedAt || (finalTaskStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+
+            taskMap.set(k, {
+              ...t,
+              ...existingTask,
+              status: finalTaskStatus,
+              completedAt: finalCompletedAt,
+              completed_at: finalCompletedAt,
+              title: existingTask.title || t.title,
+              category: existingTask.category || t.category,
+              assignedToId: existingTask.assignedToId || existingTask.assigned_to_id || t.assigned_to_id || t.assignedToId,
+              assignedToName: existingTask.assignedToName || existingTask.assigned_to_name || t.assigned_to_name || t.assignedToName,
+              painterPayout: existingTask.painterPayout ?? t.painterPayout,
+              denterPayout: existingTask.denterPayout ?? t.denterPayout,
+              panelKey: existingTask.panelKey || t.panelKey
+            });
+          }
+        }
+        const rawTasks = Array.from(taskMap.values());
 
         const tasks: JobTask[] = rawTasks.map((t: any, idx: number) => ({
           id: String(t.id || `task-${cardIdStr}-${idx}`),

@@ -333,14 +333,21 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
         const isEtCompleted = et.status === 'COMPLETED';
         const isItCompleted = it.status === 'COMPLETED';
         const finalStatus = (isEtCompleted || isItCompleted) ? 'COMPLETED' : (et.status === 'IN_PROGRESS' || it.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (it.status || et.status || 'PENDING'));
-        const finalCompletedAt = it.completedAt || it.completed_at || et.completedAt || et.completed_at || (finalStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+        const finalCompletedAt = it.completedAt || it.completed_at || et.completedAt || et.completed_at || (finalStatus === 'COMPLETED' ? (et.completedAt || new Date().toLocaleTimeString()) : undefined);
 
         mergedTasks.push({
           ...et,
           ...it,
           status: finalStatus,
           completedAt: finalCompletedAt,
-          completed_at: finalCompletedAt
+          completed_at: finalCompletedAt,
+          assignedToId: et.assignedToId || it.assignedToId || it.assigned_to_id,
+          assignedToName: et.assignedToName || it.assignedToName || it.assigned_to_name,
+          category: et.category || it.category,
+          painterPayout: et.painterPayout ?? it.painterPayout,
+          denterPayout: et.denterPayout ?? it.denterPayout,
+          contractorPayout: et.contractorPayout ?? it.contractorPayout,
+          panelKey: et.panelKey || it.panelKey
         });
         taskMap.delete(tKey);
       }
@@ -385,6 +392,20 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
     map.set(key, {
       ...existing,
       ...incCard,
+      vehicle: {
+        ...(existing.vehicle || {}),
+        ...(incCard.vehicle || {})
+      },
+      customer: {
+        ...(existing.customer || {}),
+        ...(incCard.customer || {})
+      },
+      floorManagerId: incCard.floorManagerId || existing.floorManagerId,
+      floorManagerName: incCard.floorManagerName || existing.floorManagerName,
+      workshopId: incCard.workshopId || existing.workshopId,
+      workshopName: incCard.workshopName || existing.workshopName,
+      cityId: incCard.cityId || existing.cityId,
+      cityName: incCard.cityName || existing.cityName,
       status: finalStatus,
       tasks: mergedTasks
     });
@@ -1314,7 +1335,41 @@ Return valid JSON ONLY.`;
 
               const cardIdStr = String(c.id || c.job_card_id || c.jobCardId);
               const relTasks = (supaTasks || []).filter((t: any) => String(t.job_card_id || t.jobCardId) === cardIdStr);
-              const rawTasks = relTasks.length > 0 ? relTasks : rowTasks;
+
+              // Merge rowTasks (JSON from job_cards) and relTasks (from job_tasks table)
+              const taskMap = new Map<string, any>();
+              for (const t of rowTasks) {
+                if (t && t.id) taskMap.set(String(t.id).toLowerCase().trim(), t);
+              }
+              for (const t of relTasks) {
+                if (!t || !t.id) continue;
+                const k = String(t.id).toLowerCase().trim();
+                const existingTask = taskMap.get(k);
+                if (!existingTask) {
+                  taskMap.set(k, t);
+                } else {
+                  const isExDone = existingTask.status === 'COMPLETED';
+                  const isTDone = t.status === 'COMPLETED';
+                  const finalTaskStatus = (isExDone || isTDone) ? 'COMPLETED' : (existingTask.status === 'IN_PROGRESS' || t.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (t.status || existingTask.status || 'PENDING'));
+                  const finalCompletedAt = existingTask.completedAt || existingTask.completed_at || t.completed_at || t.completedAt || (finalTaskStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+
+                  taskMap.set(k, {
+                    ...t,
+                    ...existingTask,
+                    status: finalTaskStatus,
+                    completedAt: finalCompletedAt,
+                    completed_at: finalCompletedAt,
+                    title: existingTask.title || t.title,
+                    category: existingTask.category || t.category,
+                    assignedToId: existingTask.assignedToId || existingTask.assigned_to_id || t.assigned_to_id || t.assignedToId,
+                    assignedToName: existingTask.assignedToName || existingTask.assigned_to_name || t.assigned_to_name || t.assignedToName,
+                    painterPayout: existingTask.painterPayout ?? t.painterPayout,
+                    denterPayout: existingTask.denterPayout ?? t.denterPayout,
+                    panelKey: existingTask.panelKey || t.panelKey
+                  });
+                }
+              }
+              const rawTasks = Array.from(taskMap.values());
 
               const tasks = rawTasks.map((t: any, idx: number) => ({
                 id: String(t.id || `task-${cardIdStr}-${idx}`),

@@ -436,12 +436,17 @@ export default function App() {
     }
     window.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const unsubscribe = subscribeToStore(() => {
+    const handleStoreUpdateEvent = () => {
       setJobCards(getJobCards());
       setEmployees(getEmployees());
       setVendors(getVendors());
       setAuthUser(getAuthUser());
-    });
+    };
+
+    window.addEventListener('fixocar-store-updated', handleStoreUpdateEvent);
+    window.addEventListener('storage', handleStoreUpdateEvent);
+
+    const unsubscribe = subscribeToStore(handleStoreUpdateEvent);
     
     const handleOpenSupabaseModal = () => setIsSupabaseModalOpen(true);
     window.addEventListener('open-supabase-modal', handleOpenSupabaseModal);
@@ -450,6 +455,8 @@ export default function App() {
       clearInterval(syncInterval);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('open-supabase-modal', handleOpenSupabaseModal);
+      window.removeEventListener('fixocar-store-updated', handleStoreUpdateEvent);
+      window.removeEventListener('storage', handleStoreUpdateEvent);
       unsubscribe();
     };
   }, []);

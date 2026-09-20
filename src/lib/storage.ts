@@ -117,6 +117,12 @@ export function subscribeToStore(listener: StorageListener) {
 
 function notifyStoreChange() {
   listeners.forEach(fn => fn());
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fixocar-store-updated'));
+    try {
+      window.dispatchEvent(new Event('storage'));
+    } catch {}
+  }
 }
 
 function notifyCentralServer(key: string, data: any) {
