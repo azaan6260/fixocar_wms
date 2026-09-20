@@ -160,6 +160,7 @@ export function TechnicianBodyPanelAssessmentChart({
   currentRole = 'FLOOR_MANAGER'
 }: TechnicianBodyPanelAssessmentChartProps) {
   const isCars24 = isCars24JobCard(card);
+  const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
 
   // Determine default filter based on active role
   const defaultFilter: BodyViewFilter = useMemo(() => {
@@ -830,26 +831,28 @@ export function TechnicianBodyPanelAssessmentChart({
                               >
                                 स्थिति बदलें ➔
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Remove "${t.title}" from this panel?`)) {
-                                    deleteJobCardTask(card.id, t.id);
-                                    dispatchToastNotification({
-                                      type: 'SUCCESS',
-                                      title: 'Task Removed',
-                                      message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
-                                      vehicleReg: card.vehicle.registrationNumber,
-                                      jobCardId: card.id
-                                    });
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
-                                title="Remove job"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Remove
-                              </button>
+                              {isManagementRole && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Remove "${t.title}" from this panel?`)) {
+                                      deleteJobCardTask(card.id, t.id);
+                                      dispatchToastNotification({
+                                        type: 'SUCCESS',
+                                        title: 'Task Removed',
+                                        message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
+                                        vehicleReg: card.vehicle.registrationNumber,
+                                        jobCardId: card.id
+                                      });
+                                    }
+                                  }}
+                                  className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
+                                  title="Remove job"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  Remove
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -923,26 +926,28 @@ export function TechnicianBodyPanelAssessmentChart({
                               >
                                 स्थिति बदलें ➔
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Remove "${t.title}" from this panel?`)) {
-                                    deleteJobCardTask(card.id, t.id);
-                                    dispatchToastNotification({
-                                      type: 'SUCCESS',
-                                      title: 'Task Removed',
-                                      message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
-                                      vehicleReg: card.vehicle.registrationNumber,
-                                      jobCardId: card.id
-                                    });
-                                  }
-                                }}
-                                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
-                                title="Remove job"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Remove
-                              </button>
+                              {isManagementRole && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Remove "${t.title}" from this panel?`)) {
+                                      deleteJobCardTask(card.id, t.id);
+                                      dispatchToastNotification({
+                                        type: 'SUCCESS',
+                                        title: 'Task Removed',
+                                        message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
+                                        vehicleReg: card.vehicle.registrationNumber,
+                                        jobCardId: card.id
+                                      });
+                                    }
+                                  }}
+                                  className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
+                                  title="Remove job"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  Remove
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
