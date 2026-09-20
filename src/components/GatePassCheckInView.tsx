@@ -216,8 +216,8 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
   // Workshop counts
   const inWorkshopCount = checkIns.filter(c => c.status !== 'CHECKED_OUT').length;
-  const idleAwaitingPiCount = checkIns.filter(c => c.status === 'IDLE_AWAITING_PI').length;
-  const activeRepairCount = checkIns.filter(c => c.status === 'JOB_CARD_CREATED' || c.status === 'AWAITING_JOB_CARD').length;
+  const idleAwaitingPiCount = checkIns.filter(c => c.status === 'IDLE_AWAITING_PI' || c.status === 'AWAITING_JOB_CARD').length;
+  const activeRepairCount = checkIns.filter(c => c.status === 'JOB_CARD_CREATED').length;
   const readyDispatchCount = checkIns.filter(c => c.status === 'READY_PENDING_DISPATCH').length;
   const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
 
@@ -383,18 +383,24 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   };
 
   const filteredItems = checkIns.filter(item => {
-    const matchesSearch = 
-      item.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.checkInDriverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase().trim();
+    const cleanSearch = searchLower.replace(/[^a-z0-9]/g, '');
+    const cleanReg = item.registrationNumber.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const matchesSearch = !searchLower ||
+      item.registrationNumber.toLowerCase().includes(searchLower) ||
+      (cleanSearch.length > 0 && cleanReg.includes(cleanSearch)) ||
+      item.make.toLowerCase().includes(searchLower) ||
+      item.model.toLowerCase().includes(searchLower) ||
+      item.checkInDriverName.toLowerCase().includes(searchLower) ||
+      item.customerName.toLowerCase().includes(searchLower) ||
+      item.id.toLowerCase().includes(searchLower);
 
     if (!matchesSearch) return false;
 
     if (activeFilter === 'IN_WORKSHOP') return item.status !== 'CHECKED_OUT';
-    if (activeFilter === 'IDLE_PI') return item.status === 'IDLE_AWAITING_PI';
-    if (activeFilter === 'ACTIVE_REPAIR') return item.status === 'JOB_CARD_CREATED' || item.status === 'AWAITING_JOB_CARD';
+    if (activeFilter === 'IDLE_PI') return item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD';
+    if (activeFilter === 'ACTIVE_REPAIR') return item.status === 'JOB_CARD_CREATED';
     if (activeFilter === 'READY_DISPATCH') return item.status === 'READY_PENDING_DISPATCH';
     if (activeFilter === 'CHECKED_OUT') return item.status === 'CHECKED_OUT';
 
@@ -523,7 +529,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
               }`}
             >
               <Flame className="w-3.5 h-3.5" />
-              Idle - Awaiting PI ({idleAwaitingPiCount})
+              Awaiting Job Card / PI ({idleAwaitingPiCount})
             </button>
 
             <button

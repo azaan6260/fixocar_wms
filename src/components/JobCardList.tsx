@@ -367,7 +367,7 @@ export function JobCardList({
       </div>
 
       {/* Gate Pass Checked-In Vehicles Section (Awaiting Job Card Creation) */}
-      {mainSection === 'ACTIVE' && filteredPendingCheckIns.length > 0 && (
+      {mainSection === 'ACTIVE' && (activeSubFilter === 'ALL' || activeSubFilter === 'AWAITING_JC') && filteredPendingCheckIns.length > 0 && (
         <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-blue-500/10 dark:from-amber-950/40 dark:to-blue-950/30 rounded-3xl p-5 border-2 border-amber-500/30 shadow-md space-y-4 animate-in fade-in duration-200">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -470,7 +470,19 @@ export function JobCardList({
       )}
 
       {/* Cards Responsive Grid */}
-      {sortedCards.length === 0 ? (
+      {activeSubFilter === 'AWAITING_JC' ? (
+        filteredPendingCheckIns.length === 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
+            <LogIn className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-amber-500 mb-3 stroke-[1.5]" />
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
+              No Pending Gate Checked-In Vehicles
+            </h3>
+            <p className="text-xs mt-1">
+              All vehicles inside the workshop currently have Job Cards created. New gate check-ins will automatically appear here.
+            </p>
+          </div>
+        )
+      ) : sortedCards.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
           <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
           <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">

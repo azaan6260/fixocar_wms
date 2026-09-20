@@ -5,7 +5,8 @@ import {
   TaskCategory, 
   TaskStatus, 
   Employee, 
-  Vendor 
+  Vendor,
+  VehicleCheckIn
 } from '../types';
 import { 
   updateJobCardTask, 
@@ -13,7 +14,9 @@ import {
   updateTaskStatus,
   getEmployees, 
   getVendors,
-  formatJobCardStatus
+  formatJobCardStatus,
+  getVehicleCheckIns,
+  subscribeToStore
 } from '../lib/storage';
 import { getLocalDateString } from '../lib/urgencyHelper';
 import { 
@@ -42,7 +45,9 @@ import {
   Truck,
   Check,
   Target,
-  X
+  X,
+  LogIn,
+  Car
 } from 'lucide-react';
 
 interface DailyHuddleViewProps {
@@ -77,6 +82,33 @@ export function DailyHuddleView({
     } catch (e) {
       return '';
     }
+  });
+
+  const [checkIns, setCheckIns] = useState<VehicleCheckIn[]>(() => getVehicleCheckIns());
+
+  useEffect(() => {
+    const refreshData = () => {
+      setCheckIns(getVehicleCheckIns());
+    };
+    refreshData();
+    const unsubscribe = subscribeToStore(refreshData);
+    return () => unsubscribe();
+  }, []);
+
+  const pendingCheckIns = checkIns.filter(c => {
+    if (c.status === 'CHECKED_OUT') return false;
+    const cleanReg = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const hasActiveJobCard = jobCards.some(jc => {
+      if (jc.status === 'DELIVERED' || jc.status === 'CLOSED') return false;
+      if (jc.checkInRecordId && jc.checkInRecordId === c.id) return true;
+      const jcReg = jc.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      return jcReg === cleanReg;
+    });
+    return !hasActiveJobCard;
+  }).sort((a, b) => {
+    const numA = parseInt(a.id.replace(/\D/g, '') || '0', 10);
+    const numB = parseInt(b.id.replace(/\D/g, '') || '0', 10);
+    return numB - numA;
   });
 
   const [employees, setEmployees] = useState<Employee[]>(() => getEmployees());
@@ -419,6 +451,107 @@ export function DailyHuddleView({
           </div>
         </div>
       </div>
+
+      {/* Gate Pass Checked-In Vehicles Section (Awaiting Job Card) */}
+      {pendingCheckIns.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/20 to-blue-500/10 dark:from-amber-950/50 dark:to-blue-950/30 rounded-3xl p-5 border-2 border-amber-500/40 shadow-lg space-y-4 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-sm animate-pulse">
+                <LogIn className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span>🚗 Gate Checked-In Vehicles (Awaiting Job Card)</span>
+                  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-0.5 rounded-full">
+                    {pendingCheckIns.length} Pending
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  These vehicles passed gate check-in and are inside the workshop waiting for Job Card creation.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pendingCheckIns.map((checkIn, idx) => {
+              const isLatest = idx === 0;
+              return (
+                <div
+                  key={checkIn.id}
+                  className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-xs flex flex-col justify-between gap-3 ${
+                    isLatest
+                      ? 'border-2 border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30 shadow-md'
+                      : 'border-amber-400/40 dark:border-amber-500/30 hover:border-amber-500'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {checkIn.checkInPhotoWithDriverUrl ? (
+                      <img
+                        src={checkIn.checkInPhotoWithDriverUrl}
+                        alt={checkIn.registrationNumber}
+                        className="w-12 h-12 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                        <Car className="w-6 h-6" />
+                      </div>
+                    )}
+
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          {isLatest && (
+                            <span className="bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded uppercase tracking-wide animate-pulse">
+                              ✨ LATEST
+                            </span>
+                          )}
+                          <span className="font-mono font-black text-xs bg-slate-900 text-amber-400 px-2 py-0.5 rounded-lg border border-slate-700">
+                            {checkIn.registrationNumber}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 font-mono">{checkIn.id}</span>
+                      </div>
+                      <h4 className="font-extrabold text-xs text-slate-900 dark:text-slate-100 truncate">
+                        {checkIn.make} {checkIn.model} {checkIn.variant ? `(${checkIn.variant})` : ''}
+                      </h4>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                        <span>🕒 Gate In: {checkIn.checkedInAt}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/60 text-[11px] space-y-1">
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold truncate">Customer/Fleet:</span>
+                      <strong className="text-slate-900 dark:text-slate-100 shrink-0 ml-1">{checkIn.customerName}</strong>
+                    </div>
+                    {checkIn.isCars24 && checkIn.cars24RefNo && (
+                      <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 font-bold">
+                        <span>Cars24 Ref:</span>
+                        <span className="font-mono">{checkIn.cars24RefNo}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {isManagementRole && onOpenNewJobCardModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenNewJobCardModal}
+                      className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>➕ Create Job Card for {checkIn.registrationNumber}</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Live Operational Standup Target Banner (if notes entered) */}
       {huddleNotes && (
