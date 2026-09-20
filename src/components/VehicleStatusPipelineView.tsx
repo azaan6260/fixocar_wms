@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { JobCard, JobCardStatus, UserRole, VehicleCheckIn } from '../types';
+import { JobCard, JobCardStatus, UserRole, VehicleCheckIn, FuelType } from '../types';
 import { updateJobCard, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { 
   Car, 
@@ -374,10 +374,20 @@ export function VehicleStatusPipelineView({
                           regNo: item.registrationNumber,
                           make: item.make,
                           model: item.model,
+                          variant: item.variant,
+                          fuelType: item.fuelType as FuelType,
+                          color: item.color,
                           customerName: item.customerName,
                           customerPhone: item.customerPhone,
                           isCars24: item.isCars24,
-                          checkInRecordId: item.id
+                          cars24RefNo: item.cars24RefNo,
+                          checkInRecordId: item.id,
+                          cityId: item.cityId,
+                          cityName: item.cityName,
+                          workshopId: item.workshopId,
+                          workshopName: item.workshopName,
+                          workOrderNo: item.workOrderNo,
+                          workOrderNotes: item.workOrderNotes,
                         });
                       } else {
                         onOpenNewJobCardModal();

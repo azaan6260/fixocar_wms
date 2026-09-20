@@ -50,6 +50,10 @@ interface GatePassCheckInViewProps {
     driverPhotoUrl?: string;
     workOrderNo?: string;
     workOrderNotes?: string;
+    cityId?: string;
+    cityName?: string;
+    workshopId?: string;
+    workshopName?: string;
   }) => void;
   onSelectJobCard?: (jobCardId: string) => void;
 }
@@ -811,6 +815,10 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                               isCars24: item.isCars24,
                               cars24RefNo: item.cars24RefNo,
                               checkInRecordId: item.id,
+                              cityId: item.cityId,
+                              cityName: item.cityName,
+                              workshopId: item.workshopId,
+                              workshopName: item.workshopName,
                               driverName: item.checkInDriverName,
                               driverPhone: item.checkInDriverPhone,
                               driverPhotoUrl: item.checkInPhotoWithDriverUrl,

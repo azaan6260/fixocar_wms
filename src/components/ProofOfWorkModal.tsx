@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { JobCard, ProofMediaCategory, ProofMediaItem, AuthUser, JobTask } from '../types';
 import { uploadProofMedia, getCategoryBadgeInfo } from '../lib/supabaseStorage';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 interface ProofOfWorkModalProps {
   isOpen: boolean;
@@ -653,9 +654,17 @@ export function ProofOfWorkModal({
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300 block">
-              5. अतिरिक्त टिप्पणी (Optional Technician Notes):
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold text-slate-300 block">
+                5. अतिरिक्त टिप्पणी (Optional Technician Notes):
+              </label>
+              <VoiceDictationButton
+                currentValue={notes}
+                onTranscript={setNotes}
+                size="sm"
+                buttonText="Dictate Findings"
+              />
+            </div>
             <textarea
               rows={2}
               value={notes}

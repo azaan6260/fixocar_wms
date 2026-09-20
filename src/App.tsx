@@ -363,6 +363,51 @@ export default function App() {
     setQrModalCardId(null);
   };
 
+  // Helper function that checks the logged-in user's assigned workshop
+  const getUserAssignedWorkshop = (user: AuthUser | null) => {
+    if (!user || !user.workshopId) return null;
+    const workshops = getWorkshops();
+    const assigned = workshops.find(w => w.id === user.workshopId);
+    if (!assigned) return null;
+    return {
+      workshopId: assigned.id,
+      workshopName: assigned.name,
+      cityId: assigned.cityId,
+      cityName: user.cityName,
+      isCars24Partner: assigned.isCars24Partner
+    };
+  };
+
+  const userAssignedWorkshop = getUserAssignedWorkshop(authUser);
+
+  const effectiveCreateModalPrefill = React.useMemo(() => {
+    if (!createModalPrefill && !userAssignedWorkshop) return undefined;
+    if (typeof createModalPrefill === 'string') {
+      return {
+        regNo: createModalPrefill,
+        workshopId: userAssignedWorkshop?.workshopId,
+        workshopName: userAssignedWorkshop?.workshopName,
+        cityId: userAssignedWorkshop?.cityId,
+        cityName: userAssignedWorkshop?.cityName
+      };
+    }
+    if (createModalPrefill && typeof createModalPrefill === 'object') {
+      return {
+        workshopId: userAssignedWorkshop?.workshopId,
+        workshopName: userAssignedWorkshop?.workshopName,
+        cityId: userAssignedWorkshop?.cityId,
+        cityName: userAssignedWorkshop?.cityName,
+        ...createModalPrefill
+      };
+    }
+    return userAssignedWorkshop ? {
+      workshopId: userAssignedWorkshop.workshopId,
+      workshopName: userAssignedWorkshop.workshopName,
+      cityId: userAssignedWorkshop.cityId,
+      cityName: userAssignedWorkshop.cityName
+    } : undefined;
+  }, [createModalPrefill, userAssignedWorkshop]);
+
   // Subscribe to storage updates & sync from Supabase on startup and periodically
   useEffect(() => {
     const runDiagnosticCheck = () => {
@@ -773,7 +818,7 @@ export default function App() {
           setIsCreateModalOpen(false);
           setCreateModalPrefill(undefined);
         }}
-        prefilledRegNum={createModalPrefill}
+        prefilledRegNum={effectiveCreateModalPrefill}
         employees={employees}
         vendors={vendors}
         onCardCreated={(newCard) => {

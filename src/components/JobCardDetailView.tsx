@@ -24,6 +24,7 @@ import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { triggerSuccessHaptic } from '../lib/mobileBridge';
 import { ProofMediaGallery } from './ProofMediaGallery';
 import { ProofOfWorkModal } from './ProofOfWorkModal';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 // Re-export mapping helpers for visual panel IDs to Standard Job IDs
 export { mapPanelToStandardJob, getPanelEnvironmentRates };
@@ -1185,7 +1186,13 @@ export function JobCardDetailView({
                       className="w-full p-3 rounded-2xl bg-slate-800 border border-slate-700 font-medium text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-between items-center gap-4">
+                      <VoiceDictationButton
+                        currentValue={cardHuddleNotes}
+                        onTranscript={setCardHuddleNotes}
+                        size="md"
+                        buttonText="Dictate Notes"
+                      />
                       <button
                         type="button"
                         onClick={handleSaveHuddleNotes}
