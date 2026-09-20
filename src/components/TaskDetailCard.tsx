@@ -347,17 +347,8 @@ export function TaskDetailCard({
                 </button>
 
                 <button
-                  onClick={() => { setIsReallotting(!isReallotting); setIsEditingTask(false); }}
-                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  <User className="w-3 h-3" />
-                  {isReallotting ? 'Cancel Re-allotment' : 'Reassign'}
-                </button>
-
-                <button
                   onClick={() => {
                     setIsEditingTask(!isEditingTask);
-                    setIsReallotting(false);
                     // refresh edit state from task
                     setEditTitle(task.title);
                     setEditCategory(task.category);
@@ -371,7 +362,7 @@ export function TaskDetailCard({
                   className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
                 >
                   <Edit className="w-3 h-3" />
-                  {isEditingTask ? 'Cancel Edit' : 'Edit Job & Payouts'}
+                  {isEditingTask ? 'Cancel Edit' : 'Edit & Allot Task'}
                 </button>
 
                 <button
@@ -432,53 +423,6 @@ export function TaskDetailCard({
           )}
         </div>
       </div>
-
-      {/* RE-ALLOTMENT SELECTION PANEL */}
-      {isReallotting && (
-        <form onSubmit={handleReallotSubmit} className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="grow space-y-1">
-            <label className="block text-xs font-bold text-blue-900 dark:text-blue-200">
-              Re-allot / Reassign Task to Employee or Sublet Vendor:
-            </label>
-            <select
-              value={selectedAssignee}
-              onChange={(e) => setSelectedAssignee(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-800 text-slate-900 dark:text-slate-100"
-            >
-              <optgroup label="Workshop Employees & Mechanics">
-                {employees.map(e => (
-                  <option key={e.id} value={e.id}>
-                    {e.name} — {e.specializedTeam} ({e.activeJobsCount || 0} active jobs)
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Outsourced Sublet Vendors">
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} — {v.category}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-xs"
-            >
-              Confirm Re-allotment
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsReallotting(false)}
-              className="px-3 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* EDIT TASK & PAYOUTS PANEL */}
       {isEditingTask && (

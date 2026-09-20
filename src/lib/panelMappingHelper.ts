@@ -189,13 +189,13 @@ export function getPanelEnvironmentRates(
 
     const activePrice = isCars24 ? cars24Price : retailPrice;
 
-    const retailPainterPayout = Math.round((matchedJob.retailPainterPayout ?? matchedJob.painterPayout ?? 950) * multiplier);
-    const retailDenterPayout = Math.round((matchedJob.retailDenterPayout ?? matchedJob.denterPayout ?? 200) * multiplier);
-    const retailContractorPayout = matchedJob.retailContractorPayout ? Math.round(matchedJob.retailContractorPayout * multiplier) : (retailPainterPayout + retailDenterPayout);
+    const retailPainterPayout = Math.round(matchedJob.retailPainterPayout ?? matchedJob.painterPayout ?? 950);
+    const retailDenterPayout = Math.round(matchedJob.retailDenterPayout ?? matchedJob.denterPayout ?? 200);
+    const retailContractorPayout = matchedJob.retailContractorPayout ? Math.round(matchedJob.retailContractorPayout) : (retailPainterPayout + retailDenterPayout);
 
-    const cars24PainterPayout = Math.round((matchedJob.cars24PainterPayout ?? 800) * multiplier);
-    const cars24DenterPayout = Math.round((matchedJob.cars24DenterPayout ?? 150) * multiplier);
-    const cars24ContractorPayout = matchedJob.cars24ContractorPayout ? Math.round(matchedJob.cars24ContractorPayout * multiplier) : (cars24PainterPayout + cars24DenterPayout);
+    const cars24PainterPayout = Math.round(matchedJob.cars24PainterPayout ?? 800);
+    const cars24DenterPayout = Math.round(matchedJob.cars24DenterPayout ?? 150);
+    const cars24ContractorPayout = matchedJob.cars24ContractorPayout ? Math.round(matchedJob.cars24ContractorPayout) : (cars24PainterPayout + cars24DenterPayout);
 
     const painterPayout = isCars24 ? cars24PainterPayout : retailPainterPayout;
     const denterPayout = isCars24 ? cars24DenterPayout : retailDenterPayout;
@@ -227,14 +227,14 @@ export function getPanelEnvironmentRates(
     price: defaultBasePrice,
     retailPrice: baseRetail,
     cars24Price: baseCars24,
-    retailPainterPayout: Math.round(950 * multiplier),
-    retailDenterPayout: Math.round(200 * multiplier),
-    retailContractorPayout: Math.round(1150 * multiplier),
-    cars24PainterPayout: Math.round(800 * multiplier),
-    cars24DenterPayout: Math.round(150 * multiplier),
-    cars24ContractorPayout: Math.round(950 * multiplier),
-    painterPayout: isCars24 ? Math.round(800 * multiplier) : Math.round(950 * multiplier),
-    denterPayout: isCars24 ? Math.round(150 * multiplier) : Math.round(200 * multiplier),
-    contractorPayout: isCars24 ? Math.round(950 * multiplier) : Math.round(1150 * multiplier),
+    retailPainterPayout: 950,
+    retailDenterPayout: 200,
+    retailContractorPayout: 1150,
+    cars24PainterPayout: 800,
+    cars24DenterPayout: 150,
+    cars24ContractorPayout: 950,
+    painterPayout: isCars24 ? 800 : 950,
+    denterPayout: isCars24 ? 150 : 200,
+    contractorPayout: isCars24 ? 950 : 1150,
   };
 }

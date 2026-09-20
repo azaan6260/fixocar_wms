@@ -173,21 +173,6 @@ export function JobAllotmentPipeline({
     const effectiveScope: PaintScope = scope || 'FULL_OUTER';
     const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, effectiveScope);
 
-    // If Partial Paint or Inside Paint is selected, prompt manager to feed custom payout & billing prices
-    if (effectiveScope === 'PARTIAL_TOUCHUP' || effectiveScope === 'INSIDE_JAMB' || effectiveScope === 'FULL_OUTER_AND_INSIDE') {
-      setCustomRatePrompt({
-        panelId,
-        panelName: panelDef.nameEn,
-        scope: effectiveScope,
-        matchedJobId,
-        billingPrice: rates.price,
-        painterPayout: rates.painterPayout,
-        denterPayout: rates.denterPayout
-      });
-      return;
-    }
-
-    // Standard Full Outer Paint uses standard rates directly
     const existingTasks = selectedTasks.filter(t => 
       (t.panelKey && t.panelKey === panelId) ||
       matchTaskToPanelDef(t)?.id === panelId ||
@@ -729,113 +714,6 @@ export function JobAllotmentPipeline({
 
       {/* SECTION 8: TYRE WORK */}
       {activeSection === 'TYRE_WORK' && renderJobSelectionGrid(tyreJobs, 'Tyre Work & Punctures')}
-
-      {/* MANAGER CUSTOM RATE FEED MODAL FOR PARTIAL / INSIDE PAINT */}
-      {customRatePrompt && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-sm">
-                    {customRatePrompt.scope === 'PARTIAL_TOUCHUP' ? '🎨 Partial Paint' : customRatePrompt.scope === 'INSIDE_JAMB' ? '🚪 Inside Paint' : '🌟 Outer + Inside Paint'}
-                  </span>
-                </div>
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-white mt-1">
-                  Rate &amp; Payout Setup: {customRatePrompt.panelName}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCustomRatePrompt(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Selected <strong>{customRatePrompt.scope === 'PARTIAL_TOUCHUP' ? 'Partial Touch-up Paint' : 'Inside Door Jamb Paint'}</strong> for <strong>{customRatePrompt.panelName}</strong>. Please confirm or feed the custom billing and payout prices:
-            </p>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                applyPanelTaskWithRates(
-                  customRatePrompt.panelId,
-                  customRatePrompt.scope,
-                  Number(customRatePrompt.billingPrice) || 0,
-                  Number(customRatePrompt.painterPayout) || 0,
-                  Number(customRatePrompt.denterPayout) || 0,
-                  customRatePrompt.matchedJobId
-                );
-                setCustomRatePrompt(null);
-              }}
-              className="space-y-4 text-xs"
-            >
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 dark:text-slate-300">
-                  Customer Billing Price (ग्राहक बिलिंग राशि ₹):
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={customRatePrompt.billingPrice}
-                  onChange={(e) => setCustomRatePrompt({ ...customRatePrompt, billingPrice: Number(e.target.value) })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Painter Payout (₹):
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={customRatePrompt.painterPayout}
-                    onChange={(e) => setCustomRatePrompt({ ...customRatePrompt, painterPayout: Number(e.target.value) })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono font-bold text-purple-600 dark:text-purple-400 focus:ring-2 focus:ring-purple-500"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">
-                    Denter Payout (₹):
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={customRatePrompt.denterPayout}
-                    onChange={(e) => setCustomRatePrompt({ ...customRatePrompt, denterPayout: Number(e.target.value) })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono font-bold text-amber-600 dark:text-amber-400 focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCustomRatePrompt(null)}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold shadow-md shadow-purple-600/30 transition-all flex items-center gap-1.5"
-                >
-                  ✓ Confirm &amp; Allot Panel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
