@@ -38,6 +38,132 @@ export interface SyncResult {
 let lastProcessedServerStoreSignature = '';
 let lastPushedLocalStoreSignature = '';
 
+export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCard[]): JobCard[] {
+  const localMap = new Map<string, JobCard>();
+  for (const card of localCards) {
+    if (card && card.id) {
+      localMap.set(String(card.id), card);
+    }
+  }
+
+  const mergedList: JobCard[] = [];
+
+  for (const remoteCard of remoteCards) {
+    if (!remoteCard || !remoteCard.id) continue;
+    const cardId = String(remoteCard.id);
+    const localCard = localMap.get(cardId);
+
+    if (!localCard) {
+      mergedList.push(remoteCard);
+      continue;
+    }
+
+    // Merge tasks
+    const localTasksMap = new Map<string, JobTask>();
+    if (Array.isArray(localCard.tasks)) {
+      for (const lt of localCard.tasks) {
+        if (lt && lt.id) {
+          localTasksMap.set(String(lt.id), lt);
+        }
+      }
+    }
+
+    const mergedTasks: JobTask[] = [];
+    if (Array.isArray(remoteCard.tasks)) {
+      for (const rt of remoteCard.tasks) {
+        const rtId = String(rt.id);
+        const lt = localTasksMap.get(rtId);
+        if (!lt) {
+          mergedTasks.push(rt);
+        } else {
+          // If local or remote task is COMPLETED, keep COMPLETED!
+          const isLocalCompleted = lt.status === 'COMPLETED';
+          const isRemoteCompleted = rt.status === 'COMPLETED';
+
+          const finalStatus: JobTask['status'] = (isLocalCompleted || isRemoteCompleted)
+            ? 'COMPLETED'
+            : (lt.status === 'IN_PROGRESS' || rt.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (lt.status || rt.status || 'PENDING'));
+
+          const finalCompletedAt = rt.completedAt || lt.completedAt || (finalStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+
+          mergedTasks.push({
+            ...rt,
+            ...lt,
+            status: finalStatus,
+            completedAt: finalCompletedAt,
+            assignedToId: lt.assignedToId || rt.assignedToId,
+            assignedToName: lt.assignedToName || rt.assignedToName,
+            denterPayout: lt.denterPayout ?? rt.denterPayout,
+            painterPayout: lt.painterPayout ?? rt.painterPayout,
+            panelKey: lt.panelKey || rt.panelKey,
+            pairedDenterId: lt.pairedDenterId || rt.pairedDenterId,
+            pairedDenterName: lt.pairedDenterName || rt.pairedDenterName,
+          });
+          localTasksMap.delete(rtId);
+        }
+      }
+    }
+
+    // Append any local tasks not in remoteCard
+    for (const lt of localTasksMap.values()) {
+      mergedTasks.push(lt);
+    }
+
+    // Status priority
+    const statusPriority: Record<string, number> = {
+      'CLOSED': 100,
+      'DELIVERED': 90,
+      'OUT_FOR_DELIVERY': 80,
+      'READY_FOR_DELIVERY': 70,
+      'QC_PENDING': 60,
+      'IN_PROGRESS': 50,
+      'JOB_ALLOCATED': 40,
+      'ESTIMATE_PENDING': 30,
+      'INSPECTION': 20,
+      'CREATED': 10
+    };
+
+    const allTasksDone = mergedTasks.length > 0 && mergedTasks.every(t => t.status === 'COMPLETED' || t.status === 'ON_HOLD');
+
+    let finalCardStatus = remoteCard.status;
+    const remoteRank = statusPriority[remoteCard.status] || 0;
+    const localRank = statusPriority[localCard.status] || 0;
+
+    if (allTasksDone) {
+      if (remoteRank < statusPriority['QC_PENDING'] && localRank < statusPriority['QC_PENDING']) {
+        finalCardStatus = 'QC_PENDING';
+      } else if (localRank > remoteRank) {
+        finalCardStatus = localCard.status;
+      }
+    } else {
+      if (localRank > remoteRank) {
+        finalCardStatus = localCard.status;
+      }
+    }
+
+    mergedList.push({
+      ...remoteCard,
+      ...localCard,
+      status: finalCardStatus,
+      tasks: mergedTasks,
+      estimatedCompletionDate: remoteCard.estimatedCompletionDate || localCard.estimatedCompletionDate,
+      isUrgent: remoteCard.isUrgent !== undefined ? remoteCard.isUrgent : Boolean(localCard.isUrgent),
+      huddleNotes: remoteCard.huddleNotes || localCard.huddleNotes,
+      qcChecklist: (remoteCard.qcChecklist && remoteCard.qcChecklist.length > 0) ? remoteCard.qcChecklist : localCard.qcChecklist,
+      comments: (remoteCard.comments && remoteCard.comments.length > 0) ? remoteCard.comments : localCard.comments
+    });
+  }
+
+  // Any local cards missing from remote
+  for (const localCard of localCards) {
+    if (!mergedList.some(m => String(m.id) === String(localCard.id))) {
+      mergedList.push(localCard);
+    }
+  }
+
+  return mergedList;
+}
+
 function verifyAndUpdateAuthUserWorkshop(mergedEmployees: Employee[], sourceTag: string) {
   const authUser = getAuthUser();
   if (!authUser) {
@@ -257,12 +383,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
         const serverJobCards = Array.isArray(store.jobCards) ? store.jobCards : [];
         const currentLocalJobCards = getAllJobCards();
-        const mergedJobCards: JobCard[] = [...serverJobCards];
-        for (const loc of currentLocalJobCards) {
-          if (!mergedJobCards.some(m => m.id === loc.id)) {
-            mergedJobCards.push(loc);
-          }
-        }
+        const mergedJobCards = mergeJobCardsWithLocal(serverJobCards, currentLocalJobCards);
         if (mergedJobCards.length > 0) {
           saveJobCards(mergedJobCards, true);
           jobCardsSynced = mergedJobCards.length;
@@ -830,25 +951,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       });
 
       const currentLocal = getAllJobCards();
-      const localMap = new Map<string, JobCard>(currentLocal.map(c => [String(c.id), c]));
-
-      const mergedCards = supaCards.map(sc => {
-        const local = localMap.get(String(sc.id));
-        if (!local) return sc;
-        return {
-          ...sc,
-          // Preserve local target completion date and urgency if remote is empty
-          estimatedCompletionDate: sc.estimatedCompletionDate || local.estimatedCompletionDate,
-          isUrgent: sc.isUrgent !== undefined ? sc.isUrgent : Boolean(local.isUrgent),
-          huddleNotes: sc.huddleNotes || local.huddleNotes
-        };
-      });
-
-      for (const loc of currentLocal) {
-        if (!mergedCards.some(m => String(m.id) === String(loc.id))) {
-          mergedCards.push(loc);
-        }
-      }
+      const mergedCards = mergeJobCardsWithLocal(supaCards, currentLocal);
 
       saveJobCards(mergedCards, true);
       jobCardsSynced = mergedCards.length;

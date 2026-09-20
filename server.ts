@@ -286,6 +286,113 @@ function mergeArrayItems<T>(existingList: T[], incomingList: T[], getKey: (item:
   return Array.from(map.values());
 }
 
+function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] {
+  if (!Array.isArray(incomingCards) || incomingCards.length === 0) return existingCards || [];
+  if (!Array.isArray(existingCards) || existingCards.length === 0) return incomingCards || [];
+
+  const map = new Map<string, any>();
+
+  for (const card of existingCards) {
+    if (card && card.id) {
+      map.set(String(card.id).toLowerCase().trim(), card);
+    }
+  }
+
+  for (const incCard of incomingCards) {
+    if (!incCard || !incCard.id) continue;
+    const key = String(incCard.id).toLowerCase().trim();
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, incCard);
+      continue;
+    }
+
+    // Merge tasks
+    const existingTasks = Array.isArray(existing.tasks) ? existing.tasks : [];
+    const incomingTasks = Array.isArray(incCard.tasks) ? incCard.tasks : [];
+
+    const taskMap = new Map<string, any>();
+    for (const et of existingTasks) {
+      if (et && et.id) {
+        taskMap.set(String(et.id).toLowerCase().trim(), et);
+      }
+    }
+
+    const mergedTasks: any[] = [];
+    for (const it of incomingTasks) {
+      if (!it || !it.id) {
+        mergedTasks.push(it);
+        continue;
+      }
+      const tKey = String(it.id).toLowerCase().trim();
+      const et = taskMap.get(tKey);
+      if (!et) {
+        mergedTasks.push(it);
+      } else {
+        const isEtCompleted = et.status === 'COMPLETED';
+        const isItCompleted = it.status === 'COMPLETED';
+        const finalStatus = (isEtCompleted || isItCompleted) ? 'COMPLETED' : (et.status === 'IN_PROGRESS' || it.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (it.status || et.status || 'PENDING'));
+        const finalCompletedAt = it.completedAt || it.completed_at || et.completedAt || et.completed_at || (finalStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+
+        mergedTasks.push({
+          ...et,
+          ...it,
+          status: finalStatus,
+          completedAt: finalCompletedAt,
+          completed_at: finalCompletedAt
+        });
+        taskMap.delete(tKey);
+      }
+    }
+
+    // Remaining existing tasks
+    for (const et of taskMap.values()) {
+      mergedTasks.push(et);
+    }
+
+    const statusPriority: Record<string, number> = {
+      'CLOSED': 100,
+      'DELIVERED': 90,
+      'OUT_FOR_DELIVERY': 80,
+      'READY_FOR_DELIVERY': 70,
+      'QC_PENDING': 60,
+      'IN_PROGRESS': 50,
+      'JOB_ALLOCATED': 40,
+      'ESTIMATE_PENDING': 30,
+      'INSPECTION': 20,
+      'CREATED': 10
+    };
+
+    const allDone = mergedTasks.length > 0 && mergedTasks.every((t: any) => t.status === 'COMPLETED' || t.status === 'ON_HOLD');
+
+    const exRank = statusPriority[existing.status] || 0;
+    const inRank = statusPriority[incCard.status] || 0;
+
+    let finalStatus = incCard.status || existing.status;
+    if (allDone) {
+      if (exRank < statusPriority['QC_PENDING'] && inRank < statusPriority['QC_PENDING']) {
+        finalStatus = 'QC_PENDING';
+      } else {
+        finalStatus = exRank > inRank ? existing.status : incCard.status;
+      }
+    } else {
+      if (exRank > inRank) {
+        finalStatus = existing.status;
+      }
+    }
+
+    map.set(key, {
+      ...existing,
+      ...incCard,
+      status: finalStatus,
+      tasks: mergedTasks
+    });
+  }
+
+  return Array.from(map.values());
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -1304,7 +1411,7 @@ Return valid JSON ONLY.`;
                 estimatedCompletionDate: c.estimated_completion_date || c.estimatedCompletionDate
               };
             });
-            store.jobCards = mergeArrayItems(store.jobCards, mappedCards, j => String(j.id));
+            store.jobCards = mergeJobCardRecords(store.jobCards, mappedCards);
           }
 
           // 3. Cities
@@ -1559,7 +1666,7 @@ Return valid JSON ONLY.`;
         currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.email || e.loginId || e.name);
       }
       if (Array.isArray(jobCards) && jobCards.length > 0) {
-        currentStore.jobCards = mergeArrayItems(currentStore.jobCards, jobCards, j => j.id);
+        currentStore.jobCards = mergeJobCardRecords(currentStore.jobCards, jobCards);
       }
       if (Array.isArray(cities) && cities.length > 0) {
         currentStore.cities = mergeArrayItems(currentStore.cities, cities, c => c.id || c.name);
