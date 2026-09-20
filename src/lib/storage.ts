@@ -726,6 +726,9 @@ export function updateJobCardGSTInvoice(
 }
 
 export function updateJobCardTask(jobCardId: string, taskId: string, updates: Partial<JobTask>) {
+  if (updates.status) {
+    updateTaskStatus(jobCardId, taskId, updates.status);
+  }
   updateJobCard(jobCardId, (card) => {
     const updatedTasks = card.tasks.map(task => {
       if (task.id === taskId) {
@@ -753,23 +756,106 @@ export function deleteJobCardTask(jobCardId: string, taskId: string) {
   });
 }
 
+export function areTasksOnSamePanelOrGroup(taskA: JobTask, taskB: JobTask): boolean {
+  if (taskA.id === taskB.id) return true;
+
+  // 1. Direct panelKey comparison
+  if (taskA.panelKey && taskB.panelKey) {
+    return taskA.panelKey.toLowerCase() === taskB.panelKey.toLowerCase();
+  }
+
+  // 2. Paired Denter assignment match
+  if (taskA.pairedDenterId && taskB.assignedToId === taskA.pairedDenterId) return true;
+  if (taskB.pairedDenterId && taskA.assignedToId === taskB.pairedDenterId) return true;
+  if (
+    taskA.pairedDenterName &&
+    taskB.assignedToName &&
+    taskA.pairedDenterName.toLowerCase() === taskB.assignedToName.toLowerCase()
+  ) {
+    return true;
+  }
+
+  // 3. Title keyword matching for panel names
+  const panelKeywords = [
+    'bonnet', 'hood', 'बोनट', 'हुड',
+    'front bumper', ' bumper', 'बंपर',
+    'rear bumper',
+    'fender', 'फेन्डर',
+    'door', 'दरवाजा',
+    'running board', 'सिल',
+    'quarter panel', 'quarter',
+    'roof', 'छत', 'रूफ',
+    'boot', 'trunk', 'dicky', 'डिक्की', 'बूट',
+    'windshield', 'शीशा'
+  ];
+
+  const titleA = taskA.title.toLowerCase();
+  const titleB = taskB.title.toLowerCase();
+
+  for (const kw of panelKeywords) {
+    if (titleA.includes(kw) && titleB.includes(kw)) {
+      return true;
+    }
+  }
+
+  // 4. Fallback if neither task has an explicit panelKey
+  if (!taskA.panelKey && !taskB.panelKey) {
+    return true;
+  }
+
+  return false;
+}
+
 export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: JobTask['status']) {
   updateJobCard(jobCardId, (card) => {
+    const targetTask = card.tasks.find(t => t.id === taskId);
+    if (!targetTask) return card;
+
+    const targetTitle = targetTask.title.toLowerCase();
+    const targetCategory = targetTask.category;
+
+    // Check if task being completed is a PAINT task or final body stage task
+    const isPaintTask = targetCategory === 'PAINT' || 
+                        targetTitle.includes('paint') || 
+                        targetTitle.includes('पेंट') ||
+                        targetTitle.includes('clear coat') ||
+                        targetTitle.includes('coating') ||
+                        Boolean(targetTask.painterPayout);
+
     const updatedTasks = card.tasks.map(task => {
       if (task.id === taskId) {
         return {
           ...task,
           status: newStatus,
-          completedAt: newStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined
+          completedAt: newStatus === 'COMPLETED' ? (task.completedAt || new Date().toLocaleTimeString()) : undefined
         };
       }
+
+      // If a Paint task is marked COMPLETED, auto-complete preceding Denting/Pre-denting tasks on the same panel/card
+      if (newStatus === 'COMPLETED' && isPaintTask) {
+        const isDentingTask = task.category === 'DENTING' || 
+                              task.title.toLowerCase().includes('dent') || 
+                              task.title.includes('डेंट') ||
+                              Boolean(task.denterPayout);
+
+        if (isDentingTask && task.status !== 'COMPLETED') {
+          if (areTasksOnSamePanelOrGroup(targetTask, task)) {
+            return {
+              ...task,
+              status: 'COMPLETED' as const,
+              completedAt: task.completedAt || new Date().toLocaleTimeString()
+            };
+          }
+        }
+      }
+
       return task;
     });
 
-    // Auto-recalculate status: if all tasks done -> QC PENDING or READY
-    const allDone = updatedTasks.every(t => t.status === 'COMPLETED' || t.status === 'ON_HOLD');
+    // Auto-recalculate status: if all tasks done -> QC PENDING
+    const allDone = updatedTasks.length > 0 && updatedTasks.every(t => t.status === 'COMPLETED' || t.status === 'ON_HOLD');
     let nextStatus = card.status;
-    if (allDone && card.status === 'IN_PROGRESS') {
+    if (allDone && (card.status === 'IN_PROGRESS' || card.status === 'ESTIMATE_PENDING' || card.status === 'JOB_ALLOCATED' || card.status === 'CREATED' || card.status === 'INSPECTION')) {
       nextStatus = 'QC_PENDING';
     }
 

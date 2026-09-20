@@ -25,7 +25,7 @@ import {
   Tag
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../../lib/technicianVoiceHelper';
-import { updateJobCard, addRequisitionToTask, dispatchToastNotification, getStandardJobs, deleteJobCardTask, isCars24JobCard } from '../../lib/storage';
+import { updateJobCard, updateTaskStatus, addRequisitionToTask, dispatchToastNotification, getStandardJobs, deleteJobCardTask, isCars24JobCard } from '../../lib/storage';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../../lib/panelMappingHelper';
 
 export type BodyViewFilter = 'ALL_ASSIGNED' | 'DENTER' | 'PAINTER' | 'INSPECTION';
@@ -306,10 +306,7 @@ export function TechnicianBodyPanelAssessmentChart({
   // Toggle task status from panel inspector
   const handleToggleTaskStatus = (taskId: string, currentStatus: JobTask['status']) => {
     const nextStatus = currentStatus === 'PENDING' ? 'IN_PROGRESS' : currentStatus === 'IN_PROGRESS' ? 'COMPLETED' : 'PENDING';
-    updateJobCard(card.id, (c) => ({
-      ...c,
-      tasks: c.tasks.map(t => t.id === taskId ? { ...t, status: nextStatus, completedAt: nextStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined } : t)
-    }));
+    updateTaskStatus(card.id, taskId, nextStatus);
   };
 
   // Bilingual Hindi/English voice readout for panel status

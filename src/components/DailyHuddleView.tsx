@@ -10,6 +10,7 @@ import {
 import { 
   updateJobCardTask, 
   updateJobCard, 
+  updateTaskStatus,
   getEmployees, 
   getVendors 
 } from '../lib/storage';
@@ -278,10 +279,7 @@ export function DailyHuddleView({
   });
 
   const handleQuickTaskStatus = (jobCardId: string, taskId: string, newStatus: TaskStatus) => {
-    updateJobCardTask(jobCardId, taskId, {
-      status: newStatus,
-      completedAt: newStatus === 'COMPLETED' ? new Date().toISOString() : undefined
-    });
+    updateTaskStatus(jobCardId, taskId, newStatus);
   };
 
   const formattedToday = new Date().toLocaleDateString('en-US', {
