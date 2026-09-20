@@ -407,17 +407,33 @@ export default function App() {
     };
     initializeGlobalSync();
 
-    // Auto-sync every 15 seconds to ensure mobile and desktop stay continuously linked with database
-    const syncInterval = setInterval(() => {
-      syncFromSupabase().catch(() => {});
-    }, 15000);
+    let syncInterval: any = null;
 
-    // Re-sync on tab focus or screen visibility change
+    const startSyncTimer = () => {
+      if (syncInterval) clearInterval(syncInterval);
+      syncInterval = setInterval(() => {
+        if (!document.hidden) {
+          syncFromSupabase().catch(() => {});
+        }
+      }, 45000);
+    };
+
+    // Re-sync on tab focus or screen visibility change, and pause background timer when hidden to conserve mobile battery
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         syncFromSupabase().catch(() => {});
+        startSyncTimer();
+      } else {
+        if (syncInterval) {
+          clearInterval(syncInterval);
+          syncInterval = null;
+        }
       }
     };
+
+    if (!document.hidden) {
+      startSyncTimer();
+    }
     window.addEventListener('visibilitychange', handleVisibilityChange);
 
     const unsubscribe = subscribeToStore(() => {

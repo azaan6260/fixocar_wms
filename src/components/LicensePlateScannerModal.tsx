@@ -78,6 +78,18 @@ export function LicensePlateScannerModal({
     }
   };
 
+  // Stop camera immediately if document becomes hidden (e.g. app sent to background / phone screen turned off)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden && stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    return () => window.removeEventListener('visibilitychange', handleVisibility);
+  }, [stream]);
+
   // Start Camera Stream when Modal opens & Tab is 'camera'
   useEffect(() => {
     let currentStream: MediaStream | null = null;

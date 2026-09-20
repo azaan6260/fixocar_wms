@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Camera, 
   Video, 
@@ -175,6 +175,21 @@ export function ProofOfWorkModal({
       streamRef.current = null;
     }
   };
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopLiveRecording();
+        stopStream();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibility);
+      stopLiveRecording();
+      stopStream();
+    };
+  }, []);
 
   const resetForm = () => {
     setSelectedFile(null);

@@ -142,6 +142,23 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     e.target.value = '';
   };
 
+  // Camera stream release effect on background or unmount to save Android battery
+  useEffect(() => {
+    if (!cameraStream) return;
+    const handleVisibility = () => {
+      if (document.hidden) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
+        setIsCameraModalOpen(false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibility);
+      cameraStream.getTracks().forEach(track => track.stop());
+    };
+  }, [cameraStream]);
+
   // Live Camera Stream Handlers
   const startCamera = async (target: 'checkIn' | 'checkOut') => {
     setCameraTarget(target);

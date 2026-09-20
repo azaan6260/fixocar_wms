@@ -218,7 +218,7 @@ export function HeaderNav({
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full pt-[max(env(safe-area-inset-top,0px),8px)]">
+    <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 sm:bg-white/95 sm:dark:bg-slate-900/95 sm:backdrop-blur-md border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 shadow-xs max-w-full pt-[max(env(safe-area-inset-top,0px),8px)]">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full max-w-full">
         {/* Top Header Bar: Logo & Actions */}
         <div className="flex items-center justify-between min-h-[56px] sm:h-16 gap-1.5 sm:gap-3 w-full py-1">

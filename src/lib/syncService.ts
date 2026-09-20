@@ -35,6 +35,9 @@ export interface SyncResult {
   errors: string[];
 }
 
+let lastProcessedServerStoreSignature = '';
+let lastPushedLocalStoreSignature = '';
+
 function verifyAndUpdateAuthUserWorkshop(mergedEmployees: Employee[], sourceTag: string) {
   const authUser = getAuthUser();
   if (!authUser) {
@@ -185,7 +188,12 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       const data = await res.json().catch(() => null);
       if (data && data.success && data.store) {
         const store = data.store;
-        if (Array.isArray(store.employees) && store.employees.length > 0) {
+        const serverSignature = JSON.stringify(store);
+        
+        if (serverSignature !== lastProcessedServerStoreSignature) {
+          lastProcessedServerStoreSignature = serverSignature;
+
+          if (Array.isArray(store.employees) && store.employees.length > 0) {
           const currentLocal = getEmployees();
           const empMap = new Map<string, Employee>();
           const serverWorkshops = Array.isArray(store.workshops) ? store.workshops : [];
@@ -456,6 +464,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           saveVehicleCheckIns(mergedCheckIns);
         }
       }
+    }
     }
 
     // Always push local datasets up to central server store after merging
@@ -1167,26 +1176,39 @@ export async function pushLocalDataToSupabase(): Promise<{
   const jobCards = getAllJobCards();
   const checkIns = getVehicleCheckIns();
 
-  // Always sync to central backend server first
+  const storePayload = {
+    employees,
+    jobCards,
+    cities,
+    workshops,
+    vendors,
+    vehicleCheckIns: checkIns,
+    jobCardHistory: getJobCardHistoryRecords(),
+    inventoryItems: getInventoryItems(),
+    deliveryRecords: getDeliveries(),
+    purchaseOrders: getPurchaseOrders(),
+    workshopExpenses: getWorkshopExpenses(),
+    attendanceRecords: getAttendances(),
+    salaryRecords: getSalaries()
+  };
+
+  const localSignature = JSON.stringify(storePayload);
+  if (localSignature === lastPushedLocalStoreSignature) {
+    return {
+      success: true,
+      message: 'Local store unchanged, push skipped to conserve battery.',
+      details: { cities: cities.length, workshops: workshops.length, employees: employees.length, vendors: vendors.length, jobCards: jobCards.length },
+      errors: []
+    };
+  }
+  lastPushedLocalStoreSignature = localSignature;
+
+  // Sync to central backend server first
   try {
     await fetch('/api/central/store', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        employees,
-        jobCards,
-        cities,
-        workshops,
-        vendors,
-        vehicleCheckIns: checkIns,
-        jobCardHistory: getJobCardHistoryRecords(),
-        inventoryItems: getInventoryItems(),
-        deliveryRecords: getDeliveries(),
-        purchaseOrders: getPurchaseOrders(),
-        workshopExpenses: getWorkshopExpenses(),
-        attendanceRecords: getAttendances(),
-        salaryRecords: getSalaries()
-      })
+      body: localSignature
     });
   } catch (centralPushErr) {
     console.warn('[SYNC_TRACE] Push to central store warning:', centralPushErr);
