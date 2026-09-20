@@ -305,10 +305,11 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
       workOrderNotes: workOrderNotes.trim() || undefined,
     });
 
+    setSearchTerm('');
+    setActiveFilter('IN_WORKSHOP');
     refreshList();
     setIsCheckInModalOpen(false);
     resetForm();
-    setActiveFilter('IN_WORKSHOP');
     setJustCheckedInSuccess(newRecord);
   };
 
@@ -408,6 +409,9 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   });
 
   const sortedItems = [...filteredItems].sort((a, b) => {
+    if (justCheckedInSuccess && a.id === justCheckedInSuccess.id) return -1;
+    if (justCheckedInSuccess && b.id === justCheckedInSuccess.id) return 1;
+
     const numA = parseInt(a.id.replace(/\D/g, '') || '0', 10);
     const numB = parseInt(b.id.replace(/\D/g, '') || '0', 10);
     return numB - numA;

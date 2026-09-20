@@ -3147,8 +3147,18 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
 
 export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'checkedInAt'>): VehicleCheckIn {
   const checkIns = getVehicleCheckIns();
-  const nextNum = checkIns.length + 106;
-  const gateId = `GATE-2026-${nextNum}`;
+  
+  // Calculate max numeric suffix from existing checkIns to guarantee new ID is strictly higher
+  let maxNum = 105;
+  checkIns.forEach(c => {
+    const digits = c.id.replace(/\D/g, '');
+    if (digits) {
+      const num = parseInt(digits, 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+
+  const gateId = `GATE-2026-${maxNum + 1}`;
   const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
   
   const fullRecord: VehicleCheckIn = {
@@ -3160,6 +3170,28 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
 
   checkIns.unshift(fullRecord);
   saveVehicleCheckIns(checkIns);
+
+  // Sync with Customer Vehicles directory
+  try {
+    const existingVehicles = getCustomerVehicles();
+    const cleanReg = fullRecord.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const exists = existingVehicles.some(v => v.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg);
+    if (!exists) {
+      addCustomerVehicle({
+        customerPhone: fullRecord.customerPhone || 'N/A',
+        registrationNumber: fullRecord.registrationNumber,
+        make: fullRecord.make,
+        model: fullRecord.model,
+        variant: fullRecord.variant,
+        year: 2024,
+        color: fullRecord.color || 'White',
+        fuelType: (fullRecord.fuelType as FuelType) || 'Petrol',
+        mileage: fullRecord.mileage || 0,
+      });
+    }
+  } catch (e) {
+    console.error('Error syncing customer vehicle record:', e);
+  }
 
   dispatchToastNotification({
     type: 'JOB_CARD_CREATED',

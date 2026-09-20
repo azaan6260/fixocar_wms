@@ -651,6 +651,10 @@ export default function App() {
             currentRole={currentRole}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
             onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
+            onOpenNewJobCardWithPrefill={(prefill) => {
+              setCreateModalPrefill(prefill);
+              setIsCreateModalOpen(true);
+            }}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
             initialFilter={activeTab === 'rfc_quick' || activeTab === 'rfc' ? 'RFC' : undefined}

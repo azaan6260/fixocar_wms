@@ -250,9 +250,9 @@ export function CreateJobCardModal({
   const safeRegStr = typeof regNo === 'string' ? regNo : ((regNo as any)?.regNo || '');
 
   const typedCheckInMatch = React.useMemo(() => {
-    const cleanReg = safeRegStr.toUpperCase().trim();
+    const cleanReg = safeRegStr.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     if (!cleanReg) return null;
-    return availableCheckIns.find(c => c.registrationNumber.toUpperCase().trim() === cleanReg);
+    return availableCheckIns.find(c => c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg);
   }, [safeRegStr, availableCheckIns]);
 
   // Reset form & clear tasks when modal opens

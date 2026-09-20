@@ -104,11 +104,12 @@ export function JobCardList({
 
   const pendingCheckIns = checkInsList.filter((c) => {
     if (c.status === 'CHECKED_OUT') return false;
-    const cleanReg = c.registrationNumber.toUpperCase().trim();
+    const cleanRegC = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const hasActiveJobCard = jobCards.some((jc) => {
       if (jc.status === 'DELIVERED' || jc.status === 'CLOSED') return false;
       if (jc.checkInRecordId && jc.checkInRecordId === c.id) return true;
-      return jc.vehicle.registrationNumber.toUpperCase().trim() === cleanReg;
+      const cleanJC = jc.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      return cleanJC === cleanRegC;
     });
     return !hasActiveJobCard;
   });

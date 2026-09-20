@@ -5,7 +5,7 @@ import {
   Settings, KeyRound, User, Lock, Fuel, Check, RefreshCw, Zap
 } from 'lucide-react';
 import { CityServiceOffering, JobCard, INDIAN_CITIES } from '../types';
-import { getCityServices, getJobCards, subscribeToStore } from '../lib/storage';
+import { getCityServices, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 
 interface CommonHomePageProps {
   onOpenLogin: (tab?: 'STAFF' | 'CUSTOMER') => void;
@@ -52,8 +52,46 @@ export const CommonHomePage: React.FC<CommonHomePageProps> = ({
       setTrackedCard(found);
       setSearchError(null);
     } else {
-      setSearchError(`No active workshop repair found for "${searchReg}". (Try demo: MH02CB9988 or KA01MJ8821)`);
-      setTrackedCard(null);
+      const checkIns = getVehicleCheckIns();
+      const foundCheckIn = checkIns.find(c =>
+        c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().includes(cleanInput)
+      );
+
+      if (foundCheckIn) {
+        // Construct a virtual job card representation for gate check-in status
+        const virtualCard: any = {
+          id: foundCheckIn.id,
+          jobCardNumber: foundCheckIn.id,
+          status: 'CREATED',
+          createdAt: foundCheckIn.checkedInAt,
+          updatedAt: foundCheckIn.checkedInAt,
+          vehicle: {
+            registrationNumber: foundCheckIn.registrationNumber,
+            make: foundCheckIn.make,
+            model: foundCheckIn.model,
+            variant: foundCheckIn.variant || '',
+            fuelType: foundCheckIn.fuelType || 'Petrol',
+            color: foundCheckIn.color || 'Silver',
+            mileage: foundCheckIn.mileage || 0,
+            fuelLevel: foundCheckIn.fuelLevel || 50
+          },
+          customer: {
+            name: foundCheckIn.customerName,
+            phone: foundCheckIn.customerPhone,
+            email: foundCheckIn.customerEmail
+          },
+          packageName: 'Gate Check-In Completed (Awaiting Diagnostic Inspection)',
+          totalEstimatedCost: 0,
+          estimatedCompletionTime: 'Pending Advisor Assignment',
+          tasks: [],
+          notes: foundCheckIn.checkInNotes || 'Vehicle physically in workshop.'
+        };
+        setTrackedCard(virtualCard);
+        setSearchError(null);
+      } else {
+        setSearchError(`No active workshop repair or gate check-in found for "${searchReg}". (Try demo: MH02CB9988 or KA01MJ8821)`);
+        setTrackedCard(null);
+      }
     }
   };
 
