@@ -620,7 +620,10 @@ export default function App() {
           <JobCardList
             jobCards={jobCards}
             onSelectJobCard={(id) => setSelectedJobCardId(id)}
-            onOpenNewJobCardModal={() => setIsCreateModalOpen(true)}
+            onOpenNewJobCardModal={(prefill) => {
+              if (prefill) setCreateModalPrefill(prefill);
+              setIsCreateModalOpen(true);
+            }}
             onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
             onOpenQCModal={(id) => setQcModalCardId(id)}
             onOpenQRModal={(id) => setQrModalCardId(id)}

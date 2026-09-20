@@ -104,6 +104,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   const [workOrderNotes, setWorkOrderNotes] = useState('');
 
   // Check-Out Modal State
+  const [justCheckedInSuccess, setJustCheckedInSuccess] = useState<VehicleCheckIn | null>(null);
   const [checkOutItem, setCheckOutItem] = useState<VehicleCheckIn | null>(null);
   const [checkOutStep, setCheckOutStep] = useState<number>(1);
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<VehicleCheckIn | null>(null);
@@ -275,7 +276,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     });
     const stampedBy = `${authUser?.name || 'Gate Security'} (${authUser?.role || 'Security'})`;
 
-    createVehicleCheckIn({
+    const newRecord = createVehicleCheckIn({
       registrationNumber: regNo.toUpperCase().trim(),
       make,
       model,
@@ -306,6 +307,8 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     refreshList();
     setIsCheckInModalOpen(false);
     resetForm();
+    setActiveFilter('IN_WORKSHOP');
+    setJustCheckedInSuccess(newRecord);
   };
 
   const resetForm = () => {
@@ -1674,6 +1677,92 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                 className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-md shadow-rose-600/20 cursor-pointer"
               >
                 Yes, Remove Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Check-In Complete Confirmation Modal */}
+      {justCheckedInSuccess && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto shadow-xs">
+              <Check className="w-8 h-8 stroke-[3]" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-black px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest inline-block">
+                Gate Pass Check-In Registered
+              </span>
+              <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                {justCheckedInSuccess.registrationNumber} Checked In Successfully!
+              </h2>
+              <p className="text-xs text-slate-500 font-bold">
+                {justCheckedInSuccess.make} {justCheckedInSuccess.model} • Driver: {justCheckedInSuccess.checkInDriverName}
+              </p>
+            </div>
+
+            {justCheckedInSuccess.checkInPhotoWithDriverUrl && (
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 max-h-48">
+                <img src={justCheckedInSuccess.checkInPhotoWithDriverUrl} alt="CheckIn" className="w-full h-48 object-cover" />
+                <div className="absolute bottom-2 left-2 bg-slate-950/80 text-amber-400 font-mono text-[10px] font-black px-2 py-1 rounded-lg">
+                  📷 Check-In Photo Verified
+                </div>
+              </div>
+            )}
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left space-y-1">
+              <span className="text-amber-800 dark:text-amber-300 font-extrabold text-xs flex items-center gap-1.5">
+                <LogIn className="w-4 h-4 text-amber-500" /> Current Status: In Workshop (Awaiting Job Card)
+              </span>
+              <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                This vehicle is now active in the Workshop Gate List and under Job Cards Directory.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              {onOpenCreateJobCardWithPrefill && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const item = justCheckedInSuccess;
+                    setJustCheckedInSuccess(null);
+                    onOpenCreateJobCardWithPrefill({
+                      regNo: item.registrationNumber,
+                      make: item.make,
+                      model: item.model,
+                      variant: item.variant,
+                      fuelType: item.fuelType,
+                      color: item.color,
+                      customerName: item.customerName,
+                      customerPhone: item.customerPhone,
+                      isCars24: !!item.isCars24,
+                      cars24RefNo: item.cars24RefNo,
+                      checkInRecordId: item.id,
+                      driverName: item.checkInDriverName,
+                      driverPhone: item.checkInDriverPhone,
+                      driverPhotoUrl: item.checkInPhotoWithDriverUrl,
+                      workOrderNo: item.workOrderNo,
+                      workOrderNotes: item.workOrderNotes,
+                    });
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>⚡ Open / Create Job Card Now</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm(justCheckedInSuccess.registrationNumber);
+                  setJustCheckedInSuccess(null);
+                }}
+                className="w-full py-3 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs transition-all cursor-pointer"
+              >
+                <span>View in Gate List</span>
               </button>
             </div>
           </div>
