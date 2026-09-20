@@ -13,8 +13,11 @@ import {
   updateJobCardTask,
   deleteJobCardTask,
   reassignAllPaintTasksForJobCard,
-  getAuthUser
+  getAuthUser,
+  getStandardJobs
 } from '../lib/storage';
+import { getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+import { PaintScope } from '../types';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { ProofOfWorkModal } from './ProofOfWorkModal';
 import { 
@@ -117,7 +120,19 @@ export function TaskDetailCard({
   const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout || 0);
   const [editAssignedId, setEditAssignedId] = useState(task.assignedToId || '');
   const [editPairedDenterId, setEditPairedDenterId] = useState(task.pairedDenterId || '');
+  const [editPaintScope, setEditPaintScope] = useState<PaintScope>(task.paintScope || 'FULL_OUTER');
   const [applyToAllPaintPanels, setApplyToAllPaintPanels] = useState(true);
+
+  const changePaintScopeAndPrefillRates = (newScope: PaintScope) => {
+    setEditPaintScope(newScope);
+    const freshJobs = getStandardJobs();
+    const rates = getPanelEnvironmentRates(task.panelKey || task.title, freshJobs, card.isCars24, newScope);
+    
+    setEditCustomerPrice(rates.price);
+    setEditPainterPayout(rates.painterPayout);
+    setEditDenterPayout(rates.denterPayout);
+    setEditContractorPayout(rates.contractorPayout);
+  };
 
   // Handlers
   const handleSaveTaskEdits = (e: React.FormEvent) => {
@@ -144,7 +159,8 @@ export function TaskDetailCard({
       assignedToName: matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : (editAssignedId ? 'Assigned Staff' : 'Unassigned'),
       assignedType: matchedVendor ? 'VENDOR' : 'EMPLOYEE',
       pairedDenterId: editPairedDenterId || undefined,
-      pairedDenterName: matchedDenter ? matchedDenter.name : undefined
+      pairedDenterName: matchedDenter ? matchedDenter.name : undefined,
+      paintScope: editCategory === 'PAINT' ? editPaintScope : undefined
     });
 
     // If editing a paint task and user opted to apply to all paint panels on this vehicle together
@@ -295,6 +311,14 @@ export function TaskDetailCard({
             <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
               {task.category}
             </span>
+            {task.category === 'PAINT' && task.paintScope && (
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 uppercase">
+                {task.paintScope === 'FULL_OUTER' ? '🎨 Full Outer Paint' :
+                 task.paintScope === 'PARTIAL_TOUCHUP' ? '🖌️ Partial Paint' :
+                 task.paintScope === 'INSIDE_JAMB' ? '🚪 Only Inside Paint' :
+                 '🌟 Outside + Inside Paint'}
+              </span>
+            )}
             {task.isAdditionalWork && (
               <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
                 Add-on Work
@@ -358,6 +382,7 @@ export function TaskDetailCard({
                     setEditDenterPayout(task.denterPayout || 0);
                     setEditAssignedId(task.assignedToId || '');
                     setEditPairedDenterId(task.pairedDenterId || '');
+                    setEditPaintScope(task.paintScope || 'FULL_OUTER');
                   }}
                   className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
                 >
@@ -454,7 +479,7 @@ export function TaskDetailCard({
               />
             </div>
 
-            <div>
+             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Category
               </label>
@@ -471,6 +496,38 @@ export function TaskDetailCard({
                 <option value="LATHE_WORK">LATHE_WORK</option>
               </select>
             </div>
+
+            {editCategory === 'PAINT' && (
+              <div className="bg-amber-500/5 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 space-y-1.5 sm:col-span-3">
+                <label className="block text-[11px] font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wide">
+                  Paint Scope Select (यह फ़ील्ड रेट रीसेट करेगी)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: 'FULL_OUTER', label: '🎨 Full Outer Paint' },
+                    { value: 'PARTIAL_TOUCHUP', label: '🖌️ Partial Paint' },
+                    { value: 'INSIDE_JAMB', label: '🚪 Only Inside Paint' },
+                    { value: 'FULL_OUTER_AND_INSIDE', label: '🌟 Outside + Inside Paint' }
+                  ].map((scp) => (
+                    <button
+                      key={scp.value}
+                      type="button"
+                      onClick={() => changePaintScopeAndPrefillRates(scp.value as PaintScope)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        editPaintScope === scp.value
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {scp.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-amber-600/80 dark:text-amber-400/80 font-medium">
+                  * Selecting a paint scope auto-prefills standard Rates and Contractor Payouts. You can then custom edit any amount in the fields below.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1">
