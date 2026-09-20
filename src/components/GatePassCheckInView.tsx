@@ -21,7 +21,8 @@ import {
   RefreshCw,
   Flame,
   Gauge,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
 import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
@@ -1733,7 +1734,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                       make: item.make,
                       model: item.model,
                       variant: item.variant,
-                      fuelType: item.fuelType,
+                      fuelType: item.fuelType as FuelType,
                       color: item.color,
                       customerName: item.customerName,
                       customerPhone: item.customerPhone,
