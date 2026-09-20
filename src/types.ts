@@ -6,6 +6,7 @@ export type UserRole =
   | 'SUPER_ADMIN'
   | 'ADMIN'
   | 'FLOOR_MANAGER'
+  | 'SERVICE_ADVISOR'
   | 'MECHANIC'
   | 'DENTER'
   | 'PAINTER'
@@ -720,6 +721,7 @@ export interface JobCardHistoryRecord {
 
 export interface JobCard {
   id: string; // e.g. "JC-2026-104"
+  jobCardNumber?: string;
   createdAt: string;
   estimatedCompletionDate: string;
   isUrgent?: boolean; // Flag to prioritize job card in Daily Standup Huddle
@@ -731,6 +733,8 @@ export interface JobCard {
   packageName?: string;
   floorManagerId?: string;
   floorManagerName?: string;
+  assignedAdvisorId?: string;
+  assignedManagerId?: string;
   cityId?: string;
   cityName?: string;
   workshopId?: string;

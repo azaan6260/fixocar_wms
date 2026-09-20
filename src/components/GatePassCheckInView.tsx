@@ -80,6 +80,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
   // New Gate Check-In Modal State
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [checkInStep, setCheckInStep] = useState<number>(1);
   const [regNo, setRegNo] = useState('');
   const [make, setMake] = useState('Maruti Suzuki');
   const [model, setModel] = useState('Swift');
@@ -102,6 +103,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
   // Check-Out Modal State
   const [checkOutItem, setCheckOutItem] = useState<VehicleCheckIn | null>(null);
+  const [checkOutStep, setCheckOutStep] = useState<number>(1);
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<VehicleCheckIn | null>(null);
   const [exitDriverName, setExitDriverName] = useState('');
   const [exitDriverPhone, setExitDriverPhone] = useState('');
@@ -289,6 +291,8 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   };
 
   const resetForm = () => {
+    setCheckInStep(1);
+    setCheckOutStep(1);
     setRegNo('');
     setMake('Maruti Suzuki');
     setModel('Swift');
@@ -774,7 +778,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
                     {(() => {
                       const linkedCard = item.jobCardId ? jobCardsList.find(c => c.id === item.jobCardId) : null;
-                      const canCheckOut = !linkedCard || linkedCard.status === 'RFC' || linkedCard.status === 'READY_PENDING_DISPATCH' || linkedCard.status === 'DELIVERED';
+                      const canCheckOut = !linkedCard || linkedCard.status === 'RFC' || linkedCard.status === 'READY_FOR_DELIVERY' || linkedCard.status === 'DELIVERED';
 
                       if (canCheckOut) {
                         return (
@@ -782,6 +786,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                             type="button"
                             onClick={() => {
                               setCheckOutItem(item);
+                              setCheckOutStep(1);
                               setExitDriverName(item.checkInDriverName || 'Driver / Customer');
                               setExitDriverPhone(item.checkInDriverPhone || '');
                             }}
@@ -818,630 +823,698 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         </div>
       )}
 
-      {/* NEW VEHICLE GATE CHECK-IN MODAL */}
+      {/* NEW VEHICLE GATE CHECK-IN MODAL (STEP-BY-STEP WIZARD) */}
       {isCheckInModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md shadow-amber-500/20">
                   <LogIn className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black">Gate Entry - Vehicle Check-In</h2>
-                  <p className="text-xs text-slate-400">Simplified Gate Check-In & Stamped Entry Pass</p>
+                  <h2 className="text-base font-black">Gate Entry Check-In</h2>
+                  <p className="text-[11px] text-slate-400 font-medium">Step {checkInStep} of 3 • Easy Gate Check-In</p>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsCheckInModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCheckIn} className="p-6 space-y-5 text-xs overflow-y-auto">
-              {/* 1. Workshop & City Selection */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-amber-500" />
-                    1. Workshop Location & City Assignment
-                  </span>
-                  {isSuperAdmin ? (
-                    <span className="bg-amber-500/20 text-amber-600 dark:text-amber-300 font-black text-[10px] px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-amber-500" /> Super Admin Access (All Workshops)
-                    </span>
-                  ) : (
-                    <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-slate-500" /> Employee Restricted
-                    </span>
-                  )}
-                </div>
-
-                {isSuperAdmin ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Select City</label>
-                      <select
-                        value={selectedCityId}
-                        onChange={(e) => handleCityChange(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
-                      >
-                        {citiesList.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Select Workshop</label>
-                      <select
-                        value={selectedWorkshopId}
-                        onChange={(e) => handleWorkshopChange(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
-                      >
-                        {activeWorkshopsForSelectedCity.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name} ({w.code || 'HUB'})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
-                        <Building2 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-extrabold text-slate-900 dark:text-white text-xs">
-                          {selectedCityName} • {selectedWorkshopName}
-                        </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Assigned Workshop Location (Locked to logged-in employee assignment)
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
-                      🔒 Locked
-                    </span>
-                  </div>
-                )}
+            {/* Step Progress Indicator Bar */}
+            <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center transition-all ${checkInStep >= 1 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-500'}`}>1</div>
+                <span className={`text-[11px] font-extrabold ${checkInStep === 1 ? 'text-amber-400' : 'text-slate-400'}`}>Registration & Owner</span>
               </div>
-
-              {/* 2. Photo Click / Upload */}
-              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3">
-                <span className="text-amber-900 dark:text-amber-300 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-amber-500" />
-                  2. Vehicle & Driver Photo Capture *
-                </span>
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  ref={checkInCameraInputRef}
-                  onChange={(e) => handlePhotoFileUpload(e, false)}
-                  className="hidden"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={checkInFileInputRef}
-                  onChange={(e) => handlePhotoFileUpload(e, false)}
-                  className="hidden"
-                />
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => startCamera('checkIn')}
-                    className="px-3.5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
-                  >
-                    <Camera className="w-4 h-4 stroke-[2.5]" />
-                    <span>Take Live Photo</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => checkInFileInputRef.current?.click()}
-                    className="px-3.5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
-                  >
-                    <Upload className="w-4 h-4 stroke-[2.5]" />
-                    <span>Upload Photo File</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => checkInCameraInputRef.current?.click()}
-                    className="px-3 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Camera App</span>
-                  </button>
-                </div>
-
-                {/* Photo Preview Box */}
-                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-                  {photoUrl ? (
-                    <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
-                        <img
-                          src={photoUrl}
-                          alt="Vehicle check-in preview"
-                          className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500 shadow-md"
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPhotoUrl('')}
-                          title="Remove photo"
-                          className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Vehicle Photo Attached</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
-                          {photoUrl.startsWith('data:image') ? 'Captured Photo (Base64)' : photoUrl}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => startCamera('checkIn')}
-                          className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 pt-0.5"
-                        >
-                          <RefreshCw className="w-3 h-3" /> Retake Photo
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
-                      <Camera className="w-8 h-8 text-slate-400 mx-auto" />
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Click or Upload Vehicle Photo</p>
-                      <p className="text-[10px] text-slate-400">Capture car entry image with driver or vehicle front</p>
-                    </div>
-                  )}
-                </div>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center transition-all ${checkInStep >= 2 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-500'}`}>2</div>
+                <span className={`text-[11px] font-extrabold ${checkInStep === 2 ? 'text-amber-400' : 'text-slate-400'}`}>Car Model</span>
               </div>
-
-              {/* 3. Customer / Source Type */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
-                  3. Customer / Ownership Type
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label
-                    className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${
-                      isCars24
-                        ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="customerType"
-                      checked={isCars24}
-                      onChange={() => {
-                        setIsCars24(true);
-                        setCustomerName('Cars24 Fleet Partner');
-                        setCustomerPhone('N/A');
-                        setCustomerEmail('');
-                      }}
-                      className="text-amber-500 focus:ring-amber-500"
-                    />
-                    <div>
-                      <span className="font-black text-amber-700 dark:text-amber-300 block">Cars24 Vehicle</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Fleet partner car (Customer details not required)</span>
-                    </div>
-                  </label>
-
-                  <label
-                    className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${
-                      !isCars24
-                        ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="customerType"
-                      checked={!isCars24}
-                      onChange={() => {
-                        setIsCars24(false);
-                        setCustomerName('');
-                        setCustomerPhone('');
-                        setCustomerEmail('');
-                      }}
-                      className="text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="font-black text-blue-700 dark:text-blue-300 block">Retail Customer</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Direct owner car (Name, phone & email required)</span>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Conditional Fields */}
-                {!isCars24 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    <div>
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Name *</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Rahul Sharma"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        required
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Phone *</label>
-                      <input
-                        type="text"
-                        placeholder="+91 98200 12345"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        required
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Email ID</label>
-                      <input
-                        type="email"
-                        placeholder="customer@email.com"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-center justify-between">
-                    <span className="text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-amber-500" />
-                      Cars24 Vehicle Selected — Customer name, phone & email details not required.
-                    </span>
-                    <div className="w-48 shrink-0">
-                      <input
-                        type="text"
-                        placeholder="Cars24 Ref No (Optional)"
-                        value={cars24RefNo}
-                        onChange={(e) => setCars24RefNo(e.target.value)}
-                        className="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-[11px] font-bold"
-                      />
-                    </div>
-                  </div>
-                )}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center transition-all ${checkInStep >= 3 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-500'}`}>3</div>
+                <span className={`text-[11px] font-extrabold ${checkInStep === 3 ? 'text-amber-400' : 'text-slate-400'}`}>Take Photo</span>
               </div>
+            </div>
 
-              {/* 4. Registration Number & Make / Model */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-700 dark:text-slate-300 font-black uppercase text-[10px] tracking-wider block">
-                    4. Registration Number & Vehicle Make/Model
-                  </span>
+            <form onSubmit={handleCreateCheckIn} className="p-5 space-y-4 text-xs overflow-y-auto flex-1">
+              
+              {/* STEP 1: Registration Number & Customer/Ownership Type */}
+              {checkInStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs block">
+                        Step 1: Enter Registration & Customer Type
+                      </span>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-200/80">
+                        Scan license plate or type vehicle registration number below
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-sm shrink-0"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Scan Plate</span>
+                    </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsScannerOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 font-black text-xs flex items-center gap-1 transition-all border border-amber-500/40"
-                  >
-                    <Camera className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Scan License Plate</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Registration No *</label>
+                    <label className="text-slate-700 dark:text-slate-300 font-extrabold block mb-1.5 uppercase text-[10px] tracking-wider">
+                      Vehicle Registration Number *
+                    </label>
                     <div className="relative">
                       <input
                         type="text"
                         placeholder="e.g. MH12AB1234"
                         value={regNo}
-                        onChange={(e) => setRegNo(e.target.value)}
+                        onChange={(e) => setRegNo(e.target.value.toUpperCase())}
                         required
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-black text-sm uppercase pr-9"
+                        autoFocus
+                        className="w-full p-3 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 font-mono font-black text-base uppercase pr-10 focus:border-amber-500 focus:outline-hidden"
                       />
                       <button
                         type="button"
                         onClick={() => setIsScannerOpen(true)}
-                        title="Scan license plate"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                        title="Scan license plate with camera"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-amber-500 transition-colors"
                       >
-                        <Camera className="w-4 h-4" />
+                        <Camera className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Vehicle Color</label>
-                    <input
-                      type="text"
-                      value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      placeholder="e.g. Arctic White"
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
-                    />
+                    <label className="text-slate-700 dark:text-slate-300 font-extrabold block mb-1.5 uppercase text-[10px] tracking-wider">
+                      Customer / Ownership Type *
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label
+                        className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-2.5 transition-all ${
+                          isCars24
+                            ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/20'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="customerType"
+                          checked={isCars24}
+                          onChange={() => {
+                            setIsCars24(true);
+                            setCustomerName('Cars24 Fleet Partner');
+                            setCustomerPhone('N/A');
+                            setCustomerEmail('');
+                          }}
+                          className="text-amber-500 focus:ring-amber-500"
+                        />
+                        <div>
+                          <span className="font-extrabold text-amber-800 dark:text-amber-300 block text-xs">Cars24 Vehicle</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Hub Fleet Car</span>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-2.5 transition-all ${
+                          !isCars24
+                            ? 'border-blue-500 bg-blue-500/10 dark:bg-blue-500/20'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="customerType"
+                          checked={!isCars24}
+                          onChange={() => {
+                            setIsCars24(false);
+                            setCustomerName('');
+                            setCustomerPhone('');
+                            setCustomerEmail('');
+                          }}
+                          className="text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                          <span className="font-extrabold text-blue-700 dark:text-blue-300 block text-xs">Retail Owner</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Direct Customer</span>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Name (Brought Car)</label>
-                    <input
-                      type="text"
-                      placeholder="Driver name"
-                      value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold"
-                    />
+                  {!isCars24 ? (
+                    <div className="space-y-3 pt-1 border-t border-slate-200 dark:border-slate-800">
+                      <div>
+                        <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Name *</label>
+                        <input
+                          type="text"
+                          placeholder="Customer Full Name"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Customer Phone Number *</label>
+                        <input
+                          type="text"
+                          placeholder="+91 98200 00000"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value)}
+                          className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-bold text-xs"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 font-medium">Cars24 Fleet Partner pre-selected.</span>
+                      <input
+                        type="text"
+                        placeholder="Ref No (Optional)"
+                        value={cars24RefNo}
+                        onChange={(e) => setCars24RefNo(e.target.value)}
+                        className="w-36 p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-[10px] font-bold"
+                      />
+                    </div>
+                  )}
+
+                  <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setIsCheckInModalOpen(false)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!regNo.trim()) {
+                          alert('Please enter or scan registration number.');
+                          return;
+                        }
+                        if (!isCars24 && (!customerName.trim() || !customerPhone.trim())) {
+                          alert('Please enter customer name and phone number.');
+                          return;
+                        }
+                        setCheckInStep(2);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                    >
+                      <span>Next: Vehicle Model</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
+              )}
 
-                <CarModelSelector
-                  make={make}
-                  model={model}
-                  variant={variant}
-                  fuelType={fuelType}
-                  onMakeChange={setMake}
-                  onModelChange={setModel}
-                  onVariantChange={setVariant}
-                  onFuelTypeChange={setFuelType}
-                  required
-                />
-              </div>
+              {/* STEP 2: Car Make, Model, Color & Workshop Location */}
+              {checkInStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider block flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-amber-500" />
+                        Workshop & Location Assignment
+                      </span>
+                    </div>
 
-              {/* 5. Stamped Date & Time & Done By */}
-              <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider block flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  5. Gate Check-In Stamp Metadata
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Stamped Date & Time</span>
-                    <span className="font-mono font-black text-amber-300 text-xs">
-                      {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </span>
+                    {isSuperAdmin ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-slate-500 font-bold block mb-1 text-[10px]">City</label>
+                          <select
+                            value={selectedCityId}
+                            onChange={(e) => handleCityChange(e.target.value)}
+                            className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                          >
+                            {citiesList.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-slate-500 font-bold block mb-1 text-[10px]">Workshop</label>
+                          <select
+                            value={selectedWorkshopId}
+                            onChange={(e) => handleWorkshopChange(e.target.value)}
+                            className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                          >
+                            {activeWorkshopsForSelectedCity.map((w) => (
+                              <option key={w.id} value={w.id}>{w.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">
+                          {selectedCityName} • {selectedWorkshopName}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">Assigned Hub</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Gate Check-In Done By</span>
-                    <span className="font-bold text-white text-xs">
-                      {authUser?.name || 'Gate Security Staff'} ({authUser?.role || 'Gate Staff'})
-                    </span>
+                  <CarModelSelector
+                    make={make}
+                    model={model}
+                    variant={variant}
+                    fuelType={fuelType}
+                    onMakeChange={setMake}
+                    onModelChange={setModel}
+                    onVariantChange={setVariant}
+                    onFuelTypeChange={setFuelType}
+                    required
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Vehicle Color</label>
+                      <input
+                        type="text"
+                        value={color}
+                        onChange={(e) => setColor(e.target.value)}
+                        placeholder="e.g. Arctic White"
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Driver Name (Brought Car)</label>
+                      <input
+                        type="text"
+                        placeholder="Driver name"
+                        value={driverName}
+                        onChange={(e) => setDriverName(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setCheckInStep(1)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!make.trim() || !model.trim()) {
+                          alert('Please select vehicle make and model.');
+                          return;
+                        }
+                        setCheckInStep(3);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                    >
+                      <span>Next: Take Photo</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsCheckInModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
-                >
-                  Cancel
-                </button>
+              {/* STEP 3: Take Photo & Confirm Check-In */}
+              {checkInStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl space-y-2">
+                    <span className="text-amber-900 dark:text-amber-300 font-extrabold uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                      <Camera className="w-4 h-4 text-amber-500" />
+                      Step 3: Vehicle Photo & Entry Pass Confirmation
+                    </span>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-200/90 font-medium">
+                      Capture live photo of vehicle with driver at gate to generate entry pass.
+                    </p>
+                  </div>
 
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black flex items-center gap-2 shadow-lg shadow-amber-500/20"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirm Gate Check-In</span>
-                </button>
-              </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={checkInCameraInputRef}
+                    onChange={(e) => handlePhotoFileUpload(e, false)}
+                    className="hidden"
+                  />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={checkInFileInputRef}
+                    onChange={(e) => handlePhotoFileUpload(e, false)}
+                    className="hidden"
+                  />
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startCamera('checkIn')}
+                      className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4 stroke-[2.5]" />
+                      <span>Take Live Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => checkInFileInputRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4 stroke-[2.5]" />
+                      <span>Upload File</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => checkInCameraInputRef.current?.click()}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1 cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Camera App</span>
+                    </button>
+                  </div>
+
+                  {/* Photo Preview Card */}
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    {photoUrl ? (
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <img
+                            src={photoUrl}
+                            alt="Vehicle check-in preview"
+                            className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500 shadow-md"
+                            referrerPolicy="no-referrer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPhotoUrl('')}
+                            title="Remove photo"
+                            className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Photo Attached</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
+                            {photoUrl.startsWith('data:image') ? 'Captured Photo (Image)' : photoUrl}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
+                        <Camera className="w-6 h-6 text-slate-400 mx-auto" />
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No Photo Attached</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stamped Gate Pass Metadata */}
+                  <div className="bg-slate-900 text-white p-3 rounded-2xl border border-slate-800 space-y-1 text-[11px]">
+                    <span className="text-amber-400 font-bold block flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      Gate Check-In Stamp Metadata
+                    </span>
+                    <div className="flex items-center justify-between text-slate-300 font-mono text-[10px] pt-1">
+                      <span>Time: {new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      <span>By: {authUser?.name || 'Gate Staff'}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setCheckInStep(2)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Confirm & Complete Check-In</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>
       )}
 
-      {/* CHECK-OUT / GATE DEPARTURE MODAL */}
+      {/* CHECK-OUT / GATE DEPARTURE MODAL (STEP-BY-STEP WIZARD) */}
       {checkOutItem && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+            
+            {/* Header */}
+            <div className="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black shadow-md shadow-emerald-500/20">
                   <LogOut className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black">Gate Departure Check-Out</h2>
-                  <p className="text-xs text-slate-400">{checkOutItem.registrationNumber} - {checkOutItem.make} {checkOutItem.model}</p>
+                  <h2 className="text-base font-black">Gate Departure Check-Out</h2>
+                  <p className="text-[11px] text-slate-400 font-mono font-bold">{checkOutItem.registrationNumber} • {checkOutItem.make} {checkOutItem.model}</p>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setCheckOutItem(null)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmCheckOut} className="p-6 space-y-4 text-xs">
-              <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl space-y-1 text-emerald-800 dark:text-emerald-300">
-                <span className="font-bold flex items-center gap-1 text-xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  Vehicle Ready for Departure Handover
-                </span>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                  Verify the driver picking up the vehicle and capture departure verification photo with the driver before gate exit.
-                </p>
+            {/* Step Progress Bar */}
+            <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center transition-all ${checkOutStep >= 1 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-500'}`}>1</div>
+                <span className={`text-[11px] font-extrabold ${checkOutStep === 1 ? 'text-emerald-400' : 'text-slate-400'}`}>Pickup Driver Info</span>
               </div>
-
-              <div>
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Pickup Driver Name *</label>
-                <input
-                  type="text"
-                  placeholder="Driver picking up vehicle"
-                  value={exitDriverName}
-                  onChange={(e) => setExitDriverName(e.target.value)}
-                  required
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
-                />
+              <ChevronRight className="w-3.5 h-3.5 text-slate-700" />
+              <div className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center transition-all ${checkOutStep >= 2 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-500'}`}>2</div>
+                <span className={`text-[11px] font-extrabold ${checkOutStep === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>Departure Photo</span>
               </div>
+            </div>
 
-              <div>
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Pickup Driver Phone</label>
-                <input
-                  type="text"
-                  placeholder="+91 98200 00000"
-                  value={exitDriverPhone}
-                  onChange={(e) => setExitDriverPhone(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono"
-                />
-              </div>
+            <form onSubmit={handleConfirmCheckOut} className="p-5 space-y-4 text-xs overflow-y-auto flex-1">
+              
+              {/* CHECKOUT STEP 1: Pickup Driver Info */}
+              {checkOutStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl space-y-1 text-emerald-800 dark:text-emerald-300">
+                    <span className="font-extrabold flex items-center gap-1 text-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      Step 1: Enter Pickup Driver Details
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Specify the driver name and phone number picking up vehicle {checkOutItem.registrationNumber}.
+                    </p>
+                  </div>
 
-              {/* Exit Driver + Photo Selector with Live Camera & File Upload */}
-              <div className="space-y-2">
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1 font-bold text-xs">
-                    <Camera className="w-4 h-4 text-emerald-500" /> Departure Photo of Car with Driver
-                  </span>
-                  <span className="text-slate-500 font-normal text-[11px]">Click live photo or upload image file</span>
-                </label>
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-extrabold block mb-1">Pickup Driver / Customer Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Ramesh Sharma"
+                      value={exitDriverName}
+                      onChange={(e) => setExitDriverName(e.target.value)}
+                      required
+                      autoFocus
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-xs"
+                    />
+                  </div>
 
-                {/* Hidden File Inputs for Check Out */}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  ref={checkOutCameraInputRef}
-                  onChange={(e) => handlePhotoFileUpload(e, true)}
-                  className="hidden"
-                />
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={checkOutFileInputRef}
-                  onChange={(e) => handlePhotoFileUpload(e, true)}
-                  className="hidden"
-                />
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-extrabold block mb-1">Pickup Driver Phone Number</label>
+                    <input
+                      type="text"
+                      placeholder="+91 98200 00000"
+                      value={exitDriverPhone}
+                      onChange={(e) => setExitDriverPhone(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-xs"
+                    />
+                  </div>
 
-                {/* Action Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => startCamera('checkOut')}
-                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
-                  >
-                    <Camera className="w-4 h-4 stroke-[2.5]" />
-                    <span>Take Live Photo</span>
-                  </button>
+                  <div>
+                    <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Departure Notes (Optional)</label>
+                    <textarea
+                      rows={2}
+                      value={exitNotes}
+                      onChange={(e) => setExitNotes(e.target.value)}
+                      placeholder="e.g. Handed over key & registration card to driver"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs"
+                    />
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => checkOutFileInputRef.current?.click()}
-                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
-                  >
-                    <Upload className="w-4 h-4 stroke-[2.5]" />
-                    <span>Upload File</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => checkOutCameraInputRef.current?.click()}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Camera App</span>
-                  </button>
+                  <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setCheckOutItem(null)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!exitDriverName.trim()) {
+                          alert('Please enter pickup driver name.');
+                          return;
+                        }
+                        setCheckOutStep(2);
+                      }}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                    >
+                      <span>Next: Departure Photo</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+              )}
 
-                {/* Preview Card */}
-                <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
-                  {exitPhotoUrl ? (
-                    <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
-                        <img 
-                          src={exitPhotoUrl} 
-                          alt="Exit photo preview"
-                          className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shrink-0 shadow-md"
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setExitPhotoUrl('')}
-                          title="Clear exit photo"
-                          className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+              {/* CHECKOUT STEP 2: Departure Photo & Submit */}
+              {checkOutStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-2xl space-y-1">
+                    <span className="text-emerald-800 dark:text-emerald-300 font-extrabold text-xs block flex items-center gap-1">
+                      <Camera className="w-4 h-4 text-emerald-500" />
+                      Step 2: Capture Departure Verification Photo
+                    </span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Take photo of car exit at gate with pickup driver ({exitDriverName}).
+                    </p>
+                  </div>
 
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Departure Photo Attached</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
-                          {exitPhotoUrl.startsWith('data:image') ? 'Captured Photo (Base64 Image)' : exitPhotoUrl}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
-                      <Camera className="w-6 h-6 text-slate-400 mx-auto" />
-                      <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No Departure Photo</p>
-                    </div>
-                  )}
-
+                  {/* Hidden File Inputs for Check Out */}
                   <input
-                    type="text"
-                    placeholder="Or enter departure photo URL..."
-                    value={exitPhotoUrl}
-                    onChange={(e) => setExitPhotoUrl(e.target.value)}
-                    className="w-full p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-[11px]"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={checkOutCameraInputRef}
+                    onChange={(e) => handlePhotoFileUpload(e, true)}
+                    className="hidden"
                   />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={checkOutFileInputRef}
+                    onChange={(e) => handlePhotoFileUpload(e, true)}
+                    className="hidden"
+                  />
+
+                  {/* Camera Buttons */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startCamera('checkOut')}
+                      className="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4 stroke-[2.5]" />
+                      <span>Take Live Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => checkOutFileInputRef.current?.click()}
+                      className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4 stroke-[2.5]" />
+                      <span>Upload File</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => checkOutCameraInputRef.current?.click()}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all col-span-2 sm:col-span-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Camera App</span>
+                    </button>
+                  </div>
+
+                  {/* Photo Preview Card */}
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                    {exitPhotoUrl ? (
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <img 
+                            src={exitPhotoUrl} 
+                            alt="Exit photo preview"
+                            className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shrink-0 shadow-md"
+                            referrerPolicy="no-referrer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setExitPhotoUrl('')}
+                            title="Clear exit photo"
+                            className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-500 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Departure Photo Attached</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
+                            {exitPhotoUrl.startsWith('data:image') ? 'Captured Photo (Image)' : exitPhotoUrl}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-1">
+                        <Camera className="w-6 h-6 text-slate-400 mx-auto" />
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No Departure Photo Attached</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setCheckOutStep(1)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Confirm Gate Exit & Dispatch</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="text-slate-700 dark:text-slate-300 font-bold block mb-1">Departure Notes</label>
-                <textarea
-                  rows={2}
-                  value={exitNotes}
-                  onChange={(e) => setExitNotes(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setCheckOutItem(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Confirm Gate Exit & Dispatch</span>
-                </button>
-              </div>
+              )}
             </form>
           </div>
         </div>

@@ -13,6 +13,7 @@ export const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; text: st
   SUPER_ADMIN: { label: 'Super Admin', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800', icon: ShieldCheck },
   ADMIN: { label: 'Workshop Admin', bg: 'bg-indigo-500/10', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800', icon: ShieldCheck },
   FLOOR_MANAGER: { label: 'Floor Manager', bg: 'bg-amber-500/10', text: 'text-amber-800 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', icon: UserCheck },
+  SERVICE_ADVISOR: { label: 'Service Advisor', bg: 'bg-teal-500/10', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800', icon: UserCheck },
   MECHANIC: { label: 'Mechanic', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800', icon: Wrench },
   DENTER: { label: 'Denter Specialist', bg: 'bg-orange-500/10', text: 'text-orange-800 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800', icon: Hammer },
   PAINTER: { label: 'Paint Specialist', bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800', icon: Palette },

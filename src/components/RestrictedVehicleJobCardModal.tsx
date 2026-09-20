@@ -34,7 +34,7 @@ export function RestrictedVehicleJobCardModal({
   const [exitNotes, setExitNotes] = useState('');
   const [exitPhotoUrl, setExitPhotoUrl] = useState('https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80');
 
-  const isRfc = card.status === 'RFC' || card.status === 'READY_PENDING_DISPATCH' || card.status === 'DELIVERED';
+  const isRfc = card.status === 'RFC' || card.status === 'READY_FOR_DELIVERY' || card.status === 'DELIVERED';
 
   const handleConfirmCheckOut = (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,7 +160,7 @@ export function RestrictedVehicleJobCardModal({
             </div>
 
             <div className="text-xl font-mono font-black text-blue-600 dark:text-blue-400">
-              {card.jobCardNumber}
+              {card.jobCardNumber || card.id}
             </div>
 
             <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-300">
