@@ -281,11 +281,6 @@ export function TechnicianTaskCard({
               <span>{vernacular.hindiTitle}</span>
             </p>
           )}
-          {task.notes && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 mt-1">
-              📝 <strong className="text-slate-700 dark:text-slate-300">नोट:</strong> {task.notes}
-            </p>
-          )}
         </div>
 
         {/* Row 3: GIANT PRIMARY STATUS ACTION BUTTON */}

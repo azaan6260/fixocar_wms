@@ -264,7 +264,6 @@ export function JobCardPrintSummaryModal({ card, onClose }: JobCardPrintSummaryM
                         <td className="p-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
                         <td className="p-2.5">
                           <div className="font-extrabold text-slate-900">{t.title}</div>
-                          {t.notes && <div className="text-[10px] text-slate-500 italic mt-0.5">{t.notes}</div>}
                         </td>
                         <td className="p-2.5 font-semibold text-slate-700">
                           <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-[10px] font-extrabold">

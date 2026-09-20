@@ -1053,14 +1053,14 @@ export function DailyHuddleView({
 
                   {/* Task Items Table for Huddle Review - Scrollable Left to Right */}
                   <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
-                    {/* Horizontal Scroll Bar Indicator Header */}
+                    {/* Table Header Section Bar */}
                     <div className="text-[11px] text-slate-600 dark:text-slate-400 font-bold px-3.5 py-2 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-blue-500" />
-                        <span>Daily Review Tasks List ({card.tasks.length} items)</span>
+                        <span>Tasks List ({card.tasks.length} items)</span>
                       </span>
-                      <span className="text-blue-600 dark:text-blue-400 font-black text-[10px] flex items-center gap-1 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 shrink-0 whitespace-nowrap">
-                        <span>↔ Swipe / Scroll table left & right</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-medium text-[10px] flex items-center gap-1">
+                        <span>Tap buttons below to change task status</span>
                       </span>
                     </div>
 
@@ -1071,8 +1071,8 @@ export function DailyHuddleView({
                             <th className="py-3 px-4 w-[28%] min-w-[180px] font-black">Service Task</th>
                             <th className="py-3 px-3 w-[15%] min-w-[120px] font-black">Department</th>
                             <th className="py-3 px-3 w-[22%] min-w-[160px] font-black">Assigned Staff / Vendor</th>
-                            <th className="py-3 px-3 w-[15%] min-w-[130px] font-black text-center">Status</th>
-                            <th className="py-3 px-4 w-[20%] min-w-[210px] font-black text-right">Huddle Action Toggle</th>
+                            <th className="py-3 px-3 w-[15%] min-w-[130px] font-black text-center">Current Status</th>
+                            <th className="py-3 px-4 w-[20%] min-w-[210px] font-black text-right">Action: Update Status</th>
                           </tr>
                         </thead>
 
@@ -1084,9 +1084,6 @@ export function DailyHuddleView({
                                 {/* Task Title */}
                                 <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 align-middle">
                                   <div className="flex items-center gap-2 max-w-[240px]" title={task.title}>
-                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                      task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-amber-500'
-                                    }`} />
                                     <span className="truncate">{task.title}</span>
                                   </div>
                                 </td>
@@ -1138,37 +1135,43 @@ export function DailyHuddleView({
                                     <button
                                       type="button"
                                       onClick={() => handleQuickTaskStatus(card.id, task.id, 'PENDING')}
-                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                      title="Set task status to Pending"
+                                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                                         task.status === 'PENDING'
-                                          ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
-                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                          ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-amber-400'
                                       }`}
                                     >
-                                      Pending
+                                      <Clock className="w-3 h-3" />
+                                      <span>Pending</span>
                                     </button>
 
                                     <button
                                       type="button"
                                       onClick={() => handleQuickTaskStatus(card.id, task.id, 'IN_PROGRESS')}
-                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                      title="Set task status to In Progress"
+                                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                                         task.status === 'IN_PROGRESS'
                                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-blue-400'
                                       }`}
                                     >
-                                      In Progress
+                                      <Clock className="w-3 h-3" />
+                                      <span>In Progress</span>
                                     </button>
 
                                     <button
                                       type="button"
                                       onClick={() => handleQuickTaskStatus(card.id, task.id, 'COMPLETED')}
-                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                                      title="Mark task as Completed"
+                                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
                                         task.status === 'COMPLETED'
                                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-emerald-400'
                                       }`}
                                     >
-                                      <Check className="w-3.5 h-3.5" /> Done
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Done</span>
                                     </button>
                                   </div>
                                 </td>
