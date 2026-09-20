@@ -113,18 +113,24 @@ export function JobCardList({
     return !hasActiveJobCard;
   });
 
-  const filteredPendingCheckIns = pendingCheckIns.filter((c) => {
-    const searchLower = searchTerm.toLowerCase().trim();
-    if (!searchLower) return true;
-    return (
-      c.registrationNumber.toLowerCase().includes(searchLower) ||
-      c.make.toLowerCase().includes(searchLower) ||
-      c.model.toLowerCase().includes(searchLower) ||
-      c.customerName.toLowerCase().includes(searchLower) ||
-      c.checkInDriverName.toLowerCase().includes(searchLower) ||
-      c.id.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredPendingCheckIns = pendingCheckIns
+    .filter((c) => {
+      const searchLower = searchTerm.toLowerCase().trim();
+      if (!searchLower) return true;
+      return (
+        c.registrationNumber.toLowerCase().includes(searchLower) ||
+        c.make.toLowerCase().includes(searchLower) ||
+        c.model.toLowerCase().includes(searchLower) ||
+        c.customerName.toLowerCase().includes(searchLower) ||
+        c.checkInDriverName.toLowerCase().includes(searchLower) ||
+        c.id.toLowerCase().includes(searchLower)
+      );
+    })
+    .sort((a, b) => {
+      const numA = parseInt(a.id.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.id.replace(/\D/g, '') || '0', 10);
+      return numB - numA;
+    });
 
   const activeCards = jobCards.filter((c) => c.status !== 'DELIVERED' && c.status !== 'CLOSED');
   const historyCards = jobCards.filter((c) => c.status === 'DELIVERED' || c.status === 'CLOSED');
@@ -383,10 +389,16 @@ export function JobCardList({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredPendingCheckIns.map((checkIn) => (
+            {filteredPendingCheckIns.map((checkIn, idx) => {
+              const isLatest = idx === 0;
+              return (
               <div
                 key={checkIn.id}
-                className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-400/40 dark:border-amber-500/30 shadow-xs flex flex-col justify-between gap-3 hover:border-amber-500 transition-all group"
+                className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-xs flex flex-col justify-between gap-3 group ${
+                  isLatest
+                    ? 'border-2 border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30 shadow-md shadow-amber-500/10'
+                    : 'border-amber-400/40 dark:border-amber-500/30 hover:border-amber-500'
+                }`}
               >
                 <div className="flex items-start gap-3">
                   {checkIn.checkInPhotoWithDriverUrl ? (
@@ -402,10 +414,17 @@ export function JobCardList({
                   )}
 
                   <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-mono font-black text-xs bg-slate-900 text-amber-400 px-2 py-0.5 rounded-lg border border-slate-700">
-                        {checkIn.registrationNumber}
-                      </span>
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        {isLatest && (
+                          <span className="bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded uppercase tracking-wide animate-pulse">
+                            ✨ LATEST
+                          </span>
+                        )}
+                        <span className="font-mono font-black text-xs bg-slate-900 text-amber-400 px-2 py-0.5 rounded-lg border border-slate-700">
+                          {checkIn.registrationNumber}
+                        </span>
+                      </div>
                       <span className="text-[10px] font-bold text-slate-400 font-mono">{checkIn.id}</span>
                     </div>
                     <h4 className="font-extrabold text-xs text-slate-900 dark:text-slate-100 truncate">
@@ -444,7 +463,8 @@ export function JobCardList({
                   <span>➕ Open Job Card for {checkIn.registrationNumber}</span>
                 </button>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}

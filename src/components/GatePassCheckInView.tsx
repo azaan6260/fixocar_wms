@@ -401,6 +401,12 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     return true;
   });
 
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    const numA = parseInt(a.id.replace(/\D/g, '') || '0', 10);
+    const numB = parseInt(b.id.replace(/\D/g, '') || '0', 10);
+    return numB - numA;
+  });
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Header */}
@@ -571,7 +577,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
       </div>
 
       {/* Checked-In Vehicles Grid */}
-      {filteredItems.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 space-y-3">
           <Car className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
           <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">No Vehicles Found</h3>
@@ -581,11 +587,15 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredItems.map((item) => (
+          {sortedItems.map((item, idx) => {
+            const isLatest = idx === 0;
+            return (
             <div 
               key={item.id}
               className={`bg-white dark:bg-slate-900 rounded-3xl border transition-all shadow-xs hover:shadow-md overflow-hidden flex flex-col justify-between ${
-                item.status === 'IDLE_AWAITING_PI'
+                isLatest
+                  ? 'border-2 border-amber-500 dark:border-amber-400 ring-4 ring-amber-500/20 shadow-lg shadow-amber-500/10'
+                  : item.status === 'IDLE_AWAITING_PI'
                   ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-500/20'
                   : item.status === 'READY_PENDING_DISPATCH'
                   ? 'border-emerald-400 dark:border-emerald-500/60 ring-1 ring-emerald-500/20'
@@ -612,7 +622,12 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
                   <div className="absolute inset-0 bg-linear-to-t from-slate-950/90 via-slate-950/30 to-transparent p-4 flex flex-col justify-between">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isLatest && (
+                          <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider flex items-center gap-1 shadow-md animate-bounce">
+                            ✨ LATEST GATE-IN
+                          </span>
+                        )}
                         <span className="font-mono text-xs font-black bg-slate-900/90 text-white px-2.5 py-1 rounded-xl border border-slate-700">
                           {item.id}
                         </span>
@@ -847,7 +862,8 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
