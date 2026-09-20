@@ -1670,11 +1670,6 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                   deleteVehicleCheckIn(confirmRemoveItem.id);
                   setConfirmRemoveItem(null);
                   setCheckIns(getVehicleCheckIns());
-                  dispatchToastNotification({
-                    type: 'INFO',
-                    title: 'Check-In Removed',
-                    message: `Removed ${confirmRemoveItem.registrationNumber} from check-in list.`,
-                  });
                 }}
                 className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-md shadow-rose-600/20 cursor-pointer"
               >

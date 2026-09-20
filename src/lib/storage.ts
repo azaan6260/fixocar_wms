@@ -251,24 +251,7 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
             client.from('job_cards').upsert(fallbackPayload).then(({ error: fbErr }) => {
               if (fbErr) {
                 console.error('Supabase sync error (job_card fallback):', fbErr);
-                dispatchToastNotification({
-                  type: 'ESTIMATE_DECLINED',
-                  title: `❌ Supabase Sync Error (Job Card)`,
-                  message: `Could not sync Job Card "${card.id}" to Supabase: ${fbErr.message}`
-                });
-              } else {
-                dispatchToastNotification({
-                  type: 'ESTIMATE_APPROVED',
-                  title: `✅ Saved to Supabase Database`,
-                  message: `Job Card "${card.id}" saved to Supabase database successfully.`
-                });
               }
-            });
-          } else {
-            dispatchToastNotification({
-              type: 'ESTIMATE_APPROVED',
-              title: `✅ Saved to Supabase Database`,
-              message: `Job Card "${card.id}" saved to Supabase database successfully.`
             });
           }
         });
@@ -339,15 +322,6 @@ export function deleteJobCard(id: string): boolean {
       }
     });
   }
-
-  dispatchToastNotification({
-    type: 'STATUS_CHANGE',
-    title: `🗑️ Job Card Deleted: ${id}`,
-    message: `Job Card ${id} for vehicle ${cardToDelete.vehicle.registrationNumber} (${cardToDelete.vehicle.make} ${cardToDelete.vehicle.model}) was permanently deleted.`,
-    vehicleReg: cardToDelete.vehicle.registrationNumber,
-    jobCardId: id,
-    customerName: cardToDelete.customer.name,
-  });
 
   return true;
 }
@@ -457,20 +431,10 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
     const newCard = updater(oldCard);
     cards[index] = newCard;
 
-    // 1. Detect vehicle pipeline status changes
+    // 1. Detect vehicle pipeline status changes (log audit trail without popup toast)
     if (oldCard.status !== newCard.status) {
       const oldLabel = formatJobCardStatus(oldCard.status);
       const newLabel = formatJobCardStatus(newCard.status);
-      dispatchToastNotification({
-        type: 'STATUS_CHANGE',
-        title: `🚘 Pipeline Status Updated: ${newCard.vehicle.registrationNumber}`,
-        message: `${newCard.vehicle.make} ${newCard.vehicle.model} (${newCard.id}) moved from "${oldLabel}" ➔ "${newLabel}".`,
-        vehicleReg: newCard.vehicle.registrationNumber,
-        jobCardId: newCard.id,
-        customerName: newCard.customer.name,
-        oldStatus: oldCard.status,
-        newStatus: newCard.status,
-      });
 
       const currentUser = getAuthUser();
       recordJobCardHistory({
@@ -811,6 +775,8 @@ export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: J
     const targetTask = card.tasks.find(t => t.id === taskId);
     if (!targetTask) return card;
 
+    const wasAllDone = card.tasks.length > 0 && card.tasks.every(t => t.status === 'COMPLETED' || t.status === 'ON_HOLD');
+
     const targetTitle = targetTask.title.toLowerCase();
     const targetCategory = targetTask.category;
 
@@ -857,6 +823,17 @@ export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: J
     let nextStatus = card.status;
     if (allDone && (card.status === 'IN_PROGRESS' || card.status === 'ESTIMATE_PENDING' || card.status === 'JOB_ALLOCATED' || card.status === 'CREATED' || card.status === 'INSPECTION')) {
       nextStatus = 'QC_PENDING';
+    }
+
+    if (!wasAllDone && allDone) {
+      dispatchToastNotification({
+        type: 'SUCCESS',
+        title: `🎉 All Tasks Complete`,
+        message: `All repair & service tasks for vehicle ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model}) are now COMPLETE. Admin & Manager notified.`,
+        vehicleReg: card.vehicle.registrationNumber,
+        jobCardId: card.id,
+        customerName: card.customer.name,
+      });
     }
 
     return {
@@ -1655,17 +1632,7 @@ export function deleteEmployee(id: string) {
   if (client && emp) {
     client.from('employees').delete().eq('id', id).then(({ error }) => {
       if (error) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_DECLINED',
-          title: `❌ Supabase Delete Error`,
-          message: `Could not delete employee from Supabase: ${error.message}`
-        });
-      } else {
-        dispatchToastNotification({
-          type: 'ESTIMATE_APPROVED',
-          title: `🗑️ Removed from Supabase`,
-          message: `Employee "${emp.name}" removed from Supabase database.`
-        });
+        console.error('Supabase delete error (employees):', error);
       }
     });
     syncEmployeeToSupabaseAuth(emp, undefined, 'delete');
@@ -1769,17 +1736,6 @@ export function saveVendors(vendors: Vendor[], skipPush = false) {
         }).then(({ error }) => {
           if (error) {
             console.error('Supabase sync error (vendors):', error);
-            dispatchToastNotification({
-              type: 'ESTIMATE_DECLINED',
-              title: `❌ Supabase Sync Error (Vendors)`,
-              message: `Could not sync "${v.name}" to Supabase: ${error.message}`
-            });
-          } else {
-            dispatchToastNotification({
-              type: 'ESTIMATE_APPROVED',
-              title: `✅ Saved to Supabase Database`,
-              message: `Vendor "${v.name}" saved to Supabase database successfully.`
-            });
           }
         });
       });
@@ -1809,17 +1765,7 @@ export function deleteVendor(id: string) {
   if (client) {
     client.from('vendors').delete().eq('id', id).then(({ error }) => {
       if (error) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_DECLINED',
-          title: `❌ Supabase Delete Error`,
-          message: `Could not delete vendor from Supabase: ${error.message}`
-        });
-      } else if (target) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_APPROVED',
-          title: `🗑️ Removed from Supabase`,
-          message: `Vendor "${target.name}" removed from Supabase database.`
-        });
+        console.error('Supabase delete error (vendors):', error);
       }
     });
   }
@@ -2310,17 +2256,6 @@ export function saveCities(cities: City[], skipPush = false) {
         }).then(({ error }) => {
           if (error) {
             console.error('Supabase sync error (cities):', error);
-            dispatchToastNotification({
-              type: 'ESTIMATE_DECLINED',
-              title: `❌ Supabase Sync Error (Cities)`,
-              message: `Could not sync "${city.name}" to Supabase: ${error.message}`
-            });
-          } else {
-            dispatchToastNotification({
-              type: 'ESTIMATE_APPROVED',
-              title: `✅ Saved to Supabase Database`,
-              message: `City "${city.name}" saved to Supabase database successfully.`
-            });
           }
         });
       });
@@ -2353,17 +2288,7 @@ export function deleteCity(id: string) {
   if (client) {
     client.from('cities').delete().eq('id', id).then(({ error }) => {
       if (error) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_DECLINED',
-          title: `❌ Supabase Delete Error`,
-          message: `Could not delete city from Supabase: ${error.message}`
-        });
-      } else if (target) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_APPROVED',
-          title: `🗑️ Removed from Supabase`,
-          message: `City "${target.name}" removed from Supabase database.`
-        });
+        console.error('Supabase delete error (cities):', error);
       }
     });
   }
@@ -2429,32 +2354,10 @@ export function saveWorkshops(workshops: Workshop[], skipPush = false) {
 
               client.from('workshops').upsert(fallbackPayload).then(({ error: fallbackErr }) => {
                 if (fallbackErr) {
-                  dispatchToastNotification({
-                    type: 'ESTIMATE_DECLINED',
-                    title: `❌ Supabase Sync Error (Workshops)`,
-                    message: `Could not sync "${ws.name}" to Supabase: ${fallbackErr.message}`
-                  });
-                } else {
-                  dispatchToastNotification({
-                    type: 'ESTIMATE_APPROVED',
-                    title: `⚠️ Workshop Saved (Missing Column)`,
-                    message: `"${ws.name}" saved to Supabase! To save Cars24 status, run SQL script in Database Settings.`
-                  });
+                  console.error('Supabase fallback error (workshops):', fallbackErr);
                 }
               });
-            } else {
-              dispatchToastNotification({
-                type: 'ESTIMATE_DECLINED',
-                title: `❌ Supabase Sync Error (Workshops)`,
-                message: `Could not sync "${ws.name}" to Supabase: ${error.message}`
-              });
             }
-          } else {
-            dispatchToastNotification({
-              type: 'ESTIMATE_APPROVED',
-              title: `✅ Saved to Supabase Database`,
-              message: `Workshop "${ws.name}" saved to Supabase database successfully.`
-            });
           }
         });
       });
@@ -2495,17 +2398,7 @@ export function deleteWorkshop(id: string) {
   if (client) {
     client.from('workshops').delete().eq('id', id).then(({ error }) => {
       if (error) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_DECLINED',
-          title: `❌ Supabase Delete Error`,
-          message: `Could not delete workshop from Supabase: ${error.message}`
-        });
-      } else if (target) {
-        dispatchToastNotification({
-          type: 'ESTIMATE_APPROVED',
-          title: `🗑️ Removed from Supabase`,
-          message: `Workshop "${target.name}" removed from Supabase database.`
-        });
+        console.error('Supabase delete error (workshops):', error);
       }
     });
   }
@@ -3261,6 +3154,15 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
 
   checkIns.unshift(fullRecord);
   saveVehicleCheckIns(checkIns);
+
+  dispatchToastNotification({
+    type: 'JOB_CARD_CREATED',
+    title: `🚗 Vehicle Checked In`,
+    message: `Vehicle ${fullRecord.registrationNumber} (${fullRecord.make} ${fullRecord.model}) received and checked in at gate (${gateId}).`,
+    vehicleReg: fullRecord.registrationNumber,
+    customerName: fullRecord.customerName,
+  });
+
   return fullRecord;
 }
 
@@ -3268,9 +3170,23 @@ export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn)
   const checkIns = getVehicleCheckIns();
   const index = checkIns.findIndex(c => c.id === id);
   if (index === -1) return null;
-  checkIns[index] = updater(checkIns[index]);
+
+  const oldRecord = checkIns[index];
+  const updatedRecord = updater(oldRecord);
+  checkIns[index] = updatedRecord;
   saveVehicleCheckIns(checkIns);
-  return checkIns[index];
+
+  if (oldRecord.status !== 'CHECKED_OUT' && updatedRecord.status === 'CHECKED_OUT') {
+    dispatchToastNotification({
+      type: 'SUCCESS',
+      title: `🏁 Vehicle Checked Out`,
+      message: `Vehicle ${updatedRecord.registrationNumber} (${updatedRecord.make} ${updatedRecord.model}) checked out successfully.`,
+      vehicleReg: updatedRecord.registrationNumber,
+      customerName: updatedRecord.customerName,
+    });
+  }
+
+  return updatedRecord;
 }
 
 export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {

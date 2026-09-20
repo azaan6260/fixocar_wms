@@ -129,22 +129,8 @@ export function TechnicianTaskCard({
     // Voice audio confirmation for non-reading workers
     if (newStatus === 'IN_PROGRESS') {
       speakTechnicianPrompt(`काम शुरू कर दिया गया है: ${task.title}`);
-      dispatchToastNotification({
-        type: 'JOB_CARD_CREATED',
-        title: `▶ Work Started (काम शुरू)`,
-        message: `${task.title} for ${card.vehicle.registrationNumber} is now IN PROGRESS.`,
-        vehicleReg: card.vehicle.registrationNumber,
-        jobCardId: card.id
-      });
     } else if (newStatus === 'COMPLETED') {
       speakTechnicianPrompt(`बधाई, काम पूरा हो गया है: ${task.title}`);
-      dispatchToastNotification({
-        type: 'JOB_CARD_CREATED',
-        title: `✅ Work Completed (काम पूरा)`,
-        message: `${task.title} for ${card.vehicle.registrationNumber} marked DONE.`,
-        vehicleReg: card.vehicle.registrationNumber,
-        jobCardId: card.id
-      });
     }
 
     if (onStatusUpdated) onStatusUpdated();
@@ -168,14 +154,6 @@ export function TechnicianTaskCard({
     });
 
     speakTechnicianPrompt(`सामान का ऑर्डर भेज दिया गया है: ${finalPartTitle}`);
-
-    dispatchToastNotification({
-      type: 'JOB_CARD_CREATED',
-      title: `📦 Part Requested (सामान की मांग)`,
-      message: `Requested ${partQty}x "${finalPartTitle}" for task "${task.title}".`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
 
     setIsSubmittingReq(false);
     setShowPartReqModal(false);

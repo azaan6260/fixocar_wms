@@ -1242,11 +1242,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     });
 
     if (missingTables.length > 0) {
-      dispatchToastNotification({
-        type: 'ESTIMATE_DECLINED',
-        title: '⚠️ Missing Supabase Tables Detected',
-        message: `Database tables missing: ${missingTables.join(', ')}. Run the SQL migration script from Database Settings.`
-      });
+      console.warn(`[SYNC_TRACE] Database tables missing: ${missingTables.join(', ')}. Run SQL migration script if needed.`);
     }
   } catch (err: any) {
     console.error('Initial sync failed', err);

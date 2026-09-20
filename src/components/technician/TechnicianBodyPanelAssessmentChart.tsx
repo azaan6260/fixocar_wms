@@ -270,8 +270,8 @@ export function TechnicianBodyPanelAssessmentChart({
 
       dispatchToastNotification({
         type: 'SUCCESS',
-        title: `✅ काम दर्ज हुआ (${panel.nameEn})`,
-        message: `${tasksToAdd.length} नया रिपेयर कार्य ${card.vehicle.registrationNumber} के लिए सफलतापूर्वक जोड़ा गया। (${isCars24 ? 'Cars24 Rate' : 'Retail Rate'}: ₹${envRates.price.toLocaleString('en-IN')})`,
+        title: `📋 New Task Allotted (${panel.nameEn})`,
+        message: `${tasksToAdd.length} new repair tasks allotted for ${card.vehicle.registrationNumber}.`,
         vehicleReg: card.vehicle.registrationNumber,
         jobCardId: card.id
       });
@@ -834,13 +834,6 @@ export function TechnicianBodyPanelAssessmentChart({
                                   onClick={() => {
                                     if (window.confirm(`Remove "${t.title}" from this panel?`)) {
                                       deleteJobCardTask(card.id, t.id);
-                                      dispatchToastNotification({
-                                        type: 'SUCCESS',
-                                        title: 'Task Removed',
-                                        message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
-                                        vehicleReg: card.vehicle.registrationNumber,
-                                        jobCardId: card.id
-                                      });
                                     }
                                   }}
                                   className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
@@ -929,13 +922,6 @@ export function TechnicianBodyPanelAssessmentChart({
                                   onClick={() => {
                                     if (window.confirm(`Remove "${t.title}" from this panel?`)) {
                                       deleteJobCardTask(card.id, t.id);
-                                      dispatchToastNotification({
-                                        type: 'SUCCESS',
-                                        title: 'Task Removed',
-                                        message: `Removed ${t.title} from panel ${selectedPanel?.nameEn}`,
-                                        vehicleReg: card.vehicle.registrationNumber,
-                                        jobCardId: card.id
-                                      });
                                     }
                                   }}
                                   className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"

@@ -71,13 +71,6 @@ export function TechnicianRepairPhase({
         updateTaskStatus(card.id, t.id, 'IN_PROGRESS');
       }
     });
-    dispatchToastNotification({
-      type: 'JOB_CARD_CREATED',
-      title: 'काम शुरू किया गया',
-      message: `${card.vehicle.registrationNumber} के सभी काम चालू स्थिति में सेट किए गए।`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
   };
 
   // Action: Mark All In-Progress Tasks Completed in one tap
@@ -86,13 +79,6 @@ export function TechnicianRepairPhase({
       if (t.status !== 'COMPLETED') {
         updateTaskStatus(card.id, t.id, 'COMPLETED');
       }
-    });
-    dispatchToastNotification({
-      type: 'SUCCESS',
-      title: 'सभी काम पूरे हुए',
-      message: `${card.vehicle.registrationNumber} के सभी मरम्मत कार्य पूरे मार्क किए गए।`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
     });
   };
 

@@ -349,8 +349,8 @@ export function AICostEstimatorModal({
 
     dispatchToastNotification({
       type: 'JOB_CARD_CREATED',
-      title: `✨ AI Estimate Applied to ${card.id}`,
-      message: `Added ${newTasks.length} baseline tasks & parts (Total: ₹${liveTotals.customerPrice.toLocaleString('en-IN')}) for ${card.vehicle.make} ${card.vehicle.model}.`,
+      title: `📋 New Tasks Allotted: ${card.id}`,
+      message: `${newTasks.length} new tasks & parts allotted for vehicle ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model}).`,
       vehicleReg: card.vehicle.registrationNumber,
       jobCardId: card.id,
       customerName: card.customer.name

@@ -217,13 +217,6 @@ export function JobCardDetailView({
       estimatedCompletionDate: dateStr
     }));
     triggerSuccessHaptic();
-    dispatchToastNotification({
-      type: 'STATUS_CHANGE',
-      title: 'Promised Delivery Date Set',
-      message: `Promised date updated to ${dateStr}.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
   };
 
   const handleClearDeadline = () => {
@@ -233,13 +226,6 @@ export function JobCardDetailView({
       estimatedCompletionDate: ''
     }));
     triggerSuccessHaptic();
-    dispatchToastNotification({
-      type: 'STATUS_CHANGE',
-      title: 'Deadline Cleared',
-      message: `Promised delivery date cleared for ${card.vehicle.registrationNumber}.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
   };
 
   const handleToggleUrgent = () => {
@@ -249,15 +235,15 @@ export function JobCardDetailView({
       isUrgent: newUrgent
     }));
     triggerSuccessHaptic();
-    dispatchToastNotification({
-      type: 'STATUS_CHANGE',
-      title: newUrgent ? '🔥 Marked Urgent for Daily Huddle' : 'Urgency Flag Removed',
-      message: newUrgent 
-        ? `${card.vehicle.registrationNumber} prioritized for floor team & morning standup.`
-        : `${card.vehicle.registrationNumber} normal workflow priority restored.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
+    if (newUrgent) {
+      dispatchToastNotification({
+        type: 'STATUS_CHANGE',
+        title: '🔥 Marked Urgent for Daily Huddle',
+        message: `${card.vehicle.registrationNumber} prioritized for floor team & morning standup.`,
+        vehicleReg: card.vehicle.registrationNumber,
+        jobCardId: card.id
+      });
+    }
   };
 
   const handleSaveHuddleNotes = () => {
@@ -269,13 +255,6 @@ export function JobCardDetailView({
     setIsHuddleSaved(true);
     setTimeout(() => setIsHuddleSaved(false), 2500);
     triggerSuccessHaptic();
-    dispatchToastNotification({
-      type: 'STATUS_CHANGE',
-      title: 'Daily Huddle Notes Saved',
-      message: `Standup notes for ${card.vehicle.registrationNumber} saved.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
-    });
   };
 
   // Custom task form state
@@ -1338,13 +1317,6 @@ export function JobCardDetailView({
                         onTaskStatusChange={(taskId, status) => updateTaskStatus(card.id, taskId, status)}
                         onRemoveTask={(taskId) => {
                           deleteJobCardTask(card.id, taskId);
-                          dispatchToastNotification({
-                            type: 'JOB_CARD_CREATED',
-                            title: 'Job Removed',
-                            message: `Removed task from ${card.vehicle.registrationNumber}.`,
-                            vehicleReg: card.vehicle.registrationNumber,
-                            jobCardId: card.id
-                          });
                         }}
                       />
                     ))}
@@ -1393,13 +1365,6 @@ export function JobCardDetailView({
                             onClick={() => {
                               if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
                                 deleteJobCardTask(card.id, task.id);
-                                dispatchToastNotification({
-                                  type: 'JOB_CARD_CREATED',
-                                  title: 'Task Removed',
-                                  message: `Removed ${task.title} from ${card.vehicle.registrationNumber}.`,
-                                  vehicleReg: card.vehicle.registrationNumber,
-                                  jobCardId: card.id
-                                });
                               }
                             }}
                             className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
