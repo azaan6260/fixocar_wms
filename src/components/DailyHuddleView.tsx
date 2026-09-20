@@ -12,7 +12,8 @@ import {
   updateJobCard, 
   updateTaskStatus,
   getEmployees, 
-  getVendors 
+  getVendors,
+  formatJobCardStatus
 } from '../lib/storage';
 import { getLocalDateString } from '../lib/urgencyHelper';
 import { 
@@ -39,7 +40,9 @@ import {
   TrendingUp,
   AlertCircle,
   Truck,
-  Check
+  Check,
+  Target,
+  X
 } from 'lucide-react';
 
 interface DailyHuddleViewProps {
@@ -346,7 +349,15 @@ export function DailyHuddleView({
               <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
               <span>Today's Standup Targets & Department Blockers:</span>
             </label>
-            <span className="text-[10px] text-indigo-300 font-mono">Auto-saved for today</span>
+            {huddleNotes && (
+              <button
+                type="button"
+                onClick={() => setHuddleNotes('')}
+                className="text-[10px] text-rose-300 hover:text-white underline font-medium flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Clear Targets
+              </button>
+            )}
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
@@ -359,29 +370,90 @@ export function DailyHuddleView({
             <div className="flex items-center gap-1.5 overflow-x-auto py-1">
               <button
                 type="button"
-                onClick={() => setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '🔴 Focus on Delivery Today')}
-                className="px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0 transition-all"
+                onClick={() => {
+                  setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '🔴 Focus on Delivery Today');
+                  setDeadlineFilter('DELIVERY_TODAY');
+                }}
+                className="px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                title="Filter Promised Delivery Today & add note"
               >
-                + Focus Delivery
+                <span>+ Focus Delivery</span>
               </button>
+
               <button
                 type="button"
-                onClick={() => setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '🟡 Body Shop Paint Target')}
-                className="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[10px] font-bold shrink-0 transition-all"
+                onClick={() => {
+                  setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '🟡 Body Shop Paint Target');
+                  setSelectedDepartment('BODYSHOP');
+                }}
+                className="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[10px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                title="Filter Paint & Denting & add note"
               >
-                + Paint Target
+                <span>+ Paint Target</span>
               </button>
+
               <button
                 type="button"
-                onClick={() => setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '⚠️ Clear Unassigned Tasks')}
-                className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold shrink-0 transition-all"
+                onClick={() => {
+                  setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '⚠️ Clear Unassigned Tasks');
+                  setDeadlineFilter('UNASSIGNED');
+                }}
+                className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                title="Filter Unassigned Tasks & add note"
               >
-                + Unassigned
+                <span>+ Unassigned</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setHuddleNotes(prev => (prev ? `${prev} | ` : '') + '🚨 Clear Overdue Jobs');
+                  setDeadlineFilter('OVERDUE');
+                }}
+                className="px-2.5 py-1 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-400/50 text-[10px] font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1"
+                title="Filter Overdue Jobs & add note"
+              >
+                <span>+ Overdue Alert</span>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Live Operational Standup Target Banner (if notes entered) */}
+      {huddleNotes && (
+        <div className="bg-amber-500/10 dark:bg-amber-500/15 border-2 border-amber-500/40 rounded-3xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-xs">
+              <Target className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 block">
+                Today's Active Standup Focus Target:
+              </span>
+              <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                "{huddleNotes}"
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-bold shrink-0">
+            <button
+              onClick={() => { setDeadlineFilter('ALL'); setSelectedDepartment('ALL'); }}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-xs cursor-pointer"
+            >
+              Show All Cars
+            </button>
+            <button
+              onClick={() => setHuddleNotes('')}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              title="Clear Standup Note"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Stats Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
@@ -391,19 +463,31 @@ export function DailyHuddleView({
           onClick={() => { setDeadlineFilter('ALL'); setSelectedDepartment('ALL'); }}
           className={`p-4 rounded-3xl border transition-all cursor-pointer ${
             deadlineFilter === 'ALL' && selectedDepartment === 'ALL'
-              ? 'bg-slate-900 text-white border-slate-700 shadow-md ring-2 ring-blue-500/50'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-400/50'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300'
           }`}
         >
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider">Active Shop Floor</span>
-            <FileText className="w-4 h-4 text-blue-500" />
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
+              deadlineFilter === 'ALL' && selectedDepartment === 'ALL' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'
+            }`}>
+              Active Shop Floor
+            </span>
+            <FileText className={`w-4 h-4 ${
+              deadlineFilter === 'ALL' && selectedDepartment === 'ALL' ? 'text-white' : 'text-blue-500'
+            }`} />
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
+          <div className={`text-2xl font-black ${
+            deadlineFilter === 'ALL' && selectedDepartment === 'ALL' ? 'text-white' : 'text-slate-900 dark:text-white'
+          }`}>
             {totalActiveCount}
-            <span className="text-xs font-normal text-slate-500 ml-1">cars</span>
+            <span className={`text-xs font-normal ml-1 ${
+              deadlineFilter === 'ALL' && selectedDepartment === 'ALL' ? 'text-blue-200' : 'text-slate-500 dark:text-slate-400'
+            }`}>cars</span>
           </div>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
+          <p className={`text-[10px] mt-1 font-medium ${
+            deadlineFilter === 'ALL' && selectedDepartment === 'ALL' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'
+          }`}>
             Vehicles currently in repair
           </p>
         </div>
@@ -418,16 +502,18 @@ export function DailyHuddleView({
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-950' : 'text-amber-700 dark:text-amber-300'}`}>
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
+              deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-950 font-black' : 'text-amber-700 dark:text-amber-300'
+            }`}>
               Promised Today
             </span>
             <Clock className={`w-4 h-4 ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-950' : 'text-amber-600 dark:text-amber-400'}`} />
           </div>
           <div className={`text-2xl font-black ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-950' : 'text-amber-900 dark:text-amber-100'}`}>
             {dueTodayCards.length}
-            <span className="text-xs font-normal ml-1">due today</span>
+            <span className={`text-xs font-normal ml-1 ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-900 font-semibold' : 'text-amber-700 dark:text-amber-300'}`}>due today</span>
           </div>
-          <p className={`text-[10px] mt-1 font-medium ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-900' : 'text-amber-800/80 dark:text-amber-300/80'}`}>
+          <p className={`text-[10px] mt-1 font-medium ${deadlineFilter === 'DELIVERY_TODAY' ? 'text-slate-900 font-medium' : 'text-amber-800/80 dark:text-amber-300/80'}`}>
             High priority handover targets
           </p>
         </div>
@@ -444,14 +530,16 @@ export function DailyHuddleView({
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${deadlineFilter === 'OVERDUE' ? 'text-white' : overdueCards.length > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-slate-500'}`}>
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
+              deadlineFilter === 'OVERDUE' ? 'text-white' : overdueCards.length > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-slate-500'
+            }`}>
               Overdue Deadlines
             </span>
             <AlertTriangle className={`w-4 h-4 ${deadlineFilter === 'OVERDUE' ? 'text-white' : overdueCards.length > 0 ? 'text-rose-600 dark:text-rose-400 animate-bounce' : 'text-slate-400'}`} />
           </div>
           <div className={`text-2xl font-black ${deadlineFilter === 'OVERDUE' ? 'text-white' : overdueCards.length > 0 ? 'text-rose-900 dark:text-rose-200' : 'text-slate-900 dark:text-white'}`}>
             {overdueCards.length}
-            <span className="text-xs font-normal ml-1">delayed</span>
+            <span className={`text-xs font-normal ml-1 ${deadlineFilter === 'OVERDUE' ? 'text-rose-200' : 'text-rose-700 dark:text-rose-400'}`}>delayed</span>
           </div>
           <p className={`text-[10px] mt-1 font-medium ${deadlineFilter === 'OVERDUE' ? 'text-rose-100' : overdueCards.length > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-slate-500'}`}>
             {overdueCards.length > 0 ? '🚨 Immediate action required' : 'No overdue jobs!'}
@@ -477,7 +565,7 @@ export function DailyHuddleView({
           </div>
           <div className={`text-2xl font-black ${deadlineFilter === 'UNASSIGNED' ? 'text-white' : 'text-purple-900 dark:text-purple-200'}`}>
             {unassignedTasksCards.length}
-            <span className="text-xs font-normal ml-1">cards</span>
+            <span className={`text-xs font-normal ml-1 ${deadlineFilter === 'UNASSIGNED' ? 'text-purple-200' : 'text-purple-700 dark:text-purple-300'}`}>cards</span>
           </div>
           <p className={`text-[10px] mt-1 font-medium ${deadlineFilter === 'UNASSIGNED' ? 'text-purple-100' : 'text-purple-800 dark:text-purple-300'}`}>
             Needs staff or vendor allotment
@@ -501,7 +589,7 @@ export function DailyHuddleView({
           </div>
           <div className={`text-2xl font-black ${selectedDepartment === 'QC' ? 'text-white' : 'text-emerald-900 dark:text-emerald-200'}`}>
             {readyForQCCount}
-            <span className="text-xs font-normal ml-1">ready</span>
+            <span className={`text-xs font-normal ml-1 ${selectedDepartment === 'QC' ? 'text-emerald-200' : 'text-emerald-700 dark:text-emerald-300'}`}>ready</span>
           </div>
           <p className={`text-[10px] mt-1 font-medium ${selectedDepartment === 'QC' ? 'text-emerald-100' : 'text-emerald-800 dark:text-emerald-300'}`}>
             Floor inspection & delivery
@@ -760,6 +848,21 @@ export function DailyHuddleView({
                         <span className="text-xs font-mono font-bold text-slate-500 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                           {card.id}
                         </span>
+
+                        {/* Job Card Lifecycle Stage Chip */}
+                        <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border shadow-2xs ${
+                          card.status === 'READY_FOR_DELIVERY' || card.status === 'DELIVERED'
+                            ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-400'
+                            : card.status === 'QC_PENDING'
+                            ? 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-400'
+                            : card.status === 'IN_PROGRESS'
+                            ? 'bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-400'
+                            : card.status === 'JOB_ALLOCATED'
+                            ? 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-400'
+                            : 'bg-slate-500/15 text-slate-800 dark:text-slate-300 border-slate-300'
+                        }`}>
+                          ⚙️ Stage: {formatJobCardStatus(card.status)}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400 flex-wrap">
@@ -962,13 +1065,14 @@ export function DailyHuddleView({
                     </div>
 
                     <div className="overflow-x-auto scrollbar-thin">
-                      <table className="w-full text-left border-collapse min-w-[760px]">
+                      <table className="w-full text-left border-collapse min-w-[840px]">
                         <thead>
                           <tr className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
-                            <th className="py-3 px-4 w-[32%] min-w-[210px] font-black">Service Task</th>
-                            <th className="py-3 px-3 w-[18%] min-w-[130px] font-black">Department</th>
-                            <th className="py-3 px-3 w-[25%] min-w-[180px] font-black">Assigned Staff / Vendor</th>
-                            <th className="py-3 px-4 w-[25%] min-w-[240px] font-black text-right">Huddle Status Toggle</th>
+                            <th className="py-3 px-4 w-[28%] min-w-[180px] font-black">Service Task</th>
+                            <th className="py-3 px-3 w-[15%] min-w-[120px] font-black">Department</th>
+                            <th className="py-3 px-3 w-[22%] min-w-[160px] font-black">Assigned Staff / Vendor</th>
+                            <th className="py-3 px-3 w-[15%] min-w-[130px] font-black text-center">Status</th>
+                            <th className="py-3 px-4 w-[20%] min-w-[210px] font-black text-right">Huddle Action Toggle</th>
                           </tr>
                         </thead>
 
@@ -981,7 +1085,7 @@ export function DailyHuddleView({
                                 <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 align-middle">
                                   <div className="flex items-center gap-2 max-w-[240px]" title={task.title}>
                                     <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                      task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'
+                                      task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-amber-500'
                                     }`} />
                                     <span className="truncate">{task.title}</span>
                                   </div>
@@ -1004,6 +1108,26 @@ export function DailyHuddleView({
                                   ) : (
                                     <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg text-[11px] border border-amber-200 dark:border-amber-800/80 flex items-center gap-1 w-fit whitespace-nowrap">
                                       ⚠️ Unassigned
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Task Status Stage Chip Column */}
+                                <td className="py-3 px-3 align-middle text-center">
+                                  {task.status === 'COMPLETED' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-400 dark:border-emerald-700 shadow-2xs whitespace-nowrap">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                      <span>Completed</span>
+                                    </span>
+                                  ) : task.status === 'IN_PROGRESS' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-400 dark:border-blue-700 shadow-2xs whitespace-nowrap">
+                                      <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0 animate-spin" />
+                                      <span>In Progress</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-400 dark:border-amber-700 shadow-2xs whitespace-nowrap">
+                                      <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      <span>Pending</span>
                                     </span>
                                   )}
                                 </td>
