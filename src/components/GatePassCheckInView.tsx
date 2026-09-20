@@ -20,15 +20,17 @@ import {
   Upload,
   RefreshCw,
   Flame,
-  Gauge
+  Gauge,
+  Trash2
 } from 'lucide-react';
-import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop } from '../types';
-import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, subscribeToStore, getAuthUser, getCities, getWorkshops } from '../lib/storage';
+import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
+import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
 
 interface GatePassCheckInViewProps {
+  initialFilter?: 'IN_WORKSHOP' | 'IDLE_PI' | 'ACTIVE_REPAIR' | 'READY_DISPATCH' | 'CHECKED_OUT';
   onOpenCreateJobCardWithPrefill?: (prefill: {
     regNo: string;
     make: string;
@@ -57,18 +59,20 @@ const SAMPLE_DRIVER_CAR_PHOTOS = [
   { label: 'Brown Luxury + Driver', url: 'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=800&q=80' },
 ];
 
-export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJobCard }: GatePassCheckInViewProps) {
+export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPrefill, onSelectJobCard }: GatePassCheckInViewProps) {
   const [checkIns, setCheckIns] = useState<VehicleCheckIn[]>(() => getVehicleCheckIns());
+  const [jobCardsList, setJobCardsList] = useState<JobCard[]>(() => getJobCards());
 
   useEffect(() => {
     const refreshData = () => {
       setCheckIns(getVehicleCheckIns());
+      setJobCardsList(getJobCards());
     };
     refreshData();
     const unsubscribe = subscribeToStore(refreshData);
     return () => { unsubscribe(); };
   }, []);
-  const [activeFilter, setActiveFilter] = useState<'IN_WORKSHOP' | 'IDLE_PI' | 'ACTIVE_REPAIR' | 'READY_DISPATCH' | 'CHECKED_OUT'>('IN_WORKSHOP');
+  const [activeFilter, setActiveFilter] = useState<'IN_WORKSHOP' | 'IDLE_PI' | 'ACTIVE_REPAIR' | 'READY_DISPATCH' | 'CHECKED_OUT'>(initialFilter || 'IN_WORKSHOP');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Camera License Plate Scanner Modal State
@@ -98,6 +102,7 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
 
   // Check-Out Modal State
   const [checkOutItem, setCheckOutItem] = useState<VehicleCheckIn | null>(null);
+  const [confirmRemoveItem, setConfirmRemoveItem] = useState<VehicleCheckIn | null>(null);
   const [exitDriverName, setExitDriverName] = useState('');
   const [exitDriverPhone, setExitDriverPhone] = useState('');
   const [exitPhotoUrl, setExitPhotoUrl] = useState(SAMPLE_DRIVER_CAR_PHOTOS[1].url);
@@ -581,9 +586,24 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
 
                   <div className="absolute inset-0 bg-linear-to-t from-slate-950/90 via-slate-950/30 to-transparent p-4 flex flex-col justify-between">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs font-black bg-slate-900/90 text-white px-2.5 py-1 rounded-xl border border-slate-700">
-                        {item.id}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-black bg-slate-900/90 text-white px-2.5 py-1 rounded-xl border border-slate-700">
+                          {item.id}
+                        </span>
+                        {(isSuperAdmin || authUser?.role === 'ADMIN' || authUser?.role === 'FLOOR_MANAGER' || authUser?.userType === 'ADMIN' || authUser?.role === 'SUPER_ADMIN') && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmRemoveItem(item);
+                            }}
+                            className="p-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+                            title="Remove vehicle from check-in list"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
 
                       {/* Status Badge */}
                       {item.status === 'IDLE_AWAITING_PI' && (
@@ -752,18 +772,39 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCheckOutItem(item);
-                        setExitDriverName(item.checkInDriverName || 'Cars24 Driver');
-                        setExitDriverPhone(item.checkInDriverPhone || '');
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all shrink-0"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Check-Out</span>
-                    </button>
+                    {(() => {
+                      const linkedCard = item.jobCardId ? jobCardsList.find(c => c.id === item.jobCardId) : null;
+                      const canCheckOut = !linkedCard || linkedCard.status === 'RFC' || linkedCard.status === 'READY_PENDING_DISPATCH' || linkedCard.status === 'DELIVERED';
+
+                      if (canCheckOut) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCheckOutItem(item);
+                              setExitDriverName(item.checkInDriverName || 'Driver / Customer');
+                              setExitDriverPhone(item.checkInDriverPhone || '');
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            <span>Check-Out</span>
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          disabled
+                          title="Vehicle checkout is permitted ONLY when Job Card status is RFC (Ready For Checkout)"
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold text-xs flex items-center gap-1 cursor-not-allowed opacity-70 shrink-0"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Checkout (Locked - Requires RFC)</span>
+                        </button>
+                      );
+                    })()}
                   </>
                 ) : (
                   <span className="text-slate-400 font-bold text-xs flex items-center gap-1 mx-auto">
@@ -1495,6 +1536,57 @@ export function GatePassCheckInView({ onOpenCreateJobCardWithPrefill, onSelectJo
           }
         }}
       />
+
+      {/* CONFIRM REMOVE CHECK-IN MODAL */}
+      {confirmRemoveItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
+              <div className="p-3 bg-rose-100 dark:bg-rose-950/60 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">
+                  Remove Check-In Record?
+                </h3>
+                <p className="text-xs text-slate-500 font-bold">
+                  {confirmRemoveItem.registrationNumber} ({confirmRemoveItem.make} {confirmRemoveItem.model})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Are you sure you want to remove check-in record <strong>{confirmRemoveItem.id}</strong> from the gate check-in list? This action will delete the entry.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveItem(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteVehicleCheckIn(confirmRemoveItem.id);
+                  setConfirmRemoveItem(null);
+                  setCheckIns(getVehicleCheckIns());
+                  dispatchToastNotification({
+                    type: 'INFO',
+                    title: 'Check-In Removed',
+                    message: `Removed ${confirmRemoveItem.registrationNumber} from check-in list.`,
+                  });
+                }}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Yes, Remove Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

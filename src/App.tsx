@@ -57,6 +57,7 @@ import { PartOrderBasketView } from './components/PartOrderBasketView';
 import { InvoiceManagementView } from './components/InvoiceManagementView';
 import { AccountingAndExpensesView } from './components/AccountingAndExpensesView';
 import { CarModelsManagementView } from './components/CarModelsManagementView';
+import { RestrictedVehicleJobCardModal } from './components/RestrictedVehicleJobCardModal';
 import { ToastContainer } from './components/ToastContainer';
 import { UnifiedLoginModal } from './components/UnifiedLoginModal';
 import { CommonHomePage } from './components/CommonHomePage';
@@ -581,8 +582,9 @@ export default function App() {
           />
         )}
 
-        {normalizedTab === 'gate-pass' && (
+        {(normalizedTab === 'gate-pass' || normalizedTab === 'cars-list') && (
           <GatePassCheckInView
+            initialFilter={normalizedTab === 'cars-list' ? 'IN_WORKSHOP' : undefined}
             onOpenCreateJobCardWithPrefill={(prefill) => {
               setCreateModalPrefill(prefill);
               setIsCreateModalOpen(true);
@@ -652,7 +654,7 @@ export default function App() {
           <AccountingAndExpensesView currentRole={currentRole} />
         )}
 
-        {activeTab === 'role-workspace' && (
+        {(normalizedTab === 'role-workspace' || normalizedTab === 'my-tasks') && (
           <RoleWorkspaceView
             currentRole={currentRole}
             jobCards={jobCards}
@@ -749,19 +751,46 @@ export default function App() {
         }}
       />
 
-      {/* Job Card Detailed View Modal */}
-      {activeCardForDetail && (
-        <JobCardDetailView
-          card={activeCardForDetail}
-          currentRole={currentRole}
-          onClose={() => setSelectedJobCardId(null)}
-          employees={employees}
-          vendors={vendors}
-          onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
-          onOpenQCModal={(id) => setQcModalCardId(id)}
-          onOpenQRModal={(id) => setQrModalCardId(id)}
-        />
-      )}
+      {/* Job Card Detailed View or Restricted View Modal */}
+      {activeCardForDetail && (() => {
+        const isAdminOrAdvisor = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
+        const empId = authUser?.employeeId;
+        const empName = authUser?.name?.toLowerCase();
+
+        const isAllotted = isAdminOrAdvisor || (
+          (empId && (activeCardForDetail.assignedAdvisorId === empId || activeCardForDetail.assignedManagerId === empId)) ||
+          activeCardForDetail.tasks?.some(t => 
+            (empId && (t.assignedToId === empId || t.pairedDenterId === empId || t.outsourcedVendorId === empId)) ||
+            (empName && (
+              (t.assignedToName && t.assignedToName.toLowerCase().includes(empName)) ||
+              (t.pairedDenterName && t.pairedDenterName.toLowerCase().includes(empName))
+            ))
+          )
+        );
+
+        if (isAllotted) {
+          return (
+            <JobCardDetailView
+              card={activeCardForDetail}
+              currentRole={currentRole}
+              onClose={() => setSelectedJobCardId(null)}
+              employees={employees}
+              vendors={vendors}
+              onOpenCustomerApprovalPortal={(id) => setCustomerPortalCardId(id)}
+              onOpenQCModal={(id) => setQcModalCardId(id)}
+              onOpenQRModal={(id) => setQrModalCardId(id)}
+            />
+          );
+        }
+
+        return (
+          <RestrictedVehicleJobCardModal
+            card={activeCardForDetail}
+            onClose={() => setSelectedJobCardId(null)}
+            onRefreshData={() => setJobCards(getJobCards())}
+          />
+        );
+      })()}
 
       {/* Customer Approval Portal Modal */}
       {activeCardForCustomerPortal && (

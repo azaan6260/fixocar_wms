@@ -18,6 +18,7 @@ import {
   getAuthUser
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
+import { AddCustomJobModal } from './AddCustomJobModal';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { triggerSuccessHaptic } from '../lib/mobileBridge';
@@ -283,6 +284,7 @@ export function JobCardDetailView({
   const [newTaskCost, setNewTaskCost] = useState(40);
   const [newTaskPrice, setNewTaskPrice] = useState(85);
   const [newTaskAssignedId, setNewTaskAssignedId] = useState(employees[0]?.id || '');
+  const [newTaskPairedDenterId, setNewTaskPairedDenterId] = useState('');
   const [newTaskRequiresApproval, setNewTaskRequiresApproval] = useState(true);
 
   // Gate Check-out fields
@@ -431,6 +433,7 @@ export function JobCardDetailView({
 
     const assignedEmp = employees.find(e => e.id === newTaskAssignedId);
     const assignedVen = vendors.find(v => v.id === newTaskAssignedId);
+    const pairedDenterEmp = employees.find(e => e.id === newTaskPairedDenterId);
 
     const newTask: JobTask = {
       id: `task-add-${Date.now()}`,
@@ -447,15 +450,44 @@ export function JobCardDetailView({
       isCustomerApproved: newTaskRequiresApproval ? null : true,
       isAdditionalWork: true,
       approvalStatus: newTaskRequiresApproval ? 'PENDING' : 'APPROVED',
+      pairedDenterId: newTaskCategory === 'PAINT' ? (newTaskPairedDenterId || undefined) : undefined,
+      pairedDenterName: newTaskCategory === 'PAINT' ? (pairedDenterEmp?.name || undefined) : undefined,
+      denterPayout: newTaskCategory === 'PAINT' ? 150 : undefined,
+      painterPayout: newTaskCategory === 'PAINT' ? Number(newTaskCost) || 800 : undefined
     };
+
+    const additionalTasks: JobTask[] = [newTask];
+
+    // If Paint task and paired denter is set, also create pre-denting task if not already existing
+    if (newTaskCategory === 'PAINT' && newTaskPairedDenterId) {
+      const predentTask: JobTask = {
+        id: `task-predent-add-${Date.now()}`,
+        jobCardId: card.id,
+        title: `Pre-Denting: ${newTaskTitle} (डेंटिंग व पैनल तैयारी)`,
+        category: 'DENTING',
+        assignedToId: newTaskPairedDenterId,
+        assignedToName: pairedDenterEmp?.name,
+        assignedType: 'EMPLOYEE',
+        estimatedCost: 150,
+        customerPrice: 0,
+        status: 'PENDING',
+        requiresCustomerApproval: false,
+        isCustomerApproved: true,
+        isContractBasis: true,
+        contractorPayout: 150,
+        denterPayout: 150
+      };
+      additionalTasks.push(predentTask);
+    }
 
     updateJobCard(card.id, (prev) => ({
       ...prev,
-      tasks: [...prev.tasks, newTask],
+      tasks: [...prev.tasks, ...additionalTasks],
       status: newTaskRequiresApproval ? 'ESTIMATE_PENDING' : prev.status
     }));
 
     setNewTaskTitle('');
+    setNewTaskPairedDenterId('');
     setShowAddTask(false);
 
     dispatchToastNotification({
@@ -1660,90 +1692,75 @@ export function JobCardDetailView({
       </div>
 
       {/* Add Custom Task Modal */}
-      {showAddTask && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-slate-900 text-white rounded-3xl border border-slate-800 w-full max-w-lg p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h4 className="font-black text-base text-white flex items-center gap-2">
-                <span>➕</span>
-                <span>नया काम जोड़ें (Add Extra Work)</span>
-              </h4>
-              <button onClick={() => setShowAddTask(false)} className="p-1 text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AddCustomJobModal
+        isOpen={showAddTask}
+        onClose={() => setShowAddTask(false)}
+        employees={employees}
+        vendors={vendors}
+        onAddJob={(newCustomJob) => {
+          const newTask: JobTask = {
+            id: `task-add-${Date.now()}`,
+            jobCardId: card.id,
+            title: newCustomJob.title,
+            category: newCustomJob.category,
+            assignedToId: newCustomJob.assignedToId,
+            assignedToName: newCustomJob.assignedToName,
+            assignedType: newCustomJob.assignedType,
+            estimatedCost: newCustomJob.estimatedCost,
+            customerPrice: newCustomJob.customerPrice,
+            status: 'PENDING',
+            requiresCustomerApproval: newCustomJob.requiresCustomerApproval,
+            isCustomerApproved: newCustomJob.requiresCustomerApproval ? null : true,
+            isAdditionalWork: true,
+            approvalStatus: newCustomJob.requiresCustomerApproval ? 'PENDING' : 'APPROVED',
+            isContractBasis: newCustomJob.isContractBasis,
+            contractorPayout: newCustomJob.contractorPayout,
+            painterPayout: newCustomJob.painterPayout,
+            denterPayout: newCustomJob.denterPayout,
+            pairedDenterId: newCustomJob.pairedDenterId,
+            pairedDenterName: newCustomJob.pairedDenterName,
+            isOutsourced: newCustomJob.isOutsourced,
+            outsourcedVendorId: newCustomJob.outsourcedVendorId,
+            outsourcedVendorName: newCustomJob.outsourcedVendorName,
+          };
 
-            <form onSubmit={handleCreateNewTask} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">
-                  काम का नाम (Task Title) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  placeholder="उदा. अगला शॉकअप बदलना, ब्रेक ऑयल टॉप-अप..."
-                  className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-bold text-white"
-                />
-              </div>
+          const additionalTasks: JobTask[] = [newTask];
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    विभाग (Category)
-                  </label>
-                  <select
-                    value={newTaskCategory}
-                    onChange={(e) => setNewTaskCategory(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-bold text-white"
-                  >
-                    <option value="MECHANICAL">🔧 MECHANICAL</option>
-                    <option value="DENTING">🔨 DENTING</option>
-                    <option value="PAINT">🎨 PAINT</option>
-                    <option value="WASHING">🧼 WASHING</option>
-                    <option value="SUBLET_VENDOR">🏭 SUBLET VENDOR</option>
-                  </select>
-                </div>
+          // If Paint task and paired denter is set, also create pre-denting task
+          if (newCustomJob.category === 'PAINT' && newCustomJob.pairedDenterId) {
+            const predentTask: JobTask = {
+              id: `task-predent-add-${Date.now()}`,
+              jobCardId: card.id,
+              title: `Pre-Denting: ${newCustomJob.title} (डेंटिंग व पैनल तैयारी)`,
+              category: 'DENTING',
+              assignedToId: newCustomJob.pairedDenterId,
+              assignedToName: newCustomJob.pairedDenterName,
+              assignedType: 'EMPLOYEE',
+              estimatedCost: newCustomJob.denterPayout || 150,
+              customerPrice: 0,
+              status: 'PENDING',
+              requiresCustomerApproval: false,
+              isCustomerApproved: true,
+              isContractBasis: true,
+              contractorPayout: newCustomJob.denterPayout || 150,
+              denterPayout: newCustomJob.denterPayout || 150
+            };
+            additionalTasks.push(predentTask);
+          }
 
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    किसे सौंपें (Assign To)
-                  </label>
-                  <select
-                    value={newTaskAssignedId}
-                    onChange={(e) => setNewTaskAssignedId(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-bold text-white"
-                  >
-                    <optgroup label="Workshop Staff">
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam})</option>)}
-                    </optgroup>
-                    <optgroup label="Sublet Vendors">
-                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name} ({v.category})</option>)}
-                    </optgroup>
-                  </select>
-                </div>
-              </div>
+          updateJobCard(card.id, (prev) => ({
+            ...prev,
+            tasks: [...prev.tasks, ...additionalTasks],
+            status: newCustomJob.requiresCustomerApproval ? 'ESTIMATE_PENDING' : prev.status
+          }));
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTask(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold"
-                >
-                  रद्द करें (Cancel)
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/20"
-                >
-                  सुरक्षित करें (Save Task)
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          dispatchToastNotification({
+            type: 'INFO',
+            title: 'Custom Job Added',
+            message: `Added ${newCustomJob.title} to Job Card.`,
+          });
+        }}
+      />
 
       {/* 1-Click Standard Jobs Catalog Modal */}
       <StandardJobsCatalogModal

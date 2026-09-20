@@ -3191,6 +3191,14 @@ export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {
   return getVehicleCheckIns().find(c => c.id === id);
 }
 
+export function deleteVehicleCheckIn(id: string): boolean {
+  const checkIns = getVehicleCheckIns();
+  const filtered = checkIns.filter(c => c.id !== id);
+  if (filtered.length === checkIns.length) return false;
+  saveVehicleCheckIns(filtered);
+  return true;
+}
+
 // -------------------------------------------------------------
 // WORKSHOP EXPENSES & ACCOUNTING STORAGE
 // -------------------------------------------------------------

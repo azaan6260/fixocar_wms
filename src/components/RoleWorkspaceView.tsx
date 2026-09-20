@@ -76,7 +76,7 @@ export function RoleWorkspaceView({
           matchesRole = true;
         } else if (currentRole === 'MECHANIC' && (task.category === 'MECHANICAL' || task.category === 'INSPECTION')) {
           matchesRole = true;
-        } else if (currentRole === 'DENTER' && (task.category === 'DENTING' || task.title.toLowerCase().includes('dent'))) {
+        } else if (currentRole === 'DENTER' && (task.category === 'DENTING' || task.pairedDenterId || Boolean(task.pairedDenterName) || task.title.toLowerCase().includes('dent'))) {
           matchesRole = true;
         } else if (currentRole === 'PAINTER' && (task.category === 'PAINT' || task.title.toLowerCase().includes('paint'))) {
           matchesRole = true;
@@ -88,9 +88,12 @@ export function RoleWorkspaceView({
 
         if (onlyMyTasks && !isAdminOrManager && authUser && (authUser.employeeId || authUser.vendorId)) {
           const isAssignedToMe = 
-            (authUser.employeeId && task.assignedToId === authUser.employeeId) ||
+            (authUser.employeeId && (task.assignedToId === authUser.employeeId || task.pairedDenterId === authUser.employeeId)) ||
             (authUser.vendorId && (task.outsourcedVendorId === authUser.vendorId || task.assignedToId === authUser.vendorId)) ||
-            (authUser.name && task.assignedToName && task.assignedToName.toLowerCase().includes(authUser.name.toLowerCase()));
+            (authUser.name && (
+              (task.assignedToName && task.assignedToName.toLowerCase().includes(authUser.name.toLowerCase())) ||
+              (task.pairedDenterName && task.pairedDenterName.toLowerCase().includes(authUser.name.toLowerCase()))
+            ));
           return isAssignedToMe;
         }
         return true;

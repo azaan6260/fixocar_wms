@@ -4,6 +4,7 @@ import { STANDARD_PACKAGES } from '../lib/mockData';
 import { createJobCard, getActiveJobCardForRegNo, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
+import { AddCustomJobModal, CustomJobData } from './AddCustomJobModal';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -191,6 +192,9 @@ export function CreateJobCardModal({
   const [isAiDiagnosing, setIsAiDiagnosing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Custom Job Modal State
+  const [isCustomJobModalOpen, setIsCustomJobModalOpen] = useState(false);
+
   // Tasks List (starts completely empty until user selects or adds jobs)
   const [tasks, setTasks] = useState<{
     id?: string;
@@ -204,6 +208,7 @@ export function CreateJobCardModal({
     customerPrice: number;
     requiresCustomerApproval: boolean;
     isContractBasis?: boolean;
+    contractorPayout?: number;
     painterPayout?: number;
     denterPayout?: number;
     pairedDenterId?: string;
@@ -212,6 +217,9 @@ export function CreateJobCardModal({
     panelKey?: string;
     panelNameEn?: string;
     paintScope?: string;
+    isOutsourced?: boolean;
+    outsourcedVendorId?: string;
+    outsourcedVendorName?: string;
   }[]>([]);
 
   // When package changes on explicit user click, populate tasks
@@ -339,20 +347,7 @@ export function CreateJobCardModal({
   };
 
   const handleAddTask = () => {
-    setTasks(prev => [
-      ...prev,
-      {
-        title: 'Custom Repair / Maintenance Task',
-        category: 'MECHANICAL',
-        team: 'Mechanical',
-        assignedToId: undefined,
-        assignedToName: undefined,
-        assignedType: 'EMPLOYEE',
-        estimatedCost: 30,
-        customerPrice: 65,
-        requiresCustomerApproval: false,
-      }
-    ]);
+    setIsCustomJobModalOpen(true);
   };
 
   const handleRemoveTask = (idx: number) => {
@@ -464,30 +459,70 @@ export function CreateJobCardModal({
         { id: 'qc-6', label: 'Road test - no vibration/noise', category: 'TEST_DRIVE', isPassed: false },
       ],
       qcPassed: false,
-      tasks: tasks.map((t, idx) => ({
-        id: `task-gen-${Date.now()}-${idx}`,
-        jobCardId: 'PENDING',
-        title: t.title,
-        category: t.category,
-        assignedToId: t.assignedToId,
-        assignedToName: t.assignedToName,
-        assignedType: t.assignedType,
-        estimatedCost: t.estimatedCost,
-        customerPrice: t.customerPrice,
-        status: 'PENDING',
-        requiresCustomerApproval: t.requiresCustomerApproval,
-        isCustomerApproved: t.requiresCustomerApproval ? null : true,
-        isContractBasis: t.isContractBasis,
-        contractorPayout: (t as any).contractorPayout || t.estimatedCost,
-        painterPayout: t.painterPayout,
-        denterPayout: t.denterPayout,
-        pairedDenterId: t.pairedDenterId,
-        pairedDenterName: t.pairedDenterName,
-        standardJobId: t.standardJobId,
-        panelKey: (t as any).panelKey,
-        panelNameEn: (t as any).panelNameEn,
-        paintScope: (t as any).paintScope,
-      }))
+      tasks: (() => {
+        const finalJobCardTasks: any[] = [];
+        tasks.forEach((t, idx) => {
+          finalJobCardTasks.push({
+            id: `task-gen-${Date.now()}-${idx}`,
+            jobCardId: 'PENDING',
+            title: t.title,
+            category: t.category,
+            assignedToId: t.assignedToId,
+            assignedToName: t.assignedToName,
+            assignedType: t.assignedType,
+            estimatedCost: t.estimatedCost,
+            customerPrice: t.customerPrice,
+            status: 'PENDING',
+            requiresCustomerApproval: t.requiresCustomerApproval,
+            isCustomerApproved: t.requiresCustomerApproval ? null : true,
+            isContractBasis: t.isContractBasis,
+            contractorPayout: (t as any).contractorPayout || t.estimatedCost,
+            painterPayout: t.painterPayout,
+            denterPayout: t.denterPayout,
+            pairedDenterId: t.pairedDenterId,
+            pairedDenterName: t.pairedDenterName,
+            standardJobId: t.standardJobId,
+            panelKey: (t as any).panelKey,
+            panelNameEn: (t as any).panelNameEn,
+            paintScope: (t as any).paintScope,
+          });
+
+          // Auto-generate explicit Pre-Denting task for Denter if paint panel has denter assigned
+          if (t.category === 'PAINT' && (t.pairedDenterId || (t.denterPayout && t.denterPayout > 0))) {
+            const hasExistingDentTask = tasks.some(other => 
+              other.category === 'DENTING' && 
+              ((other as any).panelKey === (t as any).panelKey || (t.panelNameEn && other.title.toLowerCase().includes(t.panelNameEn.toLowerCase())))
+            );
+
+            if (!hasExistingDentTask) {
+              const pName = t.panelNameEn || t.title.replace(/\(.*\)/, '').trim();
+              finalJobCardTasks.push({
+                id: `task-predent-${Date.now()}-${idx}`,
+                jobCardId: 'PENDING',
+                title: `${pName} - Pre-Denting & Panel Prep (डेंटिंग व पैनल तैयारी)`,
+                category: 'DENTING',
+                assignedToId: t.pairedDenterId,
+                assignedToName: t.pairedDenterName,
+                assignedType: 'EMPLOYEE',
+                estimatedCost: t.denterPayout || 150,
+                customerPrice: 0,
+                status: 'PENDING',
+                requiresCustomerApproval: false,
+                isCustomerApproved: true,
+                isContractBasis: true,
+                contractorPayout: t.denterPayout || 150,
+                denterPayout: t.denterPayout || 150,
+                pairedDenterId: t.pairedDenterId,
+                pairedDenterName: t.pairedDenterName,
+                panelKey: (t as any).panelKey,
+                panelNameEn: (t as any).panelNameEn,
+                standardJobId: t.standardJobId
+              });
+            }
+          }
+        });
+        return finalJobCardTasks;
+      })()
     });
 
     // Update Gate Check-In status & link Job Card ID
@@ -1414,6 +1449,16 @@ export function CreateJobCardModal({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanComplete={(scannedPlate) => setRegNo(scannedPlate)}
+      />
+
+      <AddCustomJobModal
+        isOpen={isCustomJobModalOpen}
+        onClose={() => setIsCustomJobModalOpen(false)}
+        employees={employees}
+        vendors={vendors}
+        onAddJob={(newCustomJob) => {
+          setTasks(prev => [...prev, newCustomJob]);
+        }}
       />
     </div>
   );

@@ -75,6 +75,11 @@ export function JobAllotmentPipeline({
   // Staged job IDs selected by checkbox before pressing "Add Selected Jobs to Job Card"
   const [stagedJobIds, setStagedJobIds] = useState<string[]>([]);
 
+  // Default staff selections for auto-allotment
+  const [selectedPainterId, setSelectedPainterId] = useState<string>('');
+  const [selectedDenterId, setSelectedDenterId] = useState<string>('');
+  const [selectedMechanicId, setSelectedMechanicId] = useState<string>('');
+
   // Toggle between interactive Visual Sketch view vs standard list view for body panels
   const [paintViewMode, setPaintViewMode] = useState<'VISUAL_SKETCH' | 'GRID_LIST'>('VISUAL_SKETCH');
 
@@ -208,14 +213,18 @@ export function JobAllotmentPipeline({
     const resolvedPanelKey = stdJob.panelKey || matchedPanelDef?.id;
     const resolvedPanelNameEn = stdJob.panelNameEn || matchedPanelDef?.nameEn;
 
+    const painterEmp = employees.find(e => e.id === selectedPainterId);
+    const denterEmp = employees.find(e => e.id === selectedDenterId);
+    const mechanicEmp = employees.find(e => e.id === selectedMechanicId);
+
     if (stdJob.category === 'PAINT') {
       return {
         id: `task-paint-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: stdJob.title,
         category: 'PAINT',
         team: 'Paint',
-        assignedToId: undefined, // Unallocated initially
-        assignedToName: undefined,
+        assignedToId: selectedPainterId || undefined,
+        assignedToName: painterEmp?.name || undefined,
         assignedType: 'EMPLOYEE',
         estimatedCost: contractorPayout,
         customerPrice: price,
@@ -223,14 +232,15 @@ export function JobAllotmentPipeline({
         isContractBasis: true,
         painterPayout: painterPayout,
         denterPayout: denterPayout,
-        pairedDenterId: undefined, // Unallocated initially
-        pairedDenterName: undefined,
+        pairedDenterId: selectedDenterId || undefined,
+        pairedDenterName: denterEmp?.name || undefined,
         standardJobId: stdJob.id,
         panelKey: resolvedPanelKey,
         panelNameEn: resolvedPanelNameEn,
         paintScope: stdJob.paintScope,
       };
     } else {
+      const assignedEmp = stdJob.category === 'DENTING' ? denterEmp : mechanicEmp;
       return {
         id: `task-std-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: stdJob.title,
@@ -238,8 +248,8 @@ export function JobAllotmentPipeline({
         team: stdJob.category === 'WASHING' ? 'Detailing & Washing' :
               stdJob.category === 'DENTING' ? 'Denting' :
               stdJob.category === 'LATHE_WORK' ? 'Logistics' : 'Mechanical',
-        assignedToId: undefined, // Unallocated initially
-        assignedToName: undefined,
+        assignedToId: (stdJob.category === 'DENTING' ? selectedDenterId : selectedMechanicId) || undefined,
+        assignedToName: assignedEmp?.name || undefined,
         assignedType: stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK' ? 'VENDOR' : 'EMPLOYEE',
         estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(price * 0.5),
         customerPrice: price,
@@ -461,6 +471,113 @@ export function JobAllotmentPipeline({
           </div>
         </div>
       )}
+
+      {/* Staff Allotment Setup Bar */}
+      <div className="p-3.5 bg-linear-to-r from-purple-900/10 via-slate-900/40 to-slate-900/10 rounded-2xl border border-purple-300/40 dark:border-purple-800/40 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4 text-purple-500" />
+            Staff & Technician Allotment (ऑटो-स्टाफ आवंटन)
+          </span>
+          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+            Auto-assigns selected technicians to newly added tasks
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          {/* Painter Select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase flex items-center gap-1">
+              <Paintbrush className="w-3 h-3" />
+              Painter Allotment
+            </label>
+            <select
+              value={selectedPainterId}
+              onChange={(e) => {
+                const pId = e.target.value;
+                setSelectedPainterId(pId);
+                const painterEmp = employees.find(emp => emp.id === pId);
+                onTasksChange(selectedTasks.map(t => t.category === 'PAINT' ? {
+                  ...t,
+                  assignedToId: pId || undefined,
+                  assignedToName: painterEmp?.name
+                } : t));
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-purple-300 dark:border-purple-800 text-slate-900 dark:text-slate-100 font-medium text-xs focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">-- Choose Painter --</option>
+              {employees.map(e => (
+                <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam || e.role})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Pre-Paint Denter Select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase flex items-center gap-1">
+              <Hammer className="w-3 h-3" />
+              Pre-Paint Denter Allotment
+            </label>
+            <select
+              value={selectedDenterId}
+              onChange={(e) => {
+                const dId = e.target.value;
+                setSelectedDenterId(dId);
+                const denterEmp = employees.find(emp => emp.id === dId);
+                onTasksChange(selectedTasks.map(t => {
+                  if (t.category === 'PAINT') {
+                    return {
+                      ...t,
+                      pairedDenterId: dId || undefined,
+                      pairedDenterName: denterEmp?.name
+                    };
+                  } else if (t.category === 'DENTING') {
+                    return {
+                      ...t,
+                      assignedToId: dId || undefined,
+                      assignedToName: denterEmp?.name
+                    };
+                  }
+                  return t;
+                }));
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-800 text-slate-900 dark:text-slate-100 font-medium text-xs focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">-- Choose Denter --</option>
+              {employees.map(e => (
+                <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam || e.role})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Mechanic Select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center gap-1">
+              <Wrench className="w-3 h-3" />
+              Mechanic Allotment
+            </label>
+            <select
+              value={selectedMechanicId}
+              onChange={(e) => {
+                const mId = e.target.value;
+                setSelectedMechanicId(mId);
+                const mechanicEmp = employees.find(emp => emp.id === mId);
+                onTasksChange(selectedTasks.map(t => t.category === 'MECHANICAL' ? {
+                  ...t,
+                  assignedToId: mId || undefined,
+                  assignedToName: mechanicEmp?.name
+                } : t));
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-800 text-slate-900 dark:text-slate-100 font-medium text-xs focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Choose Mechanic --</option>
+              {employees.map(e => (
+                <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam || e.role})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Section Tabs Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200 dark:border-slate-800">
