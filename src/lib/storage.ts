@@ -3140,7 +3140,32 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
 }
 
 export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
-  localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
+  try {
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
+  } catch (err) {
+    console.warn('LocalStorage quota warning in saveVehicleCheckIns, pruning oversized base64 images:', err);
+    // Fallback: if localStorage quota is exceeded, prune heavy base64 photo URLs in older records so save ALWAYS succeeds
+    const pruned = checkIns.map((c, index) => {
+      if (index > 0 && c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000) {
+        return { ...c, checkInPhotoWithDriverUrl: undefined, checkOutPhotoWithDriverUrl: undefined };
+      }
+      return c;
+    });
+    try {
+      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(pruned));
+    } catch (e2) {
+      const stripped = checkIns.map(c => ({
+        ...c,
+        checkInPhotoWithDriverUrl: c.checkInPhotoWithDriverUrl?.startsWith('data:') ? undefined : c.checkInPhotoWithDriverUrl,
+        checkOutPhotoWithDriverUrl: c.checkOutPhotoWithDriverUrl?.startsWith('data:') ? undefined : c.checkOutPhotoWithDriverUrl,
+      }));
+      try {
+        localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(stripped));
+      } catch (e3) {
+        console.error('Critical storage save error in saveVehicleCheckIns:', e3);
+      }
+    }
+  }
   notifyStoreChange();
   notifyCentralServer('vehicleCheckIns', checkIns);
 }

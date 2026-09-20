@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
 import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
+import { compressImageFile } from '../lib/imageCompressor';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -127,22 +128,34 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   const checkOutCameraInputRef = React.useRef<HTMLInputElement>(null);
 
   // Photo File Upload Handler
-  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isExit = false) => {
+  const handlePhotoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isExit = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
+    try {
+      const compressedDataUrl = await compressImageFile(file, 800, 800, 0.75);
+      if (compressedDataUrl) {
         if (isExit) {
-          setExitPhotoUrl(dataUrl);
+          setExitPhotoUrl(compressedDataUrl);
         } else {
-          setPhotoUrl(dataUrl);
+          setPhotoUrl(compressedDataUrl);
         }
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Image compression fallback:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          if (isExit) {
+            setExitPhotoUrl(dataUrl);
+          } else {
+            setPhotoUrl(dataUrl);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
     e.target.value = '';
   };
 
