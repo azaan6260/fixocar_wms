@@ -774,7 +774,7 @@ export function DailyHuddleView({
                   <div className="flex items-center gap-3 shrink-0 flex-wrap lg:flex-nowrap justify-between lg:justify-end">
                     
                     {/* Huddle Urgency Action Toggles */}
-                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700/60">
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700/60 shrink-0 whitespace-nowrap">
                       {/* Toggle Urgent Flag */}
                       <button
                         type="button"
@@ -782,7 +782,7 @@ export function DailyHuddleView({
                           updateJobCard(card.id, (prev) => ({ ...prev, isUrgent: !prev.isUrgent }));
                         }}
                         title={card.isUrgent ? "Remove Urgent priority" : "Mark Urgent for Daily Huddle"}
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all whitespace-nowrap ${
                           card.isUrgent
                             ? 'bg-amber-500 text-slate-950 shadow-xs'
                             : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600'
@@ -803,7 +803,7 @@ export function DailyHuddleView({
                           }));
                         }}
                         title="Set target completion to Today & mark urgent"
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all whitespace-nowrap ${
                           deadlineInfo.isToday
                             ? 'bg-emerald-600 text-white shadow-xs'
                             : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600'
@@ -824,7 +824,7 @@ export function DailyHuddleView({
                           }));
                         }}
                         title="Set target completion to Tomorrow & mark urgent"
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all ${
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-all whitespace-nowrap ${
                           deadlineInfo.status === 'TOMORROW'
                             ? 'bg-blue-600 text-white shadow-xs'
                             : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600'
@@ -836,7 +836,7 @@ export function DailyHuddleView({
                     </div>
 
                     {/* Deadline Highlight Badge */}
-                    <div className={`px-3.5 py-1.5 rounded-2xl border flex flex-col items-end ${deadlineInfo.color}`}>
+                    <div className={`px-3.5 py-1.5 rounded-2xl border flex flex-col items-end shrink-0 whitespace-nowrap ${deadlineInfo.color}`}>
                       <span className="text-xs font-black tracking-tight flex items-center gap-1">
                         {deadlineInfo.label}
                       </span>
@@ -940,89 +940,106 @@ export function DailyHuddleView({
                     )}
                   </div>
 
-                  {/* Task Items Table Grid for Huddle Review */}
-                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                    <div className="p-3 bg-slate-100/80 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-500 uppercase tracking-wider grid grid-cols-12 gap-2">
-                      <span className="col-span-4">Service Task</span>
-                      <span className="col-span-2">Department</span>
-                      <span className="col-span-3">Assigned Staff / Vendor</span>
-                      <span className="col-span-3 text-right">Huddle Status Toggle</span>
+                  {/* Task Items Table Grid for Huddle Review - Scrollable Left to Right */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 overflow-hidden">
+                    {/* Horizontal Scroll Bar Indicator Header */}
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold px-3 py-1.5 bg-slate-100/90 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Daily Review Tasks List ({card.tasks.length} items)</span>
+                      </span>
+                      <span className="text-blue-600 dark:text-blue-400 font-black text-[10px] flex items-center gap-1">
+                        <span>↔ Scroll left/right</span>
+                      </span>
                     </div>
 
-                    <div className="divide-y divide-slate-200 dark:divide-slate-800/60 text-xs">
-                      {card.tasks.map(task => {
-                        return (
-                          <div key={task.id} className="p-3 grid grid-cols-12 gap-2 items-center hover:bg-white dark:hover:bg-slate-900/40 transition-colors">
-                            
-                            {/* Task Title */}
-                            <div className="col-span-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'
-                              }`} />
-                              <span className="truncate" title={task.title}>{task.title}</span>
-                            </div>
+                    <div className="overflow-x-auto scrollbar-thin">
+                      <div className="min-w-[820px]">
+                        <div className="p-3 bg-slate-100/80 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-500 uppercase tracking-wider grid grid-cols-12 gap-3 items-center whitespace-nowrap select-none">
+                          <span className="col-span-4">Service Task</span>
+                          <span className="col-span-2">Department</span>
+                          <span className="col-span-3">Assigned Staff / Vendor</span>
+                          <span className="col-span-3 text-right">Huddle Status Toggle</span>
+                        </div>
 
-                            {/* Department */}
-                            <div className="col-span-2 font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
-                              {task.category}
-                            </div>
+                        <div className="divide-y divide-slate-200 dark:divide-slate-800/60 text-xs">
+                          {card.tasks.map(task => {
+                            return (
+                              <div key={task.id} className="p-3 grid grid-cols-12 gap-3 items-center hover:bg-white dark:hover:bg-slate-900/40 transition-colors">
+                                
+                                {/* Task Title with text overlay on hover */}
+                                <div className="col-span-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0" title={task.title}>
+                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                    task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'
+                                  }`} />
+                                  <span className="truncate">{task.title}</span>
+                                </div>
 
-                            {/* Staff Allotted */}
-                            <div className="col-span-3">
-                              {task.assignedToName ? (
-                                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                                  <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                                  <span className="truncate">{task.assignedToName}</span>
-                                </span>
-                              ) : (
-                                <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md text-[11px] border border-amber-200 dark:border-amber-800 flex items-center gap-1 w-fit">
-                                  ⚠️ Unassigned
-                                </span>
-                              )}
-                            </div>
+                                {/* Department Category */}
+                                <div className="col-span-2 font-semibold text-slate-500 dark:text-slate-400 text-[11px] whitespace-nowrap">
+                                  <span className="bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-700 dark:text-slate-300 font-bold border border-slate-300/50 dark:border-slate-700">
+                                    {task.category}
+                                  </span>
+                                </div>
 
-                            {/* Status Controls */}
-                            <div className="col-span-3 flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleQuickTaskStatus(card.id, task.id, 'PENDING')}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                                  task.status === 'PENDING'
-                                    ? 'bg-slate-700 text-white border-slate-700'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                }`}
-                              >
-                                Pending
-                              </button>
+                                {/* Staff Allotted with text overlay on hover */}
+                                <div className="col-span-3 min-w-0" title={task.assignedToName ? `Assigned to: ${task.assignedToName}` : 'Unassigned Task'}>
+                                  {task.assignedToName ? (
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+                                      <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                      <span className="truncate">{task.assignedToName}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md text-[11px] border border-amber-200 dark:border-amber-800 flex items-center gap-1 w-fit whitespace-nowrap">
+                                      ⚠️ Unassigned
+                                    </span>
+                                  )}
+                                </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleQuickTaskStatus(card.id, task.id, 'IN_PROGRESS')}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                                  task.status === 'IN_PROGRESS'
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                }`}
-                              >
-                                In Progress
-                              </button>
+                                {/* Status Controls */}
+                                <div className="col-span-3 flex items-center justify-end gap-1.5 whitespace-nowrap shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'PENDING')}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                      task.status === 'PENDING'
+                                        ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                    }`}
+                                  >
+                                    Pending
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleQuickTaskStatus(card.id, task.id, 'COMPLETED')}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 ${
-                                  task.status === 'COMPLETED'
-                                    ? 'bg-emerald-600 text-white border-emerald-600'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                }`}
-                              >
-                                <Check className="w-3 h-3" /> Done
-                              </button>
-                            </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'IN_PROGRESS')}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                      task.status === 'IN_PROGRESS'
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                    }`}
+                                  >
+                                    In Progress
+                                  </button>
 
-                          </div>
-                        );
-                      })}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'COMPLETED')}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                                      task.status === 'COMPLETED'
+                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                    }`}
+                                  >
+                                    <Check className="w-3 h-3" /> Done
+                                  </button>
+                                </div>
+
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
