@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CarModelRecord, FuelType } from '../types';
-import { getCarModels, saveCarModels, addCarModel, updateCarModel, deleteCarModel, getCarMakes } from '../lib/storage';
+import { getCarModels, saveCarModels, addCarModel, updateCarModel, deleteCarModel, getCarMakes, getAuthUser } from '../lib/storage';
 import { FUEL_TYPE_CONFIG } from '../lib/carModelsData';
 import { FuelTypeBadge } from './FuelTypeBadge';
 import { 

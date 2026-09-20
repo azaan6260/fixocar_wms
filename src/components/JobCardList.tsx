@@ -26,7 +26,7 @@ import {
   Trash2,
   ArrowUpDown
 } from 'lucide-react';
-import { deleteJobCard } from '../lib/storage';
+import { deleteJobCard, getAuthUser } from '../lib/storage';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
 import { 

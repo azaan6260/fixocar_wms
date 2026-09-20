@@ -132,20 +132,6 @@ export function mapPanelToStandardJob(
  * Fenders and Running Boards are strictly prohibited from Partial Paint per workshop rules.
  */
 export function isPartialPaintAllowedForPanel(panelIdOrName?: string): boolean {
-  if (!panelIdOrName) return true;
-  const p = panelIdOrName.toLowerCase();
-  if (
-    p.includes('fender') || 
-    p.includes('running_board') || 
-    p.includes('running board') || 
-    p.includes('sill') ||
-    p === 'fender_lhs' ||
-    p === 'fender_rhs' ||
-    p === 'running_board_lhs' ||
-    p === 'running_board_rhs'
-  ) {
-    return false;
-  }
   return true;
 }
 

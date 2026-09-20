@@ -807,7 +807,12 @@ export function TechnicianBodyPanelAssessmentChart({
                           <p className="font-extrabold text-white text-xs truncate">{t.title}</p>
                           <div className="flex items-center justify-between text-[10px] text-slate-300">
                             <span>👤 {t.assignedToName || 'Assigned Denter'}</span>
-                            <span className="font-mono font-bold text-red-300">₹{t.customerPrice}</span>
+                            <span className="font-mono font-bold text-red-300">
+                              {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER')
+                                ? `₹${t.customerPrice}`
+                                : `Payout: ₹${t.denterPayout || t.contractorPayout || 0}`
+                              }
+                            </span>
                           </div>
                           <div className="pt-1 flex items-center justify-between">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
@@ -895,7 +900,12 @@ export function TechnicianBodyPanelAssessmentChart({
                           </div>
                           <div className="flex items-center justify-between text-[10px] text-slate-300">
                             <span>👤 {t.assignedToName || 'Assigned Painter'}</span>
-                            <span className="font-mono font-bold text-blue-300">₹{t.customerPrice}</span>
+                            <span className="font-mono font-bold text-blue-300">
+                              {(currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER')
+                                ? `₹${t.customerPrice}`
+                                : `Payout: ₹${t.painterPayout || t.contractorPayout || 0}`
+                              }
+                            </span>
                           </div>
                           <div className="pt-1 flex items-center justify-between">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
