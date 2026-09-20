@@ -93,6 +93,7 @@ import { PartRequisitionModal } from './PartRequisitionModal';
 import { RequestAdditionalWorkModal } from './RequestAdditionalWorkModal';
 import { AIPrioritySuggestionBox } from './AIPrioritySuggestionBox';
 import { AICostEstimatorModal } from './AICostEstimatorModal';
+import { JobCardPrintSummaryModal } from './JobCardPrintSummaryModal';
 
 // Remove unused Stepper imports
 
@@ -136,6 +137,7 @@ export function JobCardDetailView({
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
   const [selectedProofTaskId, setSelectedProofTaskId] = useState<string | undefined>(undefined);
   const [isVehiclePhotosModalOpen, setIsVehiclePhotosModalOpen] = useState(false);
+  const [isPrintSummaryOpen, setIsPrintSummaryOpen] = useState(false);
 
   // Manager Tabs
   const [activeManagerTab, setActiveManagerTab] = useState<'huddle' | 'tasks' | 'approvals' | 'proof' | 'consumption' | 'qc' | 'delivery' | 'invoice' | 'history'>('tasks');
@@ -610,6 +612,17 @@ export function JobCardDetailView({
             >
               <Camera className="w-4 h-4 text-amber-400" />
               <span>वाहन फोटो ({card.proofMedia?.length || 0})</span>
+            </button>
+
+            {/* 🖨️ Print Summary Button */}
+            <button
+              type="button"
+              onClick={() => setIsPrintSummaryOpen(true)}
+              className="px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-md active:scale-95 cursor-pointer"
+              title="Generate clean, printer-friendly summary of vehicle, owner & tasks"
+            >
+              <Printer className="w-4 h-4 text-indigo-200" />
+              <span>Print Summary</span>
             </button>
 
             {/* 🔊 Hindi Speech Summary Button */}
@@ -1937,6 +1950,14 @@ export function JobCardDetailView({
           jobCard={card}
           currentUser={currentUser}
           initialTaskId={selectedProofTaskId}
+        />
+      )}
+
+      {/* Printer-Friendly Job Card Summary Modal */}
+      {isPrintSummaryOpen && (
+        <JobCardPrintSummaryModal
+          card={card}
+          onClose={() => setIsPrintSummaryOpen(false)}
         />
       )}
     </div>
