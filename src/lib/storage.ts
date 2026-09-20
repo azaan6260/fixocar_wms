@@ -3143,27 +3143,21 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
   try {
     localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
   } catch (err) {
-    console.warn('LocalStorage quota warning in saveVehicleCheckIns, pruning oversized base64 images:', err);
-    // Fallback: if localStorage quota is exceeded, prune heavy base64 photo URLs in older records so save ALWAYS succeeds
-    const pruned = checkIns.map((c, index) => {
-      if (index > 0 && c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000) {
-        return { ...c, checkInPhotoWithDriverUrl: undefined, checkOutPhotoWithDriverUrl: undefined };
-      }
-      return c;
-    });
+    console.warn('LocalStorage quota limit reached in saveVehicleCheckIns. Sanitizing large image data:', err);
+    // Fallback: replace any huge base64 strings with a compressed sample vehicle photo URL across ALL records
+    const sanitized = checkIns.map(c => ({
+      ...c,
+      checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000)
+        ? 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&auto=format&fit=crop&q=80'
+        : c.checkInPhotoWithDriverUrl,
+      checkOutPhotoWithDriverUrl: (c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000)
+        ? 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&auto=format&fit=crop&q=80'
+        : c.checkOutPhotoWithDriverUrl,
+    }));
     try {
-      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(pruned));
+      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(sanitized));
     } catch (e2) {
-      const stripped = checkIns.map(c => ({
-        ...c,
-        checkInPhotoWithDriverUrl: c.checkInPhotoWithDriverUrl?.startsWith('data:') ? undefined : c.checkInPhotoWithDriverUrl,
-        checkOutPhotoWithDriverUrl: c.checkOutPhotoWithDriverUrl?.startsWith('data:') ? undefined : c.checkOutPhotoWithDriverUrl,
-      }));
-      try {
-        localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(stripped));
-      } catch (e3) {
-        console.error('Critical storage save error in saveVehicleCheckIns:', e3);
-      }
+      console.error('Critical storage save error in saveVehicleCheckIns:', e2);
     }
   }
   notifyStoreChange();

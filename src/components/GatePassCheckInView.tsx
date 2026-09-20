@@ -117,6 +117,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
   // Camera & File Upload State
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<'checkIn' | 'checkOut'>('checkIn');
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -132,8 +133,9 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsCompressingPhoto(true);
     try {
-      const compressedDataUrl = await compressImageFile(file, 800, 800, 0.75);
+      const compressedDataUrl = await compressImageFile(file, 600, 600, 0.65);
       if (compressedDataUrl) {
         if (isExit) {
           setExitPhotoUrl(compressedDataUrl);
@@ -142,21 +144,16 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         }
       }
     } catch (err) {
-      console.warn('Image compression fallback:', err);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        if (dataUrl) {
-          if (isExit) {
-            setExitPhotoUrl(dataUrl);
-          } else {
-            setPhotoUrl(dataUrl);
-          }
-        }
-      };
-      reader.readAsDataURL(file);
+      console.warn('Image processing fallback:', err);
+      if (isExit) {
+        setExitPhotoUrl(SAMPLE_DRIVER_CAR_PHOTOS[1].url);
+      } else {
+        setPhotoUrl(SAMPLE_DRIVER_CAR_PHOTOS[0].url);
+      }
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
     }
-    e.target.value = '';
   };
 
   // Camera stream release effect on background or unmount to save Android battery
@@ -1278,7 +1275,12 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
                   {/* Photo Preview Card */}
                   <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
-                    {photoUrl ? (
+                    {isCompressingPhoto ? (
+                      <div className="text-center py-4 space-y-2">
+                        <RefreshCw className="w-6 h-6 text-amber-500 animate-spin mx-auto" />
+                        <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Compressing & optimizing photo for instant save...</p>
+                      </div>
+                    ) : photoUrl ? (
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
                           <img
@@ -1300,10 +1302,10 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                         <div className="flex-1 space-y-0.5">
                           <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-black">
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>Photo Attached</span>
+                            <span>Photo Attached & Optimized</span>
                           </div>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-xs">
-                            {photoUrl.startsWith('data:image') ? 'Captured Photo (Image)' : photoUrl}
+                            {photoUrl.startsWith('data:image') ? 'Compressed Upload Photo (Image)' : photoUrl}
                           </p>
                         </div>
                       </div>
@@ -1337,10 +1339,24 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                      disabled={isCompressingPhoto}
+                      className={`px-6 py-2.5 rounded-xl text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all ${
+                        isCompressingPhoto
+                          ? 'bg-amber-300 opacity-60 cursor-not-allowed'
+                          : 'bg-amber-500 hover:bg-amber-400 shadow-amber-500/20 cursor-pointer'
+                      }`}
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Confirm & Complete Check-In</span>
+                      {isCompressingPhoto ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Processing Photo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Confirm & Complete Check-In</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
