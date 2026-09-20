@@ -22,7 +22,8 @@ import {
   Flame,
   Gauge,
   Trash2,
-  Check
+  Check,
+  MapPin
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
 import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
@@ -719,6 +720,28 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
                 {/* Details Body */}
                 <div className="p-5 space-y-4 text-xs">
+                  {/* Checked-in Workshop Location */}
+                  {(item.workshopName || item.cityName) && (
+                    <div className="bg-blue-50/50 dark:bg-blue-950/25 p-3 rounded-2xl border border-blue-100 dark:border-blue-900/40 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider block">Checked-in Location</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-slate-900 dark:text-slate-100 text-xs truncate">
+                            {item.workshopName || 'Main Workshop'}
+                          </span>
+                          {item.cityName && (
+                            <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-100/60 dark:bg-blue-900/40 px-1.5 py-0.2 rounded">
+                              {item.cityName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Driver & Arrival Info */}
                   <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 space-y-2 border border-slate-200/80 dark:border-slate-700/60">
                     <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 font-bold text-[11px]">
