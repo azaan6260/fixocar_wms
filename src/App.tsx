@@ -769,22 +769,10 @@ export default function App() {
 
       {/* Job Card Detailed View or Restricted View Modal */}
       {activeCardForDetail && (() => {
-        const isAdminOrAdvisor = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
-        const empId = authUser?.employeeId;
-        const empName = authUser?.name?.toLowerCase();
+        const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
 
-        const isAllotted = isAdminOrAdvisor || (
-          (empId && (activeCardForDetail.assignedAdvisorId === empId || activeCardForDetail.assignedManagerId === empId)) ||
-          activeCardForDetail.tasks?.some(t => 
-            (empId && (t.assignedToId === empId || t.pairedDenterId === empId || t.outsourcedVendorId === empId)) ||
-            (empName && (
-              (t.assignedToName && t.assignedToName.toLowerCase().includes(empName)) ||
-              (t.pairedDenterName && t.pairedDenterName.toLowerCase().includes(empName))
-            ))
-          )
-        );
-
-        if (isAllotted) {
+        // Only Management / Advisory staff get full JobCardDetailView with creation/editing/allotment powers
+        if (isManagementRole) {
           return (
             <JobCardDetailView
               card={activeCardForDetail}
@@ -799,6 +787,7 @@ export default function App() {
           );
         }
 
+        // Technicians, Painters, Denters, Mechanics & Gate Staff get Restricted View
         return (
           <RestrictedVehicleJobCardModal
             card={activeCardForDetail}

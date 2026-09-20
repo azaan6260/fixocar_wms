@@ -60,6 +60,8 @@ const SAMPLE_DRIVER_CAR_PHOTOS = [
 ];
 
 export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPrefill, onSelectJobCard }: GatePassCheckInViewProps) {
+  const authUser = getAuthUser();
+  const isManagementRole = authUser?.role === 'SUPER_ADMIN' || authUser?.role === 'ADMIN' || authUser?.role === 'SERVICE_ADVISOR' || authUser?.role === 'FLOOR_MANAGER';
   const [checkIns, setCheckIns] = useState<VehicleCheckIn[]>(() => getVehicleCheckIns());
   const [jobCardsList, setJobCardsList] = useState<JobCard[]>(() => getJobCards());
 
@@ -218,7 +220,6 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
 
   // Auth & Workshop Assignment Rules
-  const authUser = getAuthUser();
   const isSuperAdmin = authUser?.role === 'SUPER_ADMIN';
 
   const citiesList = getCities();
@@ -755,33 +756,39 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                 {item.status !== 'CHECKED_OUT' ? (
                   <>
                     {!item.jobCardId ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenCreateJobCardWithPrefill?.({
-                            regNo: item.registrationNumber,
-                            make: item.make,
-                            model: item.model,
-                            variant: item.variant,
-                            fuelType: item.fuelType as FuelType,
-                            color: item.color,
-                            customerName: item.customerName,
-                            customerPhone: item.customerPhone,
-                            isCars24: item.isCars24,
-                            cars24RefNo: item.cars24RefNo,
-                            checkInRecordId: item.id,
-                            driverName: item.checkInDriverName,
-                            driverPhone: item.checkInDriverPhone,
-                            driverPhotoUrl: item.checkInPhotoWithDriverUrl,
-                            workOrderNo: item.workOrderNo,
-                            workOrderNotes: item.workOrderNotes,
-                          });
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all w-full justify-center"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Create Job Card</span>
-                      </button>
+                      isManagementRole ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenCreateJobCardWithPrefill?.({
+                              regNo: item.registrationNumber,
+                              make: item.make,
+                              model: item.model,
+                              variant: item.variant,
+                              fuelType: item.fuelType as FuelType,
+                              color: item.color,
+                              customerName: item.customerName,
+                              customerPhone: item.customerPhone,
+                              isCars24: item.isCars24,
+                              cars24RefNo: item.cars24RefNo,
+                              checkInRecordId: item.id,
+                              driverName: item.checkInDriverName,
+                              driverPhone: item.checkInDriverPhone,
+                              driverPhotoUrl: item.checkInPhotoWithDriverUrl,
+                              workOrderNo: item.workOrderNo,
+                              workOrderNotes: item.workOrderNotes,
+                            });
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition-all w-full justify-center cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Create Job Card</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 italic">
+                          Job Card Creation Pending (Advisor/Manager)
+                        </span>
+                      )
                     ) : (
                       <button
                         type="button"

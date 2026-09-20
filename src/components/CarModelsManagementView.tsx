@@ -47,6 +47,8 @@ export const CarModelsManagementView: React.FC<CarModelsManagementViewProps> = (
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMake, setSelectedMake] = useState<string>('All');
   const [selectedFuelType, setSelectedFuelType] = useState<string>('All');
+  const authUser = getAuthUser();
+  const isManagementRole = authUser?.role === 'SUPER_ADMIN' || authUser?.role === 'ADMIN' || authUser?.role === 'SERVICE_ADVISOR' || authUser?.role === 'FLOOR_MANAGER';
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
@@ -584,10 +586,10 @@ export const CarModelsManagementView: React.FC<CarModelsManagementViewProps> = (
                       Gate In
                     </button>
                   )}
-                  {onSelectForJobCard && (
+                  {isManagementRole && onSelectForJobCard && (
                     <button
                       onClick={() => onSelectForJobCard(model, model.variants?.[0], model.fuelTypes?.[0])}
-                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-2xs transition-colors"
+                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-2xs transition-colors cursor-pointer"
                     >
                       <span>New Job Card</span>
                       <ChevronRight size={14} />

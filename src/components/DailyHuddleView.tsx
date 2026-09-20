@@ -58,6 +58,7 @@ export function DailyHuddleView({
   onOpenCustomerApprovalPortal,
   onOpenQCModal
 }: DailyHuddleViewProps) {
+  const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<'ALL' | 'BODYSHOP' | 'MECHANICAL' | 'WASHING' | 'SUBLET' | 'QC'>('ALL');
   const [deadlineFilter, setDeadlineFilter] = useState<'ALL' | 'URGENT_DEADLINE' | 'DELIVERY_TODAY' | 'TARGET_TOMORROW' | 'OVERDUE' | 'UNASSIGNED'>('ALL');
@@ -319,11 +320,11 @@ export function DailyHuddleView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {onOpenNewJobCardModal && (
+            {isManagementRole && onOpenNewJobCardModal && (
               <button
                 type="button"
                 onClick={onOpenNewJobCardModal}
-                className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+                className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ Create Job Card</span>

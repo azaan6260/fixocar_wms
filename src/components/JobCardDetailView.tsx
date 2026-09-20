@@ -118,7 +118,7 @@ export function JobCardDetailView({
   onOpenQRModal,
 }: JobCardDetailViewProps) {
   const currentUser = getAuthUser();
-  const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'FLOOR_MANAGER'].includes(currentRole);
+  const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'SERVICE_ADVISOR', 'FLOOR_MANAGER'].includes(currentRole);
   const isCars24 = isCars24JobCard(card);
   
   const totalRequisitionsCount = React.useMemo(() => {

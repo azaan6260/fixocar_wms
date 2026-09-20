@@ -90,6 +90,7 @@ export function HeaderNav({
   const [biometricBinding, setBiometricBinding] = useState(() => getSavedBiometricBinding());
   const [isBiometricRegistering, setIsBiometricRegistering] = useState(false);
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
+  const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
 
   useEffect(() => {
     setAuthUser(getAuthUser());
@@ -336,13 +337,15 @@ export function HeaderNav({
             )}
 
             {/* Quick Create Job Card Pill */}
-            <button
-              onClick={onOpenNewJobCardModal}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>+ Create Card</span>
-            </button>
+            {isManagementRole && (
+              <button
+                onClick={onOpenNewJobCardModal}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/20 active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>+ Create Card</span>
+              </button>
+            )}
 
             {/* Live Toast & Pipeline Notifications Drawer */}
             <NotificationDrawer onSelectJobCard={onSelectJobCard} />
@@ -615,18 +618,20 @@ export function HeaderNav({
             </div>
 
             {/* Quick Actions Grid */}
-            <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-2'} gap-2`}>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenNewJobCardModal();
-                }}
-                className="p-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>+ Create Job Card</span>
-              </button>
+            <div className="grid grid-cols-2 gap-2">
+              {isManagementRole && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenNewJobCardModal();
+                  }}
+                  className="p-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/30"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>+ Create Job Card</span>
+                </button>
+              )}
 
               {onOpenScanner && (
                 <button

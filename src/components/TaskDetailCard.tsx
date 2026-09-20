@@ -64,7 +64,7 @@ export function TaskDetailCard({
   onTaskStatusChange,
   onRemoveTask
 }: TaskDetailCardProps) {
-  const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
+  const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
   const currentUser = getAuthUser();
   const [showProofModal, setShowProofModal] = useState(false);
   const [showARMap, setShowARMap] = useState(true);

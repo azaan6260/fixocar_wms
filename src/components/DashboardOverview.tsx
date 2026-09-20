@@ -63,6 +63,8 @@ export function DashboardOverview({
 }: DashboardOverviewProps) {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
+  const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
+
   const handleScannedPlate = (regNum: string) => {
     // Search active job cards
     const activeCard = jobCards.find(
@@ -74,8 +76,12 @@ export function DashboardOverview({
       alert(`Found active job card for ${regNum}. Opening details...`);
       onSelectJobCard(activeCard.id);
     } else {
-      if (confirm(`No active job card found for ${regNum}. Create a new job card for this vehicle?`)) {
-        onOpenNewJobCard(regNum);
+      if (isManagementRole) {
+        if (confirm(`No active job card found for ${regNum}. Create a new job card for this vehicle?`)) {
+          onOpenNewJobCard(regNum);
+        }
+      } else {
+        alert(`No active job card found for ${regNum}. Please request Service Advisor or Manager to create a job card.`);
       }
     }
   };
@@ -618,12 +624,14 @@ export function DashboardOverview({
                   <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   AI Diagnosis
                 </button>
-                <button
-                  onClick={() => onOpenNewJobCard()}
-                  className="bg-blue-600 text-white text-xs px-4 py-2 rounded-full font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 active:scale-95"
-                >
-                  + CREATE JOB CARD
-                </button>
+                {isManagementRole && (
+                  <button
+                    onClick={() => onOpenNewJobCard()}
+                    className="bg-blue-600 text-white text-xs px-4 py-2 rounded-full font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+                  >
+                    + CREATE JOB CARD
+                  </button>
+                )}
               </div>
             </div>
 

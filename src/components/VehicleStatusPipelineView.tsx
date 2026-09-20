@@ -194,6 +194,7 @@ export function VehicleStatusPipelineView({
   onOpenQCModal,
   initialFilter,
 }: VehicleStatusPipelineViewProps) {
+  const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<'ACTIVE' | 'ALL' | 'CARS24' | 'URGENT' | 'RFC'>(initialFilter || 'ACTIVE');
   const [selectedMobileColumn, setSelectedMobileColumn] = useState<string>(initialFilter === 'RFC' ? 'ready_delivery' : 'ALL');
@@ -300,14 +301,16 @@ export function VehicleStatusPipelineView({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onOpenNewJobCardModal}
-            className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>+ Create Job Card</span>
-          </button>
+          {isManagementRole && (
+            <button
+              type="button"
+              onClick={onOpenNewJobCardModal}
+              className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>+ Create Job Card</span>
+            </button>
+          )}
         </div>
 
         {/* Filters & Search Controls Bar */}
