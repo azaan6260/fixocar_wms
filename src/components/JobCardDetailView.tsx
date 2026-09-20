@@ -18,6 +18,7 @@ import {
   getAuthUser
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
+import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { AddCustomJobModal } from './AddCustomJobModal';
 import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
@@ -1324,6 +1325,39 @@ export function JobCardDetailView({
                       </button>
                     )}
                   </div>
+
+                  {/* Single Unified AR Vehicle Body Inspection Chart at the top of Paint / Denting Jobs */}
+                  {card.tasks.some(t => (t.category === 'PAINT' || t.category === 'DENTING') && t.panelKey) && (
+                    <div className="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-3 animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h5 className="font-extrabold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🎯</span>
+                            <span>Allotted Job Panels (Unified AR View)</span>
+                          </h5>
+                          <p className="text-[10px] text-slate-400">
+                            Highlighted areas represent the complete body shop workload for {card.vehicle.registrationNumber}
+                          </p>
+                        </div>
+                        <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md uppercase">
+                          Body Map
+                        </span>
+                      </div>
+                      <div className="border border-slate-800/80 rounded-xl bg-slate-900/30 p-2 overflow-hidden max-w-md mx-auto">
+                        <InteractiveVehicleInspectionChart
+                          mode="VIEW"
+                          selectedPanelIds={
+                            card.tasks
+                              .filter(t => t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING'))
+                              .map(t => t.panelKey as string)
+                          }
+                          compact={true}
+                          currentRole={currentRole}
+                          vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     {card.tasks.map((task) => (
