@@ -79,6 +79,14 @@ export function DailyHuddleView({
   const [employees, setEmployees] = useState<Employee[]>(() => getEmployees());
   const [vendors, setVendors] = useState<Vendor[]>(() => getVendors());
 
+  const getCategoryLabel = (category: string) => {
+    if (category === 'PAINT' || category === 'DENTING') return 'Paint & Dent';
+    if (category === 'MECHANICAL' || category === 'ALIGNMENT_BALANCING' || category === 'TYRE_WORK') return 'Mechanical';
+    if (category === 'WASHING') return 'Washing';
+    if (category === 'SUBLET_VENDOR' || category === 'LATHE_WORK') return 'Sublet Vendor';
+    return category || 'General';
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem(`fixocar_huddle_notes_${todayDateStr}`, huddleNotes);
@@ -940,106 +948,112 @@ export function DailyHuddleView({
                     )}
                   </div>
 
-                  {/* Task Items Table Grid for Huddle Review - Scrollable Left to Right */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 overflow-hidden">
+                  {/* Task Items Table for Huddle Review - Scrollable Left to Right */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
                     {/* Horizontal Scroll Bar Indicator Header */}
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold px-3 py-1.5 bg-slate-100/90 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 font-bold px-3.5 py-2 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-blue-500" />
                         <span>Daily Review Tasks List ({card.tasks.length} items)</span>
                       </span>
-                      <span className="text-blue-600 dark:text-blue-400 font-black text-[10px] flex items-center gap-1">
-                        <span>↔ Scroll left/right</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-black text-[10px] flex items-center gap-1 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 shrink-0 whitespace-nowrap">
+                        <span>↔ Swipe / Scroll table left & right</span>
                       </span>
                     </div>
 
                     <div className="overflow-x-auto scrollbar-thin">
-                      <div className="min-w-[820px]">
-                        <div className="p-3 bg-slate-100/80 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-500 uppercase tracking-wider grid grid-cols-12 gap-3 items-center whitespace-nowrap select-none">
-                          <span className="col-span-4">Service Task</span>
-                          <span className="col-span-2">Department</span>
-                          <span className="col-span-3">Assigned Staff / Vendor</span>
-                          <span className="col-span-3 text-right">Huddle Status Toggle</span>
-                        </div>
+                      <table className="w-full text-left border-collapse min-w-[760px]">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none">
+                            <th className="py-3 px-4 w-[32%] min-w-[210px] font-black">Service Task</th>
+                            <th className="py-3 px-3 w-[18%] min-w-[130px] font-black">Department</th>
+                            <th className="py-3 px-3 w-[25%] min-w-[180px] font-black">Assigned Staff / Vendor</th>
+                            <th className="py-3 px-4 w-[25%] min-w-[240px] font-black text-right">Huddle Status Toggle</th>
+                          </tr>
+                        </thead>
 
-                        <div className="divide-y divide-slate-200 dark:divide-slate-800/60 text-xs">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
                           {card.tasks.map(task => {
                             return (
-                              <div key={task.id} className="p-3 grid grid-cols-12 gap-3 items-center hover:bg-white dark:hover:bg-slate-900/40 transition-colors">
+                              <tr key={task.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                                 
-                                {/* Task Title with text overlay on hover */}
-                                <div className="col-span-4 font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0" title={task.title}>
-                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                    task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'
-                                  }`} />
-                                  <span className="truncate">{task.title}</span>
-                                </div>
+                                {/* Task Title */}
+                                <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100 align-middle">
+                                  <div className="flex items-center gap-2 max-w-[240px]" title={task.title}>
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                      task.status === 'COMPLETED' ? 'bg-emerald-500' : task.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'
+                                    }`} />
+                                    <span className="truncate">{task.title}</span>
+                                  </div>
+                                </td>
 
-                                {/* Department Category */}
-                                <div className="col-span-2 font-semibold text-slate-500 dark:text-slate-400 text-[11px] whitespace-nowrap">
-                                  <span className="bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-700 dark:text-slate-300 font-bold border border-slate-300/50 dark:border-slate-700">
-                                    {task.category}
+                                {/* Department */}
+                                <td className="py-3 px-3 align-middle">
+                                  <span className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap inline-block">
+                                    {getCategoryLabel(task.category)}
                                   </span>
-                                </div>
+                                </td>
 
-                                {/* Staff Allotted with text overlay on hover */}
-                                <div className="col-span-3 min-w-0" title={task.assignedToName ? `Assigned to: ${task.assignedToName}` : 'Unassigned Task'}>
+                                {/* Staff Allotted */}
+                                <td className="py-3 px-3 align-middle">
                                   {task.assignedToName ? (
-                                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 whitespace-nowrap">
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 whitespace-nowrap" title={`Assigned to: ${task.assignedToName}`}>
                                       <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                      <span className="truncate">{task.assignedToName}</span>
+                                      <span className="truncate max-w-[160px]">{task.assignedToName}</span>
                                     </span>
                                   ) : (
-                                    <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md text-[11px] border border-amber-200 dark:border-amber-800 flex items-center gap-1 w-fit whitespace-nowrap">
+                                    <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg text-[11px] border border-amber-200 dark:border-amber-800/80 flex items-center gap-1 w-fit whitespace-nowrap">
                                       ⚠️ Unassigned
                                     </span>
                                   )}
-                                </div>
+                                </td>
 
                                 {/* Status Controls */}
-                                <div className="col-span-3 flex items-center justify-end gap-1.5 whitespace-nowrap shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'PENDING')}
-                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
-                                      task.status === 'PENDING'
-                                        ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
-                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                    }`}
-                                  >
-                                    Pending
-                                  </button>
+                                <td className="py-3 px-4 align-middle text-right">
+                                  <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickTaskStatus(card.id, task.id, 'PENDING')}
+                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                        task.status === 'PENDING'
+                                          ? 'bg-slate-800 text-white border-slate-800 shadow-xs'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                      }`}
+                                    >
+                                      Pending
+                                    </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'IN_PROGRESS')}
-                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
-                                      task.status === 'IN_PROGRESS'
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                    }`}
-                                  >
-                                    In Progress
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickTaskStatus(card.id, task.id, 'IN_PROGRESS')}
+                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all cursor-pointer whitespace-nowrap ${
+                                        task.status === 'IN_PROGRESS'
+                                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                      }`}
+                                    >
+                                      In Progress
+                                    </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQuickTaskStatus(card.id, task.id, 'COMPLETED')}
-                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                                      task.status === 'COMPLETED'
-                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
-                                    }`}
-                                  >
-                                    <Check className="w-3 h-3" /> Done
-                                  </button>
-                                </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickTaskStatus(card.id, task.id, 'COMPLETED')}
+                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold border transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                                        task.status === 'COMPLETED'
+                                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-400'
+                                      }`}
+                                    >
+                                      <Check className="w-3.5 h-3.5" /> Done
+                                    </button>
+                                  </div>
+                                </td>
 
-                              </div>
+                              </tr>
                             );
                           })}
-                        </div>
-                      </div>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
