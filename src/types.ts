@@ -161,6 +161,8 @@ export interface ContractorPayoutRecord {
   taskStatus: string;
   jobCardStatus: string;
   billFinalizedAt?: string;
+  workshopId?: string;
+  workshopName?: string;
 }
 
 export interface ContractorPaymentRecord {

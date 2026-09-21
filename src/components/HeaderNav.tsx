@@ -92,6 +92,41 @@ export function HeaderNav({
   const isAdmin = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN';
   const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
 
+  const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
+  const [wsSearch, setWsSearch] = useState('');
+
+  const getActiveWorkshopName = () => {
+    if (activeWsId === 'ALL') return 'All Cities & Workshops';
+    if (activeWsId.startsWith('CITY:')) {
+      const cityId = activeWsId.replace('CITY:', '');
+      const city = cities.find(c => c.id === cityId);
+      return city ? `City: ${city.name}` : 'City Context';
+    }
+    const ws = workshops.find(w => w.id === activeWsId);
+    return ws ? ws.name : 'Workshop Hub';
+  };
+
+  const handleWorkshopChange = (id: string, name: string) => {
+    setActiveWorkshopId(id);
+    setActiveWsId(id);
+    setWsDropdownOpen(false);
+    dispatchToastNotification({
+      type: 'SUCCESS',
+      title: 'Context Switched',
+      message: `Successfully switched active workshop context to "${name}".`
+    });
+  };
+
+  const filteredCities = cities.filter(c => 
+    c.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
+    (c.state && c.state.toLowerCase().includes(wsSearch.toLowerCase()))
+  );
+  
+  const filteredWorkshops = workshops.filter(ws => 
+    ws.name.toLowerCase().includes(wsSearch.toLowerCase()) ||
+    (ws.cityName && ws.cityName.toLowerCase().includes(wsSearch.toLowerCase()))
+  );
+
   useEffect(() => {
     setAuthUser(getAuthUser());
     setBiometricBinding(getSavedBiometricBinding());
@@ -243,41 +278,147 @@ export function HeaderNav({
           <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
             {/* Active Workshop / City Scope Selector */}
-            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-xs font-bold text-blue-900 dark:text-blue-100 shadow-2xs shrink-0">
-              <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-              <select
-                value={activeWsId}
-                onChange={(e) => {
-                  const selected = e.target.value;
-                  setActiveWorkshopId(selected);
-                  setActiveWsId(selected);
-                }}
-                className="bg-transparent text-xs font-black outline-none cursor-pointer text-blue-950 dark:text-blue-100 max-w-[110px] sm:max-w-[190px] truncate"
-                title="Select Active Workshop / City Scope (Super Admin can select All or any specific workshop)"
-              >
-                <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold">
-                  🌐 All Cities & Workshops
-                </option>
-                {cities.length > 0 && (
-                  <optgroup label="Operational Cities">
-                    {cities.map((c) => (
-                      <option key={`city-${c.id}`} value={`CITY:${c.id}`} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold">
-                        🏙️ City: {c.name} {c.state ? `(${c.state})` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
+            {isAdmin ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 hover:dark:bg-blue-950 border border-blue-200 dark:border-blue-800 text-xs font-black text-blue-950 dark:text-blue-100 shadow-2xs cursor-pointer select-none shrink-0"
+                  title="Quick switch active workshop context"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="max-w-[120px] sm:max-w-[180px] truncate">
+                    {getActiveWorkshopName()}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-blue-500 shrink-0" />
+                </button>
+
+                {wsDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-50 cursor-default" onClick={() => setWsDropdownOpen(false)} />
+                    <div className="absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 z-[60] animate-in fade-in zoom-in-95 duration-100">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                          Switch Workshop Context
+                        </span>
+                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded">
+                          Admin Switcher
+                        </span>
+                      </div>
+
+                      {/* Dropdown Search Box */}
+                      <div className="relative mb-2">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search workshops or cities..."
+                          value={wsSearch}
+                          onChange={(e) => setWsSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {/* Option 1: Global View */}
+                        {('all cities & workshops'.includes(wsSearch.toLowerCase())) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleWorkshopChange('ALL', 'All Cities & Workshops'); }}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold text-left transition-colors cursor-pointer ${
+                              activeWsId === 'ALL'
+                                ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span>🌐</span>
+                              <span>All Cities & Workshops</span>
+                            </span>
+                            {activeWsId === 'ALL' && <span className="text-blue-500">✓</span>}
+                          </button>
+                        )}
+
+                        {/* Option 2: Cities Group */}
+                        {filteredCities.length > 0 && (
+                          <div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 px-2.5 mb-1">
+                              🏙️ Cities
+                            </div>
+                            <div className="space-y-0.5">
+                              {filteredCities.map((c) => {
+                                const optId = `CITY:${c.id}`;
+                                const isCurrent = activeWsId === optId;
+                                return (
+                                  <button
+                                    key={`ws-opt-city-${c.id}`}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleWorkshopChange(optId, `City: ${c.name}`); }}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium text-left transition-colors cursor-pointer ${
+                                      isCurrent
+                                        ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold'
+                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    <span className="truncate">City: {c.name}</span>
+                                    {isCurrent && <span className="text-blue-500 text-xs">✓</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Option 3: Workshops Group */}
+                        {filteredWorkshops.length > 0 && (
+                          <div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 px-2.5 mb-1">
+                              📍 Workshop Hubs
+                            </div>
+                            <div className="space-y-0.5">
+                              {filteredWorkshops.map((ws) => {
+                                const isCurrent = activeWsId === ws.id;
+                                return (
+                                  <button
+                                    key={`ws-opt-ws-${ws.id}`}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleWorkshopChange(ws.id, ws.name); }}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium text-left transition-colors cursor-pointer ${
+                                      isCurrent
+                                        ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold'
+                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    <div className="truncate flex flex-col">
+                                      <span className="font-bold">{ws.name}</span>
+                                      <span className="text-[9px] text-slate-400 truncate">{ws.cityName || 'Active Hub'}</span>
+                                    </div>
+                                    {isCurrent && <span className="text-blue-500 text-xs shrink-0 ml-1">✓</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {filteredCities.length === 0 && filteredWorkshops.length === 0 && (
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            No workshops found matching "{wsSearch}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 )}
-                {workshops.length > 0 && (
-                  <optgroup label="Workshop Hubs">
-                    {workshops.map((ws) => (
-                      <option key={ws.id} value={ws.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium">
-                        📍 {ws.cityName ? `${ws.cityName} • ` : ''}{ws.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-3xs shrink-0 select-none">
+                <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="max-w-[120px] sm:max-w-[180px] truncate">
+                  {getActiveWorkshopName()}
+                </span>
+              </div>
+            )}
 
             <button 
               type="button"
@@ -574,26 +715,103 @@ export function HeaderNav({
               )}
 
               {/* Scope Selector */}
-              <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
-                <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
-                <select
-                  value={activeWsId}
-                  onChange={(e) => {
-                    const selected = e.target.value;
-                    setActiveWorkshopId(selected);
-                    setActiveWsId(selected);
-                  }}
-                  className="bg-transparent text-xs font-bold outline-none w-full text-slate-900 dark:text-white"
-                >
-                  <option value="ALL">🌐 All Cities & Workshops</option>
-                  {cities.map((c) => (
-                    <option key={`m-city-${c.id}`} value={`CITY:${c.id}`}>🏙️ City: {c.name}</option>
-                  ))}
-                  {workshops.map((ws) => (
-                    <option key={`m-ws-${ws.id}`} value={ws.id}>📍 {ws.name}</option>
-                  ))}
-                </select>
-              </div>
+              {isAdmin ? (
+                <div className="space-y-1.5 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+                      Active Workshop Context
+                    </span>
+                    <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded uppercase">
+                      Quick-Switch
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 font-bold text-xs"
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span className="truncate">{getActiveWorkshopName()}</span>
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
+                    </button>
+                    
+                    {wsDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2 z-50 animate-in fade-in duration-100">
+                        {/* Dropdown Search Box */}
+                        <div className="relative mb-2">
+                          <Search className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Search workshops or cities..."
+                            value={wsSearch}
+                            onChange={(e) => setWsSearch(e.target.value)}
+                            className="w-full pl-7 pr-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-[11px] text-slate-900 dark:text-white focus:outline-none"
+                          />
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {('all cities & workshops'.includes(wsSearch.toLowerCase())) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleWorkshopChange('ALL', 'All Cities & Workshops');
+                                setMobileMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-bold text-left ${
+                                activeWsId === 'ALL' ? 'bg-blue-50 dark:bg-blue-950 text-blue-500' : 'text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <span>🌐 All Cities & Workshops</span>
+                              {activeWsId === 'ALL' && <span>✓</span>}
+                            </button>
+                          )}
+                          
+                          {filteredCities.map(c => (
+                            <button
+                              key={`m-ws-opt-city-${c.id}`}
+                              type="button"
+                              onClick={() => {
+                                handleWorkshopChange(`CITY:${c.id}`, `City: ${c.name}`);
+                                setMobileMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-left ${
+                                activeWsId === `CITY:${c.id}` ? 'bg-blue-50 dark:bg-blue-950 text-blue-500 font-bold' : 'text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <span>🏙️ City: {c.name}</span>
+                              {activeWsId === `CITY:${c.id}` && <span>✓</span>}
+                            </button>
+                          ))}
+                          
+                          {filteredWorkshops.map(ws => (
+                            <button
+                              key={`m-ws-opt-ws-${ws.id}`}
+                              type="button"
+                              onClick={() => {
+                                handleWorkshopChange(ws.id, ws.name);
+                                setMobileMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-left ${
+                                activeWsId === ws.id ? 'bg-blue-50 dark:bg-blue-950 text-blue-500 font-bold' : 'text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <span>📍 {ws.name} ({ws.cityName})</span>
+                              {activeWsId === ws.id && <span>✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300">
+                  <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="font-bold">{getActiveWorkshopName()}</span>
+                </div>
+              )}
 
               {/* Supabase Status for Mobile (Admin only) */}
               {isAdmin && (

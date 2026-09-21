@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserRole, JobCard } from '../types';
 import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
@@ -40,6 +40,24 @@ export function RoleWorkspaceView({
   const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(!isAdminOrManager);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
   const authUser = getAuthUser();
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('ALL');
+
+  useEffect(() => {
+    if (authUser && (authUser.role === currentRole || (currentRole === 'PAINTER' && authUser.role === 'PAINTER') || (currentRole === 'DENTER' && authUser.role === 'DENTER'))) {
+      setSelectedEmployeeId(authUser.employeeId || authUser.vendorId || 'ALL');
+    } else {
+      setSelectedEmployeeId('ALL');
+    }
+  }, [currentRole, authUser]);
+
+  const activeTradeEmployees = getEmployees().filter(e => {
+    if (currentRole === 'PAINTER') return e.role === 'PAINTER' || e.specializedTeam === 'Paint';
+    if (currentRole === 'DENTER') return e.role === 'DENTER' || e.specializedTeam === 'Denting';
+    if (currentRole === 'MECHANIC') return e.role === 'MECHANIC' || e.specializedTeam === 'Mechanical';
+    if (currentRole === 'DELIVERY_BOY') return e.role === 'DELIVERY_BOY';
+    return false;
+  });
   
   // Account summary for logged-in contractor / vendor / technician
   const userAccountName = authUser?.name || authUser?.employeeId || authUser?.vendorId || '';
@@ -69,6 +87,9 @@ export function RoleWorkspaceView({
       completedCount: number;
     }[] = [];
 
+    const activeStaffList = getEmployees();
+    const activeVendorList = getVendors();
+
     jobCards.forEach(card => {
       const assignedTasks = card.tasks.filter(task => {
         let matchesRole = false;
@@ -85,6 +106,22 @@ export function RoleWorkspaceView({
         }
 
         if (!matchesRole) return false;
+
+        // If a specific technician or vendor is selected via dropdown, filter by that entity
+        if (selectedEmployeeId && selectedEmployeeId !== 'ALL') {
+          const matchedEmp = activeStaffList.find(e => e.id === selectedEmployeeId);
+          const matchedVendor = activeVendorList.find(v => v.id === selectedEmployeeId);
+          const nameToMatch = matchedEmp?.name || matchedVendor?.name || '';
+
+          const isAssignedToSelected = 
+            task.assignedToId === selectedEmployeeId || 
+            task.pairedDenterId === selectedEmployeeId ||
+            (nameToMatch && (
+              (task.assignedToName && task.assignedToName.toLowerCase() === nameToMatch.toLowerCase()) ||
+              (task.pairedDenterName && task.pairedDenterName.toLowerCase() === nameToMatch.toLowerCase())
+            ));
+          return isAssignedToSelected;
+        }
 
         if (onlyMyTasks && !isAdminOrManager && authUser && (authUser.employeeId || authUser.vendorId)) {
           const isAssignedToMe = 
@@ -212,8 +249,31 @@ export function RoleWorkspaceView({
             </button>
           )}
 
-          {/* My Tasks Toggle Button */}
-          {authUser && (authUser.employeeId || authUser.vendorId) && (
+          {/* Active Technician Filter Selector */}
+          {(currentRole === 'PAINTER' || currentRole === 'DENTER' || currentRole === 'MECHANIC' || currentRole === 'VENDOR') && (
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <span className="font-extrabold uppercase text-[10px] text-slate-400 dark:text-slate-500">Technician Filter:</span>
+              <select
+                value={selectedEmployeeId}
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                className="bg-transparent border-none text-xs font-black text-slate-800 dark:text-slate-200 outline-none cursor-pointer pr-4"
+              >
+                <option value="ALL">🌐 All {currentRole} Trade Tasks</option>
+                {currentRole === 'VENDOR' ? (
+                  getVendors().map(v => (
+                    <option key={`v-filter-${v.id}`} value={v.id}>🏢 Vendor: {v.name}</option>
+                  ))
+                ) : (
+                  activeTradeEmployees.map(e => (
+                    <option key={`e-filter-${e.id}`} value={e.id}>👤 {e.name}</option>
+                  ))
+                )}
+              </select>
+            </div>
+          )}
+
+          {/* My Tasks Toggle Button - Only show if not filtering specifically */}
+          {selectedEmployeeId === 'ALL' && authUser && (authUser.employeeId || authUser.vendorId) && (
             <button
               type="button"
               onClick={() => setOnlyMyTasks(!onlyMyTasks)}

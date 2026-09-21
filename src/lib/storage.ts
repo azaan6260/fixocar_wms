@@ -2752,8 +2752,8 @@ export function addStandardJobToJobCard(
   return createdTasks;
 }
 
-export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
-  const cards = getJobCards();
+export function getContractorPayoutsReport(workshopIdFilter?: string): ContractorPayoutRecord[] {
+  const cards = getJobCards(workshopIdFilter);
   const stdJobs = getStandardJobs();
   const records: ContractorPayoutRecord[] = [];
 
@@ -2814,7 +2814,9 @@ export function getContractorPayoutsReport(): ContractorPayoutRecord[] {
           workshopMargin: Math.max(0, task.customerPrice - payout),
           taskStatus: task.status,
           jobCardStatus: card.status,
-          billFinalizedAt: card.createdAt
+          billFinalizedAt: card.createdAt,
+          workshopId: card.workshopId,
+          workshopName: card.workshopName
         });
       }
     });
@@ -2943,23 +2945,47 @@ export function recordVendorPayment(data: {
   return newPayment;
 }
 
-export function getContractorAccountSummary(contractorIdOrName: string): ContractorAccountSummary {
-  const payoutsReport = getContractorPayoutsReport();
+export function getContractorAccountSummary(contractorIdOrName: string, workshopIdFilter?: string): ContractorAccountSummary {
+  const targetWs = workshopIdFilter !== undefined ? workshopIdFilter : getActiveWorkshopId();
+  const payoutsReport = getContractorPayoutsReport(targetWs);
   const allPayments = getContractorPaymentRecords();
-  const employees = getEmployees();
-  const emp = employees.find(e => e.id === contractorIdOrName || e.name.toLowerCase() === contractorIdOrName.toLowerCase());
+  const employees = getAllEmployees();
+  
+  // Find employee matching ID or Name within same workshop if possible, otherwise global fallback
+  const emp = employees.find(e => 
+    (e.id === contractorIdOrName || e.name.toLowerCase() === contractorIdOrName.toLowerCase()) &&
+    (!targetWs || targetWs === 'ALL' || e.workshopId === targetWs)
+  ) || employees.find(e => e.id === contractorIdOrName || e.name.toLowerCase() === contractorIdOrName.toLowerCase());
 
-  const matchedPayouts = payoutsReport.filter(r => 
-    r.assignedToId === contractorIdOrName || 
-    (r.assignedToName && r.assignedToName.toLowerCase() === contractorIdOrName.toLowerCase()) ||
-    (emp && r.assignedToName && r.assignedToName.toLowerCase() === emp.name.toLowerCase())
-  );
+  const matchedPayouts = payoutsReport.filter(r => {
+    const isMatchedContractor = 
+      r.assignedToId === contractorIdOrName || 
+      (r.assignedToName && r.assignedToName.toLowerCase() === contractorIdOrName.toLowerCase()) ||
+      (emp && r.assignedToName && r.assignedToName.toLowerCase() === emp.name.toLowerCase());
+      
+    if (!isMatchedContractor) return false;
+    
+    // Isolate by workshop if target workshop is active and specified
+    if (targetWs && targetWs !== 'ALL') {
+      return r.workshopId === targetWs;
+    }
+    return true;
+  });
 
-  const matchedPayments = allPayments.filter(p =>
-    p.contractorId === contractorIdOrName ||
-    p.contractorName.toLowerCase() === contractorIdOrName.toLowerCase() ||
-    (emp && p.contractorName.toLowerCase() === emp.name.toLowerCase())
-  );
+  const matchedPayments = allPayments.filter(p => {
+    const isMatchedContractor = 
+      p.contractorId === contractorIdOrName ||
+      p.contractorName.toLowerCase() === contractorIdOrName.toLowerCase() ||
+      (emp && p.contractorName.toLowerCase() === emp.name.toLowerCase());
+      
+    if (!isMatchedContractor) return false;
+    
+    // Isolate by workshop if target workshop is active and specified
+    if (targetWs && targetWs !== 'ALL') {
+      return p.workshopId === targetWs;
+    }
+    return true;
+  });
 
   const totalAccruedEarnings = matchedPayouts.reduce((sum, r) => sum + r.contractorPayout, 0);
   const totalPaymentsReceived = matchedPayments.reduce((sum, p) => sum + p.amount, 0);
