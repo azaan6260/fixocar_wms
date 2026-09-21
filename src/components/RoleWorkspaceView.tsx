@@ -37,19 +37,22 @@ export function RoleWorkspaceView({
   onOpenCustomerApprovalPortal,
 }: RoleWorkspaceViewProps) {
   const isAdminOrManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
-  const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(!isAdminOrManager);
-  const [showLedgerModal, setShowLedgerModal] = useState(false);
   const authUser = getAuthUser();
+  const actualUserRole = authUser?.role;
+  const isActualAdminOrManager = 
+    actualUserRole === 'SUPER_ADMIN' || 
+    actualUserRole === 'ADMIN' || 
+    actualUserRole === 'FLOOR_MANAGER';
+
+  const [onlyMyTasks, setOnlyMyTasks] = useState<boolean>(!isActualAdminOrManager);
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('ALL');
 
   useEffect(() => {
-    if (authUser && (authUser.role === currentRole || (currentRole === 'PAINTER' && authUser.role === 'PAINTER') || (currentRole === 'DENTER' && authUser.role === 'DENTER'))) {
-      setSelectedEmployeeId(authUser.employeeId || authUser.vendorId || 'ALL');
-    } else {
-      setSelectedEmployeeId('ALL');
-    }
-  }, [currentRole, authUser]);
+    setSelectedEmployeeId('ALL');
+    setOnlyMyTasks(!isActualAdminOrManager);
+  }, [currentRole, isActualAdminOrManager]);
 
   const activeTradeEmployees = getEmployees().filter(e => {
     if (currentRole === 'PAINTER') return e.role === 'PAINTER' || e.specializedTeam === 'Paint';
@@ -117,19 +120,38 @@ export function RoleWorkspaceView({
             task.assignedToId === selectedEmployeeId || 
             task.pairedDenterId === selectedEmployeeId ||
             (nameToMatch && (
-              (task.assignedToName && task.assignedToName.toLowerCase() === nameToMatch.toLowerCase()) ||
-              (task.pairedDenterName && task.pairedDenterName.toLowerCase() === nameToMatch.toLowerCase())
+              (task.assignedToName && (
+                task.assignedToName.toLowerCase() === nameToMatch.toLowerCase() ||
+                task.assignedToName.toLowerCase().includes(nameToMatch.toLowerCase()) ||
+                nameToMatch.toLowerCase().includes(task.assignedToName.toLowerCase())
+              )) ||
+              (task.pairedDenterName && (
+                task.pairedDenterName.toLowerCase() === nameToMatch.toLowerCase() ||
+                task.pairedDenterName.toLowerCase().includes(nameToMatch.toLowerCase()) ||
+                nameToMatch.toLowerCase().includes(task.pairedDenterName.toLowerCase())
+              ))
             ));
           return isAssignedToSelected;
         }
 
-        if (onlyMyTasks && !isAdminOrManager && authUser && (authUser.employeeId || authUser.vendorId)) {
+        if (onlyMyTasks && !isAdminOrManager && authUser && (authUser.id || authUser.employeeId || authUser.vendorId)) {
+          const uId = authUser.id;
+          const empId = authUser.employeeId;
+          const vendId = authUser.vendorId;
+
           const isAssignedToMe = 
-            (authUser.employeeId && (task.assignedToId === authUser.employeeId || task.pairedDenterId === authUser.employeeId)) ||
-            (authUser.vendorId && (task.outsourcedVendorId === authUser.vendorId || task.assignedToId === authUser.vendorId)) ||
+            (empId && (task.assignedToId === empId || task.pairedDenterId === empId)) ||
+            (vendId && (task.outsourcedVendorId === vendId || task.assignedToId === vendId)) ||
+            (uId && (task.assignedToId === uId || task.pairedDenterId === uId)) ||
             (authUser.name && (
-              (task.assignedToName && task.assignedToName.toLowerCase().includes(authUser.name.toLowerCase())) ||
-              (task.pairedDenterName && task.pairedDenterName.toLowerCase().includes(authUser.name.toLowerCase()))
+              (task.assignedToName && (
+                task.assignedToName.toLowerCase().includes(authUser.name.toLowerCase()) ||
+                authUser.name.toLowerCase().includes(task.assignedToName.toLowerCase())
+              )) ||
+              (task.pairedDenterName && (
+                task.pairedDenterName.toLowerCase().includes(authUser.name.toLowerCase()) ||
+                authUser.name.toLowerCase().includes(task.pairedDenterName.toLowerCase())
+              ))
             ));
           return isAssignedToMe;
         }
@@ -249,8 +271,8 @@ export function RoleWorkspaceView({
             </button>
           )}
 
-          {/* Active Technician Filter Selector */}
-          {(currentRole === 'PAINTER' || currentRole === 'DENTER' || currentRole === 'MECHANIC' || currentRole === 'VENDOR') && (
+          {/* Active Technician Filter Selector - Only show if actual user is Admin/Manager */}
+          {isActualAdminOrManager && (currentRole === 'PAINTER' || currentRole === 'DENTER' || currentRole === 'MECHANIC' || currentRole === 'VENDOR') && (
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
               <span className="font-extrabold uppercase text-[10px] text-slate-400 dark:text-slate-500">Technician Filter:</span>
               <select
@@ -272,8 +294,8 @@ export function RoleWorkspaceView({
             </div>
           )}
 
-          {/* My Tasks Toggle Button - Only show if not filtering specifically */}
-          {selectedEmployeeId === 'ALL' && authUser && (authUser.employeeId || authUser.vendorId) && (
+          {/* My Tasks Toggle Button - Only show if actual user is Admin/Manager and not filtering specifically */}
+          {isActualAdminOrManager && selectedEmployeeId === 'ALL' && authUser && (authUser.employeeId || authUser.vendorId) && (
             <button
               type="button"
               onClick={() => setOnlyMyTasks(!onlyMyTasks)}
