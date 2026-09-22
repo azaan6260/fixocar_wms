@@ -206,9 +206,20 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
 export function saveJobCards(cards: JobCard[], skipPush = false) {
   localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
   notifyStoreChange();
-  if (!skipPush) notifyCentralServer('jobCards', cards);
+  
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
 
   if (!skipPush) {
+    if (isOffline) {
+      import('./offlineSync').then(m => {
+        m.addToOfflineQueue('jobCardUpdate');
+      });
+    } else {
+      notifyCentralServer('jobCards', cards);
+    }
+  }
+
+  if (!skipPush && !isOffline) {
     // Async sync to Supabase if connected
     const client = getSupabaseClient();
     if (client) {
@@ -955,21 +966,33 @@ export function reallotTask(
   newAssigneeName: string, 
   newAssigneeType: 'EMPLOYEE' | 'VENDOR'
 ) {
-  updateJobCard(jobCardId, (card) => ({
-    ...card,
-    tasks: card.tasks.map(t => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          assignedToId: newAssigneeId,
-          assignedToName: newAssigneeName,
-          assignedType: newAssigneeType,
-          notes: (t.notes ? `${t.notes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
-        };
-      }
-      return t;
-    })
-  }));
+  let vehicleReg = 'Vehicle';
+  updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
+    return {
+      ...card,
+      tasks: card.tasks.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            assignedToId: newAssigneeId,
+            assignedToName: newAssigneeName,
+            assignedType: newAssigneeType,
+            notes: (t.notes ? `${t.notes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
+          };
+        }
+        return t;
+      })
+    };
+  });
+
+  dispatchToastNotification({
+    title: 'New Job Allotted! 📋',
+    message: `Task has been assigned to ${newAssigneeName} for vehicle ${vehicleReg}. A new job card is now available in their 'My Tasks' dashboard.`,
+    type: 'TASK_ALLOTTED',
+    vehicleReg: vehicleReg,
+    jobCardId: jobCardId
+  });
 }
 
 // Reassign all paint tasks on a job card to a painter and/or paired denter together
@@ -981,31 +1004,46 @@ export function reassignAllPaintTasksForJobCard(
   denterName?: string
 ) {
   const timestampStr = new Date().toLocaleTimeString();
-  updateJobCard(jobCardId, (card) => ({
-    ...card,
-    tasks: card.tasks.map(t => {
-      if (t.category === 'PAINT') {
-        const updated: JobTask = { ...t };
-        let noteMsg = '';
-        if (painterId !== undefined) {
-          updated.assignedToId = painterId || undefined;
-          updated.assignedToName = painterName || undefined;
-          updated.assignedType = 'EMPLOYEE';
-          if (painterName) noteMsg += `Painter set to ${painterName}`;
+  let vehicleReg = 'Vehicle';
+  updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
+    return {
+      ...card,
+      tasks: card.tasks.map(t => {
+        if (t.category === 'PAINT') {
+          const updated: JobTask = { ...t };
+          let noteMsg = '';
+          if (painterId !== undefined) {
+            updated.assignedToId = painterId || undefined;
+            updated.assignedToName = painterName || undefined;
+            updated.assignedType = 'EMPLOYEE';
+            if (painterName) noteMsg += `Painter set to ${painterName}`;
+          }
+          if (denterId !== undefined) {
+            updated.pairedDenterId = denterId || undefined;
+            updated.pairedDenterName = denterName || undefined;
+            if (denterName) noteMsg += (noteMsg ? ' & ' : '') + `Denter set to ${denterName}`;
+          }
+          if (noteMsg) {
+            updated.notes = (t.notes ? `${t.notes} | ` : '') + `Batch re-allotted: ${noteMsg} on ${timestampStr}`;
+          }
+          return updated;
         }
-        if (denterId !== undefined) {
-          updated.pairedDenterId = denterId || undefined;
-          updated.pairedDenterName = denterName || undefined;
-          if (denterName) noteMsg += (noteMsg ? ' & ' : '') + `Denter set to ${denterName}`;
-        }
-        if (noteMsg) {
-          updated.notes = (t.notes ? `${t.notes} | ` : '') + `Batch re-allotted: ${noteMsg} on ${timestampStr}`;
-        }
-        return updated;
-      }
-      return t;
-    })
-  }));
+        return t;
+      })
+    };
+  });
+
+  const names = [painterName, denterName].filter(Boolean).join(' & ');
+  if (names) {
+    dispatchToastNotification({
+      title: 'Paint Job Allotted! 🎨',
+      message: `Paint panels on vehicle ${vehicleReg} have been allotted to ${names}. The job cards are now active in their workspace dashboards.`,
+      type: 'TASK_ALLOTTED',
+      vehicleReg: vehicleReg,
+      jobCardId: jobCardId
+    });
+  }
 }
 
 // Outsource a task to an external vendor

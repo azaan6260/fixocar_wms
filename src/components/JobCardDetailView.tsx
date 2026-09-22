@@ -1351,6 +1351,24 @@ export function JobCardDetailView({
                               .filter(t => t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING'))
                               .map(t => t.panelKey as string)
                           }
+                          inspections={card.tasks.reduce((acc, t) => {
+                            if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
+                              acc[t.panelKey] = {
+                                panelId: t.panelKey,
+                                nameEn: t.panelNameEn || t.title,
+                                nameHi: t.title,
+                                category: 'EXTERIOR_BODY',
+                                selected: true,
+                                paintScope: t.paintScope || 'FULL_OUTER',
+                                painterName: t.assignedToName,
+                                denterName: t.pairedDenterName,
+                                customPrice: t.customerPrice,
+                                customPainterPayout: t.painterPayout,
+                                customDenterPayout: t.denterPayout
+                              };
+                            }
+                            return acc;
+                          }, {} as Record<string, any>)}
                           compact={true}
                           currentRole={currentRole}
                           vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}

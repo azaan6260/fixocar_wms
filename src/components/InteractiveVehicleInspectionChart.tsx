@@ -42,6 +42,11 @@ export interface PanelInspectionItem {
   matchedStandardJobId?: string;
   paintScope?: PaintScope;
   selected?: boolean;
+  customPrice?: number;
+  customPainterPayout?: number;
+  customDenterPayout?: number;
+  painterName?: string;
+  denterName?: string;
 }
 
 export interface InteractiveVehicleInspectionChartProps {
@@ -1006,7 +1011,7 @@ export function InteractiveVehicleInspectionChart({
                   const isPartialAllowed = isPartialPaintAllowedForPanel(p.id);
 
                   const rates = getPanelEnvironmentRates(p, effectiveStandardJobs, isCars24, currentScope);
-                  const price = rates.price;
+                  const displayPrice = inspection?.customPrice !== undefined ? inspection.customPrice : rates.price;
 
                   return (
                     <div
@@ -1025,10 +1030,6 @@ export function InteractiveVehicleInspectionChart({
                         </div>
 
                         <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="font-mono font-bold text-amber-400 block text-xs">₹{price.toLocaleString('en-IN')}</span>
-                            <span className="text-[9px] text-slate-400 font-medium">{isCars24 ? 'Cars24 Rate' : 'Retail Rate'}</span>
-                          </div>
                           <button
                             type="button"
                             onClick={() => handlePanelClick(p)}
@@ -1039,6 +1040,22 @@ export function InteractiveVehicleInspectionChart({
                           </button>
                         </div>
                       </div>
+
+                      {/* Painter & Denter Allotment Badges */}
+                      {(inspection?.painterName || inspection?.denterName) && (
+                        <div className="pt-1 flex flex-wrap gap-1.5 items-center">
+                          {inspection?.painterName && (
+                            <span className="px-2 py-0.5 rounded bg-purple-500/25 border border-purple-500/40 text-purple-200 font-bold text-[10px] flex items-center gap-1">
+                              🎨 Painter: {inspection.painterName}
+                            </span>
+                          )}
+                          {inspection?.denterName && (
+                            <span className="px-2 py-0.5 rounded bg-amber-500/25 border border-amber-500/40 text-amber-200 font-bold text-[10px] flex items-center gap-1">
+                              🔨 Denter: {inspection.denterName}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Paint Scope Selection Chips */}
                       <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center gap-1">
@@ -1066,7 +1083,11 @@ export function InteractiveVehicleInspectionChart({
                                     ...inspections,
                                     [p.id]: {
                                       ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                      paintScope: s.id as PaintScope
+                                      paintScope: s.id as PaintScope,
+                                      // recalculate defaults on scope change if custom not yet modified
+                                      customPrice: inspection?.customPrice !== undefined ? inspection.customPrice : undefined,
+                                      customPainterPayout: inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : undefined,
+                                      customDenterPayout: inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : undefined
                                     }
                                   });
                                 }
@@ -1085,6 +1106,83 @@ export function InteractiveVehicleInspectionChart({
                           );
                         })}
                       </div>
+
+                      {/* Custom Payout and Rate Editing for INTERACTIVE MODE */}
+                      {mode === 'INTERACTIVE_SELECT' && (
+                        <div className="pt-2 border-t border-slate-700/40 grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-0.5">Billing (Inc. GST)</label>
+                            <div className="relative">
+                              <span className="absolute left-1 top-1 text-slate-500 text-[9px]">₹</span>
+                              <input
+                                type="number"
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-amber-400 focus:outline-none focus:border-amber-400"
+                                value={inspection?.customPrice !== undefined ? inspection.customPrice : rates.price}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  if (onInspectionChange) {
+                                    onInspectionChange({
+                                      ...inspections,
+                                      [p.id]: {
+                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                        customPrice: val
+                                      }
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-0.5">Painter Payout</label>
+                            <div className="relative">
+                              <span className="absolute left-1 top-1 text-slate-500 text-[9px]">₹</span>
+                              <input
+                                type="number"
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-emerald-400 focus:outline-none focus:border-emerald-400"
+                                value={inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  if (onInspectionChange) {
+                                    onInspectionChange({
+                                      ...inspections,
+                                      [p.id]: {
+                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                        customPainterPayout: val
+                                      }
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-0.5">Denter Payout</label>
+                            <div className="relative">
+                              <span className="absolute left-1 top-1 text-slate-500 text-[9px]">₹</span>
+                              <input
+                                type="number"
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-blue-400 focus:outline-none focus:border-blue-400"
+                                value={inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  if (onInspectionChange) {
+                                    onInspectionChange({
+                                      ...inspections,
+                                      [p.id]: {
+                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                        customDenterPayout: val
+                                      }
+                                    });
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })

@@ -46,6 +46,7 @@ import {
 import { getSavedBiometricBinding, registerBiometricForUser } from '../lib/biometricAuth';
 
 import { NotificationDrawer } from './NotificationDrawer';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderNavProps {
   currentRole: UserRole;
@@ -489,6 +490,7 @@ export function HeaderNav({
             )}
 
             {/* Live Toast & Pipeline Notifications Drawer */}
+            <PWAInstallButton />
             <NotificationDrawer onSelectJobCard={onSelectJobCard} />
 
             {/* Settings Dropdown */}

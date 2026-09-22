@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
 import { mapPanelToStandardJob, matchTaskToPanelDef, getPanelEnvironmentRates, isPartialPaintAllowedForPanel } from '../lib/panelMappingHelper';
-import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
+import { InteractiveVehicleInspectionChart, VEHICLE_PANELS, PanelInspectionItem } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
   Hammer, 
@@ -39,6 +39,7 @@ export interface AllocatedTaskItem {
   customerPrice: number;
   requiresCustomerApproval: boolean;
   isContractBasis?: boolean;
+  contractorPayout?: number;
   painterPayout?: number;
   denterPayout?: number;
   pairedDenterId?: string;
@@ -198,6 +199,84 @@ export function JobAllotmentPipeline({
         applyPanelTaskWithRates(panelId, effectiveScope, rates.price, rates.painterPayout, rates.denterPayout, matchedJobId);
       }
     }
+  };
+
+  // Synchronize entire visual AR inspection changes with selectedTasks state
+  const handleInspectionChange = (updatedInspections: Record<string, PanelInspectionItem>) => {
+    let updatedTasksList = [...selectedTasks];
+
+    const scopeTitleMap: Record<PaintScope, string> = {
+      FULL_OUTER: 'Full Outer Paint',
+      PARTIAL_TOUCHUP: 'Partial Paint',
+      INSIDE_JAMB: 'Inside Paint Only',
+      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
+    };
+
+    // 1. Process all selected panels in updatedInspections
+    Object.keys(updatedInspections).forEach(panelId => {
+      const inspection = updatedInspections[panelId];
+      const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
+      if (!panelDef) return;
+
+      if (!inspection.selected) {
+        // Remove task if deselected
+        updatedTasksList = updatedTasksList.filter(t => t.panelKey !== panelId);
+        return;
+      }
+
+      const scope = inspection.paintScope || 'FULL_OUTER';
+      const freshJobs = getStandardJobs();
+      const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, scope);
+
+      const price = inspection.customPrice !== undefined ? inspection.customPrice : rates.price;
+      const painterPayout = inspection.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout;
+      const denterPayout = inspection.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout;
+      const totalContractorPayout = painterPayout + denterPayout;
+
+      const existingTaskIndex = updatedTasksList.findIndex(t => t.panelKey === panelId);
+
+      if (existingTaskIndex !== -1) {
+        // Update the existing task with new paint scope, price, and payouts
+        updatedTasksList[existingTaskIndex] = {
+          ...updatedTasksList[existingTaskIndex],
+          title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+          paintScope: scope,
+          customerPrice: price,
+          painterPayout,
+          denterPayout,
+          contractorPayout: totalContractorPayout,
+          estimatedCost: totalContractorPayout
+        };
+      } else {
+        // Create a new task
+        const stdJob = {
+          id: panelDef.standardJobId,
+          title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+          category: 'PAINT' as TaskCategory,
+          panelKey: panelId,
+          panelNameEn: panelDef.nameEn,
+          paintScope: scope,
+          retailPrice: price,
+          cars24Price: price,
+          isContractBasis: true,
+          contractorPayout: totalContractorPayout,
+          painterPayout: painterPayout,
+          denterPayout: denterPayout,
+          estimatedHours: 4
+        };
+        const newTask = createUnallocatedTask(stdJob as any);
+        updatedTasksList.push(newTask);
+      }
+    });
+
+    // 2. Remove tasks for panels that are no longer in updatedInspections or marked selected=false
+    const finalTasks = updatedTasksList.filter(t => {
+      if (!t.panelKey) return true; // Keep mechanical/other non-panel tasks
+      const inspection = updatedInspections[t.panelKey];
+      return inspection && inspection.selected;
+    });
+
+    onTasksChange(finalTasks);
   };
 
   const sections = [
@@ -707,12 +786,17 @@ export function JobAllotmentPipeline({
                     nameHi: matchedDef?.nameHi || '',
                     category: 'EXTERIOR_BODY',
                     selected: true,
-                    paintScope: t.paintScope || 'FULL_OUTER'
+                    paintScope: t.paintScope || 'FULL_OUTER',
+                    customPrice: t.customerPrice,
+                    customPainterPayout: t.painterPayout,
+                    customDenterPayout: t.denterPayout,
+                    painterName: t.assignedToName,
+                    denterName: t.pairedDenterName
                   };
                 }
                 return acc;
               }, {} as Record<string, any>)}
-              onPanelToggle={handlePanelChartToggle}
+              onInspectionChange={handleInspectionChange}
               availableStandardJobs={standardJobs}
             />
           ) : (

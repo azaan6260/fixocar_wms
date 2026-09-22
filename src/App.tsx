@@ -28,6 +28,7 @@ import {
 import { Camera, Wrench, Home } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
 import { fetchServerSupabaseConfig } from './lib/supabaseClient';
+import { initOfflineSyncListeners, processOfflineQueue } from './lib/offlineSync';
 
 import { HeaderNav } from './components/HeaderNav';
 import { DashboardOverview } from './components/DashboardOverview';
@@ -64,6 +65,7 @@ import { CommonHomePage } from './components/CommonHomePage';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { AppVersionModal } from './components/AppVersionModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { initMobileEnvironment, setupNativeBackButton } from './lib/mobileBridge';
 
 export default function App() {
@@ -446,9 +448,11 @@ export default function App() {
 
     const initializeGlobalSync = async () => {
       validateLocalStorageIntegrity();
+      initOfflineSyncListeners();
       await fetchServerSupabaseConfig();
       await syncFromSupabase();
       runDiagnosticCheck();
+      processOfflineQueue();
     };
     initializeGlobalSync();
 
@@ -900,6 +904,8 @@ export default function App() {
         isOpen={isAppVersionModalOpen}
         onClose={() => setIsAppVersionModalOpen(false)}
       />
+
+      <OfflineIndicator />
 
     </div>
   );
