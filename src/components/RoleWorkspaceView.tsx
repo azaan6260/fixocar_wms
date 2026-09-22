@@ -95,8 +95,26 @@ export function RoleWorkspaceView({
 
     jobCards.forEach(card => {
       const assignedTasks = card.tasks.filter(task => {
+        const isUserAssigned = Boolean(authUser && (
+          (authUser.employeeId && (task.assignedToId === authUser.employeeId || task.pairedDenterId === authUser.employeeId)) ||
+          (authUser.vendorId && (task.outsourcedVendorId === authUser.vendorId || task.assignedToId === authUser.vendorId)) ||
+          (authUser.id && (task.assignedToId === authUser.id || task.pairedDenterId === authUser.id)) ||
+          (authUser.name && (
+            (task.assignedToName && (
+              task.assignedToName.toLowerCase().includes(authUser.name.toLowerCase()) ||
+              authUser.name.toLowerCase().includes(task.assignedToName.toLowerCase())
+            )) ||
+            (task.pairedDenterName && (
+              task.pairedDenterName.toLowerCase().includes(authUser.name.toLowerCase()) ||
+              authUser.name.toLowerCase().includes(task.pairedDenterName.toLowerCase())
+            ))
+          ))
+        ));
+
         let matchesRole = false;
         if (isAdminOrManager) {
+          matchesRole = true;
+        } else if (isUserAssigned) {
           matchesRole = true;
         } else if (currentRole === 'MECHANIC' && (task.category === 'MECHANICAL' || task.category === 'INSPECTION')) {
           matchesRole = true;

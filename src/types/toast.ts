@@ -6,7 +6,8 @@ export type ToastType =
   | 'PAYMENT_COLLECTED'
   | 'SUCCESS'
   | 'INFO'
-  | 'WARNING';
+  | 'WARNING'
+  | 'TASK_ALLOTTED';
 
 export interface ToastNotification {
   id: string;

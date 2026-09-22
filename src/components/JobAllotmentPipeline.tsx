@@ -109,7 +109,7 @@ export function JobAllotmentPipeline({
     const scopeTitleMap: Record<PaintScope, string> = {
       FULL_OUTER: 'Full Outer Paint',
       PARTIAL_TOUCHUP: 'Partial Paint',
-      INSIDE_JAMB: 'Inside Paint',
+      INSIDE_JAMB: 'Inside Paint Only',
       FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
     };
 
@@ -184,7 +184,19 @@ export function JobAllotmentPipeline({
       const idsToRemove = new Set(existingTasks.map(t => t.id));
       onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
     } else {
-      applyPanelTaskWithRates(panelId, effectiveScope, rates.price, rates.painterPayout, rates.denterPayout, matchedJobId);
+      if (effectiveScope === 'PARTIAL_TOUCHUP' || effectiveScope === 'INSIDE_JAMB') {
+        setCustomRatePrompt({
+          panelId,
+          panelName: panelDef.nameEn,
+          scope: effectiveScope,
+          matchedJobId,
+          billingPrice: rates.price,
+          painterPayout: rates.painterPayout,
+          denterPayout: rates.denterPayout
+        });
+      } else {
+        applyPanelTaskWithRates(panelId, effectiveScope, rates.price, rates.painterPayout, rates.denterPayout, matchedJobId);
+      }
     }
   };
 
@@ -685,6 +697,21 @@ export function JobAllotmentPipeline({
                 const matchedDef = matchTaskToPanelDef(t);
                 return matchedDef ? matchedDef.id : (t.panelKey || '');
               }).filter(Boolean)))}
+              inspections={selectedTasks.reduce((acc, t) => {
+                const matchedDef = matchTaskToPanelDef(t);
+                const panelId = matchedDef ? matchedDef.id : (t.panelKey || '');
+                if (panelId) {
+                  acc[panelId] = {
+                    panelId,
+                    nameEn: t.panelNameEn || matchedDef?.nameEn || '',
+                    nameHi: matchedDef?.nameHi || '',
+                    category: 'EXTERIOR_BODY',
+                    selected: true,
+                    paintScope: t.paintScope || 'FULL_OUTER'
+                  };
+                }
+                return acc;
+              }, {} as Record<string, any>)}
               onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}
             />
@@ -714,6 +741,112 @@ export function JobAllotmentPipeline({
 
       {/* SECTION 8: TYRE WORK */}
       {activeSection === 'TYRE_WORK' && renderJobSelectionGrid(tyreJobs, 'Tyre Work & Punctures')}
+
+      {/* Custom Rate Settings Prompt Modal */}
+      {customRatePrompt && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                Custom Rates Allocation
+              </span>
+              <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 mt-2">
+                ✏️ Customize Rates: {customRatePrompt.panelName}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Configure customized customer billing and technician payouts for this 
+                <strong className="text-amber-600 dark:text-amber-400 ml-1">
+                  {customRatePrompt.scope === 'PARTIAL_TOUCHUP' ? '🖌️ Partial Paint / Touch-up' : '🚪 Inside Paint (Door Jamb)'}
+                </strong>.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Customer Billing Price (GST inclusive) */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
+                  Customer Billing Price (₹) <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded ml-1">GST Included</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={customRatePrompt.billingPrice}
+                  onChange={(e) => setCustomRatePrompt(prev => prev ? { ...prev, billingPrice: Number(e.target.value) || 0 } : null)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-mono font-extrabold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <div className="text-[10px] text-emerald-600/85 dark:text-emerald-400/85 font-medium flex justify-between bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10">
+                  <span>Base: ₹{Math.round(customRatePrompt.billingPrice / 1.18).toLocaleString('en-IN')}</span>
+                  <span>GST (18%): ₹{Math.round(customRatePrompt.billingPrice - (customRatePrompt.billingPrice / 1.18)).toLocaleString('en-IN')}</span>
+                  <span className="font-extrabold text-emerald-700 dark:text-emerald-300">Total: ₹{customRatePrompt.billingPrice.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Painter Payout */}
+              <div className="space-y-1">
+                <label className="block text-[11px] font-black text-purple-800 dark:text-purple-300 uppercase tracking-wide">
+                  Painter Payout Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={customRatePrompt.painterPayout}
+                  onChange={(e) => setCustomRatePrompt(prev => prev ? { ...prev, painterPayout: Number(e.target.value) || 0 } : null)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 font-mono font-extrabold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {/* Denter Payout */}
+              <div className="space-y-1">
+                <label className="block text-[11px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-wide">
+                  Denter Payout Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={customRatePrompt.denterPayout}
+                  onChange={(e) => setCustomRatePrompt(prev => prev ? { ...prev, denterPayout: Number(e.target.value) || 0 } : null)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 font-mono font-extrabold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* Combined Total Contractor Payout display */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
+                <span className="font-bold text-slate-500 dark:text-slate-400">Total Contractor Payout (Painter + Denter):</span>
+                <span className="font-mono font-black text-slate-800 dark:text-slate-200">
+                  ₹{(customRatePrompt.painterPayout + customRatePrompt.denterPayout).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCustomRatePrompt(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  applyPanelTaskWithRates(
+                    customRatePrompt.panelId,
+                    customRatePrompt.scope,
+                    customRatePrompt.billingPrice,
+                    customRatePrompt.painterPayout,
+                    customRatePrompt.denterPayout,
+                    customRatePrompt.matchedJobId
+                  );
+                  setCustomRatePrompt(null);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-black text-xs px-4.5 py-2.5 rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                Apply Custom Rates
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -132,6 +132,15 @@ export function TaskDetailCard({
     setEditPainterPayout(rates.painterPayout);
     setEditDenterPayout(rates.denterPayout);
     setEditContractorPayout(rates.contractorPayout);
+
+    const scopeTitleMap: Record<PaintScope, string> = {
+      FULL_OUTER: 'Full Outer Paint',
+      PARTIAL_TOUCHUP: 'Partial Paint',
+      INSIDE_JAMB: 'Inside Paint Only',
+      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
+    };
+    const cleanTitle = editTitle.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    setEditTitle(`${cleanTitle} (${scopeTitleMap[newScope]})`);
   };
 
   // Handlers
@@ -530,8 +539,13 @@ export function TaskDetailCard({
             )}
 
             <div>
-              <label className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1">
-                Customer Billing Price (₹)
+              <label className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mb-1 flex items-center justify-between">
+                <span>Customer Billing Price (₹)</span>
+                {(editPaintScope === 'PARTIAL_TOUCHUP' || editPaintScope === 'INSIDE_JAMB') && (
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    Includes GST
+                  </span>
+                )}
               </label>
               <input
                 type="number"
@@ -541,6 +555,13 @@ export function TaskDetailCard({
                 onChange={(e) => setEditCustomerPrice(Number(e.target.value) || 0)}
                 className="w-full px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-mono font-extrabold"
               />
+              {(editPaintScope === 'PARTIAL_TOUCHUP' || editPaintScope === 'INSIDE_JAMB') && (
+                <div className="mt-1 text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-medium flex justify-between bg-slate-50 dark:bg-slate-950 p-1.5 rounded border border-emerald-500/20">
+                  <span>Base: ₹{Math.round(editCustomerPrice / 1.18).toLocaleString('en-IN')}</span>
+                  <span>GST (18%): ₹{Math.round(editCustomerPrice - (editCustomerPrice / 1.18)).toLocaleString('en-IN')}</span>
+                  <span className="font-extrabold text-emerald-700 dark:text-emerald-300">Total: ₹{editCustomerPrice.toLocaleString('en-IN')}</span>
+                </div>
+              )}
             </div>
 
             <div>

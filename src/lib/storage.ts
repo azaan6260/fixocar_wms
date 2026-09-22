@@ -85,6 +85,13 @@ export function getActiveWorkshopId(): string {
   if (typeof window === 'undefined') return 'ALL';
   const user = getAuthUser();
 
+  // If the logged-in user is a regular employee/technician/vendor (not admin or manager), they MUST be strictly isolated to their assigned workshop
+  if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN' && user.role !== 'FLOOR_MANAGER') {
+    if (user.workshopId && user.workshopId.trim() !== '') {
+      return user.workshopId.trim();
+    }
+  }
+
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORKSHOP);
     if (saved && saved.trim() !== '') return saved.trim();
@@ -426,6 +433,28 @@ export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCa
     customerName: fullCard.customer.name,
   });
 
+  // Trigger immediate allotment notifications for pre-assigned tasks upon initial card creation
+  fullCard.tasks.forEach(newTask => {
+    if (newTask.assignedToId && newTask.assignedToName) {
+      dispatchToastNotification({
+        type: 'TASK_ALLOTTED',
+        title: `📋 New Task Allotted!`,
+        message: `"${newTask.title}" on Job Card #${fullCard.id} has been allotted to ${newTask.assignedToName}. It is now live on their 'My Tasks' dashboard.`,
+        jobCardId: fullCard.id,
+        vehicleReg: fullCard.vehicle.registrationNumber,
+      });
+    }
+    if (newTask.pairedDenterId && newTask.pairedDenterName) {
+      dispatchToastNotification({
+        type: 'TASK_ALLOTTED',
+        title: `🔨 New Denter Task Allotted!`,
+        message: `Denting task "${newTask.title}" on Job Card #${fullCard.id} has been allotted to ${newTask.pairedDenterName}. It is now live on their 'My Tasks' dashboard.`,
+        jobCardId: fullCard.id,
+        vehicleReg: fullCard.vehicle.registrationNumber,
+      });
+    }
+  });
+
   return fullCard;
 }
 
@@ -480,6 +509,34 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
             amount: newTask.customerPrice || 0,
           });
         }
+      }
+    });
+
+    // 3. Detect task assignment changes (new task allotments)
+    newCard.tasks.forEach(newTask => {
+      const oldTask = oldCard.tasks.find(t => t.id === newTask.id);
+      
+      const isNewAllotment = (!oldTask && newTask.assignedToId) || (oldTask && oldTask.assignedToId !== newTask.assignedToId && newTask.assignedToId);
+      const isNewDenterAllotment = (!oldTask && newTask.pairedDenterId) || (oldTask && oldTask.pairedDenterId !== newTask.pairedDenterId && newTask.pairedDenterId);
+
+      if (isNewAllotment && newTask.assignedToName) {
+        dispatchToastNotification({
+          type: 'TASK_ALLOTTED',
+          title: `📋 Task Allotted: My Tasks`,
+          message: `"${newTask.title}" on Job Card #${newCard.id} has been allotted to ${newTask.assignedToName}. It is now live in their 'My Tasks' dashboard.`,
+          jobCardId: newCard.id,
+          vehicleReg: newCard.vehicle.registrationNumber,
+        });
+      }
+      
+      if (isNewDenterAllotment && newTask.pairedDenterName) {
+        dispatchToastNotification({
+          type: 'TASK_ALLOTTED',
+          title: `🔨 Denter Task Allotted!`,
+          message: `Denting task "${newTask.title}" on Job Card #${newCard.id} has been allotted to ${newTask.pairedDenterName}. It is now live in their 'My Tasks' dashboard.`,
+          jobCardId: newCard.id,
+          vehicleReg: newCard.vehicle.registrationNumber,
+        });
       }
     });
 

@@ -531,8 +531,22 @@ export function InteractiveVehicleInspectionChart({
               let strokeWidth = '1.8';
 
               if (isActive) {
-                fillColor = '#f59e0b';
-                strokeColor = '#fef08a';
+                const inspection = inspections[panel.id];
+                const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
+
+                if (currentScope === 'PARTIAL_TOUCHUP') {
+                  fillColor = '#06b6d4'; // vibrant cyan for partial paint
+                  strokeColor = '#a5f3fc';
+                } else if (currentScope === 'INSIDE_JAMB') {
+                  fillColor = '#8b5cf6'; // vibrant purple for inside paint only
+                  strokeColor = '#ddd6fe';
+                } else if (currentScope === 'FULL_OUTER_AND_INSIDE') {
+                  fillColor = '#ec4899'; // vibrant pink for outer + inside
+                  strokeColor = '#fbcfe8';
+                } else {
+                  fillColor = '#f59e0b'; // vibrant amber for standard full outer paint
+                  strokeColor = '#fef08a';
+                }
                 strokeWidth = '2.5';
               } else if (isHovered) {
                 fillColor = '#334155';
@@ -746,8 +760,22 @@ export function InteractiveVehicleInspectionChart({
                 let strokeWidth = '1.8';
 
                 if (isActive) {
-                  fillColor = '#f59e0b'; // vibrant amber
-                  strokeColor = '#fef08a';
+                  const inspection = inspections[panel.id];
+                  const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
+
+                  if (currentScope === 'PARTIAL_TOUCHUP') {
+                    fillColor = '#06b6d4'; // vibrant cyan for partial paint
+                    strokeColor = '#a5f3fc';
+                  } else if (currentScope === 'INSIDE_JAMB') {
+                    fillColor = '#8b5cf6'; // vibrant purple for inside paint only
+                    strokeColor = '#ddd6fe';
+                  } else if (currentScope === 'FULL_OUTER_AND_INSIDE') {
+                    fillColor = '#ec4899'; // vibrant pink for outer + inside
+                    strokeColor = '#fbcfe8';
+                  } else {
+                    fillColor = '#f59e0b'; // vibrant amber for standard full outer paint
+                    strokeColor = '#fef08a';
+                  }
                   strokeWidth = '2.5';
                 } else if (isHovered) {
                   fillColor = '#334155';

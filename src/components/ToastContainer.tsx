@@ -11,7 +11,8 @@ import {
   ArrowRightLeft, 
   AlertCircle,
   Bell,
-  Check
+  Check,
+  UserCheck
 } from 'lucide-react';
 
 interface ToastContainerProps {
@@ -86,6 +87,7 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
         const isApproval = toast.type === 'ESTIMATE_APPROVED';
         const isDeclined = toast.type === 'ESTIMATE_DECLINED';
         const isCreated = toast.type === 'JOB_CARD_CREATED';
+        const isAllotted = toast.type === 'TASK_ALLOTTED';
 
         return (
           <div
@@ -100,6 +102,8 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
                 ? 'bg-rose-950/95 text-rose-100 border-rose-500/40 dark:bg-rose-950/95 shadow-rose-950/30'
                 : isStatusChange
                 ? 'bg-slate-950/95 text-slate-100 border-blue-500/40 dark:bg-slate-950/95 shadow-blue-950/30'
+                : isAllotted
+                ? 'bg-purple-950/95 text-purple-100 border-purple-500/40 dark:bg-purple-950/95 shadow-purple-950/30'
                 : 'bg-slate-950/95 text-slate-100 border-amber-500/40 shadow-slate-950/30'
             }`}
           >
@@ -107,7 +111,7 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 overflow-hidden">
               <div 
                 className={`h-full transition-all duration-300 ${
-                  isApproval ? 'bg-emerald-400' : isDeclined ? 'bg-rose-400' : isStatusChange ? 'bg-blue-400' : 'bg-amber-400'
+                  isApproval ? 'bg-emerald-400' : isDeclined ? 'bg-rose-400' : isStatusChange ? 'bg-blue-400' : isAllotted ? 'bg-purple-400' : 'bg-amber-400'
                 }`}
                 style={{
                   animation: hoveredId === toast.id ? 'none' : `toast-progress ${TOAST_DURATION}ms linear forwards`
@@ -124,12 +128,15 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
                   ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                   : isStatusChange
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : isAllotted
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
                   : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               }`}>
                 {isApproval && <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />}
                 {isDeclined && <XCircle className="w-5 h-5 stroke-[2.5]" />}
                 {isStatusChange && <Car className="w-5 h-5 stroke-[2.5]" />}
                 {isCreated && <Sparkles className="w-5 h-5 stroke-[2.5]" />}
+                {isAllotted && <UserCheck className="w-5 h-5 stroke-[2.5]" />}
               </div>
 
               {/* Toast Content */}
