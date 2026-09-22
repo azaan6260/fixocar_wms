@@ -185,9 +185,9 @@ export function RoleWorkspaceView({
           if (task.status === 'COMPLETED') completedCount++;
 
           const taskPayout = currentRole === 'PAINTER' 
-            ? (task.painterPayout || task.contractorPayout || 0)
+            ? (task.painterPayout || 0)
             : currentRole === 'DENTER' 
-            ? (task.denterPayout || task.contractorPayout || 0)
+            ? (task.denterPayout || 0)
             : (task.contractorPayout || task.painterPayout || task.denterPayout || 0);
           cardPayoutSum += taskPayout;
 

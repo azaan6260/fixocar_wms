@@ -187,6 +187,12 @@ export function TechnicianTaskCard({
     setCustomIssueText('');
   };
 
+  const currentSanctionedPayout = currentRole === 'PAINTER' 
+    ? (task.painterPayout || 0)
+    : currentRole === 'DENTER' 
+    ? (task.denterPayout || 0)
+    : (task.contractorPayout || task.painterPayout || task.denterPayout || 0);
+
   return (
     <div className={`rounded-3xl border-2 transition-all overflow-hidden ${
       isCompleted 
@@ -231,9 +237,25 @@ export function TechnicianTaskCard({
             </button>
 
             {/* Assigned person badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700">
-              <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-              <span className="truncate max-w-[120px]">{task.assignedToName || 'Unassigned'}</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {task.assignedToName && (
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-700 dark:text-purple-300 text-[11px] font-black">
+                  <span className="text-xs">🎨</span>
+                  <span>Painter: {task.assignedToName}</span>
+                </div>
+              )}
+              {task.pairedDenterName && (
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-[11px] font-black">
+                  <span className="text-xs">🔨</span>
+                  <span>Denter: {task.pairedDenterName}</span>
+                </div>
+              )}
+              {!task.assignedToName && !task.pairedDenterName && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700">
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Unassigned</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -245,7 +267,7 @@ export function TechnicianTaskCard({
           </h3>
 
           {/* Linked Body Panel, Paint Scope & Sanctioned Payout Badges */}
-          {((task.panelNameEn || task.paintScope) || ((currentRole === 'PAINTER' ? (task.painterPayout || task.contractorPayout) : currentRole === 'DENTER' ? (task.denterPayout || task.contractorPayout) : (task.contractorPayout || task.painterPayout || task.denterPayout)) && (currentRole === 'PAINTER' ? (task.painterPayout || task.contractorPayout) : currentRole === 'DENTER' ? (task.denterPayout || task.contractorPayout) : (task.contractorPayout || task.painterPayout || task.denterPayout))! > 0)) && (
+          {((task.panelNameEn || task.paintScope) || currentSanctionedPayout > 0) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               {task.panelNameEn && (
                 <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-extrabold text-xs flex items-center gap-1">
@@ -259,19 +281,11 @@ export function TechnicianTaskCard({
                    task.paintScope === 'FULL_OUTER_AND_INSIDE' ? '🌟 Full Outer + Inside Paint' : '✨ Full Outer Paint'}
                 </span>
               )}
-              {(() => {
-                const payout = currentRole === 'PAINTER' 
-                  ? (task.painterPayout || task.contractorPayout || 0)
-                  : currentRole === 'DENTER' 
-                  ? (task.denterPayout || task.contractorPayout || 0)
-                  : (task.contractorPayout || task.painterPayout || task.denterPayout || 0);
-                if (payout <= 0) return null;
-                return (
-                  <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-xs flex items-center gap-1">
-                    💰 स्वीकृत भुगतान (Sanctioned Payout): ₹{payout.toLocaleString('en-IN')}
-                  </span>
-                );
-              })()}
+              {currentSanctionedPayout > 0 && (
+                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-xs flex items-center gap-1">
+                  💰 स्वीकृत भुगतान (Sanctioned Payout): ₹{currentSanctionedPayout.toLocaleString('en-IN')}
+                </span>
+              )}
             </div>
           )}
 
