@@ -220,7 +220,10 @@ export function JobAllotmentPipeline({
 
       if (!inspection.selected) {
         // Remove task if deselected
-        updatedTasksList = updatedTasksList.filter(t => t.panelKey !== panelId);
+        updatedTasksList = updatedTasksList.filter(t => {
+          const matchedDef = matchTaskToPanelDef(t);
+          return t.panelKey !== panelId && (!matchedDef || matchedDef.id !== panelId);
+        });
         return;
       }
 
@@ -233,7 +236,13 @@ export function JobAllotmentPipeline({
       const denterPayout = inspection.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout;
       const totalContractorPayout = painterPayout + denterPayout;
 
-      const existingTaskIndex = updatedTasksList.findIndex(t => t.panelKey === panelId);
+      // Find by panelKey OR standard job match OR fuzzy title
+      const existingTaskIndex = updatedTasksList.findIndex(t => {
+        const matchedDef = matchTaskToPanelDef(t);
+        return (t.panelKey && t.panelKey === panelId) || 
+               (matchedDef && matchedDef.id === panelId) ||
+               (t.title && panelDef.nameEn && t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()));
+      });
 
       if (existingTaskIndex !== -1) {
         // Update the existing task with new paint scope, price, and payouts
@@ -245,7 +254,8 @@ export function JobAllotmentPipeline({
           painterPayout,
           denterPayout,
           contractorPayout: totalContractorPayout,
-          estimatedCost: totalContractorPayout
+          estimatedCost: totalContractorPayout,
+          panelKey: panelId // preserve panelKey
         };
       } else {
         // Create a new task
@@ -271,8 +281,11 @@ export function JobAllotmentPipeline({
 
     // 2. Remove tasks for panels that are no longer in updatedInspections or marked selected=false
     const finalTasks = updatedTasksList.filter(t => {
-      if (!t.panelKey) return true; // Keep mechanical/other non-panel tasks
-      const inspection = updatedInspections[t.panelKey];
+      const matchedDef = matchTaskToPanelDef(t);
+      const resolvedPanelKey = t.panelKey || matchedDef?.id;
+      if (!resolvedPanelKey) return true; // Keep mechanical/other non-panel tasks
+      
+      const inspection = updatedInspections[resolvedPanelKey];
       return inspection && inspection.selected;
     });
 

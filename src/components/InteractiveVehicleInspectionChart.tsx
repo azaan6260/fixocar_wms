@@ -1084,10 +1084,10 @@ export function InteractiveVehicleInspectionChart({
                                     [p.id]: {
                                       ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
                                       paintScope: s.id as PaintScope,
-                                      // recalculate defaults on scope change if custom not yet modified
-                                      customPrice: inspection?.customPrice !== undefined ? inspection.customPrice : undefined,
-                                      customPainterPayout: inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : undefined,
-                                      customDenterPayout: inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : undefined
+                                      // reset custom rates on scope change to force default rate recalculation
+                                      customPrice: undefined,
+                                      customPainterPayout: undefined,
+                                      customDenterPayout: undefined
                                     }
                                   });
                                 }
