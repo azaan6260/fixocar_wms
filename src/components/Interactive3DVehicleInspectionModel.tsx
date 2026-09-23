@@ -189,26 +189,29 @@ export function Interactive3DVehicleInspectionModel({
     const carGroup = new THREE.Group();
     scene.add(carGroup);
 
-    // Common Base Materials
+    // Common Base Materials - Default Alpine / Pearl White Body Finish
     const defaultPaintMat = new THREE.MeshStandardMaterial({
-      color: 0x334155, // slate-700
-      roughness: 0.35,
-      metalness: 0.6
+      color: 0xf8fafc, // Alpine Crisp White
+      roughness: 0.18, // High-gloss automotive clearcoat
+      metalness: 0.15
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
+      color: 0x0284c7,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.5,
       roughness: 0.1,
       metalness: 0.9,
-      transmission: 0.6
+      transmission: 0.7
     });
 
     const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
-    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.1, metalness: 0.95 });
-    const tireMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.9 });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.08, metalness: 0.98 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9 });
     const engineMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.4 });
+    const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfffbe1, emissive: 0xfef08a, emissiveIntensity: 0.8, roughness: 0.1 });
+    const taillightMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xd97706, emissiveIntensity: 0.7, roughness: 0.1 });
+    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
 
     const meshesMap = new Map<string, THREE.Mesh | THREE.Group>();
     meshesMapRef.current = meshesMap;
@@ -244,7 +247,7 @@ export function Interactive3DVehicleInspectionModel({
     seatFR.position.set(0.4, 0.65, 0.2);
     carGroup.add(seatFL, seatFR);
 
-    // B. WHEELS
+    // B. WHEELS & BRAKE CALIPERS
     const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.25, 24);
     wheelGeo.rotateZ(Math.PI / 2);
     const wheelPositions = [
@@ -262,29 +265,51 @@ export function Interactive3DVehicleInspectionModel({
       wheel.add(rim);
     });
 
-    // C. FRONT BUMPER & REAR BUMPER
+    // C. FRONT END: BUMPER, RADIATOR GRILLE, HEADLIGHTS (Clear Bonnet Front Identification)
     const frontBumperGeo = new THREE.BoxGeometry(1.85, 0.4, 0.4);
-    registerPanelMesh('bumper_front', frontBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, 2.1));
+    const frontBumperMesh = registerPanelMesh('bumper_front', frontBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, 2.1));
 
+    // Front Grille Mesh
+    const grilleMesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.05), grilleMat);
+    grilleMesh.position.set(0, 0.45, 2.31);
+    carGroup.add(grilleMesh);
+
+    // Left & Right LED Headlights
+    const headlightGeo = new THREE.BoxGeometry(0.35, 0.15, 0.08);
+    const hlL = new THREE.Mesh(headlightGeo, headlightMat);
+    hlL.position.set(-0.65, 0.52, 2.31);
+    const hlR = new THREE.Mesh(headlightGeo, headlightMat);
+    hlR.position.set(0.65, 0.52, 2.31);
+    carGroup.add(hlL, hlR);
+
+    // D. REAR END: BUMPER & TAILLIGHTS (Clear Rear Trunk Identification)
     const rearBumperGeo = new THREE.BoxGeometry(1.85, 0.4, 0.4);
     registerPanelMesh('bumper_rear', rearBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -2.1));
 
-    // D. FENDERS
+    // Rear Tail Lights (Red Lenses)
+    const taillightGeo = new THREE.BoxGeometry(0.4, 0.16, 0.08);
+    const tlL = new THREE.Mesh(taillightGeo, taillightMat);
+    tlL.position.set(-0.65, 0.72, -2.28);
+    const tlR = new THREE.Mesh(taillightGeo, taillightMat);
+    tlR.position.set(0.65, 0.72, -2.28);
+    carGroup.add(tlL, tlR);
+
+    // E. FRONT FENDERS
     const fenderGeo = new THREE.BoxGeometry(0.2, 0.65, 0.9);
     registerPanelMesh('fender_lhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.72, 1.35));
     registerPanelMesh('fender_rhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.72, 1.35));
 
-    // E. RUNNING BOARDS (SILL)
+    // F. RUNNING BOARDS (SILL)
     const runningBoardGeo = new THREE.BoxGeometry(0.18, 0.2, 1.6);
     registerPanelMesh('running_board_lhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.28, 0));
     registerPanelMesh('running_board_rhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.28, 0));
 
-    // F. QUARTER PANELS
+    // G. QUARTER PANELS
     const quarterGeo = new THREE.BoxGeometry(0.22, 0.7, 1.0);
     registerPanelMesh('quarter_panel_lhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.75, -1.35));
     registerPanelMesh('quarter_panel_rhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.75, -1.35));
 
-    // G. ROOF & WINDSHIELDS
+    // H. ROOF & WINDSHIELDS
     const roofGeo = new THREE.BoxGeometry(1.5, 0.1, 1.5);
     registerPanelMesh('roof', roofGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 1.35, -0.1));
 
@@ -296,7 +321,7 @@ export function Interactive3DVehicleInspectionModel({
     wsRearGeo.rotateX(Math.PI / 6);
     registerPanelMesh('windshield_rear', wsRearGeo, glassMat, undefined, new THREE.Vector3(0, 1.15, -0.95));
 
-    // H. ENGINE BAY APRONS & UNDERBODY (Requested Features)
+    // I. ENGINE BAY APRONS & UNDERBODY
     const apronLhsGeo = new THREE.BoxGeometry(0.35, 0.45, 0.8);
     const apronRhsGeo = new THREE.BoxGeometry(0.35, 0.45, 0.8);
     registerPanelMesh('apron_lhs', apronLhsGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.55, 0.6, 1.4));
@@ -309,7 +334,7 @@ export function Interactive3DVehicleInspectionModel({
     const underbodyGeo = new THREE.BoxGeometry(1.65, 0.12, 3.8);
     registerPanelMesh('underbody', underbodyGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.15, 0));
 
-    // I. HINGED DOORS (FRONT LHS, FRONT RHS, REAR LHS, REAR RHS)
+    // J. HINGED DOORS (FRONT LHS, FRONT RHS, REAR LHS, REAR RHS)
     const doorGeo = new THREE.BoxGeometry(0.12, 0.72, 0.78);
     const innerJambGeo = new THREE.BoxGeometry(0.1, 0.68, 0.74);
 
@@ -354,19 +379,19 @@ export function Interactive3DVehicleInspectionModel({
     innerJambRRR.userData = { panelId: 'door_rhs_rear', isInnerJamb: true };
     doorRhsRearPivot.add(innerJambRRR);
 
-    // J. BONNET / HOOD (Hinged at rear of engine bay)
+    // K. FRONT BONNET / HOOD (Long Sloped Front Snout)
     const bonnetPivot = new THREE.Group();
     bonnetPivot.position.set(0, 0.95, 0.9);
     carGroup.add(bonnetPivot);
-    const bonnetGeo = new THREE.BoxGeometry(1.5, 0.1, 1.0);
-    registerPanelMesh('hood_bonnet', bonnetGeo, defaultPaintMat, bonnetPivot, new THREE.Vector3(0, 0, 0.5));
+    const bonnetGeo = new THREE.BoxGeometry(1.5, 0.1, 1.2);
+    registerPanelMesh('hood_bonnet', bonnetGeo, defaultPaintMat, bonnetPivot, new THREE.Vector3(0, 0, 0.6));
 
-    // K. DICKY / BOOT LID & BOOT FLOOR (Hinged at roof edge)
+    // L. REAR TRUNK / BOOT LID & BOOT FLOOR (Rear Notchback)
     const bootPivot = new THREE.Group();
-    bootPivot.position.set(0, 1.1, -1.35);
+    bootPivot.position.set(0, 1.05, -1.35);
     carGroup.add(bootPivot);
-    const bootGeo = new THREE.BoxGeometry(1.5, 0.55, 0.6);
-    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.2, -0.3));
+    const bootGeo = new THREE.BoxGeometry(1.5, 0.45, 0.7);
+    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.15, -0.35));
 
     const bootFloorGeo = new THREE.BoxGeometry(1.4, 0.12, 0.7);
     registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.45, -1.5));
@@ -551,42 +576,55 @@ export function Interactive3DVehicleInspectionModel({
 
       const inspection = inspections[panel.id];
       const isSelected = Boolean(inspection?.selected || selectedPanelIds.includes(panel.id));
+      const isHovered = hoveredPanelId === panel.id;
       const scope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
 
       const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
       if (!mat) return;
 
       if (!isSelected) {
-        // Unselected default slate color
-        mat.color.setHex(0x334155);
-        mat.emissive.setHex(0x000000);
+        if (isHovered) {
+          // Hovered unselected panel: Subtle cyan glow highlight
+          mat.color.setHex(0xe2e8f0);
+          mat.emissive.setHex(0x0284c7);
+          mat.emissiveIntensity = 0.4;
+        } else {
+          // Unselected default Alpine White finish
+          mat.color.setHex(0xf8fafc);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+        }
       } else {
-        // Dynamic Scope Color Coding for Non-Reading Technicians
+        // Selected Panel: High-contrast Paint Scope Highlights
         switch (scope) {
           case 'FULL_OUTER':
-            // Glowing Vibrant Amber Outer Shell
+            // High-Gloss Amber/Gold Outer Shell
             mat.color.setHex(0xf59e0b);
             mat.emissive.setHex(0x78350f);
+            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             break;
           case 'PARTIAL_TOUCHUP':
-            // Two-tone Touchup Gradient Cyan/Amber
+            // Vibrant Cyan/Electric Blue
             mat.color.setHex(0x06b6d4);
-            mat.emissive.setHex(0x0e7490);
+            mat.emissive.setHex(0x082f49);
+            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             break;
           case 'INSIDE_JAMB':
             // Inner Jamb / Door Frame Emerald Green
             mat.color.setHex(0x10b981);
-            mat.emissive.setHex(0x065f46);
+            mat.emissive.setHex(0x064e3b);
+            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             break;
           case 'FULL_OUTER_AND_INSIDE':
-            // Outer + Inside Bright Gold/Emerald
+            // Outer + Inside Glowing Warm Gold
             mat.color.setHex(0xeab308);
-            mat.emissive.setHex(0x854d0e);
+            mat.emissive.setHex(0x713f12);
+            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             break;
         }
       }
     });
-  }, [inspections, selectedPanelIds]);
+  }, [inspections, selectedPanelIds, hoveredPanelId]);
 
   return (
     <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl space-y-4">
@@ -686,8 +724,12 @@ export function Interactive3DVehicleInspectionModel({
         <div ref={mountRef} className="w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing" />
 
         {/* Legend Overlay on Canvas */}
-        <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-[10px] space-y-1.5">
+        <div className="absolute top-3 left-3 bg-slate-950/85 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-[10px] space-y-1.5 shadow-xl">
           <div className="font-bold text-slate-400 uppercase tracking-wider mb-1">कलर लेजेंड (Color Codes):</div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-slate-100 border border-slate-300 inline-block shadow-sm" />
+            <span className="text-slate-200 font-bold">Alpine White (डिफ़ॉल्ट गाड़ी का रंग)</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded bg-amber-500 inline-block shadow-sm" />
             <span className="text-amber-300 font-bold">Full Paint (बाहर पूरा)</span>
