@@ -238,3 +238,36 @@ export function getPanelEnvironmentRates(
     contractorPayout: isCars24 ? 950 : 1150,
   };
 }
+
+export type PaintScope = 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE';
+
+/**
+ * Formats a clean, variable paint task title according to the chosen paint scope.
+ * Example:
+ *  "Door RHS Rear Full Outer Paint" + INSIDE_JAMB -> "Door RHS Rear Inside Paint Only"
+ *  "Door RHS Rear (Full Outer Paint)" + PARTIAL_TOUCHUP -> "Door RHS Rear Partial Paint"
+ */
+export function formatPaintTaskTitle(panelNameOrTitle: string, scope: PaintScope): string {
+  if (!panelNameOrTitle) return 'Panel Paint Job';
+
+  // Strip existing scope phrases, parentheses, and generic paint/dent suffixes
+  let baseName = panelNameOrTitle
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/\s*(Full Outer \+ Inside Paint|Full Outer Paint|Full Paint|Partial Paint|Inside Paint Only|Inside Paint|Outer \+ Inside Paint|Outer \+ Inside|Painting & Denting|Painting|Paint|Dent)\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!baseName) {
+    baseName = panelNameOrTitle.replace(/\s*\([^)]*\)\s*/g, ' ').trim() || 'Panel';
+  }
+
+  const scopeMap: Record<PaintScope, string> = {
+    FULL_OUTER: 'Full Paint',
+    PARTIAL_TOUCHUP: 'Partial Paint',
+    INSIDE_JAMB: 'Inside Paint',
+    FULL_OUTER_AND_INSIDE: 'Outer + Inside Paint'
+  };
+
+  const scopeSuffix = scopeMap[scope] || 'Full Paint';
+  return `${baseName} ${scopeSuffix}`;
+}

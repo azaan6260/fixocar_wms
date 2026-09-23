@@ -68,13 +68,37 @@ export function getStoredSupabaseConfig() {
 
 let supabaseInstance: SupabaseClient | null = null;
 
+const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  try {
+    const f = typeof window !== 'undefined' ? window.fetch : fetch;
+    return await f(input, init);
+  } catch (err) {
+    console.warn('[SUPABASE_FETCH_SILENT] Failed to fetch. Supabase instance may be offline or unconfigured.', err);
+    return new Response(JSON.stringify({
+      error: {
+        message: 'TypeError: Failed to fetch. Supabase server is unreachable or offline.',
+        details: String(err),
+        hint: 'Verify your internet connection and Supabase settings configuration.'
+      }
+    }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+};
+
 export function getSupabaseClient(): SupabaseClient | null {
   const config = getStoredSupabaseConfig();
   if (!config.isConfigured) return null;
 
   if (!supabaseInstance) {
     try {
-      supabaseInstance = createClient(config.supabaseUrl, config.supabaseServiceKey || config.supabaseAnonKey);
+      supabaseInstance = createClient(config.supabaseUrl, config.supabaseServiceKey || config.supabaseAnonKey, {
+        global: {
+          fetch: customFetch
+        }
+      });
     } catch (err) {
       console.warn('Failed to initialize Supabase client:', err);
       return null;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { JobCard, StandardJob, Employee, Vendor, TaskCategory, SpecializedTeam } from '../types';
-import { getStandardJobs, addStandardJobToJobCard, getEmployees, getVendors, deleteJobCardTask, isCars24JobCard } from '../lib/storage';
+import { getStandardJobs, addStandardJobToJobCard, getEmployees, getVendors, deleteJobCardTask, isCars24JobCard, updateJobCardTask } from '../lib/storage';
 import { matchTaskToPanelDef } from '../lib/panelMappingHelper';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { Zap, CheckCircle2, X, Tag, ShieldCheck, Plus, Trash2 } from 'lucide-react';
@@ -75,7 +75,35 @@ export function StandardJobsCatalogModal({
       });
     }
 
-    if (onJobAdded || removedTasks.length > 0 || newTasks.length > 0) {
+    // 3. Handle modifications to existing tasks (e.g., paintScope, rates, payouts)
+    let hasModifications = false;
+    updatedTasks.forEach(newTask => {
+      const existing = existingTasks.find(et => et.id === newTask.id);
+      if (existing) {
+        const hasChanged = 
+          existing.paintScope !== newTask.paintScope ||
+          existing.customerPrice !== newTask.customerPrice ||
+          existing.painterPayout !== newTask.painterPayout ||
+          existing.denterPayout !== newTask.denterPayout ||
+          existing.title !== newTask.title;
+
+        if (hasChanged) {
+          hasModifications = true;
+          updateJobCardTask(card.id, newTask.id, {
+            title: newTask.title,
+            paintScope: newTask.paintScope,
+            customerPrice: newTask.customerPrice,
+            painterPayout: newTask.painterPayout,
+            denterPayout: newTask.denterPayout,
+            contractorPayout: newTask.contractorPayout,
+            estimatedCost: newTask.contractorPayout,
+            panelKey: newTask.panelKey
+          });
+        }
+      }
+    });
+
+    if (onJobAdded || removedTasks.length > 0 || newTasks.length > 0 || hasModifications) {
       if (onJobAdded) onJobAdded();
     }
   };

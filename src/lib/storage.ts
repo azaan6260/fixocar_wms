@@ -262,52 +262,62 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
           updated_at: new Date().toISOString()
         };
 
-        client.from('job_cards').upsert(fullPayload).then(({ error }) => {
-          if (error) {
-            console.warn('Supabase job_cards upsert warning, retrying with fallback payload without FKs:', error.message);
-            // Fallback retry without FK constraint fields if foreign key missing in target table
-            const fallbackPayload = {
-              ...fullPayload,
-              floor_manager_id: null,
-              city_id: null,
-              workshop_id: null
-            };
-            client.from('job_cards').upsert(fallbackPayload).then(({ error: fbErr }) => {
+        // Self-executing async function to safely sync to Supabase in the background
+        (async () => {
+          try {
+            const { error } = await client.from('job_cards').upsert(fullPayload);
+            if (error) {
+              console.warn('Supabase job_cards upsert warning, retrying with fallback payload without FKs:', error.message);
+              // Fallback retry without FK constraint fields if foreign key missing in target table
+              const fallbackPayload = {
+                ...fullPayload,
+                floor_manager_id: null,
+                city_id: null,
+                workshop_id: null
+              };
+              const { error: fbErr } = await client.from('job_cards').upsert(fallbackPayload);
               if (fbErr) {
                 console.error('Supabase sync error (job_card fallback):', fbErr);
               }
-            });
+            }
+          } catch (err) {
+            console.warn('[SUPABASE_CATCH] Job card upsert exception:', err);
           }
-        });
 
-        // Also upsert tasks
-        if (card.tasks && card.tasks.length > 0) {
-          card.tasks.forEach(t => {
-            client.from('job_tasks').upsert({
-              id: t.id,
-              job_card_id: card.id,
-              title: t.title || 'Task',
-              category: t.category || 'REPAIR',
-              assigned_to_id: t.assignedToId || null,
-              assigned_to_name: t.assignedToName || null,
-              assigned_type: t.assignedType || 'EMPLOYEE',
-              estimated_cost: t.estimatedCost || 0,
-              customer_price: t.customerPrice || 0,
-              status: t.status || 'PENDING',
-              requires_customer_approval: t.requiresCustomerApproval || false,
-              is_customer_approved: t.isCustomerApproved ?? null,
-              rejection_reason: t.rejectionReason || null,
-              notes: t.notes || '',
-              completed_at: t.completedAt || null,
-              is_additional_work: t.isAdditionalWork || false,
-              additional_work_requested_by: t.additionalWorkRequestedBy || null,
-              additional_work_requested_at: t.additionalWorkRequestedAt || null,
-              approval_status: t.approvalStatus || 'PENDING'
-            }).then(({ error }) => {
-              if (error) console.warn(`Supabase task sync error (${t.id}):`, error.message);
-            });
-          });
-        }
+          // Also upsert tasks
+          if (card.tasks && card.tasks.length > 0) {
+            for (const t of card.tasks) {
+              try {
+                const { error } = await client.from('job_tasks').upsert({
+                  id: t.id,
+                  job_card_id: card.id,
+                  title: t.title || 'Task',
+                  category: t.category || 'REPAIR',
+                  assigned_to_id: t.assignedToId || null,
+                  assigned_to_name: t.assignedToName || null,
+                  assigned_type: t.assignedType || 'EMPLOYEE',
+                  estimated_cost: t.estimatedCost || 0,
+                  customer_price: t.customerPrice || 0,
+                  status: t.status || 'PENDING',
+                  requires_customer_approval: t.requiresCustomerApproval || false,
+                  is_customer_approved: t.isCustomerApproved ?? null,
+                  rejection_reason: t.rejectionReason || null,
+                  notes: t.notes || '',
+                  completed_at: t.completedAt || null,
+                  is_additional_work: t.isAdditionalWork || false,
+                  additional_work_requested_by: t.additionalWorkRequestedBy || null,
+                  additional_work_requested_at: t.additionalWorkRequestedAt || null,
+                  approval_status: t.approvalStatus || 'PENDING'
+                });
+                if (error) {
+                  console.warn(`Supabase task sync error (${t.id}):`, error.message);
+                }
+              } catch (err) {
+                console.warn(`[SUPABASE_CATCH] Task upsert exception (${t.id}):`, err);
+              }
+            }
+          }
+        })();
       });
     }
   }

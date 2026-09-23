@@ -16,7 +16,7 @@ import {
   getAuthUser,
   getStandardJobs
 } from '../lib/storage';
-import { getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+import { getPanelEnvironmentRates, formatPaintTaskTitle } from '../lib/panelMappingHelper';
 import { PaintScope } from '../types';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
 import { ProofOfWorkModal } from './ProofOfWorkModal';
@@ -133,14 +133,8 @@ export function TaskDetailCard({
     setEditDenterPayout(rates.denterPayout);
     setEditContractorPayout(rates.contractorPayout);
 
-    const scopeTitleMap: Record<PaintScope, string> = {
-      FULL_OUTER: 'Full Outer Paint',
-      PARTIAL_TOUCHUP: 'Partial Paint',
-      INSIDE_JAMB: 'Inside Paint Only',
-      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
-    };
-    const cleanTitle = editTitle.replace(/\s*\([^)]*\)\s*$/, '').trim();
-    setEditTitle(`${cleanTitle} (${scopeTitleMap[newScope]})`);
+    const newTitle = formatPaintTaskTitle(editTitle, newScope);
+    setEditTitle(newTitle);
   };
 
   // Handlers

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
-import { mapPanelToStandardJob, matchTaskToPanelDef, getPanelEnvironmentRates, isPartialPaintAllowedForPanel } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, matchTaskToPanelDef, getPanelEnvironmentRates, isPartialPaintAllowedForPanel, formatPaintTaskTitle } from '../lib/panelMappingHelper';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS, PanelInspectionItem } from './InteractiveVehicleInspectionChart';
 import { 
   Paintbrush, 
@@ -107,18 +107,12 @@ export function JobAllotmentPipeline({
     const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
     if (!panelDef) return;
 
-    const scopeTitleMap: Record<PaintScope, string> = {
-      FULL_OUTER: 'Full Outer Paint',
-      PARTIAL_TOUCHUP: 'Partial Paint',
-      INSIDE_JAMB: 'Inside Paint Only',
-      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
-    };
-
     const totalContractorPayout = painterPayout + denterPayout;
+    const taskTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
 
     const stdJob = {
       id: matchedJobId || panelDef.standardJobId,
-      title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+      title: taskTitle,
       category: 'PAINT' as TaskCategory,
       panelKey: panelId,
       panelNameEn: panelDef.nameEn,
@@ -143,7 +137,7 @@ export function JobAllotmentPipeline({
         if (existingTasks.some(et => et.id === t.id)) {
           return {
             ...t,
-            title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+            title: taskTitle,
             paintScope: scope,
             customerPrice: billingPrice,
             painterPayout: painterPayout,
@@ -205,13 +199,6 @@ export function JobAllotmentPipeline({
   const handleInspectionChange = (updatedInspections: Record<string, PanelInspectionItem>) => {
     let updatedTasksList = [...selectedTasks];
 
-    const scopeTitleMap: Record<PaintScope, string> = {
-      FULL_OUTER: 'Full Outer Paint',
-      PARTIAL_TOUCHUP: 'Partial Paint',
-      INSIDE_JAMB: 'Inside Paint Only',
-      FULL_OUTER_AND_INSIDE: 'Full Outer + Inside Paint'
-    };
-
     // 1. Process all selected panels in updatedInspections
     Object.keys(updatedInspections).forEach(panelId => {
       const inspection = updatedInspections[panelId];
@@ -236,6 +223,8 @@ export function JobAllotmentPipeline({
       const denterPayout = inspection.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout;
       const totalContractorPayout = painterPayout + denterPayout;
 
+      const dynamicTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
+
       // Find by panelKey OR standard job match OR fuzzy title
       const existingTaskIndex = updatedTasksList.findIndex(t => {
         const matchedDef = matchTaskToPanelDef(t);
@@ -248,7 +237,7 @@ export function JobAllotmentPipeline({
         // Update the existing task with new paint scope, price, and payouts
         updatedTasksList[existingTaskIndex] = {
           ...updatedTasksList[existingTaskIndex],
-          title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+          title: dynamicTitle,
           paintScope: scope,
           customerPrice: price,
           painterPayout,
@@ -261,7 +250,7 @@ export function JobAllotmentPipeline({
         // Create a new task
         const stdJob = {
           id: panelDef.standardJobId,
-          title: `${panelDef.nameEn} (${scopeTitleMap[scope]})`,
+          title: dynamicTitle,
           category: 'PAINT' as TaskCategory,
           panelKey: panelId,
           panelNameEn: panelDef.nameEn,
@@ -435,7 +424,19 @@ export function JobAllotmentPipeline({
           {jobsList.map(job => {
             const alreadyAdded = isJobSelected(job.id);
             const isStaged = stagedJobIds.includes(job.id);
-            const price = isCars24 ? job.cars24Price : job.retailPrice;
+
+            const matchedPanel = matchTaskToPanelDef(job);
+            const addedTask = alreadyAdded ? selectedTasks.find(t => 
+              t.standardJobId === job.id || 
+              (matchedPanel && (t.panelKey === matchedPanel.id || matchTaskToPanelDef(t)?.id === matchedPanel.id))
+            ) : undefined;
+
+            const isPartialAllowed = matchedPanel ? isPartialPaintAllowedForPanel(matchedPanel.id) : true;
+            const currentScope: PaintScope = addedTask?.paintScope || 'FULL_OUTER';
+
+            const price = (alreadyAdded && addedTask && addedTask.customerPrice !== undefined)
+              ? addedTask.customerPrice
+              : (isCars24 ? job.cars24Price : job.retailPrice);
 
             return (
               <div
@@ -483,6 +484,77 @@ export function JobAllotmentPipeline({
                     </div>
                   </div>
                 </div>
+
+                {/* Inline Paint Scope Chips for Painting Category */}
+                {job.category === 'PAINT' && alreadyAdded && addedTask && (
+                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Select Paint Scope:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { id: 'FULL_OUTER', label: 'Full Paint', icon: '✨' },
+                        { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint', icon: '🎨', disabled: !isPartialAllowed },
+                        { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
+                        { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
+                      ].map(s => {
+                        const active = currentScope === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={s.disabled}
+                            title={s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label}
+                            onClick={() => {
+                              if (s.disabled) return;
+                              
+                              // Calculate new rates for the chosen scope
+                              const newScope = s.id as PaintScope;
+                              const freshJobs = getStandardJobs();
+                              const rates = getPanelEnvironmentRates(matchedPanel || job.id, freshJobs, isCars24, newScope);
+                              const priceVal = rates.price;
+                              const painterPayout = rates.painterPayout;
+                              const denterPayout = rates.denterPayout;
+                              const totalContractorPayout = painterPayout + denterPayout;
+
+                              const dynamicTitle = formatPaintTaskTitle(matchedPanel ? matchedPanel.nameEn : job.title, newScope);
+
+                              const updatedTasks = selectedTasks.map(t => {
+                                const isMatch = (addedTask && t.id === addedTask.id) ||
+                                  (t.standardJobId && t.standardJobId === job.id) ||
+                                  (t.panelKey && matchedPanel && t.panelKey === matchedPanel.id) ||
+                                  (matchedPanel && matchTaskToPanelDef(t)?.id === matchedPanel.id) ||
+                                  (matchedPanel && t.title && t.title.toLowerCase().includes(matchedPanel.nameEn.toLowerCase()));
+                                if (isMatch) {
+                                  return {
+                                    ...t,
+                                    title: dynamicTitle,
+                                    paintScope: newScope,
+                                    customerPrice: priceVal,
+                                    painterPayout,
+                                    denterPayout,
+                                    contractorPayout: totalContractorPayout,
+                                    estimatedCost: totalContractorPayout
+                                  };
+                                }
+                                return t;
+                              });
+                              onTasksChange(updatedTasks);
+                            }}
+                            className={`px-2 py-0.5 rounded-lg font-bold text-[9px] transition-all flex items-center gap-1 ${
+                              s.disabled
+                                ? 'bg-slate-100 dark:bg-slate-900/50 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-800 cursor-not-allowed opacity-40'
+                                : active
+                                ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-300'
+                                : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-amber-400/60'
+                            }`}
+                          >
+                            <span>{s.icon}</span>
+                            <span>{s.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
                   {alreadyAdded ? (

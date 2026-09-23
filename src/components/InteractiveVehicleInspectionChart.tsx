@@ -20,7 +20,8 @@ import {
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { StandardJob, PaintScope } from '../types';
 import { getStandardJobs } from '../lib/storage';
-import { mapPanelToStandardJob, getPanelEnvironmentRates, isPartialPaintAllowedForPanel } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, getPanelEnvironmentRates, isPartialPaintAllowedForPanel, formatPaintTaskTitle } from '../lib/panelMappingHelper';
+import { Interactive3DVehicleInspectionModel } from './Interactive3DVehicleInspectionModel';
 
 export type DamageSeverity = 'SCRATCH' | 'MINOR_DENT' | 'DEEP_DENT' | 'TEAR_CRACK' | 'REPLACE_REQ';
 export type RepairAction = 'PAINT_ONLY' | 'DENT_AND_PAINT' | 'DENT_ONLY' | 'REPLACEMENT';
@@ -352,6 +353,62 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     },
     labelPos: { x: 220, y: 397 },
     defaultPrice: 1350
+  },
+
+  // Engine Bay Aprons & Underbody (Requested Features)
+  {
+    id: 'apron_lhs',
+    code: 'APRON-L',
+    nameEn: 'Apron LHS (Left Engine Bay)',
+    nameHi: 'बायां अप्रन (Left Engine Apron)',
+    standardJobId: 'std-apron-lhs-full',
+    view: 'FRONT',
+    svgShape: {
+      type: 'rect',
+      x: 155,
+      y: 65,
+      width: 25,
+      height: 45,
+      rx: 3
+    },
+    labelPos: { x: 167, y: 87 },
+    defaultPrice: 1100
+  },
+  {
+    id: 'apron_rhs',
+    code: 'APRON-R',
+    nameEn: 'Apron RHS (Right Engine Bay)',
+    nameHi: 'दायां अप्रन (Right Engine Apron)',
+    standardJobId: 'std-apron-rhs-full',
+    view: 'FRONT',
+    svgShape: {
+      type: 'rect',
+      x: 260,
+      y: 65,
+      width: 25,
+      height: 45,
+      rx: 3
+    },
+    labelPos: { x: 272, y: 87 },
+    defaultPrice: 1100
+  },
+  {
+    id: 'underbody',
+    code: 'UNDERBODY',
+    nameEn: 'Underbody Chassis Frame',
+    nameHi: 'अंडरबॉडी चेसिस (Underbody Painting)',
+    standardJobId: 'std-underbody-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 170,
+      y: 190,
+      width: 100,
+      height: 95,
+      rx: 6
+    },
+    labelPos: { x: 220, y: 238 },
+    defaultPrice: 1800
   }
 ];
 
@@ -371,6 +428,7 @@ export function InteractiveVehicleInspectionChart({
   const [selectedPanelForDetail, setSelectedPanelForDetail] = useState<PanelDefinition | null>(null);
   const [viewAngle, setViewAngle] = useState<'TOP' | 'SIDE_LHS' | 'SIDE_RHS'>('TOP');
   const [speakingPanelId, setSpeakingPanelId] = useState<string | null>(null);
+  const [displayMode, setDisplayMode] = useState<'3D_INTERACTIVE' | '2D_SKETCH'>('3D_INTERACTIVE');
 
   // Quick damage type selector for Denter/Painter inspection mode
   const [activeSeverity, setActiveSeverity] = useState<DamageSeverity>('MINOR_DENT');
@@ -671,8 +729,35 @@ export function InteractiveVehicleInspectionChart({
           </div>
         </div>
 
-        {/* Selected Panels Counter & Estimated Total */}
+        {/* Mode Tab Switcher (3D Model vs 2D Sketch) */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setDisplayMode('3D_INTERACTIVE')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                displayMode === '3D_INTERACTIVE'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🚘</span>
+              <span>3D Model (दरवाजे & इनर पेंट)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayMode('2D_SKETCH')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                displayMode === '2D_SKETCH'
+                  ? 'bg-amber-400 text-slate-950 font-black shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>🎨</span>
+              <span>2D Sketch Blueprint</span>
+            </button>
+          </div>
+
           <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs">
             <span className="text-slate-400 font-medium mr-1.5">चुने हुए पैनल:</span>
             <strong className="text-amber-400 font-mono text-sm">{selectedCount} Panels</strong>
@@ -684,7 +769,22 @@ export function InteractiveVehicleInspectionChart({
         </div>
       </div>
 
-      {/* Main Interactive Diagram Workspace */}
+      {/* Conditional 3D Interactive Model or 2D Diagram */}
+      {displayMode === '3D_INTERACTIVE' ? (
+        <div className="p-4 sm:p-6">
+          <Interactive3DVehicleInspectionModel
+            mode={mode}
+            isCars24={isCars24}
+            selectedPanelIds={selectedPanelIds}
+            inspections={inspections}
+            onInspectionChange={onInspectionChange}
+            onPanelToggle={onPanelToggle}
+            availableStandardJobs={availableStandardJobs}
+            compact={compact}
+          />
+        </div>
+      ) : (
+      /* Main Interactive Diagram Workspace (2D) */
       <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Visual Blueprint / Sketch Canvas Area */}
@@ -1025,7 +1125,9 @@ export function InteractiveVehicleInspectionChart({
                           </span>
                           <div>
                             <strong className="text-white block">{p.nameHi}</strong>
-                            <span className="text-[10px] text-slate-400 font-mono">{p.nameEn}</span>
+                            <span className="text-[10.5px] text-amber-300 font-extrabold font-mono block">
+                              {formatPaintTaskTitle(p.nameEn, currentScope)}
+                            </span>
                           </div>
                         </div>
 
@@ -1061,7 +1163,7 @@ export function InteractiveVehicleInspectionChart({
                       <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center gap-1">
                         <span className="text-[10px] font-bold text-slate-400 mr-1">Paint Scope:</span>
                         {[
-                          { id: 'FULL_OUTER', label: 'Full Outer', icon: '✨' },
+                          { id: 'FULL_OUTER', label: 'Full Paint', icon: '✨' },
                           { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint', icon: '🎨', disabled: !isPartialAllowed },
                           { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
                           { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
@@ -1193,6 +1295,7 @@ export function InteractiveVehicleInspectionChart({
         </div>
 
       </div>
+      )}
 
       {/* Action Footer */}
       <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
