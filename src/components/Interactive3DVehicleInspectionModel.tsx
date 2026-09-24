@@ -30,6 +30,10 @@ export interface Interactive3DVehicleInspectionModelProps {
   currentRole?: string;
   vehicleMakeModel?: string;
   compact?: boolean;
+  bonnetOpen?: boolean;
+  setBonnetOpen?: (open: boolean) => void;
+  dickyOpen?: boolean;
+  setDickyOpen?: (open: boolean) => void;
 }
 
 export function Interactive3DVehicleInspectionModel({
@@ -40,13 +44,16 @@ export function Interactive3DVehicleInspectionModel({
   onInspectionChange,
   onPanelToggle,
   availableStandardJobs = [],
-  compact = false
+  compact = false,
+  ...props
 }: Interactive3DVehicleInspectionModelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
 
   // States
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
   const [hoveredPanelId, setHoveredPanelId] = useState<string | null>(null);
+  const [isPillDismissed, setIsPillDismissed] = useState(false);
+  const previousPanelIdRef = useRef<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
@@ -62,8 +69,14 @@ export function Interactive3DVehicleInspectionModel({
 
   // Open / Close Hinged Parts State
   const [doorsOpen, setDoorsOpen] = useState(true);
-  const [bonnetOpen, setBonnetOpen] = useState(false);
-  const [dickyOpen, setDickyOpen] = useState(false);
+  const [localBonnetOpen, setLocalBonnetOpen] = useState(false);
+  const [localDickyOpen, setLocalDickyOpen] = useState(false);
+
+  const bonnetOpen = props.bonnetOpen !== undefined ? props.bonnetOpen : localBonnetOpen;
+  const setBonnetOpen = props.setBonnetOpen || setLocalBonnetOpen;
+
+  const dickyOpen = props.dickyOpen !== undefined ? props.dickyOpen : localDickyOpen;
+  const setDickyOpen = props.setDickyOpen || setLocalDickyOpen;
 
   // Isolation and Assembly Reference states
   const [isolatedComponent, setIsolatedComponent] = useState<string | null>(null);
@@ -95,14 +108,15 @@ export function Interactive3DVehicleInspectionModel({
 
   // Active panel definition
   const activePanelObj = useMemo(() => {
-    return VEHICLE_PANELS.find(p => p.id === (activePanelId || hoveredPanelId)) || null;
-  }, [activePanelId, hoveredPanelId]);
+    return VEHICLE_PANELS.find(p => p.id === activePanelId) || null;
+  }, [activePanelId]);
 
   const activeInspection = activePanelObj ? effectiveInspections[activePanelObj.id] : undefined;
   const currentScope: PaintScope = activeInspection?.paintScope || 'FULL_OUTER';
 
   // Toggle panel selection
   const handlePanelClick = (panelId: string, scope?: PaintScope) => {
+    if (panelId === 'boot_floor' && !dickyOpen) return; // Prevent selection if closed!
     setActivePanelId(panelId);
     const panelObj = VEHICLE_PANELS.find(p => p.id === panelId);
     if (!panelObj) return;
@@ -110,7 +124,7 @@ export function Interactive3DVehicleInspectionModel({
     const existing = effectiveInspections[panelId];
     // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle.
     const newSelected = scope ? true : (existing ? !existing.selected : true);
-    const targetScope = scope || existing?.paintScope || 'FULL_OUTER';
+    const targetScope = scope || existing?.paintScope || (panelId.startsWith('pillar_') ? 'INSIDE_JAMB' : 'FULL_OUTER');
 
     const updatedObj = {
       panelId,
@@ -248,6 +262,15 @@ export function Interactive3DVehicleInspectionModel({
     });
 
     const interiorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });
+    const tintedGlassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0f172a, // Premium deep tinted luxury glass look
+      transparent: true,
+      opacity: 0.3, // Semi-transparent so interior/pillars are fully visible!
+      roughness: 0.05,
+      metalness: 0.95,
+      transmission: 0.8,
+      thickness: 0.8
+    });
     const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.05, metalness: 0.95 });
     const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.95 });
     const engineMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.5 });
@@ -319,13 +342,13 @@ export function Interactive3DVehicleInspectionModel({
     cabinGroup.add(chassisTub);
 
     // Aerodynamic Glass Canopy - shaped like the Honda City's fastback roofline
-    const canopyGeo = new THREE.BoxGeometry(1.42, 0.65, 2.15);
-    const canopyMesh = new THREE.Mesh(canopyGeo, interiorMat);
+    const canopyGeo = new THREE.BoxGeometry(1.30, 0.65, 2.15);
+    const canopyMesh = new THREE.Mesh(canopyGeo, tintedGlassMat);
     canopyMesh.position.set(0, 0.95, -0.15);
     cabinGroup.add(canopyMesh);
 
     // Premium Glossy Black A, B, and C Window Pillars
-    const bPillarGeo = new THREE.BoxGeometry(1.46, 0.65, 0.08);
+    const bPillarGeo = new THREE.BoxGeometry(1.32, 0.65, 0.08);
     const bPillar = new THREE.Mesh(bPillarGeo, interiorMat);
     bPillar.position.set(0, 0.95, -0.15); // Center pillar
     cabinGroup.add(bPillar);
@@ -520,6 +543,41 @@ export function Interactive3DVehicleInspectionModel({
     wsRearGeo.rotateX(Math.PI / 4.2);
     registerPanelMesh('windshield_rear', wsRearGeo, glassMat, undefined, new THREE.Vector3(0, 1.05, -1.02));
 
+    // Structural Pillars: Pillar A, B, and C (Inside Paint Panels)
+    // Pillar A (Front Symmetrical Windshield Pillars) - Made thicker and offset outward to stand proud of glass canopy
+    const pillarAGeo = createRoundedBoxGeometry(0.07, 0.54, 0.07, 0.015);
+    const pillarAL = registerPanelMesh('pillar_a', pillarAGeo, defaultPaintMat, undefined, new THREE.Vector3(0.70, 1.06, 0.85));
+    pillarAL.rotation.set(-0.6, 0, -0.3);
+    pillarAL.userData = { panelId: 'pillar_a', isInnerJamb: true };
+
+    const pillarAR = new THREE.Mesh(pillarAGeo, defaultPaintMat.clone());
+    pillarAR.position.set(-0.70, 1.06, 0.85);
+    pillarAR.rotation.set(-0.6, 0, 0.3);
+    pillarAR.userData = { panelId: 'pillar_a', isInnerJamb: true };
+    carGroup.add(pillarAR);
+
+    // Pillar B (Middle Passenger Door Structural Pillars) - Made thicker and offset outward to stand proud of static black pillar
+    const pillarBGeo = createRoundedBoxGeometry(0.07, 0.57, 0.09, 0.015);
+    const pillarBL = registerPanelMesh('pillar_b', pillarBGeo, defaultPaintMat, undefined, new THREE.Vector3(0.71, 0.96, -0.1));
+    pillarBL.userData = { panelId: 'pillar_b', isInnerJamb: true };
+
+    const pillarBR = new THREE.Mesh(pillarBGeo, defaultPaintMat.clone());
+    pillarBR.position.set(-0.71, 0.96, -0.1);
+    pillarBR.userData = { panelId: 'pillar_b', isInnerJamb: true };
+    carGroup.add(pillarBR);
+
+    // Pillar C (Rear Symmetrical Fastback Pillars) - Made thicker and offset outward to stand proud of glass canopy
+    const pillarCGeo = createRoundedBoxGeometry(0.07, 0.54, 0.11, 0.015);
+    const pillarCL = registerPanelMesh('pillar_c', pillarCGeo, defaultPaintMat, undefined, new THREE.Vector3(0.70, 1.03, -0.92));
+    pillarCL.rotation.set(0.5, 0, -0.2);
+    pillarCL.userData = { panelId: 'pillar_c', isInnerJamb: true };
+
+    const pillarCR = new THREE.Mesh(pillarCGeo, defaultPaintMat.clone());
+    pillarCR.position.set(-0.70, 1.03, -0.92);
+    pillarCR.rotation.set(0.5, 0, 0.2);
+    pillarCR.userData = { panelId: 'pillar_c', isInnerJamb: true };
+    carGroup.add(pillarCR);
+
     // I. ENGINE BAY APRONS, APEX CORES & UNDERBODY
     const apronLhsGeo = createRoundedBoxGeometry(0.28, 0.4, 0.75, 0.04);
     const apronRhsGeo = createRoundedBoxGeometry(0.28, 0.4, 0.75, 0.04);
@@ -613,22 +671,35 @@ export function Interactive3DVehicleInspectionModel({
     carGroup.add(bonnetPivot);
     const bonnetGeo = createRoundedBoxGeometry(1.38, 0.04, 1.45, 0.05);
     registerPanelMesh('hood_bonnet', bonnetGeo, defaultPaintMat, bonnetPivot, new THREE.Vector3(0, 0, 0.725));
+    
+    // Bonnet Inner Panel representing Bonnet Inside Paint
+    const innerBonnetGeo = createRoundedBoxGeometry(1.32, 0.03, 1.38, 0.04);
+    const innerBonnet = new THREE.Mesh(innerBonnetGeo, defaultPaintMat.clone());
+    innerBonnet.position.set(0, -0.025, 0.725);
+    innerBonnet.userData = { panelId: 'hood_bonnet', isInnerJamb: true };
+    bonnetPivot.add(innerBonnet);
 
-    // L. NOTCHBACK REAR TRUNK / DICKY (More compact, sportier deck lid - smaller than Bonnet)
+    // L. NOTCHBACK REAR TRUNK / DICKY (Thinner, longer deck lid that covers the inside boot floor nicely)
     const bootPivot = new THREE.Group();
     bootPivot.position.set(0, 0.95, -1.32);
     carGroup.add(bootPivot);
-    const bootGeo = createRoundedBoxGeometry(1.38, 0.38, 0.48, 0.05);
-    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.15, -0.24));
+    const bootGeo = createRoundedBoxGeometry(1.38, 0.02, 0.85, 0.008);
+    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.01, -0.425));
 
-    // Sleek Rear Spoiler on trunk lid
+    // Dicky Inner Panel representing Dicky Inside Paint
+    const innerBootGeo = createRoundedBoxGeometry(1.34, 0.015, 0.81, 0.006);
+    const innerBoot = new THREE.Mesh(innerBootGeo, defaultPaintMat.clone());
+    innerBoot.position.set(0, -0.02, -0.425);
+    innerBoot.userData = { panelId: 'boot_trunk', isInnerJamb: true };
+    bootPivot.add(innerBoot);
+
+    // Sleek Selectable Rear Spoiler on trunk lid (rotates with bootPivot)
     const spoilerGeo = createRoundedBoxGeometry(1.4, 0.03, 0.12, 0.01);
-    const spoiler = new THREE.Mesh(spoilerGeo, chromeMat);
-    spoiler.position.set(0, 0.08, -0.65);
-    bootPivot.add(spoiler);
+    const spoilerMesh = registerPanelMesh('spoiler', spoilerGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, 0.02, -0.82));
 
     const bootFloorGeo = createRoundedBoxGeometry(1.3, 0.06, 0.64, 0.03);
-    registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -1.42));
+    const bootFloor = registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -1.55));
+    bootFloor.userData = { panelId: 'boot_floor', isInnerJamb: true };
 
     hingedGroupsRef.current = {
       doorLhsFront: doorLhsFrontPivot,
@@ -753,7 +824,15 @@ export function Interactive3DVehicleInspectionModel({
       } else {
         // Raycast for hover
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(carGroup.children, true);
+        const selectableObjects: THREE.Object3D[] = [];
+        carGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh && child.userData && child.userData.panelId) {
+            if (child.visible) {
+              selectableObjects.push(child);
+            }
+          }
+        });
+        const intersects = raycaster.intersectObjects(selectableObjects, true);
         if (intersects.length > 0) {
           const hit = intersects[0].object;
           if (hit.userData && hit.userData.panelId) {
@@ -781,7 +860,15 @@ export function Interactive3DVehicleInspectionModel({
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(carGroup.children, true);
+      const selectableObjects: THREE.Object3D[] = [];
+      carGroup.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && child.userData && child.userData.panelId) {
+          if (child.visible) {
+            selectableObjects.push(child);
+          }
+        }
+      });
+      const intersects = raycaster.intersectObjects(selectableObjects, true);
       if (intersects.length > 0) {
         const hit = intersects[0].object;
         if (hit.userData && hit.userData.panelId) {
@@ -871,15 +958,27 @@ export function Interactive3DVehicleInspectionModel({
     if (h.bootTrunk) h.bootTrunk.rotation.x = bootAngle;
   }, [doorsOpen, bonnetOpen, dickyOpen]);
 
-  // Automatically clear selected 3D panel floating pill after 3.5 seconds to keep screen clean
+  // Track panel switches to reactivate floating pill
   useEffect(() => {
     if (activePanelId) {
+      if (activePanelId !== previousPanelIdRef.current) {
+        setIsPillDismissed(false); // Reset dismissal when shifting to a different panel
+        previousPanelIdRef.current = activePanelId;
+      }
+    } else {
+      previousPanelIdRef.current = null;
+    }
+  }, [activePanelId]);
+
+  // Automatically clear selected 3D panel floating pill after 3.5 seconds to keep screen clean
+  useEffect(() => {
+    if (activePanelId && !isPillDismissed) {
       const timer = setTimeout(() => {
-        setActivePanelId(null);
+        setIsPillDismissed(true);
       }, 3500);
       return () => clearTimeout(timer);
     }
-  }, [activePanelId]);
+  }, [activePanelId, isPillDismissed]);
 
   // Update Camera Preset Views
   useEffect(() => {
@@ -956,10 +1055,18 @@ export function Interactive3DVehicleInspectionModel({
             shouldKeepVisible = true;
           }
 
+          if (child.userData?.panelId === 'boot_floor') {
+            shouldKeepVisible = shouldKeepVisible && dickyOpen;
+          }
+
           child.visible = shouldKeepVisible;
         } else {
-          // No active isolation: keep all body panels visible
-          child.visible = true;
+          // No active isolation: keep all body panels visible except boot floor which requires dickyOpen
+          if (child.userData?.panelId === 'boot_floor') {
+            child.visible = dickyOpen;
+          } else {
+            child.visible = true;
+          }
         }
       }
     });
@@ -974,7 +1081,7 @@ export function Interactive3DVehicleInspectionModel({
     } else if (isolatedComponent === 'Doors') {
       setCameraPreset('ISO');
     }
-  }, [isolatedComponent]);
+  }, [isolatedComponent, dickyOpen]);
 
   // Handle AR Camera Feed Stream allocation and release
   useEffect(() => {
@@ -1254,7 +1361,7 @@ export function Interactive3DVehicleInspectionModel({
           <div ref={mountRef} className="relative w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing z-10" />
 
           {/* Hovered Panel Floating Pill */}
-          {activePanelObj && (
+          {activePanelObj && !isPillDismissed && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center justify-between gap-4 z-20 animate-in fade-in zoom-in-95 duration-200">
               <div>
                 <div className="text-[9px] text-amber-400 font-black uppercase tracking-wider">चयनित पैनल (Selected Panel)</div>
@@ -1267,6 +1374,7 @@ export function Interactive3DVehicleInspectionModel({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setIsPillDismissed(true);
                   setActivePanelId(null);
                 }}
                 className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
@@ -1505,10 +1613,10 @@ export function Interactive3DVehicleInspectionModel({
           {/* Scope Selector Buttons */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
             {[
-              { id: 'FULL_OUTER', label: 'Full Paint (बाहर पूरा)', icon: '✨' },
-              { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint (आधा/टचअप)', icon: '🎨', disabled: !isPartialPaintAllowedForPanel(activePanelObj.id) },
-              { id: 'INSIDE_JAMB', label: 'Inside Paint (अंदर पिलर)', icon: '🚪' },
-              { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside (दोनों)', icon: '🌟' }
+              { id: 'FULL_OUTER', label: 'Full Paint (बाहर पूरा)', icon: '✨', disabled: false, tooltip: 'Full Paint' },
+              { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint (आधा/टचअप)', icon: '🎨', disabled: !isPartialPaintAllowedForPanel(activePanelObj.id), tooltip: 'Partial Paint' },
+              { id: 'INSIDE_JAMB', label: 'Inside Paint (अंदर पिलर)', icon: '🚪', disabled: false, tooltip: 'Inside Paint' },
+              { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside (दोनों)', icon: '🌟', disabled: false, tooltip: 'Outer + Inside Paint' }
             ].map(s => {
               const active = currentScope === s.id;
               return (
@@ -1516,7 +1624,19 @@ export function Interactive3DVehicleInspectionModel({
                   key={s.id}
                   type="button"
                   disabled={s.disabled}
-                  onClick={() => handlePanelClick(activePanelObj.id, s.id as PaintScope)}
+                  title={s.tooltip}
+                  onClick={() => {
+                    const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                    if (isInsideScope) {
+                      if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
+                        setBonnetOpen(true);
+                      }
+                      if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
+                        setDickyOpen(true);
+                      }
+                    }
+                    handlePanelClick(activePanelObj.id, s.id as PaintScope);
+                  }}
                   className={`p-2.5 rounded-xl font-extrabold text-xs transition-all flex flex-col items-center justify-center gap-1 text-center ${
                     s.disabled
                       ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'

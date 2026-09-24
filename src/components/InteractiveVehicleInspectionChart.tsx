@@ -341,6 +341,24 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     defaultPrice: 300
   },
   {
+    id: 'spoiler',
+    code: 'SPOILER',
+    nameEn: 'Rear Spoiler',
+    nameHi: 'रियर स्पॉइलर (Rear Spoiler)',
+    standardJobId: 'std-spoiler-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 172,
+      y: 328,
+      width: 96,
+      height: 5,
+      rx: 1
+    },
+    labelPos: { x: 220, y: 322 },
+    defaultPrice: 1200
+  },
+  {
     id: 'bumper_rear',
     code: 'RB',
     nameEn: 'Rear Bumper',
@@ -409,6 +427,48 @@ export const VEHICLE_PANELS: PanelDefinition[] = [
     },
     labelPos: { x: 220, y: 238 },
     defaultPrice: 1800
+  },
+  {
+    id: 'pillar_a',
+    code: 'P-A',
+    nameEn: 'A-Pillar',
+    nameHi: 'ए-पिलर (A-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-a',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 152 140 L 162 140 L 170 180 L 160 180 Z M 278 140 L 288 140 L 280 180 L 270 180 Z'
+    },
+    labelPos: { x: 220, y: 124 },
+    defaultPrice: 800
+  },
+  {
+    id: 'pillar_b',
+    code: 'P-B',
+    nameEn: 'B-Pillar',
+    nameHi: 'बी-पिलर (B-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-b',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 164 230 L 174 230 L 174 245 L 164 245 Z M 266 230 L 276 230 L 276 245 L 266 245 Z'
+    },
+    labelPos: { x: 220, y: 215 },
+    defaultPrice: 800
+  },
+  {
+    id: 'pillar_c',
+    code: 'P-C',
+    nameEn: 'C-Pillar',
+    nameHi: 'सी-पिलर (C-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-c',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 166 290 L 174 290 L 164 330 L 156 330 Z M 266 290 L 274 290 L 284 330 L 276 330 Z'
+    },
+    labelPos: { x: 220, y: 326 },
+    defaultPrice: 800
   }
 ];
 
@@ -428,7 +488,10 @@ export function InteractiveVehicleInspectionChart({
   const [selectedPanelForDetail, setSelectedPanelForDetail] = useState<PanelDefinition | null>(null);
   const [viewAngle, setViewAngle] = useState<'TOP' | 'SIDE_LHS' | 'SIDE_RHS'>('TOP');
   const [speakingPanelId, setSpeakingPanelId] = useState<string | null>(null);
-  const [displayMode, setDisplayMode] = useState<'3D_INTERACTIVE' | '2D_SKETCH'>('3D_INTERACTIVE');
+
+  // Lifted state to control dicky and bonnet open states
+  const [bonnetOpen, setBonnetOpen] = useState(false);
+  const [dickyOpen, setDickyOpen] = useState(false);
 
   // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
   const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
@@ -489,12 +552,15 @@ export function InteractiveVehicleInspectionChart({
 
     const wasActive = isPanelActive(panel.id);
 
+    const isInsideOnly = panel.id.startsWith('pillar_') || panel.id === 'boot_floor';
+
     const current = effectiveInspections[panel.id] || {
       panelId: panel.id,
       nameEn: panel.nameEn,
       nameHi: panel.nameHi,
       category: 'EXTERIOR_BODY',
-      selected: false
+      selected: false,
+      paintScope: isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER'
     };
 
     const updatedObj = {
@@ -502,7 +568,8 @@ export function InteractiveVehicleInspectionChart({
       selected: !wasActive,
       damageType: !wasActive ? activeSeverity : undefined,
       actionRequired: !wasActive ? activeRepairAction : undefined,
-      matchedStandardJobId: panel.standardJobId
+      matchedStandardJobId: panel.standardJobId,
+      paintScope: current.paintScope || (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER')
     };
 
     setLocalInspections(prev => ({
@@ -528,12 +595,12 @@ export function InteractiveVehicleInspectionChart({
   }, [availableStandardJobs]);
 
   const selectedCount = useMemo(() => {
-    return VEHICLE_PANELS.filter(p => isPanelActive(p.id)).length;
-  }, [selectedPanelIds, effectiveInspections]);
+    return VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length;
+  }, [selectedPanelIds, effectiveInspections, dickyOpen]);
 
   const estimatedTotalCost = useMemo(() => {
     return VEHICLE_PANELS
-      .filter(p => isPanelActive(p.id))
+      .filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor')))
       .reduce((sum, p) => {
         const stdJob = getMatchingStandardJob(p, effectiveStandardJobs);
         if (stdJob) {
@@ -541,211 +608,25 @@ export function InteractiveVehicleInspectionChart({
         }
         return sum + (isCars24 ? 1350 : (p.defaultPrice || 1350));
       }, 0);
-  }, [selectedPanelIds, effectiveInspections, effectiveStandardJobs, isCars24]);
+  }, [selectedPanelIds, effectiveInspections, effectiveStandardJobs, isCars24, dickyOpen]);
 
   if (compact) {
     return (
-      <div className="w-full bg-slate-950 text-white rounded-2xl border border-slate-800 p-4 sm:p-6 flex flex-col items-center justify-center relative shadow-inner">
-        {/* Top Orientation Bar */}
-        <div className="w-full max-w-[500px] flex items-center justify-between text-xs text-slate-400 mb-3 px-3 font-mono font-bold">
-          <span className="flex items-center gap-1.5 text-amber-400">
-            <span>⬆️ FRONT (आगे - BONNET)</span>
-          </span>
-          <span className="text-[11px] text-slate-500 font-semibold">
-            (LHS बायां • RHS दायां)
-          </span>
-          <span className="flex items-center gap-1.5 text-amber-400">
-            <span>⬇️ REAR (पीछे - DICKY)</span>
-          </span>
-        </div>
-
-        {/* SVG Vehicle Blueprint Sketch - Enlarged for maximum panel clarity */}
-        <div className="w-full max-w-[460px] sm:max-w-[520px] aspect-[440/440] relative flex items-center justify-center my-2">
-          <svg
-            viewBox="0 0 440 440"
-            className="w-full h-full drop-shadow-2xl select-none"
-          >
-            <defs>
-              <pattern id="tirePattern" width="10" height="10" patternUnits="userSpaceOnUse">
-                <path d="M 0 5 L 10 5 M 5 0 L 5 10" stroke="#334155" strokeWidth="1" />
-              </pattern>
-              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-
-              {/* Dynamic Gradients for Precise Paint Scopes */}
-              {VEHICLE_PANELS.map((p) => {
-                const inspection = effectiveInspections[p.id];
-                const scope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
-
-                if (scope === 'PARTIAL_TOUCHUP') {
-                  // Partial Paint: Left half colored cyan, right half uncolored dark grey
-                  return (
-                    <linearGradient id={`grad-partial-${p.id}`} x1="0%" y1="0%" x2="100%" y2="0%" key={p.id}>
-                      <stop offset="50%" stopColor="#06b6d4" />
-                      <stop offset="50%" stopColor="#1e293b" />
-                    </linearGradient>
-                  );
-                }
-
-                if (scope === 'INSIDE_JAMB') {
-                  // Inside Jamb Only: Edges/boundaries colored purple, outer center uncolored dark grey
-                  return (
-                    <linearGradient id={`grad-inside-${p.id}`} x1="0%" y1="0%" x2="100%" y2="0%" key={p.id}>
-                      <stop offset="15%" stopColor="#8b5cf6" />
-                      <stop offset="15%" stopColor="#1e293b" />
-                      <stop offset="85%" stopColor="#1e293b" />
-                      <stop offset="85%" stopColor="#8b5cf6" />
-                    </linearGradient>
-                  );
-                }
-
-                return null;
-              })}
-            </defs>
-
-            {/* Ground Shadow & Car Chassis Underbody Outline */}
-            <path
-              d="M 125 45 C 125 20, 315 20, 315 45 L 325 110 C 330 140, 330 290, 325 330 L 315 395 C 315 415, 125 415, 125 395 L 115 330 C 110 290, 110 140, 115 110 Z"
-              fill="#0f172a"
-              stroke="#334155"
-              strokeWidth="2.5"
-              strokeDasharray="4 2"
-            />
-
-            {/* 4 Tires (Wheels) */}
-            <rect x="94" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-            <rect x="322" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-            <rect x="94" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-            <rect x="322" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-
-            {/* Side Mirrors */}
-            <path d="M 120 135 C 100 135, 100 150, 120 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
-            <path d="M 320 135 C 340 135, 340 150, 320 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
-
-            {/* Headlights */}
-            <path d="M 142 32 C 150 25, 165 25, 175 34 L 165 48 C 155 45, 145 42, 142 32 Z" fill="#fbbf24" opacity="0.8" />
-            <path d="M 298 32 C 290 25, 275 25, 265 34 L 275 48 C 285 45, 295 42, 298 32 Z" fill="#fbbf24" opacity="0.8" />
-
-            {/* Tail-lights */}
-            <path d="M 142 390 C 150 396, 165 396, 175 390 L 168 378 C 158 382, 148 384, 142 390 Z" fill="#ef4444" opacity="0.8" />
-            <path d="M 298 390 C 290 396, 275 396, 265 390 L 272 378 C 282 382, 292 384, 298 390 Z" fill="#ef4444" opacity="0.8" />
-
-            {/* Interactive Panels */}
-            {VEHICLE_PANELS.map((panel) => {
-              const isActive = isPanelActive(panel.id);
-              const isHovered = activeHoveredPanel?.id === panel.id;
-
-              let fillColor = '#1e293b';
-              let strokeColor = '#475569';
-              let strokeWidth = '1.8';
-
-              if (isActive) {
-                const inspection = effectiveInspections[panel.id];
-                const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
-
-                if (currentScope === 'PARTIAL_TOUCHUP') {
-                  fillColor = `url(#grad-partial-${panel.id})`; // dynamic half-colored gradient
-                  strokeColor = '#a5f3fc';
-                } else if (currentScope === 'INSIDE_JAMB') {
-                  fillColor = `url(#grad-inside-${panel.id})`; // dynamic inside-only gradient
-                  strokeColor = '#ddd6fe';
-                } else if (currentScope === 'FULL_OUTER_AND_INSIDE') {
-                  fillColor = '#ec4899'; // vibrant pink for outer + inside
-                  strokeColor = '#fbcfe8';
-                } else {
-                  fillColor = '#f59e0b'; // vibrant amber for standard full outer paint
-                  strokeColor = '#fef08a';
-                }
-                strokeWidth = '2.5';
-              } else if (isHovered) {
-                fillColor = '#334155';
-                strokeColor = '#fbbf24';
-                strokeWidth = '2.5';
-              }
-
-              if (panel.id.includes('windshield')) {
-                fillColor = isActive ? '#38bdf8' : '#0f172a';
-                strokeColor = isActive ? '#bae6fd' : '#334155';
-              }
-
-              return (
-                <g
-                  key={panel.id}
-                  className="cursor-pointer transition-all duration-200"
-                  onMouseEnter={() => setActiveHoveredPanel(panel)}
-                  onMouseLeave={() => setActiveHoveredPanel(null)}
-                  onClick={() => handlePanelClick(panel)}
-                >
-                  {panel.svgShape.type === 'path' && (
-                    <path
-                      d={panel.svgShape.d}
-                      fill={fillColor}
-                      stroke={strokeColor}
-                      strokeWidth={strokeWidth}
-                      filter={isActive ? 'url(#glow)' : undefined}
-                      className="transition-colors duration-150"
-                    />
-                  )}
-
-                  {panel.svgShape.type === 'rect' && (
-                    <rect
-                      x={panel.svgShape.x}
-                      y={panel.svgShape.y}
-                      width={panel.svgShape.width}
-                      height={panel.svgShape.height}
-                      rx={panel.svgShape.rx || 4}
-                      fill={fillColor}
-                      stroke={strokeColor}
-                      strokeWidth={strokeWidth}
-                      className="transition-colors duration-150"
-                    />
-                  )}
-
-                  {/* Panel Label Pill on SVG */}
-                  <text
-                    x={panel.labelPos.x}
-                    y={panel.labelPos.y}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill={isActive ? '#020617' : '#e2e8f0'}
-                    fontSize={panel.id === 'roof' ? '11' : panel.id === 'boot_trunk' ? '10' : '9'}
-                    fontWeight="900"
-                    fontFamily="system-ui, -apple-system, sans-serif"
-                    className="pointer-events-none select-none"
-                  >
-                    {isActive ? `✓ ${panel.code}` : panel.code}
-                  </text>
-
-                  {/* Active tick badge */}
-                  {isActive && (
-                    <circle
-                      cx={panel.labelPos.x + 22}
-                      cy={panel.labelPos.y - 10}
-                      r="5"
-                      fill="#10b981"
-                      stroke="#ffffff"
-                      strokeWidth="1.5"
-                    />
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Minimal Sketch Visual Legend */}
-        <div className="w-full max-w-[500px] mt-2 pt-2 border-t border-slate-800 flex items-center justify-center gap-6 text-xs flex-wrap font-semibold">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-slate-800 border border-slate-600 inline-block" />
-            <span className="text-slate-400">Regular Panel</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-amber-500 border border-amber-300 inline-block" />
-            <span className="text-amber-300 font-bold">🎯 Allotted Panel ({selectedCount})</span>
-          </div>
-        </div>
+      <div className="w-full">
+        <Interactive3DVehicleInspectionModel
+          mode={mode}
+          isCars24={isCars24}
+          selectedPanelIds={selectedPanelIds}
+          inspections={inspections}
+          onInspectionChange={onInspectionChange}
+          onPanelToggle={onPanelToggle}
+          availableStandardJobs={availableStandardJobs}
+          compact={true}
+          bonnetOpen={bonnetOpen}
+          setBonnetOpen={setBonnetOpen}
+          dickyOpen={dickyOpen}
+          setDickyOpen={setDickyOpen}
+        />
       </div>
     );
   }
@@ -777,35 +658,8 @@ export function InteractiveVehicleInspectionChart({
           </div>
         </div>
 
-        {/* Mode Tab Switcher (3D Model vs 2D Sketch) */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setDisplayMode('3D_INTERACTIVE')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                displayMode === '3D_INTERACTIVE'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span>🚘</span>
-              <span>3D Model (दरवाजे & इनर पेंट)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDisplayMode('2D_SKETCH')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                displayMode === '2D_SKETCH'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span>🎨</span>
-              <span>2D Sketch Blueprint</span>
-            </button>
-          </div>
-
+        {/* Status Info Badges */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs">
             <span className="text-slate-400 font-medium mr-1.5">चुने हुए पैनल:</span>
             <strong className="text-amber-400 font-mono text-sm">{selectedCount} Panels</strong>
@@ -817,210 +671,34 @@ export function InteractiveVehicleInspectionChart({
         </div>
       </div>
 
-      {/* Conditional 3D Interactive Model or 2D Diagram */}
-      {displayMode === '3D_INTERACTIVE' ? (
-        <div className="p-4 sm:p-6">
+      {/* Main Interactive 3D Work Area */}
+      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Column: Premium 3D Interactive Model */}
+        <div className="lg:col-span-7 rounded-3xl overflow-hidden border border-slate-800 bg-slate-950/60 p-1">
           <Interactive3DVehicleInspectionModel
             mode={mode}
             isCars24={isCars24}
             selectedPanelIds={selectedPanelIds}
             inspections={inspections}
             onInspectionChange={onInspectionChange}
-            onPanelToggle={onPanelToggle}
+            onPanelToggle={(panelId, jobId, scope) => {
+              // Sync selected panel details on 3D click so the right edit sidebar updates
+              const found = VEHICLE_PANELS.find(p => p.id === panelId);
+              if (found) {
+                setSelectedPanelForDetail(found);
+              }
+              if (onPanelToggle) {
+                onPanelToggle(panelId, jobId, scope);
+              }
+            }}
             availableStandardJobs={availableStandardJobs}
             compact={compact}
+            bonnetOpen={bonnetOpen}
+            setBonnetOpen={setBonnetOpen}
+            dickyOpen={dickyOpen}
+            setDickyOpen={setDickyOpen}
           />
-        </div>
-      ) : (
-      /* Main Interactive Diagram Workspace (2D) */
-      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Visual Blueprint / Sketch Canvas Area */}
-        <div className="lg:col-span-7 flex flex-col items-center justify-center bg-slate-950/60 rounded-3xl p-4 sm:p-6 border border-slate-800/80 relative">
-          
-          {/* Top Orientation Bar */}
-          <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-2 px-2">
-            <span className="flex items-center gap-1 font-bold text-amber-400/80">
-              <span>⬆️ आगे (FRONT / BONNET)</span>
-            </span>
-            <span className="text-[11px] text-slate-500">
-              (LHS बायां • RHS दायां)
-            </span>
-            <span className="flex items-center gap-1 font-bold text-amber-400/80">
-              <span>⬇️ पीछे (REAR / BOOT)</span>
-            </span>
-          </div>
-
-          {/* SVG Vehicle Blueprint Sketch */}
-          <div className="w-full max-w-[380px] sm:max-w-[420px] aspect-[440/440] relative flex items-center justify-center">
-            <svg
-              viewBox="0 0 440 440"
-              className="w-full h-full drop-shadow-xl select-none"
-            >
-              <defs>
-                {/* Wheels Styling */}
-                <pattern id="tirePattern" width="10" height="10" patternUnits="userSpaceOnUse">
-                  <path d="M 0 5 L 10 5 M 5 0 L 5 10" stroke="#334155" strokeWidth="1" />
-                </pattern>
-                
-                {/* Active Glowing Shadow */}
-                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="3" result="blur" />
-                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                </filter>
-              </defs>
-
-              {/* 1. Ground Shadow & Car Chassis Underbody Outline */}
-              <path
-                d="M 125 45 C 125 20, 315 20, 315 45 L 325 110 C 330 140, 330 290, 325 330 L 315 395 C 315 415, 125 415, 125 395 L 115 330 C 110 290, 110 140, 115 110 Z"
-                fill="#0f172a"
-                stroke="#334155"
-                strokeWidth="2.5"
-                strokeDasharray="4 2"
-              />
-
-              {/* 2. 4 Tires (Wheels) on Corners */}
-              {/* Front Left Tire */}
-              <rect x="94" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-              {/* Front Right Tire */}
-              <rect x="322" y="65" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-              {/* Rear Left Tire */}
-              <rect x="94" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-              {/* Rear Right Tire */}
-              <rect x="322" y="295" width="24" height="60" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-
-              {/* Side Mirrors */}
-              <path d="M 120 135 C 100 135, 100 150, 120 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
-              <path d="M 320 135 C 340 135, 340 150, 320 150 Z" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
-
-              {/* Headlights (Yellow Accents) */}
-              <path d="M 142 32 C 150 25, 165 25, 175 34 L 165 48 C 155 45, 145 42, 142 32 Z" fill="#fbbf24" opacity="0.8" />
-              <path d="M 298 32 C 290 25, 275 25, 265 34 L 275 48 C 285 45, 295 42, 298 32 Z" fill="#fbbf24" opacity="0.8" />
-
-              {/* Tail-lights (Red Accents) */}
-              <path d="M 142 390 C 150 396, 165 396, 175 390 L 168 378 C 158 382, 148 384, 142 390 Z" fill="#ef4444" opacity="0.8" />
-              <path d="M 298 390 C 290 396, 275 396, 265 390 L 272 378 C 282 382, 292 384, 298 390 Z" fill="#ef4444" opacity="0.8" />
-
-              {/* 3. Interactive Panels (Clickable SVG paths) */}
-              {VEHICLE_PANELS.map((panel) => {
-                const isActive = isPanelActive(panel.id);
-                const isHovered = activeHoveredPanel?.id === panel.id;
-                const isDetailSelected = selectedPanelForDetail?.id === panel.id;
-
-                // Color themes
-                let fillColor = '#1e293b'; // default slate-800
-                let strokeColor = '#475569';
-                let strokeWidth = '1.8';
-
-                if (isActive) {
-                  const inspection = inspections[panel.id];
-                  const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
-
-                  if (currentScope === 'PARTIAL_TOUCHUP') {
-                    fillColor = '#06b6d4'; // vibrant cyan for partial paint
-                    strokeColor = '#a5f3fc';
-                  } else if (currentScope === 'INSIDE_JAMB') {
-                    fillColor = '#8b5cf6'; // vibrant purple for inside paint only
-                    strokeColor = '#ddd6fe';
-                  } else if (currentScope === 'FULL_OUTER_AND_INSIDE') {
-                    fillColor = '#ec4899'; // vibrant pink for outer + inside
-                    strokeColor = '#fbcfe8';
-                  } else {
-                    fillColor = '#f59e0b'; // vibrant amber for standard full outer paint
-                    strokeColor = '#fef08a';
-                  }
-                  strokeWidth = '2.5';
-                } else if (isHovered) {
-                  fillColor = '#334155';
-                  strokeColor = '#fbbf24';
-                  strokeWidth = '2.5';
-                }
-
-                if (panel.id.includes('windshield')) {
-                  fillColor = isActive ? '#38bdf8' : '#0f172a';
-                  strokeColor = isActive ? '#bae6fd' : '#334155';
-                }
-
-                return (
-                  <g
-                    key={panel.id}
-                    className="cursor-pointer transition-all duration-200"
-                    onMouseEnter={() => setActiveHoveredPanel(panel)}
-                    onMouseLeave={() => setActiveHoveredPanel(null)}
-                    onClick={() => handlePanelClick(panel)}
-                  >
-                    {panel.svgShape.type === 'path' && (
-                      <path
-                        d={panel.svgShape.d}
-                        fill={fillColor}
-                        stroke={strokeColor}
-                        strokeWidth={strokeWidth}
-                        filter={isActive ? 'url(#glow)' : undefined}
-                        className="transition-colors duration-150"
-                      />
-                    )}
-
-                    {panel.svgShape.type === 'rect' && (
-                      <rect
-                        x={panel.svgShape.x}
-                        y={panel.svgShape.y}
-                        width={panel.svgShape.width}
-                        height={panel.svgShape.height}
-                        rx={panel.svgShape.rx || 4}
-                        fill={fillColor}
-                        stroke={strokeColor}
-                        strokeWidth={strokeWidth}
-                        className="transition-colors duration-150"
-                      />
-                    )}
-
-                    {/* Panel Label Pill on SVG */}
-                    <text
-                      x={panel.labelPos.x}
-                      y={panel.labelPos.y}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill={isActive ? '#020617' : '#e2e8f0'}
-                      fontSize={panel.id === 'roof' ? '11' : '9'}
-                      fontWeight="900"
-                      fontFamily="system-ui, -apple-system, sans-serif"
-                      className="pointer-events-none select-none"
-                    >
-                      {isActive ? `✓ ${panel.code}` : panel.code}
-                    </text>
-
-                    {/* Visual damage / active tick badge */}
-                    {isActive && (
-                      <circle
-                        cx={panel.labelPos.x + 22}
-                        cy={panel.labelPos.y - 10}
-                        r="5"
-                        fill="#10b981"
-                        stroke="#ffffff"
-                        strokeWidth="1.5"
-                      />
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-
-          {/* Quick Sketch Visual Legend */}
-          <div className="w-full mt-4 pt-3 border-t border-slate-800 flex items-center justify-around text-xs flex-wrap gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded bg-slate-800 border border-slate-600 inline-block" />
-              <span className="text-slate-400">साफ पैनल (Clean)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded bg-amber-500 border border-amber-300 inline-block" />
-              <span className="text-amber-300 font-bold">डेंट/पेंट चुना गया (Selected)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded bg-sky-500 border border-sky-300 inline-block" />
-              <span className="text-sky-300">शीशा (Glass)</span>
-            </div>
-          </div>
         </div>
 
         {/* Right Detail Panel & Interactive Quick Actions */}
@@ -1079,6 +757,10 @@ export function InteractiveVehicleInspectionChart({
                 ? (isCars24 ? (matchedStdJob.cars24DenterPayout ?? matchedStdJob.denterPayout ?? 150) : (matchedStdJob.retailDenterPayout ?? matchedStdJob.denterPayout ?? 200))
                 : (isCars24 ? 150 : 200);
 
+              const inspection = effectiveInspections[activePanelObj.id];
+              const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
+              const isPartialAllowed = isPartialPaintAllowedForPanel(activePanelObj.id);
+
               return (
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
                   <div className="flex items-center justify-between">
@@ -1093,6 +775,79 @@ export function InteractiveVehicleInspectionChart({
                     <span className="text-amber-300 font-semibold">
                       ₹{activePainterPayout} (Paint) + ₹{activeDenterPayout} (Dent)
                     </span>
+                  </div>
+
+                  {/* Inline Paint Scope Chips */}
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 mr-1">Paint Scope:</span>
+                    {[
+                      { id: 'FULL_OUTER', label: 'Full Paint', icon: '✨' },
+                      { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint', icon: '🎨', disabled: !isPartialAllowed },
+                      { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
+                      { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
+                    ].map(s => {
+                      const isInsideOnlyPanel = activePanelObj.id.startsWith('pillar_') || activePanelObj.id === 'boot_floor';
+                      const isInsideOnlyDisabled = isInsideOnlyPanel && s.id !== 'INSIDE_JAMB';
+                      const isDisabled = s.disabled || isInsideOnlyDisabled;
+                      const active = currentScope === s.id;
+
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            
+                            // Auto-open Bonnet or Dicky if choosing inside paint scope
+                            const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                            if (isInsideScope) {
+                              if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
+                                setBonnetOpen(true);
+                              }
+                              if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
+                                setDickyOpen(true);
+                              }
+                            }
+
+                            const updatedObj = {
+                              ...(effectiveInspections[activePanelObj.id] || { panelId: activePanelObj.id, nameEn: activePanelObj.nameEn, nameHi: activePanelObj.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                              selected: true,
+                              paintScope: s.id as PaintScope,
+                              customPrice: undefined,
+                              customPainterPayout: undefined,
+                              customDenterPayout: undefined
+                            };
+
+                            setLocalInspections(prev => ({
+                              ...prev,
+                              [activePanelObj.id]: updatedObj
+                            }));
+
+                            if (onPanelToggle) {
+                              onPanelToggle(activePanelObj.id, activePanelObj.standardJobId, s.id as PaintScope);
+                            }
+                            if (onInspectionChange) {
+                              const updated = {
+                                ...effectiveInspections,
+                                [activePanelObj.id]: updatedObj
+                              };
+                              onInspectionChange(updated);
+                            }
+                          }}
+                          className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
+                            isDisabled
+                              ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'
+                              : active
+                              ? 'bg-amber-400 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
+                              : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-400/60'
+                          }`}
+                        >
+                          <span>{s.icon}</span>
+                          <span>{s.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -1129,6 +884,55 @@ export function InteractiveVehicleInspectionChart({
             </div>
           </div>
 
+          {/* Quick Toggle for Internal Panels & Pillars */}
+          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 space-y-2.5">
+            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              अंदरूनी भाग और पिलर (Internal & Pillar Panels):
+            </span>
+            <p className="text-[10px] text-slate-400">
+              इन्हें यहाँ से सीधा एक क्लिक में चुन सकते हैं (Select directly in 1-click):
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {[
+                { id: 'pillar_a', label: '🚪 A-Pillar (ए-पिलर)' },
+                { id: 'pillar_b', label: '🚪 B-Pillar (बी-पिलर)' },
+                { id: 'pillar_c', label: '🚪 C-Pillar (सी-पिलर)' },
+                { id: 'boot_floor', label: '🚗 Dicky Floor (डिक्की फर्श)' },
+                { id: 'spoiler', label: '🏎️ Spoiler (स्पॉइलर)' },
+              ].map(item => {
+                const isActive = isPanelActive(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (item.id === 'boot_floor' && !dickyOpen) {
+                        setDickyOpen(true);
+                      }
+                      const panelObj = VEHICLE_PANELS.find(p => p.id === item.id);
+                      if (panelObj) {
+                        handlePanelClick(panelObj);
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border font-bold text-left transition-all text-[11px] flex items-center justify-between ${
+                      isActive
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 ring-2 ring-emerald-400/40 font-extrabold'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {isActive ? (
+                      <span className="text-[9px] bg-slate-950/20 px-1 rounded text-emerald-950 font-black">ACTIVE</span>
+                    ) : (
+                      <span className="text-[9px] text-slate-500 font-bold">+ Add</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Quick List of Active Selected Panels with One-Tap Remove */}
           <div className="space-y-2 grow">
             <div className="flex items-center justify-between text-xs text-slate-300">
@@ -1148,12 +952,12 @@ export function InteractiveVehicleInspectionChart({
             </div>
 
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-              {VEHICLE_PANELS.filter(p => isPanelActive(p.id)).length === 0 ? (
+              {VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
                   अभी तक कोई पैनल नहीं चुना गया। ऊपर गाड़ी के स्केच पर क्लिक करें।
                 </div>
               ) : (
-                VEHICLE_PANELS.filter(p => isPanelActive(p.id)).map(p => {
+                VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).map(p => {
                   const inspection = effectiveInspections[p.id];
                   const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
                   const isPartialAllowed = isPartialPaintAllowedForPanel(p.id);
@@ -1216,16 +1020,38 @@ export function InteractiveVehicleInspectionChart({
                           { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
                           { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
                         ].map(s => {
+                          const isInsideOnlyPanel = p.id.startsWith('pillar_') || p.id === 'boot_floor';
+                          const isInsideOnlyDisabled = isInsideOnlyPanel && s.id !== 'INSIDE_JAMB';
+                          
+                          // No longer disabled even when Bonnet/Dicky are closed. We auto-open on click!
+                          const isDisabled = s.disabled || isInsideOnlyDisabled;
                           const active = currentScope === s.id;
+                          
+                          const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                          const tooltipText = isInsideOnlyDisabled 
+                            ? 'Internal panels are inside paint only' 
+                            : (s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label);
+
                           return (
                             <button
                               key={s.id}
                               type="button"
-                              disabled={s.disabled}
-                              title={s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label}
+                              disabled={isDisabled}
+                              title={tooltipText}
                               onClick={() => {
-                                if (s.disabled) return;
+                                if (isDisabled) return;
                                 
+                                // Auto-open Bonnet or Dicky if choosing inside paint scope
+                                const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                                if (isInsideScope) {
+                                  if (p.id === 'hood_bonnet' && !bonnetOpen) {
+                                    setBonnetOpen(true);
+                                  }
+                                  if (p.id === 'boot_trunk' && !dickyOpen) {
+                                    setDickyOpen(true);
+                                  }
+                                }
+
                                 const updatedObj = {
                                   ...(effectiveInspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
                                   paintScope: s.id as PaintScope,
@@ -1352,7 +1178,6 @@ export function InteractiveVehicleInspectionChart({
         </div>
 
       </div>
-      )}
 
       {/* Action Footer */}
       <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">

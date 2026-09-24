@@ -39,6 +39,10 @@ export function matchTaskToPanelDef(task: { title: string; panelKey?: string; st
     return VEHICLE_PANELS.find(p => p.id === 'hood_bonnet');
   }
 
+  if (cleanTitle.includes('spoiler') || cleanTitle.includes('स्पॉइलर')) {
+    return VEHICLE_PANELS.find(p => p.id === 'spoiler');
+  }
+
   if (cleanTitle.includes('front bumper') || (cleanTitle.includes('bumper') && cleanTitle.includes('front'))) {
     return VEHICLE_PANELS.find(p => p.id === 'bumper_front');
   }
