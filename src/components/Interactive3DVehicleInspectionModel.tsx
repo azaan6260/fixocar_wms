@@ -49,6 +49,17 @@ export function Interactive3DVehicleInspectionModel({
   const [hoveredPanelId, setHoveredPanelId] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
+  const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
+
+  // Merge inspections prop with local interaction overrides
+  const effectiveInspections = useMemo(() => {
+    return {
+      ...inspections,
+      ...localInspections
+    };
+  }, [inspections, localInspections]);
+
   // Open / Close Hinged Parts State
   const [doorsOpen, setDoorsOpen] = useState(true);
   const [bonnetOpen, setBonnetOpen] = useState(false);
@@ -87,7 +98,7 @@ export function Interactive3DVehicleInspectionModel({
     return VEHICLE_PANELS.find(p => p.id === (activePanelId || hoveredPanelId)) || null;
   }, [activePanelId, hoveredPanelId]);
 
-  const activeInspection = activePanelObj ? inspections[activePanelObj.id] : undefined;
+  const activeInspection = activePanelObj ? effectiveInspections[activePanelObj.id] : undefined;
   const currentScope: PaintScope = activeInspection?.paintScope || 'FULL_OUTER';
 
   // Toggle panel selection
@@ -96,24 +107,32 @@ export function Interactive3DVehicleInspectionModel({
     const panelObj = VEHICLE_PANELS.find(p => p.id === panelId);
     if (!panelObj) return;
 
-    const existing = inspections[panelId];
-    const newSelected = existing ? !existing.selected : true;
+    const existing = effectiveInspections[panelId];
+    // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle.
+    const newSelected = scope ? true : (existing ? !existing.selected : true);
     const targetScope = scope || existing?.paintScope || 'FULL_OUTER';
+
+    const updatedObj = {
+      panelId,
+      nameEn: panelObj.nameEn,
+      nameHi: panelObj.nameHi,
+      category: 'EXTERIOR_BODY' as const,
+      selected: newSelected,
+      paintScope: targetScope,
+      customPrice: undefined,
+      customPainterPayout: undefined,
+      customDenterPayout: undefined
+    };
+
+    setLocalInspections(prev => ({
+      ...prev,
+      [panelId]: updatedObj
+    }));
 
     if (onInspectionChange) {
       const updated = {
-        ...inspections,
-        [panelId]: {
-          panelId,
-          nameEn: panelObj.nameEn,
-          nameHi: panelObj.nameHi,
-          category: 'EXTERIOR_BODY' as const,
-          selected: newSelected,
-          paintScope: targetScope,
-          customPrice: undefined,
-          customPainterPayout: undefined,
-          customDenterPayout: undefined
-        }
+        ...effectiveInspections,
+        [panelId]: updatedObj
       };
       onInspectionChange(updated);
     }
@@ -125,7 +144,7 @@ export function Interactive3DVehicleInspectionModel({
 
   // Voice speech handler
   const speakPanelInfo = (panel: PanelDefinition) => {
-    const inspection = inspections[panel.id];
+    const inspection = effectiveInspections[panel.id];
     const scope = inspection?.paintScope || 'FULL_OUTER';
     const dynamicTitle = formatPaintTaskTitle(panel.nameEn, scope);
     const text = `${panel.nameHi}. ${dynamicTitle}.`;
@@ -462,18 +481,18 @@ export function Interactive3DVehicleInspectionModel({
 
     // E. FRONT FENDERS (Sculpted with Side Character Lines)
     const fenderGeo = createRoundedBoxGeometry(0.12, 0.52, 0.82, 0.04);
-    registerPanelMesh('fender_lhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.64, 1.35));
-    registerPanelMesh('fender_rhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.64, 1.35));
+    registerPanelMesh('fender_lhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.64, 1.35));
+    registerPanelMesh('fender_rhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.64, 1.35));
 
     // F. RUNNING BOARDS (SILL)
     const runningBoardGeo = createRoundedBoxGeometry(0.14, 0.14, 1.6, 0.03);
-    registerPanelMesh('running_board_lhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.22, 0));
-    registerPanelMesh('running_board_rhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.22, 0));
+    registerPanelMesh('running_board_lhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.22, 0));
+    registerPanelMesh('running_board_rhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.22, 0));
 
     // G. QUARTER PANELS (Contoured rear wheel fenders)
     const quarterGeo = createRoundedBoxGeometry(0.14, 0.58, 0.92, 0.04);
-    registerPanelMesh('quarter_panel_lhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.66, -1.35));
-    registerPanelMesh('quarter_panel_rhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.66, -1.35));
+    registerPanelMesh('quarter_panel_lhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.66, -1.35));
+    registerPanelMesh('quarter_panel_rhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.66, -1.35));
 
     // H. ROOF & SHAPED WINDSHIELDS (Sleek coupe outline with Panoramic Sunroof)
     const roofGeo = createRoundedBoxGeometry(1.36, 0.04, 1.5, 0.04);
@@ -546,47 +565,47 @@ export function Interactive3DVehicleInspectionModel({
 
     // Door LHS Front Group
     const doorLhsFrontPivot = new THREE.Group();
-    doorLhsFrontPivot.position.set(-0.8, 0.65, 0.7); // Hinge position
+    doorLhsFrontPivot.position.set(0.8, 0.65, 0.7); // Hinge position
     carGroup.add(doorLhsFrontPivot);
     registerPanelMesh('door_lhs_front', doorGeo, defaultPaintMat, doorLhsFrontPivot, new THREE.Vector3(0, 0, -0.37));
-    const innerJambLFR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambLFR.position.set(0.05, 0, -0.37);
+    const innerJambLFR = new THREE.Mesh(innerJambGeo, defaultPaintMat.clone());
+    innerJambLFR.position.set(-0.05, 0, -0.37);
     innerJambLFR.userData = { panelId: 'door_lhs_front', isInnerJamb: true };
     doorLhsFrontPivot.add(innerJambLFR);
-    decorateDoor(doorLhsFrontPivot, true, true);
+    decorateDoor(doorLhsFrontPivot, false, true);
 
     // Door RHS Front Group
     const doorRhsFrontPivot = new THREE.Group();
-    doorRhsFrontPivot.position.set(0.8, 0.65, 0.7);
+    doorRhsFrontPivot.position.set(-0.8, 0.65, 0.7);
     carGroup.add(doorRhsFrontPivot);
     registerPanelMesh('door_rhs_front', doorGeo, defaultPaintMat, doorRhsFrontPivot, new THREE.Vector3(0, 0, -0.37));
-    const innerJambRFR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambRFR.position.set(-0.05, 0, -0.37);
+    const innerJambRFR = new THREE.Mesh(innerJambGeo, defaultPaintMat.clone());
+    innerJambRFR.position.set(0.05, 0, -0.37);
     innerJambRFR.userData = { panelId: 'door_rhs_front', isInnerJamb: true };
     doorRhsFrontPivot.add(innerJambRFR);
-    decorateDoor(doorRhsFrontPivot, false, true);
+    decorateDoor(doorRhsFrontPivot, true, true);
 
     // Door LHS Rear Group
     const doorLhsRearPivot = new THREE.Group();
-    doorLhsRearPivot.position.set(-0.8, 0.65, -0.04);
+    doorLhsRearPivot.position.set(0.8, 0.65, -0.04);
     carGroup.add(doorLhsRearPivot);
     registerPanelMesh('door_lhs_rear', doorGeo, defaultPaintMat, doorLhsRearPivot, new THREE.Vector3(0, 0, -0.37));
-    const innerJambLRR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambLRR.position.set(0.05, 0, -0.37);
+    const innerJambLRR = new THREE.Mesh(innerJambGeo, defaultPaintMat.clone());
+    innerJambLRR.position.set(-0.05, 0, -0.37);
     innerJambLRR.userData = { panelId: 'door_lhs_rear', isInnerJamb: true };
     doorLhsRearPivot.add(innerJambLRR);
-    decorateDoor(doorLhsRearPivot, true, false);
+    decorateDoor(doorLhsRearPivot, false, false);
 
     // Door RHS Rear Group
     const doorRhsRearPivot = new THREE.Group();
-    doorRhsRearPivot.position.set(0.8, 0.65, -0.04);
+    doorRhsRearPivot.position.set(-0.8, 0.65, -0.04);
     carGroup.add(doorRhsRearPivot);
     registerPanelMesh('door_rhs_rear', doorGeo, defaultPaintMat, doorRhsRearPivot, new THREE.Vector3(0, 0, -0.37));
-    const innerJambRRR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambRRR.position.set(-0.05, 0, -0.37);
+    const innerJambRRR = new THREE.Mesh(innerJambGeo, defaultPaintMat.clone());
+    innerJambRRR.position.set(0.05, 0, -0.37);
     innerJambRRR.userData = { panelId: 'door_rhs_rear', isInnerJamb: true };
     doorRhsRearPivot.add(innerJambRRR);
-    decorateDoor(doorRhsRearPivot, false, false);
+    decorateDoor(doorRhsRearPivot, true, false);
 
     // K. SPORTY HONDA SLOPED BONNET / HOOD (Aerodynamically tapered and elongated - significantly larger than Dicky)
     const bonnetPivot = new THREE.Group();
@@ -842,13 +861,25 @@ export function Interactive3DVehicleInspectionModel({
     const bonnetAngle = bonnetOpen ? -Math.PI / 3.5 : 0;
     const bootAngle = dickyOpen ? Math.PI / 3.2 : 0;
 
-    if (h.doorLhsFront) h.doorLhsFront.rotation.y = doorAngleLHS;
-    if (h.doorRhsFront) h.doorRhsFront.rotation.y = doorAngleRHS;
-    if (h.doorLhsRear) h.doorLhsRear.rotation.y = doorAngleLHS;
-    if (h.doorRhsRear) h.doorRhsRear.rotation.y = doorAngleRHS;
+    // Since LHS and RHS coordinates are mirrored for standard viewport intuition, LHS door is on +x and RHS is on -x.
+    // Thus we swap the rotation angles to open outward.
+    if (h.doorLhsFront) h.doorLhsFront.rotation.y = doorAngleRHS;
+    if (h.doorRhsFront) h.doorRhsFront.rotation.y = doorAngleLHS;
+    if (h.doorLhsRear) h.doorLhsRear.rotation.y = doorAngleRHS;
+    if (h.doorRhsRear) h.doorRhsRear.rotation.y = doorAngleLHS;
     if (h.hoodBonnet) h.hoodBonnet.rotation.x = bonnetAngle;
     if (h.bootTrunk) h.bootTrunk.rotation.x = bootAngle;
   }, [doorsOpen, bonnetOpen, dickyOpen]);
+
+  // Automatically clear selected 3D panel floating pill after 3.5 seconds to keep screen clean
+  useEffect(() => {
+    if (activePanelId) {
+      const timer = setTimeout(() => {
+        setActivePanelId(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [activePanelId]);
 
   // Update Camera Preset Views
   useEffect(() => {
@@ -995,20 +1026,49 @@ export function Interactive3DVehicleInspectionModel({
 
   // Update Material Colors based on Selected Inspections & Paint Scope
   useEffect(() => {
-    const meshes = meshesMapRef.current;
-    if (!meshes) return;
+    const carGroup = carGroupRef.current;
+    if (!carGroup) return;
 
-    VEHICLE_PANELS.forEach(panel => {
-      const mesh = meshes.get(panel.id);
-      if (!mesh) return;
+    // Helper to generate half-colored high-contrast texture on the fly for partial paint scope
+    const makeHalfColorTexture = (colorStr: string) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Fill left half with high-contrast highlight color
+        ctx.fillStyle = colorStr;
+        ctx.fillRect(0, 0, 64, 128);
+        // Fill right half with default pearl white background
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(64, 0, 64, 128);
+      }
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      return texture;
+    };
 
-      const inspection = inspections[panel.id];
-      const isSelected = Boolean(inspection?.selected || selectedPanelIds.includes(panel.id));
-      const isHovered = hoveredPanelId === panel.id;
+    carGroup.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      const panelId = mesh.userData?.panelId;
+      if (!panelId) return;
+
+      const inspection = effectiveInspections[panelId];
+      const isSelected = Boolean(inspection?.selected || selectedPanelIds.includes(panelId));
+      const isHovered = hoveredPanelId === panelId;
       const scope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
 
-      const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const isInnerJamb = mesh.userData?.isInnerJamb === true;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
       if (!mat) return;
+
+      // Clean up previous map if any to prevent memory leaks
+      if (mat.map) {
+        mat.map.dispose();
+        mat.map = null;
+      }
 
       if (!isSelected) {
         if (isHovered) {
@@ -1023,36 +1083,65 @@ export function Interactive3DVehicleInspectionModel({
           mat.emissiveIntensity = 0;
         }
       } else {
-        // Selected Panel: High-contrast Paint Scope Highlights
+        // Selected Panel: High-contrast Paint Scope Highlights based on user instructions
         switch (scope) {
-          case 'FULL_OUTER':
-            // High-Gloss Amber/Gold Outer Shell
-            mat.color.setHex(0xf59e0b);
-            mat.emissive.setHex(0x78350f);
-            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
-            break;
           case 'PARTIAL_TOUCHUP':
-            // Vibrant Cyan/Electric Blue
-            mat.color.setHex(0x06b6d4);
-            mat.emissive.setHex(0x082f49);
-            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
+            if (isInnerJamb) {
+              // Inner jamb is completely uncolored (default pearl white) for partial outer touchup
+              mat.color.setHex(0xf8fafc);
+              mat.emissive.setHex(0x000000);
+              mat.emissiveIntensity = 0;
+            } else {
+              // "On selecting partial paint half panel should show colour"
+              const tex = makeHalfColorTexture('#06b6d4');
+              mat.map = tex;
+              mat.color.setHex(0xffffff); // White modulation so the canvas texture colors display perfectly
+              mat.emissive.setHex(0x082f49);
+              mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
+            }
             break;
+
           case 'INSIDE_JAMB':
-            // Inner Jamb / Door Frame Emerald Green
-            mat.color.setHex(0x10b981);
-            mat.emissive.setHex(0x064e3b);
-            mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
+            if (isInnerJamb) {
+              // "in selecting inside only the inside panel should show colour not outside panel"
+              mat.color.setHex(0x10b981); // Beautiful Emerald Green representing inside jamb
+              mat.emissive.setHex(0x064e3b);
+              mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
+            } else {
+              // Outer panel is completely uncolored (default pearl white) for inside jamb only paint
+              mat.color.setHex(0xf8fafc);
+              mat.emissive.setHex(0x000000);
+              mat.emissiveIntensity = 0;
+            }
             break;
+
           case 'FULL_OUTER_AND_INSIDE':
-            // Outer + Inside Glowing Warm Gold
+            // "On selecting inside plus outside panel both outside and inside should show colour"
+            // High contrast glowing gold for both outside and inside jamb
             mat.color.setHex(0xeab308);
             mat.emissive.setHex(0x713f12);
             mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             break;
+
+          case 'FULL_OUTER':
+          default:
+            if (isInnerJamb) {
+              // Inner jamb is completely uncolored for full outer-only paint
+              mat.color.setHex(0xf8fafc);
+              mat.emissive.setHex(0x000000);
+              mat.emissiveIntensity = 0;
+            } else {
+              // Outer panel: High-Gloss Amber/Gold
+              mat.color.setHex(0xf59e0b);
+              mat.emissive.setHex(0x78350f);
+              mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
+            }
+            break;
         }
       }
+      mat.needsUpdate = true;
     });
-  }, [inspections, selectedPanelIds, hoveredPanelId]);
+  }, [effectiveInspections, selectedPanelIds, hoveredPanelId]);
 
   return (
     <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl space-y-4">
@@ -1166,14 +1255,25 @@ export function Interactive3DVehicleInspectionModel({
 
           {/* Hovered Panel Floating Pill */}
           {activePanelObj && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center gap-3 z-20">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center justify-between gap-4 z-20 animate-in fade-in zoom-in-95 duration-200">
               <div>
-                <div className="text-[10px] text-amber-400 font-bold uppercase">चयनित 3D पैनल</div>
-                <div className="text-xs font-black text-white">{activePanelObj.nameHi}</div>
-                <div className="text-[10.5px] font-mono text-amber-300 font-extrabold">
+                <div className="text-[9px] text-amber-400 font-black uppercase tracking-wider">चयनित पैनल (Selected Panel)</div>
+                <div className="text-xs font-extrabold text-white">{activePanelObj.nameHi}</div>
+                <div className="text-[10px] font-mono text-slate-300 font-semibold">
                   {activePanelObj.nameEn}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivePanelId(null);
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                ✕
+              </button>
             </div>
           )}
         </div>

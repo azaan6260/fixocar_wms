@@ -430,6 +430,17 @@ export function InteractiveVehicleInspectionChart({
   const [speakingPanelId, setSpeakingPanelId] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<'3D_INTERACTIVE' | '2D_SKETCH'>('3D_INTERACTIVE');
 
+  // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
+  const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
+
+  // Merge inspections prop with local interaction overrides
+  const effectiveInspections = useMemo(() => {
+    return {
+      ...inspections,
+      ...localInspections
+    };
+  }, [inspections, localInspections]);
+
   // Quick damage type selector for Denter/Painter inspection mode
   const [activeSeverity, setActiveSeverity] = useState<DamageSeverity>('MINOR_DENT');
   const [activeRepairAction, setActiveRepairAction] = useState<RepairAction>('DENT_AND_PAINT');
@@ -442,7 +453,7 @@ export function InteractiveVehicleInspectionChart({
       return;
     }
 
-    const inspection = inspections[panel.id];
+    const inspection = effectiveInspections[panel.id];
     let speech = `${panel.nameHi}. `;
     if (inspection?.damageType) {
       const dmgMap: Record<DamageSeverity, string> = {
@@ -470,7 +481,7 @@ export function InteractiveVehicleInspectionChart({
     if (mode === 'INTERACTIVE_SELECT') {
       return selectedPanelIds.includes(panelId);
     }
-    return selectedPanelIds.includes(panelId) || Boolean(inspections[panelId]?.selected);
+    return selectedPanelIds.includes(panelId) || Boolean(effectiveInspections[panelId]?.selected);
   };
 
   const handlePanelClick = (panel: PanelDefinition) => {
@@ -478,28 +489,35 @@ export function InteractiveVehicleInspectionChart({
 
     const wasActive = isPanelActive(panel.id);
 
+    const current = effectiveInspections[panel.id] || {
+      panelId: panel.id,
+      nameEn: panel.nameEn,
+      nameHi: panel.nameHi,
+      category: 'EXTERIOR_BODY',
+      selected: false
+    };
+
+    const updatedObj = {
+      ...current,
+      selected: !wasActive,
+      damageType: !wasActive ? activeSeverity : undefined,
+      actionRequired: !wasActive ? activeRepairAction : undefined,
+      matchedStandardJobId: panel.standardJobId
+    };
+
+    setLocalInspections(prev => ({
+      ...prev,
+      [panel.id]: updatedObj
+    }));
+
     if (onPanelToggle) {
       onPanelToggle(panel.id, panel.standardJobId);
     }
 
     if (onInspectionChange) {
-      const current = inspections[panel.id] || {
-        panelId: panel.id,
-        nameEn: panel.nameEn,
-        nameHi: panel.nameHi,
-        category: 'EXTERIOR_BODY',
-        selected: false
-      };
-
       const updated = {
-        ...inspections,
-        [panel.id]: {
-          ...current,
-          selected: !wasActive,
-          damageType: !wasActive ? activeSeverity : undefined,
-          actionRequired: !wasActive ? activeRepairAction : undefined,
-          matchedStandardJobId: panel.standardJobId
-        }
+        ...effectiveInspections,
+        [panel.id]: updatedObj
       };
       onInspectionChange(updated);
     }
@@ -511,7 +529,7 @@ export function InteractiveVehicleInspectionChart({
 
   const selectedCount = useMemo(() => {
     return VEHICLE_PANELS.filter(p => isPanelActive(p.id)).length;
-  }, [selectedPanelIds, inspections]);
+  }, [selectedPanelIds, effectiveInspections]);
 
   const estimatedTotalCost = useMemo(() => {
     return VEHICLE_PANELS
@@ -523,7 +541,7 @@ export function InteractiveVehicleInspectionChart({
         }
         return sum + (isCars24 ? 1350 : (p.defaultPrice || 1350));
       }, 0);
-  }, [selectedPanelIds, inspections, effectiveStandardJobs, isCars24]);
+  }, [selectedPanelIds, effectiveInspections, effectiveStandardJobs, isCars24]);
 
   if (compact) {
     return (
@@ -555,6 +573,36 @@ export function InteractiveVehicleInspectionChart({
                 <feGaussianBlur stdDeviation="3" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
+
+              {/* Dynamic Gradients for Precise Paint Scopes */}
+              {VEHICLE_PANELS.map((p) => {
+                const inspection = effectiveInspections[p.id];
+                const scope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
+
+                if (scope === 'PARTIAL_TOUCHUP') {
+                  // Partial Paint: Left half colored cyan, right half uncolored dark grey
+                  return (
+                    <linearGradient id={`grad-partial-${p.id}`} x1="0%" y1="0%" x2="100%" y2="0%" key={p.id}>
+                      <stop offset="50%" stopColor="#06b6d4" />
+                      <stop offset="50%" stopColor="#1e293b" />
+                    </linearGradient>
+                  );
+                }
+
+                if (scope === 'INSIDE_JAMB') {
+                  // Inside Jamb Only: Edges/boundaries colored purple, outer center uncolored dark grey
+                  return (
+                    <linearGradient id={`grad-inside-${p.id}`} x1="0%" y1="0%" x2="100%" y2="0%" key={p.id}>
+                      <stop offset="15%" stopColor="#8b5cf6" />
+                      <stop offset="15%" stopColor="#1e293b" />
+                      <stop offset="85%" stopColor="#1e293b" />
+                      <stop offset="85%" stopColor="#8b5cf6" />
+                    </linearGradient>
+                  );
+                }
+
+                return null;
+              })}
             </defs>
 
             {/* Ground Shadow & Car Chassis Underbody Outline */}
@@ -594,14 +642,14 @@ export function InteractiveVehicleInspectionChart({
               let strokeWidth = '1.8';
 
               if (isActive) {
-                const inspection = inspections[panel.id];
+                const inspection = effectiveInspections[panel.id];
                 const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
 
                 if (currentScope === 'PARTIAL_TOUCHUP') {
-                  fillColor = '#06b6d4'; // vibrant cyan for partial paint
+                  fillColor = `url(#grad-partial-${panel.id})`; // dynamic half-colored gradient
                   strokeColor = '#a5f3fc';
                 } else if (currentScope === 'INSIDE_JAMB') {
-                  fillColor = '#8b5cf6'; // vibrant purple for inside paint only
+                  fillColor = `url(#grad-inside-${panel.id})`; // dynamic inside-only gradient
                   strokeColor = '#ddd6fe';
                 } else if (currentScope === 'FULL_OUTER_AND_INSIDE') {
                   fillColor = '#ec4899'; // vibrant pink for outer + inside
@@ -1106,7 +1154,7 @@ export function InteractiveVehicleInspectionChart({
                 </div>
               ) : (
                 VEHICLE_PANELS.filter(p => isPanelActive(p.id)).map(p => {
-                  const inspection = inspections[p.id];
+                  const inspection = effectiveInspections[p.id];
                   const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
                   const isPartialAllowed = isPartialPaintAllowedForPanel(p.id);
 
@@ -1177,21 +1225,30 @@ export function InteractiveVehicleInspectionChart({
                               title={s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label}
                               onClick={() => {
                                 if (s.disabled) return;
+                                
+                                const updatedObj = {
+                                  ...(effectiveInspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                  paintScope: s.id as PaintScope,
+                                  // reset custom rates on scope change to force default rate recalculation
+                                  customPrice: undefined,
+                                  customPainterPayout: undefined,
+                                  customDenterPayout: undefined
+                                };
+
+                                setLocalInspections(prev => ({
+                                  ...prev,
+                                  [p.id]: updatedObj
+                                }));
+
                                 if (onPanelToggle) {
                                   onPanelToggle(p.id, p.standardJobId, s.id as PaintScope);
                                 }
                                 if (onInspectionChange) {
-                                  onInspectionChange({
-                                    ...inspections,
-                                    [p.id]: {
-                                      ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                      paintScope: s.id as PaintScope,
-                                      // reset custom rates on scope change to force default rate recalculation
-                                      customPrice: undefined,
-                                      customPainterPayout: undefined,
-                                      customDenterPayout: undefined
-                                    }
-                                  });
+                                  const updated = {
+                                    ...effectiveInspections,
+                                    [p.id]: updatedObj
+                                  };
+                                  onInspectionChange(updated);
                                 }
                               }}
                               className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
