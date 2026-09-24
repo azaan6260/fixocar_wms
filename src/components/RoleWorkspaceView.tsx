@@ -4,6 +4,7 @@ import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, get
 import { RoleBadge } from './RoleBadge';
 import { TechnicianTaskCard } from './TechnicianTaskCard';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
+import { Interactive3DVehicleInspectionModel } from './Interactive3DVehicleInspectionModel';
 import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { AccountBillingLedgerModal } from './AccountBillingLedgerModal';
 import { useI18n } from '../lib/i18n';
@@ -48,6 +49,7 @@ export function RoleWorkspaceView({
   const [showLedgerModal, setShowLedgerModal] = useState(false);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('ALL');
+  const [use3DView, setUse3DView] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setSelectedEmployeeId('ALL');
@@ -442,32 +444,85 @@ export function RoleWorkspaceView({
                       
                       {/* 1. AR VEHICLE PANEL MAP (For Painters & Denters) */}
                       {showARMap && (
-                        <div className="p-2 sm:p-3 rounded-2xl bg-slate-950 border border-slate-800 shadow-inner overflow-hidden">
-                          <InteractiveVehicleInspectionChart
-                            mode="VIEW"
-                            selectedPanelIds={allottedPanelIds}
-                            inspections={card.tasks.reduce((acc, t) => {
-                              if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                                acc[t.panelKey] = {
-                                  panelId: t.panelKey,
-                                  nameEn: t.panelNameEn || t.title,
-                                  nameHi: t.title,
-                                  category: 'EXTERIOR_BODY',
-                                  selected: true,
-                                  paintScope: t.paintScope || 'FULL_OUTER',
-                                  painterName: t.assignedToName,
-                                  denterName: t.pairedDenterName,
-                                  customPrice: t.customerPrice,
-                                  customPainterPayout: t.painterPayout,
-                                  customDenterPayout: t.denterPayout
-                                };
-                              }
-                              return acc;
-                            }, {} as Record<string, any>)}
-                            compact={true}
-                            currentRole={currentRole}
-                            vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-                          />
+                        <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+                            <span className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>🚗 3D AR Body Panels &amp; Allotted Work Inspection View:</span>
+                            </span>
+                            <div className="flex items-center bg-slate-250 dark:bg-slate-900 rounded-xl p-1 border border-slate-300 dark:border-slate-800 self-start sm:self-auto shadow-xs">
+                              <button
+                                type="button"
+                                onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: true }))}
+                                className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                  use3DView[card.id] !== false
+                                    ? 'bg-amber-500 text-slate-950 font-black shadow'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                }`}
+                              >
+                                🌟 Interactive 3D Model
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: false }))}
+                                className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                  use3DView[card.id] === false
+                                    ? 'bg-amber-500 text-slate-950 font-black shadow'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                }`}
+                              >
+                                📊 2D Diagram
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="p-1 sm:p-2.5 rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl overflow-hidden">
+                            {use3DView[card.id] !== false ? (
+                              <Interactive3DVehicleInspectionModel
+                                mode="VIEW"
+                                selectedPanelIds={allottedPanelIds}
+                                inspections={card.tasks.reduce((acc, t) => {
+                                  if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
+                                    acc[t.panelKey] = {
+                                      panelId: t.panelKey,
+                                      nameEn: t.panelNameEn || t.title,
+                                      nameHi: t.title,
+                                      category: 'EXTERIOR_BODY',
+                                      selected: true,
+                                      paintScope: t.paintScope || 'FULL_OUTER'
+                                    };
+                                  }
+                                  return acc;
+                                }, {} as Record<string, any>)}
+                              />
+                            ) : (
+                              <InteractiveVehicleInspectionChart
+                                mode="VIEW"
+                                selectedPanelIds={allottedPanelIds}
+                                inspections={card.tasks.reduce((acc, t) => {
+                                  if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
+                                    acc[t.panelKey] = {
+                                      panelId: t.panelKey,
+                                      nameEn: t.panelNameEn || t.title,
+                                      nameHi: t.title,
+                                      category: 'EXTERIOR_BODY',
+                                      selected: true,
+                                      paintScope: t.paintScope || 'FULL_OUTER',
+                                      painterName: t.assignedToName,
+                                      denterName: t.pairedDenterName,
+                                      customPrice: t.customerPrice,
+                                      customPainterPayout: t.painterPayout,
+                                      customDenterPayout: t.denterPayout
+                                    };
+                                  }
+                                  return acc;
+                                }, {} as Record<string, any>)}
+                                compact={true}
+                                currentRole={currentRole}
+                                vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+                              />
+                            )}
+                          </div>
                         </div>
                       )}
 

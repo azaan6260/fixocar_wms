@@ -54,6 +54,16 @@ export function Interactive3DVehicleInspectionModel({
   const [bonnetOpen, setBonnetOpen] = useState(false);
   const [dickyOpen, setDickyOpen] = useState(false);
 
+  // Isolation and Assembly Reference states
+  const [isolatedComponent, setIsolatedComponent] = useState<string | null>(null);
+  const carGroupRef = useRef<THREE.Group | null>(null);
+
+  // AR View Mode states
+  const [isArMode, setIsArMode] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [arStream, setArStream] = useState<MediaStream | null>(null);
+  const [cameraPermissionError, setCameraPermissionError] = useState(false);
+
   // Camera preset view
   const [cameraPreset, setCameraPreset] = useState<'ISO' | 'FRONT' | 'REAR' | 'LHS' | 'RHS' | 'TOP' | 'UNDERBODY'>('ISO');
 
@@ -61,6 +71,7 @@ export function Interactive3DVehicleInspectionModel({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const targetFocusRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.5, 0));
   const meshesMapRef = useRef<Map<string, THREE.Mesh | THREE.Group>>(new Map());
   const hingedGroupsRef = useRef<{
     doorLhsFront?: THREE.Group;
@@ -131,16 +142,16 @@ export function Interactive3DVehicleInspectionModel({
     const width = container.clientWidth || 800;
     const height = compact ? 360 : 480;
 
-    // 1. Scene
+    // 1. Scene - Showroom Studio White/Light Grey (Matching Reference Image)
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f172a); // slate-900
-    scene.fog = new THREE.FogExp2(0x0f172a, 0.035);
+    scene.background = new THREE.Color(0xe2e8f0); // Premium light-grey studio
+    scene.fog = new THREE.FogExp2(0xe2e8f0, 0.02);
     sceneRef.current = scene;
 
     // 2. Camera
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(4.5, 2.5, 5.5);
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+    camera.position.set(4.8, 2.2, 5.8);
+    camera.lookAt(0, 0.3, 0);
     cameraRef.current = camera;
 
     // 3. Renderer
@@ -149,69 +160,82 @@ export function Interactive3DVehicleInspectionModel({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // 4. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    // 4. Lighting - Premium Studio Light Rigs
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xfff5ea, 1.4);
-    dirLight1.position.set(6, 10, 6);
-    dirLight1.castShadow = true;
-    dirLight1.shadow.mapSize.width = 1024;
-    dirLight1.shadow.mapSize.height = 1024;
-    scene.add(dirLight1);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainLight.position.set(8, 12, 8);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.bias = -0.0005;
+    scene.add(mainLight);
 
-    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.6); // cool fill
-    dirLight2.position.set(-6, 6, -6);
-    scene.add(dirLight2);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.8); // Gentle sky-blue bounce fill
+    fillLight.position.set(-8, 8, -8);
+    scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xf59e0b, 0.8); // warm rim
-    rimLight.position.set(0, -6, 0);
-    scene.add(rimLight);
+    const bounceLight = new THREE.DirectionalLight(0xffffff, 0.5); // Underbody ground bounce
+    bounceLight.position.set(0, -6, 0);
+    scene.add(bounceLight);
 
-    // 5. Grid Floor & Pedestal
-    const gridHelper = new THREE.GridHelper(12, 24, 0x3b82f6, 0x1e293b);
-    gridHelper.position.y = -0.01;
+    // 5. Light Studio Grid Floor (Checkerboard style matching reference image)
+    const gridHelper = new THREE.GridHelper(16, 32, 0x94a3b8, 0xcbd5e1);
+    gridHelper.position.y = 0.001;
     scene.add(gridHelper);
 
-    const floorGeo = new THREE.PlaneGeometry(12, 12);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8, metalness: 0.2 });
+    const floorGeo = new THREE.PlaneGeometry(20, 20);
+    const floorMat = new THREE.MeshStandardMaterial({ 
+      color: 0xf1f5f9, 
+      roughness: 0.4, 
+      metalness: 0.1 
+    });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.position.y = -0.02;
+    floorMesh.position.y = 0;
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
 
     // 6. Base Vehicle Assembly Setup
     const carGroup = new THREE.Group();
     scene.add(carGroup);
+    carGroupRef.current = carGroup;
 
-    // Common Base Materials - Default Alpine / Pearl White Body Finish
-    const defaultPaintMat = new THREE.MeshStandardMaterial({
-      color: 0xf8fafc, // Alpine Crisp White
-      roughness: 0.18, // High-gloss automotive clearcoat
-      metalness: 0.15
+    // Common Base Materials - Highly realistic Pearl White Automotive Finish (MeshPhysicalMaterial)
+    const defaultPaintMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf8fafc, // Pure Pearl White
+      metalness: 0.15,
+      roughness: 0.14,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.03,
+      reflectivity: 0.9
     });
 
     const glassMat = new THREE.MeshPhysicalMaterial({
       color: 0x0284c7,
       transparent: true,
-      opacity: 0.5,
-      roughness: 0.1,
-      metalness: 0.9,
-      transmission: 0.7
+      opacity: 0.45,
+      roughness: 0.05,
+      metalness: 0.95,
+      transmission: 0.8,
+      thickness: 1.0
     });
 
-    const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
-    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.08, metalness: 0.98 });
-    const tireMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.9 });
-    const engineMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.4 });
-    const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfffbe1, emissive: 0xfef08a, emissiveIntensity: 0.8, roughness: 0.1 });
-    const taillightMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xd97706, emissiveIntensity: 0.7, roughness: 0.1 });
-    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+    const interiorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.05, metalness: 0.95 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.95 });
+    const engineMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.5 });
+    const caliperMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.85, roughness: 0.15 }); // Sporty RED Calipers
+    const headlightMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.05 });
+    const taillightMat = new THREE.MeshStandardMaterial({ color: 0xd946ef, emissive: 0xef4444, emissiveIntensity: 1.0, roughness: 0.05 });
+    const grilleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
 
     const meshesMap = new Map<string, THREE.Mesh | THREE.Group>();
     meshesMapRef.current = meshesMap;
@@ -233,168 +257,359 @@ export function Interactive3DVehicleInspectionModel({
       return mesh;
     };
 
-    // A. VEHICLE CHASSIS & INTERIOR CABIN BASE
-    const cabinGeo = new THREE.BoxGeometry(1.6, 1.1, 2.8);
-    const cabinMesh = new THREE.Mesh(cabinGeo, interiorMat);
-    cabinMesh.position.set(0, 0.75, 0);
-    carGroup.add(cabinMesh);
+    // Custom Rounded Box Extruder for organically curved panels catching sleek showroom reflections
+    const createRoundedBoxGeometry = (w: number, h: number, d: number, r: number) => {
+      const shape = new THREE.Shape();
+      const x = -w / 2;
+      const y = -h / 2;
+      
+      shape.moveTo(x, y + r);
+      shape.lineTo(x, y + h - r);
+      shape.quadraticCurveTo(x, y + h, x + r, y + h);
+      shape.lineTo(x + w - r, y + h);
+      shape.quadraticCurveTo(x + w, y + h, x + w, y + h - r);
+      shape.lineTo(x + w, y + r);
+      shape.quadraticCurveTo(x + w, y, x + w - r, y);
+      shape.lineTo(x + r, y);
+      shape.quadraticCurveTo(x, y, x, y + r);
 
-    // Dashboard & Seats
-    const seatGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const seatFL = new THREE.Mesh(seatGeo, interiorMat);
-    seatFL.position.set(-0.4, 0.65, 0.2);
-    const seatFR = new THREE.Mesh(seatGeo, interiorMat);
-    seatFR.position.set(0.4, 0.65, 0.2);
-    carGroup.add(seatFL, seatFR);
+      const depthVal = Math.max(0.01, d - r * 2);
+      const extrudeSettings = {
+        steps: 1,
+        depth: depthVal,
+        bevelEnabled: true,
+        bevelThickness: r,
+        bevelSize: r,
+        bevelOffset: 0,
+        bevelSegments: 4
+      };
 
-    // B. WHEELS & BRAKE CALIPERS
-    const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.25, 24);
+      const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      geo.center();
+      return geo;
+    };
+
+    // A. VEHICLE CHASSIS & AERODYNAMIC HONDA CITY CABIN (Tapered & Rounded for Sedan realism)
+    const cabinGroup = new THREE.Group();
+    carGroup.add(cabinGroup);
+
+    // Main lower chassis tub with sloped front/rear overhangs
+    const chassisTubGeo = new THREE.BoxGeometry(1.65, 0.45, 3.8);
+    const chassisTub = new THREE.Mesh(chassisTubGeo, interiorMat);
+    chassisTub.position.set(0, 0.4, 0);
+    cabinGroup.add(chassisTub);
+
+    // Aerodynamic Glass Canopy - shaped like the Honda City's fastback roofline
+    const canopyGeo = new THREE.BoxGeometry(1.42, 0.65, 2.15);
+    const canopyMesh = new THREE.Mesh(canopyGeo, interiorMat);
+    canopyMesh.position.set(0, 0.95, -0.15);
+    cabinGroup.add(canopyMesh);
+
+    // Premium Glossy Black A, B, and C Window Pillars
+    const bPillarGeo = new THREE.BoxGeometry(1.46, 0.65, 0.08);
+    const bPillar = new THREE.Mesh(bPillarGeo, interiorMat);
+    bPillar.position.set(0, 0.95, -0.15); // Center pillar
+    cabinGroup.add(bPillar);
+
+    // Curved Wheel Arches / Wells (Colored in body paint to integrate wheels realistically)
+    const archPositions = [
+      new THREE.Vector3(-0.86, 0.42, 1.25),
+      new THREE.Vector3(0.86, 0.42, 1.25),
+      new THREE.Vector3(-0.86, 0.42, -1.25),
+      new THREE.Vector3(0.86, 0.42, -1.25)
+    ];
+    archPositions.forEach(pos => {
+      const archGeo = new THREE.RingGeometry(0.36, 0.42, 16);
+      archGeo.rotateY(Math.PI / 2);
+      const arch = new THREE.Mesh(archGeo, defaultPaintMat);
+      arch.position.copy(pos);
+      carGroup.add(arch);
+    });
+
+    // B. WHEELS, MULTI-SPOKE DIAMOND-CUT RIMS & TYRES
+    const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.22, 32);
     wheelGeo.rotateZ(Math.PI / 2);
     const wheelPositions = [
-      new THREE.Vector3(-0.9, 0.35, 1.2),  // FL
-      new THREE.Vector3(0.9, 0.35, 1.2),   // FR
-      new THREE.Vector3(-0.9, 0.35, -1.2), // RL
-      new THREE.Vector3(0.9, 0.35, -1.2)   // RR
+      new THREE.Vector3(-0.9, 0.35, 1.25),  // Front Left
+      new THREE.Vector3(0.9, 0.35, 1.25),   // Front Right
+      new THREE.Vector3(-0.9, 0.35, -1.25), // Rear Left
+      new THREE.Vector3(0.9, 0.35, -1.25)   // Rear Right
     ];
     wheelPositions.forEach(pos => {
+      // Tire
       const wheel = new THREE.Mesh(wheelGeo, tireMat);
       wheel.position.copy(pos);
       carGroup.add(wheel);
-      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.26, 12), chromeMat);
+
+      // Multi-spoke sporty alloy rim
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.23, 16), chromeMat);
       rim.rotation.z = Math.PI / 2;
       wheel.add(rim);
+
+      // Sporty Red Caliper Mesh (as in reference image)
+      const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), caliperMat);
+      caliper.position.set(pos.x > 0 ? -0.04 : 0.04, 0.12, 0);
+      wheel.add(caliper);
+
+      // Diamond-cut styled spokes
+      for (let i = 0; i < 8; i++) {
+        const spokeGeo = new THREE.BoxGeometry(0.03, 0.22, 0.03);
+        const spoke = new THREE.Mesh(spokeGeo, chromeMat);
+        spoke.rotation.x = (i * Math.PI) / 4;
+        rim.add(spoke);
+      }
     });
 
-    // C. FRONT END: BUMPER, RADIATOR GRILLE, HEADLIGHTS (Clear Bonnet Front Identification)
-    const frontBumperGeo = new THREE.BoxGeometry(1.85, 0.4, 0.4);
-    const frontBumperMesh = registerPanelMesh('bumper_front', frontBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, 2.1));
+    // C. FRONT END: HONDA CITY SOLID WING FACE & LED HEADLAMPS WITH SPORTY BUMPER DESIGN
+    const frontBumperGeo = createRoundedBoxGeometry(1.78, 0.42, 0.45, 0.08);
+    const frontBumperMesh = registerPanelMesh('bumper_front', frontBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, 2.0));
 
-    // Front Grille Mesh
-    const grilleMesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.05), grilleMat);
-    grilleMesh.position.set(0, 0.45, 2.31);
-    carGroup.add(grilleMesh);
+    // Sporty Front Bumper Lower Splitter Lip (Dark Chrome finish)
+    const frontSplitter = new THREE.Mesh(createRoundedBoxGeometry(1.5, 0.04, 0.3, 0.01), chromeMat);
+    frontSplitter.position.set(0, 0.18, 2.05);
+    carGroup.add(frontSplitter);
 
-    // Left & Right LED Headlights
-    const headlightGeo = new THREE.BoxGeometry(0.35, 0.15, 0.08);
-    const hlL = new THREE.Mesh(headlightGeo, headlightMat);
-    hlL.position.set(-0.65, 0.52, 2.31);
-    const hlR = new THREE.Mesh(headlightGeo, headlightMat);
-    hlR.position.set(0.65, 0.52, 2.31);
-    carGroup.add(hlL, hlR);
+    // Bumper Side Air Vents / Inlets
+    const ventL = new THREE.Mesh(createRoundedBoxGeometry(0.18, 0.14, 0.06, 0.01), grilleMat);
+    ventL.position.set(-0.62, 0.32, 2.11);
+    const ventR = new THREE.Mesh(createRoundedBoxGeometry(0.18, 0.14, 0.06, 0.01), grilleMat);
+    ventR.position.set(0.62, 0.32, 2.11);
+    carGroup.add(ventL, ventR);
 
-    // D. REAR END: BUMPER & TAILLIGHTS (Clear Rear Trunk Identification)
-    const rearBumperGeo = new THREE.BoxGeometry(1.85, 0.4, 0.4);
+    // Front License Plate Holder
+    const frontPlate = new THREE.Mesh(createRoundedBoxGeometry(0.48, 0.11, 0.02, 0.005), chromeMat);
+    frontPlate.position.set(0, 0.26, 2.13);
+    carGroup.add(frontPlate);
+
+    // Honda Signature "Solid Wing Face" Chrome Grill Bar with horizontal slats
+    const chromeGrille = new THREE.Mesh(createRoundedBoxGeometry(1.25, 0.14, 0.06, 0.01), chromeMat);
+    chromeGrille.position.set(0, 0.52, 2.11);
+    carGroup.add(chromeGrille);
+
+    // 3 Chrome Grille Slats for premium Honda City elegance
+    for (let i = 0; i < 3; i++) {
+      const slat = new THREE.Mesh(createRoundedBoxGeometry(1.15, 0.02, 0.02, 0.005), chromeMat);
+      slat.position.set(0, 0.44 - (i * 0.05), 2.12);
+      carGroup.add(slat);
+    }
+
+    // Black radiator intake mesh underneath the chrome wing
+    const lowerGrille = new THREE.Mesh(createRoundedBoxGeometry(1.1, 0.16, 0.05, 0.01), grilleMat);
+    lowerGrille.position.set(0, 0.34, 2.11);
+    carGroup.add(lowerGrille);
+
+    // LED Fog Lamp Pods on bumper corners
+    const fogL = new THREE.Mesh(createRoundedBoxGeometry(0.12, 0.04, 0.04, 0.01), headlightMat);
+    fogL.position.set(-0.58, 0.24, 2.12);
+    const fogR = new THREE.Mesh(createRoundedBoxGeometry(0.12, 0.04, 0.04, 0.01), headlightMat);
+    fogR.position.set(0.58, 0.24, 2.12);
+    carGroup.add(fogL, fogR);
+
+    // TWO HIGHLY PROMINENT ROUND FRONT HEADLIGHT UNITS (Round projector spheres sitting proud on the bumper front face)
+    const hlLGeo = new THREE.SphereGeometry(0.12, 32, 32);
+    const hlL = new THREE.Mesh(hlLGeo, headlightMat);
+    hlL.position.set(-0.55, 0.52, 2.26); // Prominently forward and visible on front bumper
+    
+    const hlRGeo = new THREE.SphereGeometry(0.12, 32, 32);
+    const hlR = new THREE.Mesh(hlRGeo, headlightMat);
+    hlR.position.set(0.55, 0.52, 2.26); // Prominently forward and visible on front bumper
+
+    // Elegant chrome surrounding ring plates for the round headlights
+    const headlightRingGeo = new THREE.TorusGeometry(0.13, 0.018, 12, 32);
+    
+    const ringL = new THREE.Mesh(headlightRingGeo, chromeMat);
+    ringL.position.set(-0.55, 0.52, 2.25);
+    
+    const ringR = new THREE.Mesh(headlightRingGeo, chromeMat);
+    ringR.position.set(0.55, 0.52, 2.25);
+    
+    carGroup.add(hlL, hlR, ringL, ringR);
+
+    // D. REAR END: SLEEK DECK TRUNK BUMPER & 3D WRAP-AROUND TAILLIGHTS
+    const rearBumperGeo = createRoundedBoxGeometry(1.78, 0.42, 0.45, 0.08);
     registerPanelMesh('bumper_rear', rearBumperGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -2.1));
 
-    // Rear Tail Lights (Red Lenses)
-    const taillightGeo = new THREE.BoxGeometry(0.4, 0.16, 0.08);
+    // Rear Bumper Dark Diffuser (Sporty dual-tone bumper design)
+    const rearDiffuser = new THREE.Mesh(createRoundedBoxGeometry(1.5, 0.12, 0.36, 0.02), grilleMat);
+    rearDiffuser.position.set(0, 0.24, -2.12);
+    carGroup.add(rearDiffuser);
+
+    // Bumper Red Safety Reflectors
+    const reflectorL = new THREE.Mesh(createRoundedBoxGeometry(0.16, 0.03, 0.02, 0.005), taillightMat);
+    reflectorL.position.set(-0.65, 0.32, -2.13);
+    const reflectorR = new THREE.Mesh(createRoundedBoxGeometry(0.16, 0.03, 0.02, 0.005), taillightMat);
+    reflectorR.position.set(0.65, 0.32, -2.13);
+    carGroup.add(reflectorL, reflectorR);
+
+    // Dual Chrome Exhaust Pipes (Sporty ZX Styling)
+    const exhaustL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 8), chromeMat);
+    exhaustL.rotation.x = Math.PI / 2;
+    exhaustL.position.set(-0.55, 0.18, -2.25);
+    const exhaustR = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 8), chromeMat);
+    exhaustR.rotation.x = Math.PI / 2;
+    exhaustR.position.set(0.55, 0.18, -2.25);
+    carGroup.add(exhaustL, exhaustR);
+
+    // Sleek 3D Wrap-Around LED Taillights (with red signature lens)
+    const taillightGeo = createRoundedBoxGeometry(0.38, 0.1, 0.08, 0.02);
     const tlL = new THREE.Mesh(taillightGeo, taillightMat);
-    tlL.position.set(-0.65, 0.72, -2.28);
+    tlL.position.set(-0.62, 0.74, -2.25);
+    tlL.rotation.y = Math.PI / 12;
     const tlR = new THREE.Mesh(taillightGeo, taillightMat);
-    tlR.position.set(0.65, 0.72, -2.28);
+    tlR.position.set(0.62, 0.74, -2.25);
+    tlR.rotation.y = -Math.PI / 12;
     carGroup.add(tlL, tlR);
 
-    // E. FRONT FENDERS
-    const fenderGeo = new THREE.BoxGeometry(0.2, 0.65, 0.9);
-    registerPanelMesh('fender_lhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.72, 1.35));
-    registerPanelMesh('fender_rhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.72, 1.35));
+    // E. FRONT FENDERS (Sculpted with Side Character Lines)
+    const fenderGeo = createRoundedBoxGeometry(0.12, 0.52, 0.82, 0.04);
+    registerPanelMesh('fender_lhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.64, 1.35));
+    registerPanelMesh('fender_rhs', fenderGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.64, 1.35));
 
     // F. RUNNING BOARDS (SILL)
-    const runningBoardGeo = new THREE.BoxGeometry(0.18, 0.2, 1.6);
-    registerPanelMesh('running_board_lhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.28, 0));
-    registerPanelMesh('running_board_rhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.28, 0));
+    const runningBoardGeo = createRoundedBoxGeometry(0.14, 0.14, 1.6, 0.03);
+    registerPanelMesh('running_board_lhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.22, 0));
+    registerPanelMesh('running_board_rhs', runningBoardGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.22, 0));
 
-    // G. QUARTER PANELS
-    const quarterGeo = new THREE.BoxGeometry(0.22, 0.7, 1.0);
-    registerPanelMesh('quarter_panel_lhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.88, 0.75, -1.35));
-    registerPanelMesh('quarter_panel_rhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(0.88, 0.75, -1.35));
+    // G. QUARTER PANELS (Contoured rear wheel fenders)
+    const quarterGeo = createRoundedBoxGeometry(0.14, 0.58, 0.92, 0.04);
+    registerPanelMesh('quarter_panel_lhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.82, 0.66, -1.35));
+    registerPanelMesh('quarter_panel_rhs', quarterGeo, defaultPaintMat, undefined, new THREE.Vector3(0.82, 0.66, -1.35));
 
-    // H. ROOF & WINDSHIELDS
-    const roofGeo = new THREE.BoxGeometry(1.5, 0.1, 1.5);
-    registerPanelMesh('roof', roofGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 1.35, -0.1));
+    // H. ROOF & SHAPED WINDSHIELDS (Sleek coupe outline with Panoramic Sunroof)
+    const roofGeo = createRoundedBoxGeometry(1.36, 0.04, 1.5, 0.04);
+    const roofMesh = registerPanelMesh('roof', roofGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 1.27, -0.1));
 
-    const wsFrontGeo = new THREE.BoxGeometry(1.45, 0.6, 0.08);
-    wsFrontGeo.rotateX(-Math.PI / 6);
-    registerPanelMesh('windshield_front', wsFrontGeo, glassMat, undefined, new THREE.Vector3(0, 1.15, 0.8));
+    // Glossy Black Panoramic Sunroof Glass Plate
+    const sunroofGeo = createRoundedBoxGeometry(0.95, 0.01, 0.75, 0.02);
+    const sunroof = new THREE.Mesh(sunroofGeo, interiorMat);
+    sunroof.position.set(0, 0.03, 0.1);
+    roofMesh.add(sunroof);
 
-    const wsRearGeo = new THREE.BoxGeometry(1.45, 0.55, 0.08);
-    wsRearGeo.rotateX(Math.PI / 6);
-    registerPanelMesh('windshield_rear', wsRearGeo, glassMat, undefined, new THREE.Vector3(0, 1.15, -0.95));
+    // Shark-fin Antenna on the back of the roof
+    const antennaGeo = new THREE.ConeGeometry(0.05, 0.1, 4);
+    antennaGeo.rotateX(Math.PI / 4);
+    const antenna = new THREE.Mesh(antennaGeo, chromeMat);
+    antenna.position.set(0, 0.08, -0.6);
+    roofMesh.add(antenna);
 
-    // I. ENGINE BAY APRONS & UNDERBODY
-    const apronLhsGeo = new THREE.BoxGeometry(0.35, 0.45, 0.8);
-    const apronRhsGeo = new THREE.BoxGeometry(0.35, 0.45, 0.8);
-    registerPanelMesh('apron_lhs', apronLhsGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.55, 0.6, 1.4));
-    registerPanelMesh('apron_rhs', apronRhsGeo, defaultPaintMat, undefined, new THREE.Vector3(0.55, 0.6, 1.4));
+    // Highly sloped windscreens typical of Honda City aerodynamic look
+    const wsFrontGeo = createRoundedBoxGeometry(1.3, 0.76, 0.03, 0.02);
+    wsFrontGeo.rotateX(-Math.PI / 4.2);
+    registerPanelMesh('windshield_front', wsFrontGeo, glassMat, undefined, new THREE.Vector3(0, 1.05, 0.82));
 
-    const engineBlock = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.7), engineMat);
-    engineBlock.position.set(0, 0.55, 1.4);
+    const wsRearGeo = createRoundedBoxGeometry(1.3, 0.72, 0.03, 0.02);
+    wsRearGeo.rotateX(Math.PI / 4.2);
+    registerPanelMesh('windshield_rear', wsRearGeo, glassMat, undefined, new THREE.Vector3(0, 1.05, -1.02));
+
+    // I. ENGINE BAY APRONS, APEX CORES & UNDERBODY
+    const apronLhsGeo = createRoundedBoxGeometry(0.28, 0.4, 0.75, 0.04);
+    const apronRhsGeo = createRoundedBoxGeometry(0.28, 0.4, 0.75, 0.04);
+    registerPanelMesh('apron_lhs', apronLhsGeo, defaultPaintMat, undefined, new THREE.Vector3(-0.5, 0.52, 1.35));
+    registerPanelMesh('apron_rhs', apronRhsGeo, defaultPaintMat, undefined, new THREE.Vector3(0.5, 0.52, 1.35));
+
+    const engineBlock = new THREE.Mesh(createRoundedBoxGeometry(0.65, 0.45, 0.65, 0.05), engineMat);
+    engineBlock.position.set(0, 0.48, 1.35);
     carGroup.add(engineBlock);
 
-    const underbodyGeo = new THREE.BoxGeometry(1.65, 0.12, 3.8);
+    const underbodyGeo = createRoundedBoxGeometry(1.58, 0.06, 3.65, 0.04);
     registerPanelMesh('underbody', underbodyGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.15, 0));
 
-    // J. HINGED DOORS (FRONT LHS, FRONT RHS, REAR LHS, REAR RHS)
-    const doorGeo = new THREE.BoxGeometry(0.12, 0.72, 0.78);
-    const innerJambGeo = new THREE.BoxGeometry(0.1, 0.68, 0.74);
+    // J. HONDA DOOR PANELS with Sharp Character Styling Lines & Side Mirrors
+    const doorGeo = createRoundedBoxGeometry(0.08, 0.65, 0.74, 0.03);
+    const innerJambGeo = createRoundedBoxGeometry(0.06, 0.62, 0.7, 0.02);
+
+    // Decorate doors with chrome handles, crease trims, and sleek Honda side-view mirrors
+    const decorateDoor = (doorPivot: THREE.Group, isLhs: boolean, isFront: boolean) => {
+      // Body Crease Styling Accent Trim
+      const creaseTrim = new THREE.Mesh(createRoundedBoxGeometry(0.02, 0.02, 0.72, 0.005), chromeMat);
+      creaseTrim.position.set(isLhs ? -0.06 : 0.06, 0.18, -0.38);
+      doorPivot.add(creaseTrim);
+
+      // Sleek Chrome Handle
+      const handle = new THREE.Mesh(createRoundedBoxGeometry(0.03, 0.02, 0.12, 0.005), chromeMat);
+      handle.position.set(isLhs ? -0.065 : 0.065, 0.08, -0.58);
+      doorPivot.add(handle);
+
+      // Aerodynamic side mirrors (front doors only)
+      if (isFront) {
+        const mirrorGroup = new THREE.Group();
+        mirrorGroup.position.set(isLhs ? -0.11 : 0.11, 0.22, -0.05);
+        
+        const stem = new THREE.Mesh(createRoundedBoxGeometry(0.07, 0.03, 0.03, 0.005), chromeMat);
+        const glass = new THREE.Mesh(createRoundedBoxGeometry(0.1, 0.07, 0.14, 0.01), defaultPaintMat);
+        glass.position.set(isLhs ? -0.05 : 0.05, 0.02, 0);
+
+        mirrorGroup.add(stem, glass);
+        doorPivot.add(mirrorGroup);
+      }
+    };
 
     // Door LHS Front Group
     const doorLhsFrontPivot = new THREE.Group();
-    doorLhsFrontPivot.position.set(-0.82, 0.72, 0.75); // Hinge position
+    doorLhsFrontPivot.position.set(-0.8, 0.65, 0.7); // Hinge position
     carGroup.add(doorLhsFrontPivot);
-    registerPanelMesh('door_lhs_front', doorGeo, defaultPaintMat, doorLhsFrontPivot, new THREE.Vector3(0, 0, -0.38));
-    // Inner jamb mesh
+    registerPanelMesh('door_lhs_front', doorGeo, defaultPaintMat, doorLhsFrontPivot, new THREE.Vector3(0, 0, -0.37));
     const innerJambLFR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambLFR.position.set(0.06, 0, -0.38);
+    innerJambLFR.position.set(0.05, 0, -0.37);
     innerJambLFR.userData = { panelId: 'door_lhs_front', isInnerJamb: true };
     doorLhsFrontPivot.add(innerJambLFR);
+    decorateDoor(doorLhsFrontPivot, true, true);
 
     // Door RHS Front Group
     const doorRhsFrontPivot = new THREE.Group();
-    doorRhsFrontPivot.position.set(0.82, 0.72, 0.75);
+    doorRhsFrontPivot.position.set(0.8, 0.65, 0.7);
     carGroup.add(doorRhsFrontPivot);
-    registerPanelMesh('door_rhs_front', doorGeo, defaultPaintMat, doorRhsFrontPivot, new THREE.Vector3(0, 0, -0.38));
+    registerPanelMesh('door_rhs_front', doorGeo, defaultPaintMat, doorRhsFrontPivot, new THREE.Vector3(0, 0, -0.37));
     const innerJambRFR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambRFR.position.set(-0.06, 0, -0.38);
+    innerJambRFR.position.set(-0.05, 0, -0.37);
     innerJambRFR.userData = { panelId: 'door_rhs_front', isInnerJamb: true };
     doorRhsFrontPivot.add(innerJambRFR);
+    decorateDoor(doorRhsFrontPivot, false, true);
 
     // Door LHS Rear Group
     const doorLhsRearPivot = new THREE.Group();
-    doorLhsRearPivot.position.set(-0.82, 0.72, -0.05);
+    doorLhsRearPivot.position.set(-0.8, 0.65, -0.04);
     carGroup.add(doorLhsRearPivot);
-    registerPanelMesh('door_lhs_rear', doorGeo, defaultPaintMat, doorLhsRearPivot, new THREE.Vector3(0, 0, -0.38));
+    registerPanelMesh('door_lhs_rear', doorGeo, defaultPaintMat, doorLhsRearPivot, new THREE.Vector3(0, 0, -0.37));
     const innerJambLRR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambLRR.position.set(0.06, 0, -0.38);
+    innerJambLRR.position.set(0.05, 0, -0.37);
     innerJambLRR.userData = { panelId: 'door_lhs_rear', isInnerJamb: true };
     doorLhsRearPivot.add(innerJambLRR);
+    decorateDoor(doorLhsRearPivot, true, false);
 
     // Door RHS Rear Group
     const doorRhsRearPivot = new THREE.Group();
-    doorRhsRearPivot.position.set(0.82, 0.72, -0.05);
+    doorRhsRearPivot.position.set(0.8, 0.65, -0.04);
     carGroup.add(doorRhsRearPivot);
-    registerPanelMesh('door_rhs_rear', doorGeo, defaultPaintMat, doorRhsRearPivot, new THREE.Vector3(0, 0, -0.38));
+    registerPanelMesh('door_rhs_rear', doorGeo, defaultPaintMat, doorRhsRearPivot, new THREE.Vector3(0, 0, -0.37));
     const innerJambRRR = new THREE.Mesh(innerJambGeo, defaultPaintMat);
-    innerJambRRR.position.set(-0.06, 0, -0.38);
+    innerJambRRR.position.set(-0.05, 0, -0.37);
     innerJambRRR.userData = { panelId: 'door_rhs_rear', isInnerJamb: true };
     doorRhsRearPivot.add(innerJambRRR);
+    decorateDoor(doorRhsRearPivot, false, false);
 
-    // K. FRONT BONNET / HOOD (Long Sloped Front Snout)
+    // K. SPORTY HONDA SLOPED BONNET / HOOD (Aerodynamically tapered and elongated - significantly larger than Dicky)
     const bonnetPivot = new THREE.Group();
-    bonnetPivot.position.set(0, 0.95, 0.9);
+    bonnetPivot.position.set(0, 0.78, 0.88);
     carGroup.add(bonnetPivot);
-    const bonnetGeo = new THREE.BoxGeometry(1.5, 0.1, 1.2);
-    registerPanelMesh('hood_bonnet', bonnetGeo, defaultPaintMat, bonnetPivot, new THREE.Vector3(0, 0, 0.6));
+    const bonnetGeo = createRoundedBoxGeometry(1.38, 0.04, 1.45, 0.05);
+    registerPanelMesh('hood_bonnet', bonnetGeo, defaultPaintMat, bonnetPivot, new THREE.Vector3(0, 0, 0.725));
 
-    // L. REAR TRUNK / BOOT LID & BOOT FLOOR (Rear Notchback)
+    // L. NOTCHBACK REAR TRUNK / DICKY (More compact, sportier deck lid - smaller than Bonnet)
     const bootPivot = new THREE.Group();
-    bootPivot.position.set(0, 1.05, -1.35);
+    bootPivot.position.set(0, 0.95, -1.32);
     carGroup.add(bootPivot);
-    const bootGeo = new THREE.BoxGeometry(1.5, 0.45, 0.7);
-    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.15, -0.35));
+    const bootGeo = createRoundedBoxGeometry(1.38, 0.38, 0.48, 0.05);
+    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.15, -0.24));
 
-    const bootFloorGeo = new THREE.BoxGeometry(1.4, 0.12, 0.7);
-    registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.45, -1.5));
+    // Sleek Rear Spoiler on trunk lid
+    const spoilerGeo = createRoundedBoxGeometry(1.4, 0.03, 0.12, 0.01);
+    const spoiler = new THREE.Mesh(spoilerGeo, chromeMat);
+    spoiler.position.set(0, 0.08, -0.65);
+    bootPivot.add(spoiler);
+
+    const bootFloorGeo = createRoundedBoxGeometry(1.3, 0.06, 0.64, 0.03);
+    registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -1.42));
 
     hingedGroupsRef.current = {
       doorLhsFront: doorLhsFrontPivot,
@@ -405,34 +620,115 @@ export function Interactive3DVehicleInspectionModel({
       bootTrunk: bootPivot
     };
 
-    // 7. Raycasting & Mouse Interaction Setup
+    // 7. Raycasting & Mouse/Touch Interaction Setup
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
+    const targetFocus = targetFocusRef.current;
     let isMouseDown = false;
+    let isPanning = false;
     let previousMousePosition = { x: 0, y: 0 };
 
+    // Pinch & mobile zoom/pan trackers
+    let previousTouchDistance = 0;
+    let previousTouchMidpoint = { x: 0, y: 0 };
+
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      isMouseDown = true;
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      previousMousePosition = { x: clientX, y: clientY };
+      if ('touches' in e) {
+        if (e.touches.length === 1) {
+          isMouseDown = true;
+          isPanning = false;
+          previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.touches.length === 2) {
+          isMouseDown = false;
+          isPanning = true;
+          // Calculate initial touch distance
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          previousTouchDistance = Math.sqrt(dx * dx + dy * dy);
+
+          // Calculate initial touch midpoint
+          previousTouchMidpoint = {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+          };
+        }
+      } else {
+        isMouseDown = true;
+        // Right click (button 2) or Shift + Left click activates Pan Mode
+        isPanning = (e.button === 2 || e.shiftKey);
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      }
     };
 
     const handlePointerMove = (e: MouseEvent | TouchEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const clientX = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientX : 0) : e.clientX;
+      const clientY = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientY : 0) : e.clientY;
 
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-      if (isMouseDown) {
+      if ('touches' in e && e.touches.length === 2) {
+        // Pinch-to-zoom and two-finger translation pan
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+
+        // A. PINCH ZOOM
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        const currentTouchDistance = Math.sqrt(dx * dx + dy * dy);
+
+        if (previousTouchDistance > 0) {
+          const pinchDelta = currentTouchDistance - previousTouchDistance;
+          const zoomSpeed = 0.008;
+          const dir = new THREE.Vector3().subVectors(camera.position, targetFocus).normalize();
+          const dist = camera.position.distanceTo(targetFocus);
+          const newDist = Math.max(1.8, Math.min(14.0, dist - pinchDelta * zoomSpeed));
+          camera.position.copy(dir.multiplyScalar(newDist).add(targetFocus));
+        }
+        previousTouchDistance = currentTouchDistance;
+
+        // B. TWO FINGER PAN (Translation)
+        const currentMidpoint = {
+          x: (touch1.clientX + touch2.clientX) / 2,
+          y: (touch1.clientY + touch2.clientY) / 2
+        };
+        if (previousTouchMidpoint.x > 0 && previousTouchMidpoint.y > 0) {
+          const mdx = currentMidpoint.x - previousTouchMidpoint.x;
+          const mdy = currentMidpoint.y - previousTouchMidpoint.y;
+
+          const panSpeed = 0.005;
+          const rightVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).normalize();
+          const upVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1).normalize();
+
+          targetFocus.addScaledVector(rightVector, -mdx * panSpeed);
+          targetFocus.addScaledVector(upVector, mdy * panSpeed);
+          camera.position.addScaledVector(rightVector, -mdx * panSpeed);
+          camera.position.addScaledVector(upVector, mdy * panSpeed);
+        }
+        previousTouchMidpoint = currentMidpoint;
+
+      } else if (isMouseDown) {
+        // Mouse drag rotation or mouse panning
         const deltaX = clientX - previousMousePosition.x;
         const deltaY = clientY - previousMousePosition.y;
 
-        carGroup.rotation.y += deltaX * 0.008;
-        carGroup.rotation.x = Math.max(-0.8, Math.min(0.8, carGroup.rotation.x + deltaY * 0.008));
+        if (isPanning) {
+          // Pan camera focus target
+          const panSpeed = 0.006;
+          const rightVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).normalize();
+          const upVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1).normalize();
+
+          targetFocus.addScaledVector(rightVector, -deltaX * panSpeed);
+          targetFocus.addScaledVector(upVector, deltaY * panSpeed);
+          camera.position.addScaledVector(rightVector, -deltaX * panSpeed);
+          camera.position.addScaledVector(upVector, deltaY * panSpeed);
+        } else {
+          // Standard rotation
+          carGroup.rotation.y += deltaX * 0.008;
+          carGroup.rotation.x = Math.max(-0.8, Math.min(0.8, carGroup.rotation.x + deltaY * 0.008));
+        }
 
         previousMousePosition = { x: clientX, y: clientY };
       } else {
@@ -451,12 +747,16 @@ export function Interactive3DVehicleInspectionModel({
     };
 
     const handlePointerUp = (e: MouseEvent | TouchEvent) => {
-      if (isMouseDown) {
-        isMouseDown = false;
-      }
+      isMouseDown = false;
+      isPanning = false;
+      previousTouchDistance = 0;
+      previousTouchMidpoint = { x: 0, y: 0 };
     };
 
     const handleCanvasClick = (e: MouseEvent) => {
+      // Ignore click triggers if they were meant as panning
+      if (e.button === 2 || e.shiftKey) return;
+
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -471,11 +771,28 @@ export function Interactive3DVehicleInspectionModel({
       }
     };
 
+    // Zoom via mouse wheel scroll
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomSpeed = 0.005;
+      const dir = new THREE.Vector3().subVectors(camera.position, targetFocus).normalize();
+      const dist = camera.position.distanceTo(targetFocus);
+      const newDist = Math.max(2.0, Math.min(12.0, dist + e.deltaY * zoomSpeed));
+      camera.position.copy(dir.multiplyScalar(newDist).add(targetFocus));
+    };
+
+    // Prevent default right-click menu within WebGL container
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
     const domElem = renderer.domElement;
     domElem.addEventListener('mousedown', handlePointerDown);
     domElem.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
     domElem.addEventListener('click', handleCanvasClick);
+    domElem.addEventListener('wheel', handleWheel, { passive: false });
+    domElem.addEventListener('contextmenu', handleContextMenu);
 
     domElem.addEventListener('touchstart', handlePointerDown);
     domElem.addEventListener('touchmove', handlePointerMove);
@@ -487,9 +804,12 @@ export function Interactive3DVehicleInspectionModel({
       animationFrameId = requestAnimationFrame(animate);
 
       // Idle subtle spin if not interacting
-      if (!isMouseDown) {
+      if (!isMouseDown && !isPanning) {
         carGroup.rotation.y += 0.0015;
       }
+
+      // Smoothly focus camera onto current focus target
+      camera.lookAt(targetFocus);
 
       renderer.render(scene, camera);
     };
@@ -502,6 +822,8 @@ export function Interactive3DVehicleInspectionModel({
       domElem.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('mouseup', handlePointerUp);
       domElem.removeEventListener('click', handleCanvasClick);
+      domElem.removeEventListener('wheel', handleWheel);
+      domElem.removeEventListener('contextmenu', handleContextMenu);
       domElem.removeEventListener('touchstart', handlePointerDown);
       domElem.removeEventListener('touchmove', handlePointerMove);
       window.removeEventListener('touchend', handlePointerUp);
@@ -565,6 +887,112 @@ export function Interactive3DVehicleInspectionModel({
     }
   }, [cameraPreset]);
 
+  // Update Component Isolation & Mesh Visibility in real-time
+  useEffect(() => {
+    const carGroup = carGroupRef.current;
+    if (!carGroup) return;
+
+    // Mapping of visual control panel components to core 3D panel IDs
+    const groupPanelIds: Record<string, string[]> = {
+      'Bonnet': ['hood_bonnet'],
+      'Dicky': ['boot_trunk', 'boot_floor'],
+      'Doors': ['door_lhs_front', 'door_rhs_front', 'door_lhs_rear', 'door_rhs_rear'],
+      'Apron': ['apron_lhs', 'apron_rhs'],
+      'Underbody': ['underbody'],
+    };
+
+    const targetIds = isolatedComponent ? groupPanelIds[isolatedComponent] : null;
+
+    carGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (isolatedComponent) {
+          let shouldKeepVisible = false;
+
+          // Check if this child mesh or any parent group is part of the isolation target
+          let current: THREE.Object3D | null = child;
+          while (current) {
+            if (current.userData && current.userData.panelId) {
+              if (targetIds?.includes(current.userData.panelId)) {
+                shouldKeepVisible = true;
+                break;
+              }
+            }
+            current = current.parent;
+          }
+
+          // Special exception: preserve inner jamb highlights when door is isolated
+          if (isolatedComponent === 'Doors' && child.userData && child.userData.isInnerJamb) {
+            shouldKeepVisible = true;
+          }
+
+          child.visible = shouldKeepVisible;
+        } else {
+          // No active isolation: keep all body panels visible
+          child.visible = true;
+        }
+      }
+    });
+
+    // Auto-adjust cameras for the best inspection view of the isolated part
+    if (isolatedComponent === 'Underbody') {
+      setCameraPreset('UNDERBODY');
+    } else if (isolatedComponent === 'Bonnet') {
+      setCameraPreset('FRONT');
+    } else if (isolatedComponent === 'Dicky') {
+      setCameraPreset('REAR');
+    } else if (isolatedComponent === 'Doors') {
+      setCameraPreset('ISO');
+    }
+  }, [isolatedComponent]);
+
+  // Handle AR Camera Feed Stream allocation and release
+  useEffect(() => {
+    if (isArMode) {
+      setCameraPermissionError(false);
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Rear-facing camera of device
+      })
+      .then((stream) => {
+        setArStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      })
+      .catch((err) => {
+        console.error("AR Mode camera connection failed:", err);
+        setCameraPermissionError(true);
+        setIsArMode(false);
+      });
+    } else {
+      if (arStream) {
+        arStream.getTracks().forEach(track => track.stop());
+        setArStream(null);
+      }
+    }
+
+    return () => {
+      if (arStream) {
+        arStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isArMode]);
+
+  // Adjust Three.js Scene background transparently when AR mode is active
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (isArMode) {
+      // Clear background color and fog to allow DOM background video feed to show through
+      scene.background = null;
+      scene.fog = null;
+    } else {
+      // Re-apply premium light grey showroom studio background
+      scene.background = new THREE.Color(0xe2e8f0);
+      scene.fog = new THREE.FogExp2(0xe2e8f0, 0.02);
+    }
+  }, [isArMode]);
+
   // Update Material Colors based on Selected Inspections & Paint Scope
   useEffect(() => {
     const meshes = meshesMapRef.current;
@@ -589,7 +1017,7 @@ export function Interactive3DVehicleInspectionModel({
           mat.emissive.setHex(0x0284c7);
           mat.emissiveIntensity = 0.4;
         } else {
-          // Unselected default Alpine White finish
+          // Unselected default premium Pearl White finish
           mat.color.setHex(0xf8fafc);
           mat.emissive.setHex(0x000000);
           mat.emissiveIntensity = 0;
@@ -646,12 +1074,12 @@ export function Interactive3DVehicleInspectionModel({
         {/* Preset Angle Buttons */}
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
           {[
-            { id: 'ISO', label: '3D ISO', icon: '🧊' },
-            { id: 'FRONT', label: 'Front / Bonnet', icon: '🚘' },
-            { id: 'LHS', label: 'Left Doors', icon: '👈' },
-            { id: 'RHS', label: 'Right Doors', icon: '👉' },
-            { id: 'REAR', label: 'Rear / Dicky', icon: '🚗' },
-            { id: 'UNDERBODY', label: 'Underbody', icon: '⚡' },
+            { id: 'ISO', label: '3D ISO View', icon: '🧊' },
+            { id: 'FRONT', label: 'Front / बोनट', icon: '🚘' },
+            { id: 'LHS', label: 'Left (बायां - Passenger Side)', icon: '👈' },
+            { id: 'RHS', label: 'Right (दायां - Driver Side)', icon: '👉' },
+            { id: 'REAR', label: 'Rear / डिकी', icon: '🚗' },
+            { id: 'UNDERBODY', label: 'Underbody / फर्श', icon: '⚡' },
           ].map(p => (
             <button
               key={p.id}
@@ -719,56 +1147,232 @@ export function Interactive3DVehicleInspectionModel({
         </div>
       </div>
 
-      {/* 3D Canvas Viewport */}
-      <div className="relative w-full rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
-        <div ref={mountRef} className="w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing" />
+      {/* 3D Canvas Viewport & Sidebar Control Panel Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* 3D Canvas Viewport */}
+        <div className="lg:col-span-3 relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
+          {/* Real-world Live Camera feed for AR overlay behind the 3D canvas */}
+          {isArMode && (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
+            />
+          )}
 
-        {/* Legend Overlay on Canvas */}
-        <div className="absolute top-3 left-3 bg-slate-950/85 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-[10px] space-y-1.5 shadow-xl">
-          <div className="font-bold text-slate-400 uppercase tracking-wider mb-1">कलर लेजेंड (Color Codes):</div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-slate-100 border border-slate-300 inline-block shadow-sm" />
-            <span className="text-slate-200 font-bold">Alpine White (डिफ़ॉल्ट गाड़ी का रंग)</span>
+          <div ref={mountRef} className="relative w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing z-10" />
+
+          {/* Hovered Panel Floating Pill */}
+          {activePanelObj && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center gap-3 z-20">
+              <div>
+                <div className="text-[10px] text-amber-400 font-bold uppercase">चयनित 3D पैनल</div>
+                <div className="text-xs font-black text-white">{activePanelObj.nameHi}</div>
+                <div className="text-[10.5px] font-mono text-amber-300 font-extrabold">
+                  {activePanelObj.nameEn}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3D AR Sidebar Controller Panel */}
+        <div className="lg:col-span-1 bg-slate-950 rounded-2xl border border-slate-800 p-4 flex flex-col justify-between space-y-4">
+          <div className="space-y-3">
+            <div className="pb-2 border-b border-slate-800">
+              <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                <span>3D AR Control Panel</span>
+              </h4>
+              <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                पार्ट्स को अलग करके (Isolate) या खोलकर (Open/Hinge) बारीकी से अंदर-बाहर पेंट और डैमेज चेक करें।
+              </p>
+            </div>
+
+            {/* Futuristic Real-world AR Overlay Camera Toggle */}
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/30 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-black text-white flex items-center gap-1">
+                    <span>🎥 AR Preview Mode</span>
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[8px] font-bold tracking-wider animate-pulse">LIVE</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-300 font-medium leading-normal mt-0.5">
+                    असली गाड़ी पर 3D कार ओवरले करें। (Overlay 3D car on real car.)
+                  </p>
+                </div>
+                
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isArMode} 
+                    onChange={(e) => setIsArMode(e.target.checked)} 
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-6 bg-slate-800 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500/50 dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-indigo-500 peer-checked:to-purple-500 peer-checked:after:bg-white peer-checked:after:border-white shadow-inner" />
+                </label>
+              </div>
+
+              {isArMode && (
+                <div className="text-[9px] text-emerald-400 font-extrabold flex items-center gap-1 mt-1 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span>🔴 Back Camera Active (Environment Mode)</span>
+                </div>
+              )}
+
+              {cameraPermissionError && (
+                <div className="text-[9.5px] text-rose-300 font-bold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/30 leading-relaxed space-y-1 mt-1 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-1 text-rose-400">
+                    <span>⚠️</span>
+                    <span>कैमरा परमिशन आवश्यक है (Permission Required)</span>
+                  </div>
+                  <div>
+                    AR प्रीव्यू के लिए अपने ब्राउज़र के एड्रेस बार में कैमरा आइकॉन पर क्लिक करें और <b>'Allow'</b> करें। (Click camera icon in browser address bar to allow.)
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                { 
+                  id: 'Bonnet', 
+                  labelEn: 'Hood / Bonnet', 
+                  labelHi: 'बोनट / इंजन', 
+                  icon: '🚘', 
+                  isOpen: bonnetOpen, 
+                  onToggleOpen: () => setBonnetOpen(!bonnetOpen), 
+                  hasHinge: true 
+                },
+                { 
+                  id: 'Dicky', 
+                  labelEn: 'Boot / Dicky', 
+                  labelHi: 'डिकी / पिछला फर्श', 
+                  icon: '🚗', 
+                  isOpen: dickyOpen, 
+                  onToggleOpen: () => setDickyOpen(!dickyOpen), 
+                  hasHinge: true 
+                },
+                { 
+                  id: 'Doors', 
+                  labelEn: '4 Side Doors', 
+                  labelHi: 'चारों दरवाजे', 
+                  icon: '🚪', 
+                  isOpen: doorsOpen, 
+                  onToggleOpen: () => setDoorsOpen(!doorsOpen), 
+                  hasHinge: true 
+                },
+                { 
+                  id: 'Apron', 
+                  labelEn: 'Engine Apron', 
+                  labelHi: 'इंजन एप्रन (Pillars)', 
+                  icon: '⚙️', 
+                  hasHinge: false 
+                },
+                { 
+                  id: 'Underbody', 
+                  labelEn: 'Underbody Floor', 
+                  labelHi: 'गाड़ी का निचला फर्श', 
+                  icon: '⚡', 
+                  hasHinge: false 
+                },
+              ].map(comp => {
+                const isIsolated = isolatedComponent === comp.id;
+                return (
+                  <div key={comp.id} className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-850 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">{comp.icon}</span>
+                        <div>
+                          <div className="text-xs font-bold text-slate-100 leading-tight">{comp.labelEn}</div>
+                          <div className="text-[10px] text-slate-400 font-semibold">{comp.labelHi}</div>
+                        </div>
+                      </div>
+
+                      {/* Isolate Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsolatedComponent(isIsolated ? null : comp.id)}
+                        className={`px-2 py-1 rounded-md text-[9.5px] font-black uppercase transition-all tracking-wider cursor-pointer ${
+                          isIsolated
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                        title="Isolate this component to view alone"
+                      >
+                        {isIsolated ? '🔍 Isolated' : ' Isolate'}
+                      </button>
+                    </div>
+
+                    {/* Hinge open control */}
+                    {comp.hasHinge && (
+                      <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/60">
+                        <span className="text-[10px] text-slate-400 font-bold">Hinge Position:</span>
+                        <button
+                          type="button"
+                          onClick={comp.onToggleOpen}
+                          className={`px-2.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                            comp.isOpen
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-800/80 text-slate-400 hover:text-slate-300'
+                          }`}
+                        >
+                          <span>{comp.isOpen ? '🟢 Open (खुला)' : '🔴 Closed (बंद)'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-amber-500 inline-block shadow-sm" />
+
+          {/* Reset All Visibility & Hinges Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsolatedComponent(null);
+              setDoorsOpen(true);
+              setBonnetOpen(false);
+              setDickyOpen(false);
+              setCameraPreset('ISO');
+            }}
+            className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-700 cursor-pointer"
+          >
+            🔄 Reset View &amp; Hinges
+          </button>
+        </div>
+      </div>
+
+      {/* Repositioned Colour Legends Bar (Clean Horizontal layout beneath the canvas) */}
+      <div className="bg-slate-900/85 backdrop-blur-md p-3 rounded-xl border border-slate-800 text-xs shadow-xl">
+        <div className="font-bold text-slate-400 uppercase tracking-wider mb-2 text-[10px] text-center sm:text-left">
+          🎨 कलर कोड्स एवं लेजेंड (Color Codes & Legends):
+        </div>
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2">
+          <div className="flex items-center gap-1.5 bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800">
+            <span className="w-3.5 h-3.5 rounded bg-white border border-slate-300 inline-block shadow-sm" />
+            <span className="text-slate-200 font-bold">Pearl White (डिफ़ॉल्ट)</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800">
+            <span className="w-3.5 h-3.5 rounded bg-amber-500 inline-block shadow-sm" />
             <span className="text-amber-300 font-bold">Full Paint (बाहर पूरा)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-emerald-500 inline-block shadow-sm" />
-            <span className="text-emerald-300 font-bold">Inside Paint (अंदर पिलर/फर्श)</span>
+          <div className="flex items-center gap-1.5 bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800">
+            <span className="w-3.5 h-3.5 rounded bg-emerald-500 inline-block shadow-sm" />
+            <span className="text-emerald-300 font-bold">Inside Paint (अंदर फर्श/पिलर)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-cyan-400 inline-block shadow-sm" />
+          <div className="flex items-center gap-1.5 bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800">
+            <span className="w-3.5 h-3.5 rounded bg-cyan-400 inline-block shadow-sm" />
             <span className="text-cyan-300 font-bold">Partial Touchup (आधा/पैच)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-yellow-400 inline-block shadow-sm" />
+          <div className="flex items-center gap-1.5 bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800">
+            <span className="w-3.5 h-3.5 rounded bg-yellow-400 inline-block shadow-sm" />
             <span className="text-yellow-300 font-bold">Outer + Inside (दोनों)</span>
           </div>
         </div>
-
-        {/* Hovered Panel Floating Pill */}
-        {activePanelObj && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center gap-3">
-            <div>
-              <div className="text-[10px] text-amber-400 font-bold uppercase">चयनित 3D पैनल</div>
-              <div className="text-xs font-black text-white">{activePanelObj.nameHi}</div>
-              <div className="text-[10.5px] font-mono text-amber-300 font-extrabold">
-                {formatPaintTaskTitle(activePanelObj.nameEn, currentScope)}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => speakPanelInfo(activePanelObj)}
-              className="p-2 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 transition-colors"
-              title="बोलकर सुनें"
-            >
-              <Volume2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Selected Panel Detail & Scope Selector */}
