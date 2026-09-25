@@ -104,7 +104,8 @@ export function matchTaskToPanelDef(task: { title: string; panelKey?: string; st
  */
 export function mapPanelToStandardJob(
   panelIdOrPanel: string | PanelDefinition,
-  standardJobs?: StandardJob[]
+  standardJobs?: StandardJob[],
+  scope?: string
 ): StandardJob | undefined {
   const jobs = (standardJobs && standardJobs.length > 0) ? standardJobs : getStandardJobs();
   const panelId = typeof panelIdOrPanel === 'string' ? panelIdOrPanel : panelIdOrPanel.id;
@@ -113,6 +114,18 @@ export function mapPanelToStandardJob(
     : panelIdOrPanel;
 
   if (!panelId && !panelObj) return undefined;
+
+  // 1. Prioritize exact match for panelKey AND paintScope if scope is provided
+  if (scope && panelId) {
+    const exactScopeMatch = jobs.find(job => job.panelKey === panelId && job.paintScope === scope);
+    if (exactScopeMatch) return exactScopeMatch;
+  }
+
+  // 2. Fallback to FULL_OUTER or general panel key if scope is FULL_OUTER or not found
+  if (panelId) {
+    const defaultScopeMatch = jobs.find(job => job.panelKey === panelId && (job.paintScope === 'FULL_OUTER' || !job.paintScope));
+    if (defaultScopeMatch) return defaultScopeMatch;
+  }
 
   const targetStdId = panelObj?.standardJobId;
   const targetCode = panelObj?.code?.toLowerCase();
@@ -166,10 +179,12 @@ export function getPanelEnvironmentRates(
   isCars24: boolean = false,
   scope?: string
 ): PanelEnvironmentRates {
-  const matchedJob = mapPanelToStandardJob(panelIdOrPanel, standardJobs);
   const panelId = typeof panelIdOrPanel === 'string' ? panelIdOrPanel : panelIdOrPanel?.id;
   const isPartialAllowed = isPartialPaintAllowedForPanel(panelId);
   const activeScope = (scope === 'PARTIAL_TOUCHUP' && !isPartialAllowed) ? 'FULL_OUTER' : (scope || 'FULL_OUTER');
+  
+  // Pass scope to mapPanelToStandardJob so we get the exact scope-specific job if configured!
+  const matchedJob = mapPanelToStandardJob(panelIdOrPanel, standardJobs, activeScope);
 
   let multiplier = 1.0;
   if (activeScope === 'PARTIAL_TOUCHUP') multiplier = 0.6;
@@ -180,15 +195,18 @@ export function getPanelEnvironmentRates(
     let retailPrice = matchedJob.retailPrice ?? 2000;
     let cars24Price = matchedJob.cars24Price ?? 1350;
 
-    if (activeScope === 'PARTIAL_TOUCHUP') {
-      retailPrice = matchedJob.retailPartialPrice ?? Math.round(retailPrice * 0.6);
-      cars24Price = matchedJob.cars24PartialPrice ?? Math.round(cars24Price * 0.6);
-    } else if (activeScope === 'INSIDE_JAMB') {
-      retailPrice = matchedJob.retailInsidePrice ?? Math.round(retailPrice * 0.5);
-      cars24Price = matchedJob.cars24InsidePrice ?? Math.round(cars24Price * 0.5);
-    } else if (activeScope === 'FULL_OUTER_AND_INSIDE') {
-      retailPrice = matchedJob.retailFullOuterInsidePrice ?? Math.round(retailPrice * 1.35);
-      cars24Price = matchedJob.cars24FullOuterInsidePrice ?? Math.round(cars24Price * 1.35);
+    // Only apply nested scope math / defaults if the matched job is NOT already scope-specific
+    if (matchedJob.paintScope !== activeScope) {
+      if (activeScope === 'PARTIAL_TOUCHUP') {
+        retailPrice = matchedJob.retailPartialPrice ?? Math.round(retailPrice * 0.6);
+        cars24Price = matchedJob.cars24PartialPrice ?? Math.round(cars24Price * 0.6);
+      } else if (activeScope === 'INSIDE_JAMB') {
+        retailPrice = matchedJob.retailInsidePrice ?? Math.round(retailPrice * 0.5);
+        cars24Price = matchedJob.cars24InsidePrice ?? Math.round(cars24Price * 0.5);
+      } else if (activeScope === 'FULL_OUTER_AND_INSIDE') {
+        retailPrice = matchedJob.retailFullOuterInsidePrice ?? Math.round(retailPrice * 1.35);
+        cars24Price = matchedJob.cars24FullOuterInsidePrice ?? Math.round(cars24Price * 1.35);
+      }
     }
 
     const activePrice = isCars24 ? cars24Price : retailPrice;

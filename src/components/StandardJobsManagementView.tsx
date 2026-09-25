@@ -369,8 +369,16 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
       description: assocDesc.trim() || `${assocJobType.label} for ${assocPanel.nameEn}`
     };
 
-    if (assocEditingJobId) {
-      updateStandardJob(assocEditingJobId, jobData);
+    // Find if there is an existing standard job with the same panelKey and paintScope / category
+    const existingJob = standardJobs.find(j => 
+      j.panelKey === assocPanel.id && 
+      (paintScope ? j.paintScope === paintScope : j.category === category)
+    );
+
+    const targetJobId = assocEditingJobId || existingJob?.id;
+
+    if (targetJobId) {
+      updateStandardJob(targetJobId, jobData);
     } else {
       addStandardJob(jobData as StandardJob);
     }
@@ -729,8 +737,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       type="number"
                       step="0.5"
                       min="0.5"
-                      value={assocHours}
-                      onChange={(e) => setAssocHours(Number(e.target.value))}
+                      value={assocHours === 0 ? '' : assocHours}
+                      onChange={(e) => setAssocHours(e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
                     />
                   </div>
@@ -760,8 +768,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       type="number"
                       required
                       min="0"
-                      value={assocRetailPrice}
-                      onChange={(e) => setAssocRetailPrice(Number(e.target.value))}
+                      value={assocRetailPrice === 0 ? '' : assocRetailPrice}
+                      onChange={(e) => setAssocRetailPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-black text-emerald-600 dark:text-emerald-400"
                     />
                   </div>
@@ -774,8 +782,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       type="number"
                       required
                       min="0"
-                      value={assocCars24Price}
-                      onChange={(e) => setAssocCars24Price(Number(e.target.value))}
+                      value={assocCars24Price === 0 ? '' : assocCars24Price}
+                      onChange={(e) => setAssocCars24Price(e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-black text-blue-600 dark:text-blue-400"
                     />
                   </div>
@@ -793,8 +801,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       <input
                         type="number"
                         min="0"
-                        value={assocRetailPainter}
-                        onChange={(e) => setAssocRetailPainter(Number(e.target.value) || 0)}
+                        value={assocRetailPainter === 0 ? '' : assocRetailPainter}
+                        onChange={(e) => setAssocRetailPainter(e.target.value === '' ? 0 : Number(e.target.value))}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
                       />
                     </div>
@@ -803,8 +811,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       <input
                         type="number"
                         min="0"
-                        value={assocRetailDenter}
-                        onChange={(e) => setAssocRetailDenter(Number(e.target.value) || 0)}
+                        value={assocRetailDenter === 0 ? '' : assocRetailDenter}
+                        onChange={(e) => setAssocRetailDenter(e.target.value === '' ? 0 : Number(e.target.value))}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
                       />
                     </div>
@@ -816,8 +824,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       <input
                         type="number"
                         min="0"
-                        value={assocCars24Painter}
-                        onChange={(e) => setAssocCars24Painter(Number(e.target.value) || 0)}
+                        value={assocCars24Painter === 0 ? '' : assocCars24Painter}
+                        onChange={(e) => setAssocCars24Painter(e.target.value === '' ? 0 : Number(e.target.value))}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
                       />
                     </div>
@@ -826,8 +834,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       <input
                         type="number"
                         min="0"
-                        value={assocCars24Denter}
-                        onChange={(e) => setAssocCars24Denter(Number(e.target.value) || 0)}
+                        value={assocCars24Denter === 0 ? '' : assocCars24Denter}
+                        onChange={(e) => setAssocCars24Denter(e.target.value === '' ? 0 : Number(e.target.value))}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
                       />
                     </div>
@@ -1043,10 +1051,10 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                             <input
                               type="number"
                               min="0"
-                              value={p.defaultPrice || 0}
+                              value={p.defaultPrice === 0 ? '' : p.defaultPrice}
                               onChange={(e) => {
                                 const updated = [...panels];
-                                updated[idx] = { ...p, defaultPrice: Number(e.target.value) || 0 };
+                                updated[idx] = { ...p, defaultPrice: e.target.value === '' ? 0 : Number(e.target.value) };
                                 setPanels(updated);
                               }}
                               className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-6 pr-3 py-1.5 w-full font-mono font-black text-right text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -1143,8 +1151,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                     type="number"
                     step="0.5"
                     min="0.5"
-                    value={formHours}
-                    onChange={(e) => setFormHours(Number(e.target.value))}
+                    value={formHours === 0 ? '' : formHours}
+                    onChange={(e) => setFormHours(e.target.value === '' ? 0 : Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
                   />
                 </div>
@@ -1230,8 +1238,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       type="number"
                       required
                       min="0"
-                      value={formRetailPrice}
-                      onChange={(e) => setFormRetailPrice(Number(e.target.value))}
+                      value={formRetailPrice === 0 ? '' : formRetailPrice}
+                      onChange={(e) => setFormRetailPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1244,8 +1252,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                       type="number"
                       required
                       min="0"
-                      value={formCars24Price}
-                      onChange={(e) => setFormCars24Price(Number(e.target.value))}
+                      value={formCars24Price === 0 ? '' : formCars24Price}
+                      onChange={(e) => setFormCars24Price(e.target.value === '' ? 0 : Number(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-black text-slate-900 dark:text-white"
                     />
                   </div>
@@ -1267,8 +1275,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formRetailPartialPrice}
-                          onChange={(e) => setFormRetailPartialPrice(Number(e.target.value))}
+                          value={formRetailPartialPrice === 0 ? '' : formRetailPartialPrice}
+                          onChange={(e) => setFormRetailPartialPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1279,8 +1287,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formCars24PartialPrice}
-                          onChange={(e) => setFormCars24PartialPrice(Number(e.target.value))}
+                          value={formCars24PartialPrice === 0 ? '' : formCars24PartialPrice}
+                          onChange={(e) => setFormCars24PartialPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1297,8 +1305,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formRetailInsidePrice}
-                          onChange={(e) => setFormRetailInsidePrice(Number(e.target.value))}
+                          value={formRetailInsidePrice === 0 ? '' : formRetailInsidePrice}
+                          onChange={(e) => setFormRetailInsidePrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1309,8 +1317,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formCars24InsidePrice}
-                          onChange={(e) => setFormCars24InsidePrice(Number(e.target.value))}
+                          value={formCars24InsidePrice === 0 ? '' : formCars24InsidePrice}
+                          onChange={(e) => setFormCars24InsidePrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1324,8 +1332,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formRetailFullOuterInsidePrice}
-                          onChange={(e) => setFormRetailFullOuterInsidePrice(Number(e.target.value))}
+                          value={formRetailFullOuterInsidePrice === 0 ? '' : formRetailFullOuterInsidePrice}
+                          onChange={(e) => setFormRetailFullOuterInsidePrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1336,8 +1344,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                         <input
                           type="number"
                           min="0"
-                          value={formCars24FullOuterInsidePrice}
-                          onChange={(e) => setFormCars24FullOuterInsidePrice(Number(e.target.value))}
+                          value={formCars24FullOuterInsidePrice === 0 ? '' : formCars24FullOuterInsidePrice}
+                          onChange={(e) => setFormCars24FullOuterInsidePrice(e.target.value === '' ? 0 : Number(e.target.value))}
                           className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
@@ -1384,8 +1392,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                               <input
                                 type="number"
                                 min="0"
-                                value={formRetailPainterPayout}
-                                onChange={(e) => setFormRetailPainterPayout(Number(e.target.value) || 0)}
+                                value={formRetailPainterPayout === 0 ? '' : formRetailPainterPayout}
+                                onChange={(e) => setFormRetailPainterPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                                 className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
                               />
                             </div>
@@ -1397,8 +1405,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                               <input
                                 type="number"
                                 min="0"
-                                value={formRetailDenterPayout}
-                                onChange={(e) => setFormRetailDenterPayout(Number(e.target.value) || 0)}
+                                value={formRetailDenterPayout === 0 ? '' : formRetailDenterPayout}
+                                onChange={(e) => setFormRetailDenterPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                                 className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
                               />
                             </div>
@@ -1420,8 +1428,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                               <input
                                 type="number"
                                 min="0"
-                                value={formCars24PainterPayout}
-                                onChange={(e) => setFormCars24PainterPayout(Number(e.target.value) || 0)}
+                                value={formCars24PainterPayout === 0 ? '' : formCars24PainterPayout}
+                                onChange={(e) => setFormCars24PainterPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                                 className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-purple-600 dark:text-purple-400"
                               />
                             </div>
@@ -1433,8 +1441,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                               <input
                                 type="number"
                                 min="0"
-                                value={formCars24DenterPayout}
-                                onChange={(e) => setFormCars24DenterPayout(Number(e.target.value) || 0)}
+                                value={formCars24DenterPayout === 0 ? '' : formCars24DenterPayout}
+                                onChange={(e) => setFormCars24DenterPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                                 className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-orange-600 dark:text-orange-400"
                               />
                             </div>
@@ -1451,8 +1459,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                           <input
                             type="number"
                             min="0"
-                            value={formRetailContractorPayout}
-                            onChange={(e) => setFormRetailContractorPayout(Number(e.target.value) || 0)}
+                            value={formRetailContractorPayout === 0 ? '' : formRetailContractorPayout}
+                            onChange={(e) => setFormRetailContractorPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                             className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-extrabold text-emerald-700 dark:text-emerald-300"
                             placeholder="e.g. 150"
                           />
@@ -1465,8 +1473,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                           <input
                             type="number"
                             min="0"
-                            value={formCars24ContractorPayout}
-                            onChange={(e) => setFormCars24ContractorPayout(Number(e.target.value) || 0)}
+                            value={formCars24ContractorPayout === 0 ? '' : formCars24ContractorPayout}
+                            onChange={(e) => setFormCars24ContractorPayout(e.target.value === '' ? 0 : Number(e.target.value))}
                             className="w-full px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-extrabold text-blue-700 dark:text-blue-300"
                             placeholder="e.g. 100"
                           />

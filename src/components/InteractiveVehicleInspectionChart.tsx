@@ -1148,15 +1148,15 @@ export function InteractiveVehicleInspectionChart({
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-amber-400 focus:outline-none focus:border-amber-400"
-                                value={inspection?.customPrice !== undefined ? inspection.customPrice : rates.price}
+                                value={(inspection?.customPrice !== undefined ? inspection.customPrice : rates.price) ?? ""}
                                 onChange={(e) => {
-                                  const val = Number(e.target.value);
+                                  const val = e.target.value === '' ? '' : Number(e.target.value);
                                   if (onInspectionChange) {
                                     onInspectionChange({
                                       ...inspections,
                                       [p.id]: {
                                         ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customPrice: val
+                                        customPrice: val as any
                                       }
                                     });
                                   }
@@ -1172,15 +1172,15 @@ export function InteractiveVehicleInspectionChart({
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-emerald-400 focus:outline-none focus:border-emerald-400"
-                                value={inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout}
+                                value={(inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout) ?? ""}
                                 onChange={(e) => {
-                                  const val = Number(e.target.value);
+                                  const val = e.target.value === '' ? '' : Number(e.target.value);
                                   if (onInspectionChange) {
                                     onInspectionChange({
                                       ...inspections,
                                       [p.id]: {
                                         ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customPainterPayout: val
+                                        customPainterPayout: val as any
                                       }
                                     });
                                   }
@@ -1196,15 +1196,15 @@ export function InteractiveVehicleInspectionChart({
                               <input
                                 type="number"
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-blue-400 focus:outline-none focus:border-blue-400"
-                                value={inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout}
+                                value={(inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout) ?? ""}
                                 onChange={(e) => {
-                                  const val = Number(e.target.value);
+                                  const val = e.target.value === '' ? '' : Number(e.target.value);
                                   if (onInspectionChange) {
                                     onInspectionChange({
                                       ...inspections,
                                       [p.id]: {
                                         ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customDenterPayout: val
+                                        customDenterPayout: val as any
                                       }
                                     });
                                   }
