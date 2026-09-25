@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { VEHICLE_PANELS, PanelDefinition, PanelInspectionItem } from './InteractiveVehicleInspectionChart';
 import { PaintScope, StandardJob } from '../types';
+import { getVehiclePanels } from '../lib/storage';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { formatPaintTaskTitle, isPartialPaintAllowedForPanel, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 
@@ -55,6 +56,7 @@ export function Interactive3DVehicleInspectionModel({
   const [isPillDismissed, setIsPillDismissed] = useState(false);
   const previousPanelIdRef = useRef<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [panelToDeselect, setPanelToDeselect] = useState<{ panelId: string; nameEn: string; nameHi: string } | null>(null);
 
   // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
   const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
@@ -106,22 +108,81 @@ export function Interactive3DVehicleInspectionModel({
     bootTrunk?: THREE.Group;
   }>({});
 
+  const effectivePanels = useMemo(() => {
+    return getVehiclePanels();
+  }, []);
+
   // Active panel definition
   const activePanelObj = useMemo(() => {
-    return VEHICLE_PANELS.find(p => p.id === activePanelId) || null;
-  }, [activePanelId]);
+    return effectivePanels.find(p => p.id === activePanelId) || null;
+  }, [activePanelId, effectivePanels]);
 
   const activeInspection = activePanelObj ? effectiveInspections[activePanelObj.id] : undefined;
   const currentScope: PaintScope = activeInspection?.paintScope || 'FULL_OUTER';
 
+  // Confirm removal/deselection of panel
+  const confirmDeselect = () => {
+    if (!panelToDeselect) return;
+    const { panelId } = panelToDeselect;
+    const panelObj = effectivePanels.find(p => p.id === panelId);
+    if (!panelObj) {
+      setPanelToDeselect(null);
+      return;
+    }
+
+    const updatedObj = {
+      panelId,
+      nameEn: panelObj.nameEn,
+      nameHi: panelObj.nameHi,
+      category: 'EXTERIOR_BODY' as const,
+      selected: false,
+      paintScope: 'FULL_OUTER' as const,
+      customPrice: undefined,
+      customPainterPayout: undefined,
+      customDenterPayout: undefined
+    };
+
+    setLocalInspections(prev => ({
+      ...prev,
+      [panelId]: updatedObj
+    }));
+
+    if (onInspectionChange) {
+      const updated = {
+        ...effectiveInspections,
+        [panelId]: updatedObj
+      };
+      onInspectionChange(updated);
+    }
+
+    if (onPanelToggle) {
+      onPanelToggle(panelId, panelObj.standardJobId, 'FULL_OUTER');
+    }
+
+    setPanelToDeselect(null);
+  };
+
   // Toggle panel selection
   const handlePanelClick = (panelId: string, scope?: PaintScope) => {
-    if (panelId === 'boot_floor' && !dickyOpen) return; // Prevent selection if closed!
+    if ((panelId === 'boot_floor' || panelId === 'boot_trunk') && !dickyOpen) {
+      setDickyOpen(true);
+    }
     setActivePanelId(panelId);
-    const panelObj = VEHICLE_PANELS.find(p => p.id === panelId);
+    const panelObj = effectivePanels.find(p => p.id === panelId);
     if (!panelObj) return;
 
     const existing = effectiveInspections[panelId];
+    
+    // Clicking on already selected panel on AR without a scope triggers confirmation
+    if (!scope && existing && existing.selected) {
+      setPanelToDeselect({
+        panelId,
+        nameEn: panelObj.nameEn,
+        nameHi: panelObj.nameHi
+      });
+      return;
+    }
+
     // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle.
     const newSelected = scope ? true : (existing ? !existing.selected : true);
     const targetScope = scope || existing?.paintScope || (panelId.startsWith('pillar_') ? 'INSIDE_JAMB' : 'FULL_OUTER');
@@ -335,10 +396,10 @@ export function Interactive3DVehicleInspectionModel({
     const cabinGroup = new THREE.Group();
     carGroup.add(cabinGroup);
 
-    // Main lower chassis tub with sloped front/rear overhangs
-    const chassisTubGeo = new THREE.BoxGeometry(1.65, 0.45, 3.8);
+    // Main lower chassis tub with sloped front/rear overhangs - shortened to create a hollow trunk cavity at the rear
+    const chassisTubGeo = new THREE.BoxGeometry(1.65, 0.45, 3.0);
     const chassisTub = new THREE.Mesh(chassisTubGeo, interiorMat);
-    chassisTub.position.set(0, 0.4, 0);
+    chassisTub.position.set(0, 0.4, 0.35); // Shifted forward to clear the trunk space
     cabinGroup.add(chassisTub);
 
     // Aerodynamic Glass Canopy - shaped like the Honda City's fastback roofline
@@ -545,7 +606,7 @@ export function Interactive3DVehicleInspectionModel({
 
     // Structural Pillars: Pillar A, B, and C (Inside Paint Panels)
     // Pillar A (Front Symmetrical Windshield Pillars) - Made thicker and offset outward to stand proud of glass canopy
-    const pillarAGeo = createRoundedBoxGeometry(0.07, 0.54, 0.07, 0.015);
+    const pillarAGeo = createRoundedBoxGeometry(0.14, 0.54, 0.14, 0.03);
     const pillarAL = registerPanelMesh('pillar_a', pillarAGeo, defaultPaintMat, undefined, new THREE.Vector3(0.70, 1.06, 0.85));
     pillarAL.rotation.set(-0.6, 0, -0.3);
     pillarAL.userData = { panelId: 'pillar_a', isInnerJamb: true };
@@ -557,7 +618,7 @@ export function Interactive3DVehicleInspectionModel({
     carGroup.add(pillarAR);
 
     // Pillar B (Middle Passenger Door Structural Pillars) - Made thicker and offset outward to stand proud of static black pillar
-    const pillarBGeo = createRoundedBoxGeometry(0.07, 0.57, 0.09, 0.015);
+    const pillarBGeo = createRoundedBoxGeometry(0.14, 0.57, 0.14, 0.03);
     const pillarBL = registerPanelMesh('pillar_b', pillarBGeo, defaultPaintMat, undefined, new THREE.Vector3(0.71, 0.96, -0.1));
     pillarBL.userData = { panelId: 'pillar_b', isInnerJamb: true };
 
@@ -567,7 +628,7 @@ export function Interactive3DVehicleInspectionModel({
     carGroup.add(pillarBR);
 
     // Pillar C (Rear Symmetrical Fastback Pillars) - Made thicker and offset outward to stand proud of glass canopy
-    const pillarCGeo = createRoundedBoxGeometry(0.07, 0.54, 0.11, 0.015);
+    const pillarCGeo = createRoundedBoxGeometry(0.14, 0.54, 0.18, 0.04);
     const pillarCL = registerPanelMesh('pillar_c', pillarCGeo, defaultPaintMat, undefined, new THREE.Vector3(0.70, 1.03, -0.92));
     pillarCL.rotation.set(0.5, 0, -0.2);
     pillarCL.userData = { panelId: 'pillar_c', isInnerJamb: true };
@@ -683,22 +744,22 @@ export function Interactive3DVehicleInspectionModel({
     const bootPivot = new THREE.Group();
     bootPivot.position.set(0, 0.95, -1.32);
     carGroup.add(bootPivot);
-    const bootGeo = createRoundedBoxGeometry(1.38, 0.02, 0.85, 0.008);
-    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.01, -0.425));
+    const bootGeo = createRoundedBoxGeometry(1.38, 0.008, 0.96, 0.003);
+    registerPanelMesh('boot_trunk', bootGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, -0.004, -0.48));
 
     // Dicky Inner Panel representing Dicky Inside Paint
-    const innerBootGeo = createRoundedBoxGeometry(1.34, 0.015, 0.81, 0.006);
+    const innerBootGeo = createRoundedBoxGeometry(1.34, 0.006, 0.92, 0.002);
     const innerBoot = new THREE.Mesh(innerBootGeo, defaultPaintMat.clone());
-    innerBoot.position.set(0, -0.02, -0.425);
+    innerBoot.position.set(0, -0.012, -0.48);
     innerBoot.userData = { panelId: 'boot_trunk', isInnerJamb: true };
     bootPivot.add(innerBoot);
 
     // Sleek Selectable Rear Spoiler on trunk lid (rotates with bootPivot)
     const spoilerGeo = createRoundedBoxGeometry(1.4, 0.03, 0.12, 0.01);
-    const spoilerMesh = registerPanelMesh('spoiler', spoilerGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, 0.02, -0.82));
+    const spoilerMesh = registerPanelMesh('spoiler', spoilerGeo, defaultPaintMat, bootPivot, new THREE.Vector3(0, 0.014, -0.92));
 
-    const bootFloorGeo = createRoundedBoxGeometry(1.3, 0.06, 0.64, 0.03);
-    const bootFloor = registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.4, -1.55));
+    const bootFloorGeo = createRoundedBoxGeometry(1.34, 0.20, 0.92, 0.03);
+    const bootFloor = registerPanelMesh('boot_floor', bootFloorGeo, defaultPaintMat, undefined, new THREE.Vector3(0, 0.52, -1.65));
     bootFloor.userData = { panelId: 'boot_floor', isInnerJamb: true };
 
     hingedGroupsRef.current = {
@@ -834,7 +895,12 @@ export function Interactive3DVehicleInspectionModel({
         });
         const intersects = raycaster.intersectObjects(selectableObjects, true);
         if (intersects.length > 0) {
-          const hit = intersects[0].object;
+          // Prioritize structural/internal panels like pillars, boot floor, and spoiler if they are in the hit path
+          const targetPanelIds = ['pillar_a', 'pillar_b', 'pillar_c', 'boot_floor', 'spoiler', 'apron_lhs', 'apron_rhs'];
+          const hitTarget = intersects.find(it => 
+            it.object.userData && targetPanelIds.includes(it.object.userData.panelId)
+          );
+          const hit = hitTarget ? hitTarget.object : intersects[0].object;
           if (hit.userData && hit.userData.panelId) {
             setHoveredPanelId(hit.userData.panelId);
           }
@@ -870,7 +936,12 @@ export function Interactive3DVehicleInspectionModel({
       });
       const intersects = raycaster.intersectObjects(selectableObjects, true);
       if (intersects.length > 0) {
-        const hit = intersects[0].object;
+        // Prioritize structural/internal panels like pillars, boot floor, and spoiler if they are in the hit path
+        const targetPanelIds = ['pillar_a', 'pillar_b', 'pillar_c', 'boot_floor', 'spoiler', 'apron_lhs', 'apron_rhs'];
+        const hitTarget = intersects.find(it => 
+          it.object.userData && targetPanelIds.includes(it.object.userData.panelId)
+        );
+        const hit = hitTarget ? hitTarget.object : intersects[0].object;
         if (hit.userData && hit.userData.panelId) {
           handlePanelClick(hit.userData.panelId);
         }
@@ -1537,6 +1608,47 @@ export function Interactive3DVehicleInspectionModel({
             </div>
           </div>
 
+          {/* Quick Select Inside Panels & Pillars */}
+          <div className="p-3 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
+            <div className="text-[10px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+              <span>🎯 Quick Select Pillars &amp; Dicky Floor</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+              {[
+                { id: 'pillar_a', label: '🚪 A-Pillar' },
+                { id: 'pillar_b', label: '🚪 B-Pillar' },
+                { id: 'pillar_c', label: '🚪 C-Pillar' },
+                { id: 'boot_floor', label: '🚗 Dicky Floor' },
+              ].map(item => {
+                const isActive = selectedPanelIds.includes(item.id) || Boolean(effectiveInspections[item.id]?.selected);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (item.id === 'boot_floor' && !dickyOpen) {
+                        setDickyOpen(true);
+                      }
+                      handlePanelClick(item.id);
+                    }}
+                    className={`p-2 rounded-lg border font-bold text-left transition-all flex items-center justify-between cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-extrabold shadow-sm'
+                        : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {isActive ? (
+                      <span className="text-[8px] bg-emerald-500/20 px-1 rounded text-emerald-300 font-bold">ON</span>
+                    ) : (
+                      <span className="text-[8px] text-slate-500 font-bold">+</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Reset All Visibility & Hinges Button */}
           <button
             type="button"
@@ -1650,6 +1762,56 @@ export function Interactive3DVehicleInspectionModel({
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Selection Removal Confirmation Modal */}
+      {panelToDeselect && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                <span className="text-rose-500">⚠️</span>
+                <span>चयन हटाना सुनिश्चित करें (Confirm Removal)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPanelToDeselect(null)}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-3">
+              <div className="text-slate-300 text-sm leading-relaxed">
+                क्या आप सचमुच <strong className="text-white font-extrabold">{panelToDeselect.nameHi}</strong> (<span className="text-amber-400 font-semibold">{panelToDeselect.nameEn}</span>) को अपनी सूची से हटाना चाहते हैं?
+              </div>
+              <p className="text-xs text-slate-400 leading-normal">
+                Are you sure you want to remove <strong className="text-white">{panelToDeselect.nameEn}</strong> from the assessment selection? This will clear all recorded paint/damage details for this panel.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-950/40 border-t border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPanelToDeselect(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+              >
+                नहीं, रखें (Keep)
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeselect}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg shadow-rose-900/20"
+              >
+                <span>हाँ, हटाएं (Yes, Remove)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

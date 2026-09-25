@@ -129,6 +129,7 @@ interface CentralStoreData {
   workshopExpenses?: any[];
   attendanceRecords?: any[];
   salaryRecords?: any[];
+  vehiclePanels?: any[];
 }
 
 const DEFAULT_INITIAL_CITIES = [
@@ -189,7 +190,8 @@ function getInitialCentralStore(): CentralStoreData {
     vendors: [],
     vehicleCheckIns: [],
     standardJobs: [],
-    carModels: []
+    carModels: [],
+    vehiclePanels: []
   };
 }
 
@@ -217,7 +219,8 @@ function loadCentralStore(): CentralStoreData {
           purchaseOrders: Array.isArray(parsed.purchaseOrders) ? parsed.purchaseOrders : [],
           workshopExpenses: Array.isArray(parsed.workshopExpenses) ? parsed.workshopExpenses : [],
           attendanceRecords: Array.isArray(parsed.attendanceRecords) ? parsed.attendanceRecords : [],
-          salaryRecords: Array.isArray(parsed.salaryRecords) ? parsed.salaryRecords : []
+          salaryRecords: Array.isArray(parsed.salaryRecords) ? parsed.salaryRecords : [],
+          vehiclePanels: Array.isArray(parsed.vehiclePanels) ? parsed.vehiclePanels : []
         };
         // Guarantee Super Admin and Taifur are in employees list
         if (!memoryCentralStore.employees.some(e => e.id === 'emp-admin' || e.loginId === 'admin')) {
@@ -1699,6 +1702,69 @@ Return valid JSON ONLY.`;
             (store as any).salaryRecords = mergeArrayItems((store as any).salaryRecords || [], mappedSalaries, s => s.id);
           }
 
+          // 14. Vehicle Panels
+          try {
+            const { data: supaPanels } = await client.from('vehicle_panels').select('*');
+            if (supaPanels && supaPanels.length > 0) {
+              const mappedPanels = supaPanels.map((p: any) => ({
+                id: p.id,
+                code: p.code,
+                nameEn: p.name_en,
+                nameHi: p.name_hi,
+                standardJobId: p.standard_job_id,
+                cars24StandardJobId: p.cars24_standard_job_id,
+                view: p.view,
+                svgShape: typeof p.svg_shape === 'string' ? JSON.parse(p.svg_shape) : p.svg_shape,
+                labelPos: typeof p.label_pos === 'string' ? JSON.parse(p.label_pos) : p.label_pos,
+                badgePos: typeof p.badge_pos === 'string' ? JSON.parse(p.badge_pos) : p.badge_pos,
+                defaultPrice: Number(p.default_price) || 0
+              }));
+              (store as any).vehiclePanels = mergeArrayItems((store as any).vehiclePanels || [], mappedPanels, p => p.id);
+            }
+          } catch (pErr) {
+            console.warn('[CENTRAL_STORE] Supabase vehicle_panels select error:', pErr);
+          }
+
+          // 15. Standard Jobs
+          try {
+            const { data: supaStdJobs } = await client.from('standard_jobs').select('*');
+            if (supaStdJobs && supaStdJobs.length > 0) {
+              const mappedStdJobs = supaStdJobs.map((j: any) => ({
+                id: j.id,
+                title: j.title,
+                category: j.category,
+                hsnSacCode: j.hsn_sac_code || '998729',
+                retailPrice: Number(j.retail_price ?? j.default_price) || 0,
+                cars24Price: Number(j.cars24_price ?? j.default_price) || 0,
+                isContractBasis: Boolean(j.is_contract_basis),
+                retailPainterPayout: Number(j.retail_painter_payout ?? j.painter_payout) || 0,
+                retailDenterPayout: Number(j.retail_denter_payout ?? j.denter_payout) || 0,
+                retailContractorPayout: Number(j.retail_contractor_payout ?? j.contractor_payout) || 0,
+                cars24PainterPayout: Number(j.cars24_painter_payout ?? j.painter_payout) || 0,
+                cars24DenterPayout: Number(j.cars24_denter_payout ?? j.denter_payout) || 0,
+                cars24ContractorPayout: Number(j.cars24_contractor_payout ?? j.contractor_payout) || 0,
+                painterPayout: Number(j.painter_payout) || 0,
+                denterPayout: Number(j.denter_payout) || 0,
+                contractorPayout: Number(j.contractor_payout) || 0,
+                estimatedHours: Number(j.estimated_hours) || 1.0,
+                description: j.description || '',
+                requiresCustomerApproval: Boolean(j.requires_customer_approval),
+                panelKey: j.panel_key,
+                panelNameEn: j.panel_name_en,
+                paintScope: j.paint_scope,
+                retailPartialPrice: Number(j.retail_partial_price) || 0,
+                cars24PartialPrice: Number(j.cars24_partial_price) || 0,
+                retailInsidePrice: Number(j.retail_inside_price) || 0,
+                cars24InsidePrice: Number(j.cars24_inside_price) || 0,
+                retailFullOuterInsidePrice: Number(j.retail_full_outer_inside_price) || 0,
+                cars24FullOuterInsidePrice: Number(j.cars24_full_outer_inside_price) || 0
+              }));
+              store.standardJobs = mergeArrayItems(store.standardJobs || [], mappedStdJobs, sj => sj.id);
+            }
+          } catch (stdJobErr) {
+            console.warn('[CENTRAL_STORE] Supabase standard_jobs select error:', stdJobErr);
+          }
+
           saveCentralStore(store);
         } catch (supaFetchErr) {
           console.warn('[CENTRAL_STORE] Supabase query warning:', supaFetchErr);
@@ -1715,7 +1781,7 @@ Return valid JSON ONLY.`;
   app.post('/api/central/store', async (req, res) => {
     try {
       const currentStore = loadCentralStore();
-      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels, jobCardHistory, inventoryItems, deliveryRecords, purchaseOrders, workshopExpenses, attendanceRecords, salaryRecords } = req.body;
+      const { employees, jobCards, cities, workshops, vendors, vehicleCheckIns, standardJobs, carModels, jobCardHistory, inventoryItems, deliveryRecords, purchaseOrders, workshopExpenses, attendanceRecords, salaryRecords, vehiclePanels } = req.body;
 
       if (Array.isArray(employees) && employees.length > 0) {
         currentStore.employees = mergeArrayItems(currentStore.employees, employees, e => e.id || e.email || e.loginId || e.name);
@@ -1761,6 +1827,9 @@ Return valid JSON ONLY.`;
       }
       if (Array.isArray(salaryRecords) && salaryRecords.length > 0) {
         currentStore.salaryRecords = mergeArrayItems(currentStore.salaryRecords || [], salaryRecords, sal => sal.id);
+      }
+      if (Array.isArray(vehiclePanels) && vehiclePanels.length > 0) {
+        currentStore.vehiclePanels = mergeArrayItems(currentStore.vehiclePanels || [], vehiclePanels, p => p.id);
       }
 
       saveCentralStore(currentStore);
@@ -1903,6 +1972,62 @@ Return valid JSON ONLY.`;
               changed_by_role: h.changedByRole || null,
               notes: h.notes || null,
               created_at: h.createdAt
+            }).then(() => {}, () => {});
+          }
+        }
+
+        // Standard Jobs (with ALL the new fields!)
+        if (Array.isArray(standardJobs) && standardJobs.length > 0) {
+          for (const j of standardJobs) {
+            client.from('standard_jobs').upsert({
+              id: j.id,
+              title: j.title,
+              category: j.category,
+              hsn_sac_code: j.hsnSacCode || '998729',
+              default_price: j.retailPrice || 0,
+              retail_price: j.retailPrice || 0,
+              cars24_price: j.cars24Price || 0,
+              is_contract_basis: j.isContractBasis || false,
+              painter_payout: j.painterPayout || j.retailPainterPayout || 0,
+              denter_payout: j.denterPayout || j.retailDenterPayout || 0,
+              contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
+              estimated_hours: j.estimatedHours || 1.0,
+              description: j.description || '',
+              requires_customer_approval: j.requiresCustomerApproval || false,
+              panel_key: j.panelKey,
+              panel_name_en: j.panelNameEn,
+              paint_scope: j.paintScope,
+              retail_partial_price: j.retailPartialPrice || 0,
+              cars24_partial_price: j.cars24PartialPrice || 0,
+              retail_inside_price: j.retailInsidePrice || 0,
+              cars24_inside_price: j.cars24InsidePrice || 0,
+              retail_full_outer_inside_price: j.retailFullOuterInsidePrice || 0,
+              cars24_full_outer_inside_price: j.cars24FullOuterInsidePrice || 0,
+              retail_painter_payout: j.retailPainterPayout || 0,
+              retail_denter_payout: j.retailDenterPayout || 0,
+              retail_contractor_payout: j.retailContractorPayout || 0,
+              cars24_painter_payout: j.cars24PainterPayout || 0,
+              cars24_denter_payout: j.cars24DenterPayout || 0,
+              cars24_contractor_payout: j.cars24ContractorPayout || 0
+            }).then(() => {}, () => {});
+          }
+        }
+
+        // Vehicle Panels
+        if (Array.isArray(vehiclePanels) && vehiclePanels.length > 0) {
+          for (const p of vehiclePanels) {
+            client.from('vehicle_panels').upsert({
+              id: p.id,
+              code: p.code,
+              name_en: p.nameEn,
+              name_hi: p.nameHi,
+              standard_job_id: p.standardJobId,
+              cars24_standard_job_id: p.cars24StandardJobId,
+              view: p.view,
+              svg_shape: p.svgShape,
+              label_pos: p.labelPos,
+              badge_pos: p.badgePos,
+              default_price: p.defaultPrice
             }).then(() => {}, () => {});
           }
         }

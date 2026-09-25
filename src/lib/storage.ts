@@ -78,6 +78,7 @@ const STORAGE_KEYS = {
   VENDOR_PAYMENTS: 'fixocar_vendor_payments_v4',
   AUTH_USER: 'fixocar_auth_user_v4',
   ACTIVE_WORKSHOP: 'fixocar_active_workshop_v4',
+  VEHICLE_PANELS: 'fixocar_vehicle_panels_v4',
 };
 
 // Global active workshop observer context helpers
@@ -2696,7 +2697,19 @@ export function saveStandardJobs(jobs: StandardJob[], skipPush = false): void {
   localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(jobs));
   notifyStoreChange();
 
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
   if (!skipPush) {
+    if (isOffline) {
+      import('./offlineSync').then(m => {
+        m.addToOfflineQueue('all');
+      });
+    } else {
+      notifyCentralServer('standardJobs', jobs);
+    }
+  }
+
+  if (!skipPush && !isOffline) {
     const client = getSupabaseClient();
     if (client) {
       jobs.forEach(j => {
@@ -2715,9 +2728,87 @@ export function saveStandardJobs(jobs: StandardJob[], skipPush = false): void {
           estimated_hours: j.estimatedHours || 1.0,
           description: j.description || '',
           requires_customer_approval: j.requiresCustomerApproval || false,
+          panel_key: j.panelKey,
+          panel_name_en: j.panelNameEn,
+          paint_scope: j.paintScope,
+          retail_partial_price: j.retailPartialPrice || 0,
+          cars24_partial_price: j.cars24PartialPrice || 0,
+          retail_inside_price: j.retailInsidePrice || 0,
+          cars24_inside_price: j.cars24InsidePrice || 0,
+          retail_full_outer_inside_price: j.retailFullOuterInsidePrice || 0,
+          cars24_full_outer_inside_price: j.cars24FullOuterInsidePrice || 0,
+          retail_painter_payout: j.retailPainterPayout || 0,
+          retail_denter_payout: j.retailDenterPayout || 0,
+          retail_contractor_payout: j.retailContractorPayout || 0,
+          cars24_painter_payout: j.cars24PainterPayout || 0,
+          cars24_denter_payout: j.cars24DenterPayout || 0,
+          cars24_contractor_payout: j.cars24ContractorPayout || 0
         }).then(({ error }) => {
           if (error) {
             console.error('Supabase sync error (standard_jobs):', error);
+          }
+        });
+      });
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// VEHICLE BODY PANELS STORAGE
+// -------------------------------------------------------------
+import { INITIAL_VEHICLE_PANELS } from './mockData';
+
+export function getVehiclePanels(): any[] {
+  const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_PANELS);
+  let list: any[] = [];
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
+    } catch {}
+  }
+  if (list.length === 0) {
+    list = [...INITIAL_VEHICLE_PANELS];
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_PANELS, JSON.stringify(list));
+  }
+  return list;
+}
+
+export function saveVehiclePanels(panels: any[], skipPush = false): void {
+  localStorage.setItem(STORAGE_KEYS.VEHICLE_PANELS, JSON.stringify(panels));
+  notifyStoreChange();
+
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+  if (!skipPush) {
+    if (isOffline) {
+      import('./offlineSync').then(m => {
+        m.addToOfflineQueue('all');
+      });
+    } else {
+      notifyCentralServer('vehiclePanels', panels);
+    }
+  }
+
+  if (!skipPush && !isOffline) {
+    const client = getSupabaseClient();
+    if (client) {
+      panels.forEach(p => {
+        client.from('vehicle_panels').upsert({
+          id: p.id,
+          code: p.code,
+          name_en: p.nameEn,
+          name_hi: p.nameHi,
+          standard_job_id: p.standardJobId,
+          cars24_standard_job_id: p.cars24StandardJobId,
+          view: p.view,
+          svg_shape: p.svgShape,
+          label_pos: p.labelPos,
+          badge_pos: p.badgePos,
+          default_price: p.defaultPrice
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Supabase sync error (vehicle_panels):', error);
           }
         });
       });

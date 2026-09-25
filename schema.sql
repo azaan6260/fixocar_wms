@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS public.vendors (
 );
 
 -- ==========================================
--- 4. MASTER DATA (STANDARD JOBS & CAR MODELS)
+-- 4. MASTER DATA (STANDARD JOBS, VEHICLE PANELS & CAR MODELS)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS public.standard_jobs (
   id text NOT NULL,
@@ -142,7 +142,55 @@ CREATE TABLE IF NOT EXISTS public.standard_jobs (
   contractor_payout numeric DEFAULT 0,
   description text,
   requires_customer_approval boolean DEFAULT false,
+  panel_key text,
+  panel_name_en text,
+  paint_scope text,
+  retail_partial_price numeric DEFAULT 0,
+  cars24_partial_price numeric DEFAULT 0,
+  retail_inside_price numeric DEFAULT 0,
+  cars24_inside_price numeric DEFAULT 0,
+  retail_full_outer_inside_price numeric DEFAULT 0,
+  cars24_full_outer_inside_price numeric DEFAULT 0,
+  retail_painter_payout numeric DEFAULT 0,
+  retail_denter_payout numeric DEFAULT 0,
+  retail_contractor_payout numeric DEFAULT 0,
+  cars24_painter_payout numeric DEFAULT 0,
+  cars24_denter_payout numeric DEFAULT 0,
+  cars24_contractor_payout numeric DEFAULT 0,
   CONSTRAINT standard_jobs_pkey PRIMARY KEY (id)
+);
+
+-- Idempotent migrations for standard_jobs
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS panel_key text;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS panel_name_en text;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS paint_scope text;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_partial_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_partial_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_inside_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_inside_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_full_outer_inside_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_full_outer_inside_price numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_painter_payout numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_denter_payout numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS retail_contractor_payout numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_painter_payout numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_denter_payout numeric DEFAULT 0;
+ALTER TABLE public.standard_jobs ADD COLUMN IF NOT EXISTS cars24_contractor_payout numeric DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS public.vehicle_panels (
+  id text NOT NULL,
+  code text NOT NULL,
+  name_en text NOT NULL,
+  name_hi text NOT NULL,
+  standard_job_id text,
+  cars24_standard_job_id text,
+  view text NOT NULL,
+  svg_shape jsonb NOT NULL,
+  label_pos jsonb NOT NULL,
+  badge_pos jsonb,
+  default_price numeric DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT vehicle_panels_pkey PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS public.car_models (
@@ -477,6 +525,7 @@ ALTER TABLE public.vehicle_check_ins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workshop_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.salary_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vehicle_panels ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   DROP POLICY IF EXISTS "Public full access on cities" ON public.cities;
@@ -495,6 +544,7 @@ DO $$ BEGIN
   DROP POLICY IF EXISTS "Public full access on workshop_expenses" ON public.workshop_expenses;
   DROP POLICY IF EXISTS "Public full access on attendance_records" ON public.attendance_records;
   DROP POLICY IF EXISTS "Public full access on salary_records" ON public.salary_records;
+  DROP POLICY IF EXISTS "Public full access on vehicle_panels" ON public.vehicle_panels;
 END $$;
 
 CREATE POLICY "Public full access on cities" ON public.cities FOR ALL USING (true) WITH CHECK (true);
@@ -513,3 +563,4 @@ CREATE POLICY "Public full access on vehicle_check_ins" ON public.vehicle_check_
 CREATE POLICY "Public full access on workshop_expenses" ON public.workshop_expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on attendance_records" ON public.attendance_records FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on salary_records" ON public.salary_records FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on vehicle_panels" ON public.vehicle_panels FOR ALL USING (true) WITH CHECK (true);

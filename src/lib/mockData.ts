@@ -559,3 +559,376 @@ export const INITIAL_JOB_CARDS: JobCard[] = [];
 export const INITIAL_VEHICLE_CHECKINS: VehicleCheckIn[] = [];
 
 export const STANDARD_PACKAGES: StandardServicePackage[] = [];
+
+export const INITIAL_VEHICLE_PANELS: any[] = [
+  {
+    id: 'bumper_front',
+    code: 'FB',
+    nameEn: 'Front Bumper',
+    nameHi: 'आगे का बंपर (Front Bumper)',
+    standardJobId: 'std-bumper-front-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 140 30 C 180 15, 260 15, 300 30 C 310 38, 300 55, 290 55 C 240 45, 200 45, 150 55 C 140 55, 130 38, 140 30 Z'
+    },
+    labelPos: { x: 220, y: 38 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'hood_bonnet',
+    code: 'BONNET',
+    nameEn: 'Hood / Bonnet',
+    nameHi: 'बोनट / हुड (Bonnet)',
+    standardJobId: 'std-hood-bonnet-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 152 60 C 190 52, 250 52, 288 60 L 280 135 C 240 130, 200 130, 160 135 Z'
+    },
+    labelPos: { x: 220, y: 95 },
+    defaultPrice: 2200
+  },
+  {
+    id: 'fender_lhs',
+    code: 'F-LHS',
+    nameEn: 'Left Front Fender',
+    nameHi: 'बायां अगला फेंडर (Left Front Fender)',
+    standardJobId: 'std-fender-lhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 132 38 L 148 58 L 158 135 L 132 135 C 125 100, 125 70, 132 38 Z'
+    },
+    labelPos: { x: 140, y: 90 },
+    defaultPrice: 750
+  },
+  {
+    id: 'fender_rhs',
+    code: 'F-RHS',
+    nameEn: 'Right Front Fender',
+    nameHi: 'दायां अगला फेंडर (Right Front Fender)',
+    standardJobId: 'std-fender-rhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 308 38 L 292 58 L 282 135 L 308 135 C 315 100, 315 70, 308 38 Z'
+    },
+    labelPos: { x: 300, y: 90 },
+    defaultPrice: 750
+  },
+  {
+    id: 'windshield_front',
+    code: 'WS-FR',
+    nameEn: 'Front Windshield Glass',
+    nameHi: 'आगे का शीशा (Front Glass)',
+    standardJobId: 'std-glass-front',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 163 140 C 200 136, 240 136, 277 140 L 270 180 C 235 178, 205 178, 170 180 Z'
+    },
+    labelPos: { x: 220, y: 160 },
+    defaultPrice: 0
+  },
+  {
+    id: 'roof',
+    code: 'ROOF',
+    nameEn: 'Roof Panel',
+    nameHi: 'छत (Roof)',
+    standardJobId: 'std-roof-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 172 185 C 205 182, 235 182, 268 185 L 268 290 C 235 293, 205 293, 172 290 Z'
+    },
+    labelPos: { x: 220, y: 238 },
+    defaultPrice: 2600
+  },
+  {
+    id: 'windshield_rear',
+    code: 'WS-RR',
+    nameEn: 'Rear Windshield Glass',
+    nameHi: 'पीछे का शीशा (Rear Glass)',
+    standardJobId: 'std-glass-rear',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 172 295 C 205 298, 235 298, 268 295 L 275 330 C 240 334, 200 334, 165 330 Z'
+    },
+    labelPos: { x: 220, y: 312 },
+    defaultPrice: 0
+  },
+  {
+    id: 'door_lhs_front',
+    code: 'D-L-FR',
+    nameEn: 'Door LHS Front',
+    nameHi: 'बायां अगला दरवाजा (Left Front Door)',
+    standardJobId: 'std-door-lhs-front-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 130 140 L 168 140 L 168 210 L 130 210 Z'
+    },
+    labelPos: { x: 148, y: 175 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'door_lhs_rear',
+    code: 'D-L-RR',
+    nameEn: 'Door LHS Rear',
+    nameHi: 'बायां पिछला दरवाजा (Left Rear Door)',
+    standardJobId: 'std-door-lhs-rear-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 130 215 L 168 215 L 168 285 L 130 285 Z'
+    },
+    labelPos: { x: 148, y: 250 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'running_board_lhs',
+    code: 'RB-L',
+    nameEn: 'Running Board LHS (Sill)',
+    nameHi: 'बायां रनिंग बोर्ड / सिल (Left Running Board)',
+    standardJobId: 'std-running-board-lhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 116 142 L 126 142 L 126 283 L 116 283 Z'
+    },
+    labelPos: { x: 104, y: 212 },
+    defaultPrice: 750
+  },
+  {
+    id: 'quarter_panel_lhs',
+    code: 'QP-L',
+    nameEn: 'Quarter Panel LHS',
+    nameHi: 'बायां क्वार्टर पैनल (Left Quarter Panel)',
+    standardJobId: 'std-quarter-panel-lhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 130 290 L 163 290 L 163 355 L 135 355 C 128 335, 126 310, 130 290 Z'
+    },
+    labelPos: { x: 146, y: 325 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'door_rhs_front',
+    code: 'D-R-FR',
+    nameEn: 'Door RHS Front',
+    nameHi: 'दायां अगला दरवाजा (Right Front Door)',
+    standardJobId: 'std-door-rhs-front-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 272 140 L 310 140 L 310 210 L 272 210 Z'
+    },
+    labelPos: { x: 292, y: 175 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'door_rhs_rear',
+    code: 'D-R-RR',
+    nameEn: 'Door RHS Rear',
+    nameHi: 'दायां पिछला दरवाजा (Right Rear Door)',
+    standardJobId: 'std-door-rhs-rear-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 272 215 L 310 215 L 310 285 L 272 285 Z'
+    },
+    labelPos: { x: 292, y: 250 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'running_board_rhs',
+    code: 'RB-R',
+    nameEn: 'Running Board RHS (Sill)',
+    nameHi: 'दायां रनिंग बोर्ड / सिल (Right Running Board)',
+    standardJobId: 'std-running-board-rhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 314 142 L 324 142 L 324 283 L 314 283 Z'
+    },
+    labelPos: { x: 336, y: 212 },
+    defaultPrice: 750
+  },
+  {
+    id: 'quarter_panel_rhs',
+    code: 'QP-R',
+    nameEn: 'Quarter Panel RHS',
+    nameHi: 'दायां क्वार्टर पैनल (Right Quarter Panel)',
+    standardJobId: 'std-quarter-panel-rhs-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 277 290 L 310 290 C 314 310, 312 335, 305 355 L 277 355 Z'
+    },
+    labelPos: { x: 294, y: 325 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'boot_trunk',
+    code: 'DICKY',
+    nameEn: 'Dicky Door / Boot Lid (Outer Panel)',
+    nameHi: 'डिक्की का दरवाजा / बूट लिड (Dicky Door)',
+    standardJobId: 'std-boot-trunk-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 166 332 C 200 335, 240 335, 274 332 L 280 358 C 240 361, 200 361, 160 358 Z'
+    },
+    labelPos: { x: 220, y: 345 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'boot_floor',
+    code: 'DICKY FLR',
+    nameEn: 'Dicky Boot Floor / Underbody (Internal Panel)',
+    nameHi: 'डिक्की का फर्श (Dicky Boot Floor)',
+    standardJobId: 'std-boot-floor-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 172,
+      y: 362,
+      width: 96,
+      height: 18,
+      rx: 4
+    },
+    labelPos: { x: 220, y: 371 },
+    defaultPrice: 300
+  },
+  {
+    id: 'spoiler',
+    code: 'SPOILER',
+    nameEn: 'Rear Spoiler',
+    nameHi: 'रियर स्पॉइलर (Rear Spoiler)',
+    standardJobId: 'std-spoiler-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 172,
+      y: 328,
+      width: 96,
+      height: 5,
+      rx: 1
+    },
+    labelPos: { x: 220, y: 322 },
+    defaultPrice: 1200
+  },
+  {
+    id: 'bumper_rear',
+    code: 'RB',
+    nameEn: 'Rear Bumper',
+    nameHi: 'पीछे का बंपर (Rear Bumper)',
+    standardJobId: 'std-bumper-rear-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 140 398 C 180 410, 260 410, 300 398 C 308 393, 312 384, 304 384 C 260 393, 180 393, 136 384 C 128 384, 132 393, 140 398 Z'
+    },
+    labelPos: { x: 220, y: 397 },
+    defaultPrice: 1350
+  },
+  {
+    id: 'apron_lhs',
+    code: 'APRON-L',
+    nameEn: 'Apron LHS (Left Engine Bay)',
+    nameHi: 'बायां अप्रन (Left Engine Apron)',
+    standardJobId: 'std-apron-lhs-full',
+    view: 'FRONT',
+    svgShape: {
+      type: 'rect',
+      x: 155,
+      y: 65,
+      width: 25,
+      height: 45,
+      rx: 3
+    },
+    labelPos: { x: 167, y: 87 },
+    defaultPrice: 1100
+  },
+  {
+    id: 'apron_rhs',
+    code: 'APRON-R',
+    nameEn: 'Apron RHS (Right Engine Bay)',
+    nameHi: 'दायां अप्रन (Right Engine Apron)',
+    standardJobId: 'std-apron-rhs-full',
+    view: 'FRONT',
+    svgShape: {
+      type: 'rect',
+      x: 260,
+      y: 65,
+      width: 25,
+      height: 45,
+      rx: 3
+    },
+    labelPos: { x: 272, y: 87 },
+    defaultPrice: 1100
+  },
+  {
+    id: 'underbody',
+    code: 'UNDERBODY',
+    nameEn: 'Underbody Chassis Frame',
+    nameHi: 'अंडरबॉडी चेसिस (Underbody Painting)',
+    standardJobId: 'std-underbody-full',
+    view: 'TOP',
+    svgShape: {
+      type: 'rect',
+      x: 170,
+      y: 190,
+      width: 100,
+      height: 95,
+      rx: 6
+    },
+    labelPos: { x: 220, y: 238 },
+    defaultPrice: 1800
+  },
+  {
+    id: 'pillar_a',
+    code: 'P-A',
+    nameEn: 'A-Pillar',
+    nameHi: 'ए-पिलर (A-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-a',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 152 140 L 162 140 L 170 180 L 160 180 Z M 278 140 L 288 140 L 280 180 L 270 180 Z'
+    },
+    labelPos: { x: 220, y: 124 },
+    defaultPrice: 800
+  },
+  {
+    id: 'pillar_b',
+    code: 'P-B',
+    nameEn: 'B-Pillar',
+    nameHi: 'बी-पिलर (B-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-b',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 164 230 L 174 230 L 174 245 L 164 245 Z M 266 230 L 276 230 L 276 245 L 266 245 Z'
+    },
+    labelPos: { x: 220, y: 215 },
+    defaultPrice: 800
+  },
+  {
+    id: 'pillar_c',
+    code: 'P-C',
+    nameEn: 'C-Pillar',
+    nameHi: 'सी-पिलर (C-Pillar - Inside Only)',
+    standardJobId: 'std-pillar-c',
+    view: 'TOP',
+    svgShape: {
+      type: 'path',
+      d: 'M 166 290 L 174 290 L 164 330 L 156 330 Z M 266 290 L 274 290 L 284 330 L 276 330 Z'
+    },
+    labelPos: { x: 220, y: 326 },
+    defaultPrice: 800
+  }
+];

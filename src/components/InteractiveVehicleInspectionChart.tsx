@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { StandardJob, PaintScope } from '../types';
-import { getStandardJobs } from '../lib/storage';
+import { getStandardJobs, getVehiclePanels } from '../lib/storage';
 import { mapPanelToStandardJob, getPanelEnvironmentRates, isPartialPaintAllowedForPanel, formatPaintTaskTitle } from '../lib/panelMappingHelper';
 import { Interactive3DVehicleInspectionModel } from './Interactive3DVehicleInspectionModel';
 
@@ -489,12 +489,17 @@ export function InteractiveVehicleInspectionChart({
   const [viewAngle, setViewAngle] = useState<'TOP' | 'SIDE_LHS' | 'SIDE_RHS'>('TOP');
   const [speakingPanelId, setSpeakingPanelId] = useState<string | null>(null);
 
+  const effectivePanels = useMemo(() => {
+    return getVehiclePanels();
+  }, []);
+
   // Lifted state to control dicky and bonnet open states
   const [bonnetOpen, setBonnetOpen] = useState(false);
   const [dickyOpen, setDickyOpen] = useState(false);
 
   // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
   const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
+  const [panelToDeselect, setPanelToDeselect] = useState<PanelDefinition | null>(null);
 
   // Merge inspections prop with local interaction overrides
   const effectiveInspections = useMemo(() => {
@@ -547,10 +552,51 @@ export function InteractiveVehicleInspectionChart({
     return selectedPanelIds.includes(panelId) || Boolean(effectiveInspections[panelId]?.selected);
   };
 
-  const handlePanelClick = (panel: PanelDefinition) => {
+  const confirmDeselect = () => {
+    if (!panelToDeselect) return;
+    const panel = panelToDeselect;
+    setPanelToDeselect(null);
+
+    const isInsideOnly = panel.id.startsWith('pillar_') || panel.id === 'boot_floor';
+    const updatedObj = {
+      panelId: panel.id,
+      nameEn: panel.nameEn,
+      nameHi: panel.nameHi,
+      category: 'EXTERIOR_BODY' as const,
+      selected: false,
+      paintScope: (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER') as PaintScope,
+      customPrice: undefined,
+      customPainterPayout: undefined,
+      customDenterPayout: undefined
+    };
+
+    setLocalInspections(prev => ({
+      ...prev,
+      [panel.id]: updatedObj
+    }));
+
+    if (onPanelToggle) {
+      onPanelToggle(panel.id, panel.standardJobId);
+    }
+
+    if (onInspectionChange) {
+      const updated = {
+        ...effectiveInspections,
+        [panel.id]: updatedObj
+      };
+      onInspectionChange(updated);
+    }
+  };
+
+  const handlePanelClick = (panel: PanelDefinition, forceConfirm = false) => {
     setSelectedPanelForDetail(prev => prev?.id === panel.id ? null : panel);
 
     const wasActive = isPanelActive(panel.id);
+
+    if (wasActive && !forceConfirm) {
+      setPanelToDeselect(panel);
+      return;
+    }
 
     const isInsideOnly = panel.id.startsWith('pillar_') || panel.id === 'boot_floor';
 
@@ -595,11 +641,11 @@ export function InteractiveVehicleInspectionChart({
   }, [availableStandardJobs]);
 
   const selectedCount = useMemo(() => {
-    return VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length;
-  }, [selectedPanelIds, effectiveInspections, dickyOpen]);
+    return effectivePanels.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length;
+  }, [selectedPanelIds, effectiveInspections, dickyOpen, effectivePanels]);
 
   const estimatedTotalCost = useMemo(() => {
-    return VEHICLE_PANELS
+    return effectivePanels
       .filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor')))
       .reduce((sum, p) => {
         const stdJob = getMatchingStandardJob(p, effectiveStandardJobs);
@@ -608,7 +654,7 @@ export function InteractiveVehicleInspectionChart({
         }
         return sum + (isCars24 ? 1350 : (p.defaultPrice || 1350));
       }, 0);
-  }, [selectedPanelIds, effectiveInspections, effectiveStandardJobs, isCars24, dickyOpen]);
+  }, [selectedPanelIds, effectiveInspections, effectiveStandardJobs, isCars24, dickyOpen, effectivePanels]);
 
   if (compact) {
     return (
@@ -684,7 +730,7 @@ export function InteractiveVehicleInspectionChart({
             onInspectionChange={onInspectionChange}
             onPanelToggle={(panelId, jobId, scope) => {
               // Sync selected panel details on 3D click so the right edit sidebar updates
-              const found = VEHICLE_PANELS.find(p => p.id === panelId);
+              const found = effectivePanels.find(p => p.id === panelId);
               if (found) {
                 setSelectedPanelForDetail(found);
               }
@@ -910,7 +956,7 @@ export function InteractiveVehicleInspectionChart({
                       if (item.id === 'boot_floor' && !dickyOpen) {
                         setDickyOpen(true);
                       }
-                      const panelObj = VEHICLE_PANELS.find(p => p.id === item.id);
+                      const panelObj = effectivePanels.find(p => p.id === item.id);
                       if (panelObj) {
                         handlePanelClick(panelObj);
                       }
@@ -952,12 +998,12 @@ export function InteractiveVehicleInspectionChart({
             </div>
 
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-              {VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length === 0 ? (
+              {effectivePanels.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
                   अभी तक कोई पैनल नहीं चुना गया। ऊपर गाड़ी के स्केच पर क्लिक करें।
                 </div>
               ) : (
-                VEHICLE_PANELS.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).map(p => {
+                effectivePanels.filter(p => isPanelActive(p.id) && (p.id !== 'boot_floor' || dickyOpen || isPanelActive('boot_floor'))).map(p => {
                   const inspection = effectiveInspections[p.id];
                   const currentScope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
                   const isPartialAllowed = isPartialPaintAllowedForPanel(p.id);
@@ -1192,6 +1238,56 @@ export function InteractiveVehicleInspectionChart({
           </span>
         </div>
       </div>
+
+      {/* Selection Removal Confirmation Modal */}
+      {panelToDeselect && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                <span className="text-rose-500">⚠️</span>
+                <span>चयन हटाना सुनिश्चित करें (Confirm Removal)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPanelToDeselect(null)}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-3">
+              <div className="text-slate-300 text-sm leading-relaxed">
+                क्या आप सचमुच <strong className="text-white font-extrabold">{panelToDeselect.nameHi}</strong> (<span className="text-amber-400 font-semibold">{panelToDeselect.nameEn}</span>) को अपनी सूची से हटाना चाहते हैं?
+              </div>
+              <p className="text-xs text-slate-400 leading-normal">
+                Are you sure you want to remove <strong className="text-white">{panelToDeselect.nameEn}</strong> from the assessment selection? This will clear all recorded paint/damage details for this panel.
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-950/40 border-t border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPanelToDeselect(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+              >
+                नहीं, रखें (Keep)
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDeselect()}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg shadow-rose-900/20"
+              >
+                <span>हाँ, हटाएं (Yes, Remove)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
