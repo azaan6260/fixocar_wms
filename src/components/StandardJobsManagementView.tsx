@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole, StandardJob, TaskCategory, PaintScope } from '../types';
-import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob, subscribeToStore } from '../lib/storage';
+import { getStandardJobs, addStandardJob, updateStandardJob, deleteStandardJob, subscribeToStore, getVehiclePanels, saveVehiclePanels } from '../lib/storage';
 import { VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { Zap, Plus, Edit2, Trash2, ShieldCheck, Tag, DollarSign, Clock, Layers, Save, X, Search, Lock, Car, Paintbrush, Sparkles } from 'lucide-react';
 
@@ -60,15 +60,41 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     );
   }
   const [standardJobs, setStandardJobs] = useState<StandardJob[]>(() => getStandardJobs());
+  const [panels, setPanels] = useState<any[]>(() => getVehiclePanels());
+  const [activeSubTab, setActiveSubTab] = useState<'CATALOG' | 'ASSOCIATIONS' | 'PANELS'>('CATALOG');
 
   useEffect(() => {
     const refreshData = () => {
       setStandardJobs(getStandardJobs());
+      setPanels(getVehiclePanels());
     };
     refreshData();
     const unsubscribe = subscribeToStore(refreshData);
     return () => { unsubscribe(); };
   }, []);
+
+  // Association Modal states
+  const [isAssocModalOpen, setIsAssocModalOpen] = useState(false);
+  const [assocPanel, setAssocPanel] = useState<any | null>(null);
+  const [assocJobType, setAssocJobType] = useState<any | null>(null);
+  const [assocEditingJobId, setAssocEditingJobId] = useState<string | null>(null);
+  const [assocRetailPrice, setAssocRetailPrice] = useState<number>(2000);
+  const [assocCars24Price, setAssocCars24Price] = useState<number>(1400);
+  const [assocHours, setAssocHours] = useState<number>(2);
+  const [assocRetailPainter, setAssocRetailPainter] = useState<number>(950);
+  const [assocRetailDenter, setAssocRetailDenter] = useState<number>(200);
+  const [assocCars24Painter, setAssocCars24Painter] = useState<number>(800);
+  const [assocCars24Denter, setAssocCars24Denter] = useState<number>(150);
+  const [assocDesc, setAssocDesc] = useState<string>('');
+
+  const STANDARD_JOB_TYPES = useMemo(() => [
+    { id: 'FULL_PAINT', label: 'Full Paint (बाहर पूरा)', category: 'PAINT', paintScope: 'FULL_OUTER' },
+    { id: 'PARTIAL_PAINT', label: 'Partial Paint / Touch-Up (आधा पेंट)', category: 'PAINT', paintScope: 'PARTIAL_TOUCHUP' },
+    { id: 'INSIDE_PAINT', label: 'Inside Paint (अंदर का पेंट)', category: 'PAINT', paintScope: 'INSIDE_JAMB' },
+    { id: 'OUTER_INSIDE_PAINT', label: 'Full Outer + Inside Paint (दोनों तरफ)', category: 'PAINT', paintScope: 'FULL_OUTER_AND_INSIDE' },
+    { id: 'DENT_REPAIR', label: 'Dent Repair (डेंट रिपेयर)', category: 'DENTING', paintScope: undefined },
+    { id: 'PART_REPLACEMENT', label: 'Part Replacement (पार्ट बदलना)', category: 'MECHANICAL', paintScope: undefined },
+  ], []);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCat, setFilterCat] = useState<string>('ALL');
 
@@ -313,6 +339,46 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     refreshList();
   };
 
+  const handleSaveAssociation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assocPanel || !assocJobType) return;
+
+    const title = `${assocPanel.nameEn} (${assocJobType.label})`;
+    const category = assocJobType.category as TaskCategory;
+    const paintScope = assocJobType.paintScope as PaintScope | undefined;
+
+    const jobData: Partial<StandardJob> = {
+      title,
+      category,
+      panelKey: assocPanel.id,
+      panelNameEn: assocPanel.nameEn,
+      paintScope,
+      retailPrice: Number(assocRetailPrice) || 0,
+      cars24Price: Number(assocCars24Price) || 0,
+      estimatedHours: Number(assocHours) || 1,
+      isContractBasis: true,
+      retailPainterPayout: Number(assocRetailPainter) || 0,
+      retailDenterPayout: Number(assocRetailDenter) || 0,
+      retailContractorPayout: (Number(assocRetailPainter) || 0) + (Number(assocRetailDenter) || 0),
+      cars24PainterPayout: Number(assocCars24Painter) || 0,
+      cars24DenterPayout: Number(assocCars24Denter) || 0,
+      cars24ContractorPayout: (Number(assocCars24Painter) || 0) + (Number(assocCars24Denter) || 0),
+      painterPayout: Number(assocRetailPainter) || Number(assocCars24Painter) || 0,
+      denterPayout: Number(assocRetailDenter) || Number(assocCars24Denter) || 0,
+      contractorPayout: ((Number(assocRetailPainter) || 0) + (Number(assocRetailDenter) || 0)) || ((Number(assocCars24Painter) || 0) + (Number(assocCars24Denter) || 0)) || 0,
+      description: assocDesc.trim() || `${assocJobType.label} for ${assocPanel.nameEn}`
+    };
+
+    if (assocEditingJobId) {
+      updateStandardJob(assocEditingJobId, jobData);
+    } else {
+      addStandardJob(jobData as StandardJob);
+    }
+
+    setIsAssocModalOpen(false);
+    refreshList();
+  };
+
   const filtered = standardJobs.filter(j => {
     const matchesSearch = j.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (j.description && j.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -346,177 +412,671 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
         )}
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search catalog by title..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium outline-none focus:ring-2 focus:ring-amber-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-          {['ALL', 'PAINT', 'DENTING', 'MECHANICAL', 'SERVICE', 'WASHING', 'DETAILING', 'SUBLET_VENDOR'].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilterCat(cat)}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
-                filterCat === cat
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {cat === 'ALL' ? 'ALL JOBS' : cat}
-            </button>
-          ))}
-        </div>
+      {/* Sub-Tab Navigation Bar */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto">
+        <button
+          onClick={() => setActiveSubTab('CATALOG')}
+          className={`px-5 py-3 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'CATALOG'
+              ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          Jobs Catalog (सेवाओं की सूची)
+        </button>
+        <button
+          onClick={() => {
+            setActiveSubTab('ASSOCIATIONS');
+            if (!assocPanel && panels.length > 0) setAssocPanel(panels[0]);
+            if (!assocJobType && STANDARD_JOB_TYPES.length > 0) setAssocJobType(STANDARD_JOB_TYPES[0]);
+          }}
+          className={`px-5 py-3 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'ASSOCIATIONS'
+              ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Car className="w-4 h-4" />
+          Define Associations (पैनल-जॉब जुड़ाव)
+        </button>
+        <button
+          onClick={() => setActiveSubTab('PANELS')}
+          className={`px-5 py-3 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeSubTab === 'PANELS'
+              ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Tag className="w-4 h-4" />
+          Vehicle Panels Master (मास्टर पैनल सूची)
+        </button>
       </div>
 
-      {/* Grid of Standard Jobs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((job) => (
-          <div
-            key={job.id}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                  job.category === 'PAINT' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' :
-                  job.category === 'DENTING' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20' :
-                  job.category === 'MECHANICAL' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20' :
-                  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                }`}>
-                  {job.category}
-                </span>
-
-                {canManage && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenEdit(job)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="Edit Job"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(job.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      title="Delete Job"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-tight">
-                {job.title}
-              </h3>
-
-              {/* Linked Body Panel and Paint Scope Badges */}
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                {job.panelNameEn ? (
-                  <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 font-bold text-[10px] flex items-center gap-1">
-                    <Car className="w-3 h-3 text-blue-500" />
-                    {job.panelNameEn}
-                    {job.panelKey && <span className="opacity-60 text-[9px]">[{job.panelKey}]</span>}
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium text-[10px]">
-                    General / Multi-panel
-                  </span>
-                )}
-
-                {job.paintScope && PAINT_SCOPE_LABELS[job.paintScope] ? (
-                  <span className={`px-2 py-0.5 rounded-lg border font-bold text-[10px] flex items-center gap-1 ${PAINT_SCOPE_LABELS[job.paintScope].bg} ${PAINT_SCOPE_LABELS[job.paintScope].text} ${PAINT_SCOPE_LABELS[job.paintScope].border}`}>
-                    <span>{PAINT_SCOPE_LABELS[job.paintScope].icon}</span>
-                    {PAINT_SCOPE_LABELS[job.paintScope].label}
-                  </span>
-                ) : null}
-              </div>
-
-              {job.description && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">
-                  {job.description}
-                </p>
-              )}
-
-              {/* Pricing Cards Comparison */}
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-center">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">
-                    <Tag className="w-3 h-3 text-emerald-500" /> Retail Price
-                  </div>
-                  <div className="text-base font-black text-slate-900 dark:text-white mt-0.5">
-                    ₹{job.retailPrice.toLocaleString()}
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-center">
-                  <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center justify-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-blue-500" /> Cars24 Rate
-                  </div>
-                  <div className="text-base font-black text-blue-700 dark:text-blue-300 mt-0.5">
-                    ₹{job.cars24Price.toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Contractor Payout Section with Dual Rate Comparison */}
-              {job.isContractBasis && (
-                <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-800 dark:text-amber-200 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-amber-900 dark:text-amber-300">
-                    <span className="flex items-center gap-1 font-extrabold">
-                      <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Contract Rates:
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {(job.category === 'PAINT' || job.category === 'DENTING') ? 'Painter / Denter' : 'Technician Payout'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold">
-                    <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex flex-col">
-                      <span className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Retail Contract</span>
-                      <span className="font-mono font-black">
-                        ₹{job.retailContractorPayout ?? job.contractorPayout ?? 0}
-                      </span>
-                      {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.retailPainterPayout ?? job.painterPayout ?? 0) > 0 || (job.retailDenterPayout ?? job.denterPayout ?? 0) > 0) && (
-                        <span className="text-[9.5px] text-emerald-700 dark:text-emerald-400/80">
-                          P: ₹{job.retailPainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.retailDenterPayout ?? job.denterPayout ?? 0}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-300 flex flex-col">
-                      <span className="text-[9px] font-extrabold uppercase text-blue-600 dark:text-blue-400">Cars24 Contract</span>
-                      <span className="font-mono font-black">
-                        ₹{job.cars24ContractorPayout ?? job.contractorPayout ?? 0}
-                      </span>
-                      {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.cars24PainterPayout ?? job.painterPayout ?? 0) > 0 || (job.cars24DenterPayout ?? job.denterPayout ?? 0) > 0) && (
-                        <span className="text-[9.5px] text-blue-700 dark:text-blue-400/80">
-                          P: ₹{job.cars24PainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.cars24DenterPayout ?? job.denterPayout ?? 0}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+      {activeSubTab === 'CATALOG' && (
+        <>
+          {/* Filter and Search Bar */}
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+            <div className="relative w-full md:w-80">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search catalog by title..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-medium outline-none focus:ring-2 focus:ring-amber-500"
+              />
             </div>
 
-            <div className="mt-4 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Est. {job.estimatedHours} hrs
-              </span>
-              <span>{job.isContractBasis ? 'Contract Job' : 'Standard Labor'}</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
+              {['ALL', 'PAINT', 'DENTING', 'MECHANICAL', 'SERVICE', 'WASHING', 'DETAILING', 'SUBLET_VENDOR'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setFilterCat(cat)}
+                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                    filterCat === cat
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {cat === 'ALL' ? 'ALL JOBS' : cat}
+                </button>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* Grid of Standard Jobs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((job) => (
+              <div
+                key={job.id}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                      job.category === 'PAINT' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' :
+                      job.category === 'DENTING' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20' :
+                      job.category === 'MECHANICAL' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20' :
+                      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {job.category}
+                    </span>
+
+                    {canManage && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenEdit(job)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title="Edit Job"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(job.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title="Delete Job"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-tight">
+                    {job.title}
+                  </h3>
+
+                  {/* Linked Body Panel and Paint Scope Badges */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {job.panelNameEn ? (
+                      <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 font-bold text-[10px] flex items-center gap-1">
+                        <Car className="w-3 h-3 text-blue-500" />
+                        {job.panelNameEn}
+                        {job.panelKey && <span className="opacity-60 text-[9px]">[{job.panelKey}]</span>}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium text-[10px]">
+                        General / Multi-panel
+                      </span>
+                    )}
+
+                    {job.paintScope && PAINT_SCOPE_LABELS[job.paintScope] ? (
+                      <span className={`px-2 py-0.5 rounded-lg border font-bold text-[10px] flex items-center gap-1 ${PAINT_SCOPE_LABELS[job.paintScope].bg} ${PAINT_SCOPE_LABELS[job.paintScope].text} ${PAINT_SCOPE_LABELS[job.paintScope].border}`}>
+                        <span>{PAINT_SCOPE_LABELS[job.paintScope].icon}</span>
+                        {PAINT_SCOPE_LABELS[job.paintScope].label}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {job.description && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">
+                      {job.description}
+                    </p>
+                  )}
+
+                  {/* Pricing Cards Comparison */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-center">
+                      <div className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">
+                        <Tag className="w-3 h-3 text-emerald-500" /> Retail Price
+                      </div>
+                      <div className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                        ₹{job.retailPrice.toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-center">
+                      <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase flex items-center justify-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-blue-500" /> Cars24 Rate
+                      </div>
+                      <div className="text-base font-black text-blue-700 dark:text-blue-300 mt-0.5">
+                        ₹{job.cars24Price.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contractor Payout Section with Dual Rate Comparison */}
+                  {job.isContractBasis && (
+                    <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-800 dark:text-amber-200 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                        <span className="flex items-center gap-1 font-extrabold">
+                          <DollarSign className="w-3.5 h-3.5 text-amber-500" /> Contract Rates:
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {(job.category === 'PAINT' || job.category === 'DENTING') ? 'Painter / Denter' : 'Technician Payout'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex flex-col">
+                          <span className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400">Retail Contract</span>
+                          <span className="font-mono font-black">
+                            ₹{job.retailContractorPayout ?? job.contractorPayout ?? 0}
+                          </span>
+                          {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.retailPainterPayout ?? job.painterPayout ?? 0) > 0 || (job.retailDenterPayout ?? job.denterPayout ?? 0) > 0) && (
+                            <span className="text-[9.5px] text-emerald-700 dark:text-emerald-400/80">
+                              P: ₹{job.retailPainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.retailDenterPayout ?? job.denterPayout ?? 0}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-300 flex flex-col">
+                          <span className="text-[9px] font-extrabold uppercase text-blue-600 dark:text-blue-400">Cars24 Contract</span>
+                          <span className="font-mono font-black">
+                            ₹{job.cars24ContractorPayout ?? job.contractorPayout ?? 0}
+                          </span>
+                          {(job.category === 'PAINT' || job.category === 'DENTING') && ((job.cars24PainterPayout ?? job.painterPayout ?? 0) > 0 || (job.cars24DenterPayout ?? job.denterPayout ?? 0) > 0) && (
+                            <span className="text-[9.5px] text-blue-700 dark:text-blue-400/80">
+                              P: ₹{job.cars24PainterPayout ?? job.painterPayout ?? 0} | D: ₹{job.cars24DenterPayout ?? job.denterPayout ?? 0}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Est. {job.estimatedHours} hrs
+                  </span>
+                  <span>{job.isContractBasis ? 'Contract Job' : 'Standard Labor'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {activeSubTab === 'ASSOCIATIONS' && (
+        <div className="space-y-6">
+          {/* Association Editor Section */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                {assocEditingJobId ? '✍️ Edit Panel-Job Association' : '➕ Define New Panel-Job Association'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Link a standard vehicle body panel with a job type to specify customized estimated hours, retail prices, fleet rates, and contractor payouts.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveAssociation} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-bold">
+              <div className="space-y-4">
+                {/* Panel Selection */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1">
+                    Select Vehicle Panel (पैनल चुनें) *
+                  </label>
+                  <select
+                    required
+                    value={assocPanel?.id || ''}
+                    onChange={(e) => {
+                      const selected = panels.find(p => p.id === e.target.value);
+                      setAssocPanel(selected || null);
+                      if (selected) {
+                        setAssocRetailPrice(selected.defaultPrice || 1800);
+                        setAssocCars24Price(Math.round((selected.defaultPrice || 1800) * 0.75));
+                        setAssocRetailPainter(Math.round((selected.defaultPrice || 1800) * 0.4));
+                        setAssocCars24Painter(Math.round((selected.defaultPrice || 1800) * 0.3));
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="" disabled>-- Select Panel --</option>
+                    {panels.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nameEn} ({p.nameHi}) [Baseline: ₹{p.defaultPrice}]
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Job Type Selection */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1">
+                    Select Job Type (जॉब प्रकार चुनें) *
+                  </label>
+                  <select
+                    required
+                    value={assocJobType?.id || ''}
+                    onChange={(e) => {
+                      const selected = STANDARD_JOB_TYPES.find(t => t.id === e.target.value);
+                      setAssocJobType(selected || null);
+                      
+                      let multiplier = 1.0;
+                      if (selected?.id === 'PARTIAL_PAINT') multiplier = 0.6;
+                      if (selected?.id === 'INSIDE_PAINT') multiplier = 0.5;
+                      if (selected?.id === 'OUTER_INSIDE_PAINT') multiplier = 1.35;
+                      if (selected?.id === 'DENT_REPAIR') multiplier = 0.4;
+                      if (selected?.id === 'PART_REPLACEMENT') multiplier = 0.2;
+
+                      const basePrice = assocPanel ? assocPanel.defaultPrice : 1800;
+                      setAssocRetailPrice(Math.round(basePrice * multiplier));
+                      setAssocCars24Price(Math.round(basePrice * multiplier * 0.75));
+                      
+                      if (selected?.id === 'DENT_REPAIR') {
+                        setAssocRetailPainter(0);
+                        setAssocCars24Painter(0);
+                        setAssocRetailDenter(Math.round(basePrice * multiplier * 0.5));
+                        setAssocCars24Denter(Math.round(basePrice * multiplier * 0.4));
+                      } else {
+                        setAssocRetailPainter(Math.round(basePrice * multiplier * 0.4));
+                        setAssocCars24Painter(Math.round(basePrice * multiplier * 0.3));
+                        setAssocRetailDenter(Math.round(basePrice * multiplier * 0.1));
+                        setAssocCars24Denter(Math.round(basePrice * multiplier * 0.08));
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="" disabled>-- Select Job Type --</option>
+                    {STANDARD_JOB_TYPES.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Estimate hours and Description */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 mb-1">
+                      Estimated Time (Hours)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      value={assocHours}
+                      onChange={(e) => setAssocHours(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 mb-1">
+                      Description / Notes
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Precision dent pull and paint matching"
+                      value={assocDesc}
+                      onChange={(e) => setAssocDesc(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing & Contractor Payout Rates */}
+              <div className="space-y-4 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-emerald-700 dark:text-emerald-400 mb-1">
+                      Retail Price (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={assocRetailPrice}
+                      onChange={(e) => setAssocRetailPrice(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 font-black text-emerald-600 dark:text-emerald-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-blue-700 dark:text-blue-400 mb-1">
+                      Cars24 Fleet Price (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={assocCars24Price}
+                      onChange={(e) => setAssocCars24Price(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-black text-blue-600 dark:text-blue-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Painter and Denter payouts */}
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-3">
+                  <div className="text-[11px] font-extrabold uppercase text-amber-600 tracking-wider">
+                    Contractor Labor Payout Rates (ठेकेदार का लेबर रेट)
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 p-2 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Retail Painter (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={assocRetailPainter}
+                        onChange={(e) => setAssocRetailPainter(Number(e.target.value) || 0)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Retail Denter (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={assocRetailDenter}
+                        onChange={(e) => setAssocRetailDenter(Number(e.target.value) || 0)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 p-2 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Cars24 Painter (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={assocCars24Painter}
+                        onChange={(e) => setAssocCars24Painter(Number(e.target.value) || 0)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Cars24 Denter (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={assocCars24Denter}
+                        onChange={(e) => setAssocCars24Denter(Number(e.target.value) || 0)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  {assocEditingJobId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssocEditingJobId(null);
+                        setAssocDesc('');
+                      }}
+                      className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold animate-in fade-in duration-200"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    {assocEditingJobId ? 'Update Association' : 'Save Association'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* Current Associations List */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  📋 Active Panel &amp; Job Associations
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Manage associations configured for individual car panels.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-black uppercase border-b border-slate-200 dark:border-slate-800">
+                    <th className="p-3">Panel Name</th>
+                    <th className="p-3">Job Finish/Type</th>
+                    <th className="p-3 text-center">Est. Hours</th>
+                    <th className="p-3 text-right">Retail Price</th>
+                    <th className="p-3 text-right">Cars24 Rate</th>
+                    <th className="p-3 text-center">Contract Labor (Painter | Denter)</th>
+                    <th className="p-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                  {standardJobs
+                    .filter(j => j.panelKey && j.panelKey !== 'NONE')
+                    .map(job => {
+                      return (
+                        <tr key={job.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="p-3">
+                            <div className="font-extrabold text-slate-900 dark:text-white">
+                              {job.panelNameEn || job.panelKey}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono font-bold">[{job.panelKey}]</div>
+                          </td>
+                          <td className="p-3">
+                            {job.paintScope && PAINT_SCOPE_LABELS[job.paintScope] ? (
+                              <span className={`px-2 py-0.5 rounded-lg border font-bold text-[10px] flex items-center gap-1 w-max ${PAINT_SCOPE_LABELS[job.paintScope].bg} ${PAINT_SCOPE_LABELS[job.paintScope].text} ${PAINT_SCOPE_LABELS[job.paintScope].border}`}>
+                                <span>{PAINT_SCOPE_LABELS[job.paintScope].icon}</span>
+                                {PAINT_SCOPE_LABELS[job.paintScope].label}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 font-black text-[10px]">
+                                🛠️ {job.category}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold">{job.estimatedHours} hrs</td>
+                          <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                            ₹{job.retailPrice?.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-blue-600 dark:text-blue-400">
+                            ₹{job.cars24Price?.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex flex-col items-center gap-0.5 text-[10px] font-mono">
+                              <div className="text-emerald-700 dark:text-emerald-300">
+                                Retail: P: ₹{job.retailPainterPayout || 0} | D: ₹{job.retailDenterPayout || 0}
+                              </div>
+                              <div className="text-blue-600 dark:text-blue-400">
+                                Cars24: P: ₹{job.cars24PainterPayout || 0} | D: ₹{job.cars24DenterPayout || 0}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setAssocEditingJobId(job.id);
+                                  setAssocPanel(panels.find(p => p.id === job.panelKey) || panels[0]);
+                                  setAssocJobType(
+                                    STANDARD_JOB_TYPES.find(
+                                      t => t.paintScope === job.paintScope || (t.category === job.category && !t.paintScope)
+                                    ) || STANDARD_JOB_TYPES[0]
+                                  );
+                                  setAssocRetailPrice(job.retailPrice || 0);
+                                  setAssocCars24Price(job.cars24Price || 0);
+                                  setAssocHours(job.estimatedHours || 1);
+                                  setAssocRetailPainter(job.retailPainterPayout || 0);
+                                  setAssocRetailDenter(job.retailDenterPayout || 0);
+                                  setAssocCars24Painter(job.cars24PainterPayout || 0);
+                                  setAssocCars24Denter(job.cars24DenterPayout || 0);
+                                  setAssocDesc(job.description || '');
+                                  window.scrollTo({ top: 320, behavior: 'smooth' });
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 hover:bg-amber-500 hover:text-slate-950 font-bold transition-all"
+                                title="Edit Association"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(job.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 hover:bg-rose-500 hover:text-white font-bold transition-all"
+                                title="Delete Association"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'PANELS' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                  🚗 Master Vehicle Panels List &amp; Base Rates
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 font-bold">
+                  Directly edit the baseline retail prices for each of the 15 standard car body panels. This baseline price is used to auto-calculate proportional rates across different paint scopes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  saveVehiclePanels(panels);
+                  alert('🎉 Master panel rates saved successfully & synced with database!');
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl shadow-lg flex items-center gap-2 transition-all self-start sm:self-auto cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                Save Master Panel Rates (डेटाबेस में सेव करें)
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-black uppercase border-b border-slate-200 dark:border-slate-800">
+                    <th className="p-3 w-16">Code</th>
+                    <th className="p-3">Panel Name (English)</th>
+                    <th className="p-3">Panel Name (Hindi)</th>
+                    <th className="p-3">3D View Angle</th>
+                    <th className="p-3 text-right">Default Baseline Price (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-200">
+                  {panels.map((p, idx) => {
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="p-3 font-mono font-black text-amber-600">{p.code}</td>
+                        <td className="p-3">
+                          <input
+                            type="text"
+                            value={p.nameEn || ''}
+                            onChange={(e) => {
+                              const updated = [...panels];
+                              updated[idx] = { ...p, nameEn: e.target.value };
+                              setPanels(updated);
+                            }}
+                            className="bg-transparent border border-transparent hover:border-slate-300 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-800 px-2 py-1 rounded w-full font-bold text-slate-900 dark:text-white"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <input
+                            type="text"
+                            value={p.nameHi || ''}
+                            onChange={(e) => {
+                              const updated = [...panels];
+                              updated[idx] = { ...p, nameHi: e.target.value };
+                              setPanels(updated);
+                            }}
+                            className="bg-transparent border border-transparent hover:border-slate-300 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-800 px-2 py-1 rounded w-full font-bold text-slate-900 dark:text-white"
+                          />
+                        </td>
+                        <td className="p-3 font-bold text-slate-400">{p.view || 'TOP'}</td>
+                        <td className="p-3 text-right">
+                          <div className="relative inline-block w-36">
+                            <span className="absolute left-2.5 top-2 text-slate-500 font-bold">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={p.defaultPrice || 0}
+                              onChange={(e) => {
+                                const updated = [...panels];
+                                updated[idx] = { ...p, defaultPrice: Number(e.target.value) || 0 };
+                                setPanels(updated);
+                              }}
+                              className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-6 pr-3 py-1.5 w-full font-mono font-black text-right text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  saveVehiclePanels(panels);
+                  alert('🎉 Master panel rates saved successfully & synced with database!');
+                }}
+                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Save className="w-4.5 h-4.5" />
+                Save Master Panel Rates &amp; Sync with Database
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Edit / Add Modal */}
       {isModalOpen && (
