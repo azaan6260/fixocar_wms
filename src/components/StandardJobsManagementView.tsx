@@ -122,42 +122,16 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
             description: existing.description || ''
           };
         } else {
-          // Fallback calculations using multipliers as starting point
-          let multiplier = 1.0;
-          if (type.id === 'PARTIAL_PAINT') multiplier = 0.6;
-          else if (type.id === 'INSIDE_PAINT') multiplier = 0.5;
-          else if (type.id === 'OUTER_INSIDE_PAINT') multiplier = 1.35;
-          else if (type.id === 'DENT_REPAIR') multiplier = 0.4;
-          else if (type.id === 'PART_REPLACEMENT') multiplier = 0.2;
-
-          const basePrice = panel.defaultPrice || 1800;
-          const retailPrice = Math.round(basePrice * multiplier);
-          const cars24Price = Math.round(basePrice * multiplier * 0.75);
-
-          let retailPainter = 0;
-          let cars24Painter = 0;
-          let retailDenter = 0;
-          let cars24Denter = 0;
-
-          if (type.id === 'DENT_REPAIR') {
-            retailDenter = Math.round(basePrice * multiplier * 0.5);
-            cars24Denter = Math.round(basePrice * multiplier * 0.4);
-          } else {
-            retailPainter = Math.round(basePrice * multiplier * 0.4);
-            cars24Painter = Math.round(basePrice * multiplier * 0.3);
-            retailDenter = Math.round(basePrice * multiplier * 0.1);
-            cars24Denter = Math.round(basePrice * multiplier * 0.08);
-          }
-
+          // Keep all fields strictly at 0 / empty so the user can manually enter them and see exactly what is saved in the database
           grid[key] = {
-            retailPrice,
-            cars24Price,
+            retailPrice: 0,
+            cars24Price: 0,
             estimatedHours: type.id === 'DENT_REPAIR' ? 1.5 : type.id === 'PART_REPLACEMENT' ? 1 : 2,
-            retailPainterPayout: retailPainter,
-            retailDenterPayout: retailDenter,
-            cars24PainterPayout: cars24Painter,
-            cars24DenterPayout: cars24Denter,
-            description: `${type.label} for ${panel.nameEn}`
+            retailPainterPayout: 0,
+            retailDenterPayout: 0,
+            cars24PainterPayout: 0,
+            cars24DenterPayout: 0,
+            description: ''
           };
         }
       });
