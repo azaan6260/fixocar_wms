@@ -63,6 +63,29 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [panels, setPanels] = useState<any[]>(() => getVehiclePanels());
   const [activeSubTab, setActiveSubTab] = useState<'CATALOG' | 'ASSOCIATIONS' | 'PANELS'>('CATALOG');
 
+  const [masterGrid, setMasterGrid] = useState<Record<string, {
+    id?: string;
+    retailPrice: number;
+    cars24Price: number;
+    estimatedHours: number;
+    retailPainterPayout: number;
+    retailDenterPayout: number;
+    cars24PainterPayout: number;
+    cars24DenterPayout: number;
+    description: string;
+  }>>({});
+
+  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
+
+  const STANDARD_JOB_TYPES = useMemo(() => [
+    { id: 'FULL_PAINT', label: 'Full Paint (बाहर पूरा)', category: 'PAINT', paintScope: 'FULL_OUTER' },
+    { id: 'PARTIAL_PAINT', label: 'Partial Paint / Touch-Up (आधा पेंट)', category: 'PAINT', paintScope: 'PARTIAL_TOUCHUP' },
+    { id: 'INSIDE_PAINT', label: 'Inside Paint (अंदर का पेंट)', category: 'PAINT', paintScope: 'INSIDE_JAMB' },
+    { id: 'OUTER_INSIDE_PAINT', label: 'Full Outer + Inside Paint (दोनों तरफ)', category: 'PAINT', paintScope: 'FULL_OUTER_AND_INSIDE' },
+    { id: 'DENT_REPAIR', label: 'Dent Repair (डेंट रिपेयर)', category: 'DENTING', paintScope: undefined },
+    { id: 'PART_REPLACEMENT', label: 'Part Replacement (पार्ट बदलना)', category: 'MECHANICAL', paintScope: undefined },
+  ], []);
+
   useEffect(() => {
     const refreshData = () => {
       setStandardJobs(getStandardJobs());
@@ -72,6 +95,139 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     const unsubscribe = subscribeToStore(refreshData);
     return () => { unsubscribe(); };
   }, []);
+
+  // Initialize master rates grid from database standardJobs and panels list
+  useEffect(() => {
+    if (activeSubTab !== 'PANELS') return;
+    const grid: typeof masterGrid = {};
+    
+    panels.forEach(panel => {
+      STANDARD_JOB_TYPES.forEach(type => {
+        const key = `${panel.id}_${type.id}`;
+        const existing = standardJobs.find(j => 
+          j.panelKey === panel.id && 
+          (type.paintScope ? j.paintScope === type.paintScope : j.category === type.category)
+        );
+
+        if (existing) {
+          grid[key] = {
+            id: existing.id,
+            retailPrice: existing.retailPrice || 0,
+            cars24Price: existing.cars24Price || 0,
+            estimatedHours: existing.estimatedHours || 1,
+            retailPainterPayout: existing.retailPainterPayout || 0,
+            retailDenterPayout: existing.retailDenterPayout || 0,
+            cars24PainterPayout: existing.cars24PainterPayout || 0,
+            cars24DenterPayout: existing.cars24DenterPayout || 0,
+            description: existing.description || ''
+          };
+        } else {
+          // Fallback calculations using multipliers as starting point
+          let multiplier = 1.0;
+          if (type.id === 'PARTIAL_PAINT') multiplier = 0.6;
+          else if (type.id === 'INSIDE_PAINT') multiplier = 0.5;
+          else if (type.id === 'OUTER_INSIDE_PAINT') multiplier = 1.35;
+          else if (type.id === 'DENT_REPAIR') multiplier = 0.4;
+          else if (type.id === 'PART_REPLACEMENT') multiplier = 0.2;
+
+          const basePrice = panel.defaultPrice || 1800;
+          const retailPrice = Math.round(basePrice * multiplier);
+          const cars24Price = Math.round(basePrice * multiplier * 0.75);
+
+          let retailPainter = 0;
+          let cars24Painter = 0;
+          let retailDenter = 0;
+          let cars24Denter = 0;
+
+          if (type.id === 'DENT_REPAIR') {
+            retailDenter = Math.round(basePrice * multiplier * 0.5);
+            cars24Denter = Math.round(basePrice * multiplier * 0.4);
+          } else {
+            retailPainter = Math.round(basePrice * multiplier * 0.4);
+            cars24Painter = Math.round(basePrice * multiplier * 0.3);
+            retailDenter = Math.round(basePrice * multiplier * 0.1);
+            cars24Denter = Math.round(basePrice * multiplier * 0.08);
+          }
+
+          grid[key] = {
+            retailPrice,
+            cars24Price,
+            estimatedHours: type.id === 'DENT_REPAIR' ? 1.5 : type.id === 'PART_REPLACEMENT' ? 1 : 2,
+            retailPainterPayout: retailPainter,
+            retailDenterPayout: retailDenter,
+            cars24PainterPayout: cars24Painter,
+            cars24DenterPayout: cars24Denter,
+            description: `${type.label} for ${panel.nameEn}`
+          };
+        }
+      });
+    });
+
+    setMasterGrid(grid);
+  }, [panels, standardJobs, activeSubTab, STANDARD_JOB_TYPES]);
+
+  const handleGridChange = (panelId: string, typeId: string, field: string, val: any) => {
+    const key = `${panelId}_${typeId}`;
+    setMasterGrid(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [field]: val
+      }
+    }));
+  };
+
+  const handleSaveMasterGrid = () => {
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    panels.forEach(panel => {
+      STANDARD_JOB_TYPES.forEach(type => {
+        const key = `${panel.id}_${type.id}`;
+        const data = masterGrid[key];
+        if (!data) return;
+
+        const title = `${panel.nameEn} (${type.label})`;
+        const category = type.category as TaskCategory;
+        const paintScope = type.paintScope as PaintScope | undefined;
+
+        const jobData: Partial<StandardJob> = {
+          title,
+          category,
+          panelKey: panel.id,
+          panelNameEn: panel.nameEn,
+          paintScope,
+          retailPrice: Number(data.retailPrice) || 0,
+          cars24Price: Number(data.cars24Price) || 0,
+          estimatedHours: Number(data.estimatedHours) || 1,
+          isContractBasis: true,
+          retailPainterPayout: Number(data.retailPainterPayout) || 0,
+          retailDenterPayout: Number(data.retailDenterPayout) || 0,
+          retailContractorPayout: (Number(data.retailPainterPayout) || 0) + (Number(data.retailDenterPayout) || 0),
+          cars24PainterPayout: Number(data.cars24PainterPayout) || 0,
+          cars24DenterPayout: Number(data.cars24DenterPayout) || 0,
+          cars24ContractorPayout: (Number(data.cars24PainterPayout) || 0) + (Number(data.cars24DenterPayout) || 0),
+          painterPayout: Number(data.retailPainterPayout) || Number(data.cars24PainterPayout) || 0,
+          denterPayout: Number(data.retailDenterPayout) || Number(data.cars24DenterPayout) || 0,
+          contractorPayout: ((Number(data.retailPainterPayout) || 0) + (Number(data.retailDenterPayout) || 0)) || ((Number(data.cars24PainterPayout) || 0) + (Number(data.cars24DenterPayout) || 0)) || 0,
+          description: data.description.trim() || `${type.label} for ${panel.nameEn}`
+        };
+
+        if (data.id) {
+          updateStandardJob(data.id, jobData);
+          updatedCount++;
+        } else {
+          if (data.retailPrice > 0) {
+            addStandardJob(jobData as StandardJob);
+            addedCount++;
+          }
+        }
+      });
+    });
+
+    alert(`🎉 Master rates saved successfully!\nCreated ${addedCount} new custom task rates.\nUpdated ${updatedCount} existing custom task rates.`);
+    refreshList();
+  };
 
   // Association Modal states
   const [isAssocModalOpen, setIsAssocModalOpen] = useState(false);
@@ -86,15 +242,6 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [assocCars24Painter, setAssocCars24Painter] = useState<number>(800);
   const [assocCars24Denter, setAssocCars24Denter] = useState<number>(150);
   const [assocDesc, setAssocDesc] = useState<string>('');
-
-  const STANDARD_JOB_TYPES = useMemo(() => [
-    { id: 'FULL_PAINT', label: 'Full Paint (बाहर पूरा)', category: 'PAINT', paintScope: 'FULL_OUTER' },
-    { id: 'PARTIAL_PAINT', label: 'Partial Paint / Touch-Up (आधा पेंट)', category: 'PAINT', paintScope: 'PARTIAL_TOUCHUP' },
-    { id: 'INSIDE_PAINT', label: 'Inside Paint (अंदर का पेंट)', category: 'PAINT', paintScope: 'INSIDE_JAMB' },
-    { id: 'OUTER_INSIDE_PAINT', label: 'Full Outer + Inside Paint (दोनों तरफ)', category: 'PAINT', paintScope: 'FULL_OUTER_AND_INSIDE' },
-    { id: 'DENT_REPAIR', label: 'Dent Repair (डेंट रिपेयर)', category: 'DENTING', paintScope: undefined },
-    { id: 'PART_REPLACEMENT', label: 'Part Replacement (पार्ट बदलना)', category: 'MECHANICAL', paintScope: undefined },
-  ], []);
 
   // Set default panel and job type on load
   useEffect(() => {
@@ -1124,99 +1271,230 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
       {activeSubTab === 'PANELS' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  🚗 Master Vehicle Panels List &amp; Base Rates
+                <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  🚗 Master Task Rates Matrix (मास्टर रेट्स ग्रिड)
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 font-bold">
-                  Directly edit the baseline retail prices for each of the 15 standard car body panels. This baseline price is used to auto-calculate proportional rates across different paint scopes.
+                  Directly inspect and manually edit the individual rates, hours, and contractor payouts for EVERY task on all 15 vehicle panels. Click any panel to expand its nested tasks and customize everything in one place.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  saveVehiclePanels(panels);
-                  alert('🎉 Master panel rates saved successfully & synced with database!');
-                }}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl shadow-lg flex items-center gap-2 transition-all self-start sm:self-auto cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                Save Master Panel Rates (डेटाबेस में सेव करें)
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setExpandedPanelId(expandedPanelId ? null : panels[0]?.id || null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  {expandedPanelId ? 'Collapse All' : 'Expand Panel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMasterGrid}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  Save Master Rates (डेटाबेस में सेव करें)
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-black uppercase border-b border-slate-200 dark:border-slate-800">
-                    <th className="p-3 w-16">Code</th>
+                    <th className="p-3 w-20">Code</th>
                     <th className="p-3">Panel Name (English)</th>
                     <th className="p-3">Panel Name (Hindi)</th>
-                    <th className="p-3">3D View Angle</th>
-                    <th className="p-3 text-right">Default Baseline Price (₹)</th>
+                    <th className="p-3">3D View</th>
+                    <th className="p-3 text-center">Baseline (Ref)</th>
+                    <th className="p-3 text-center w-40">Actions / Tasks status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-200">
+                <tbody className="divide-y divide-slate-150 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-200">
                   {panels.map((p, idx) => {
+                    const isExpanded = expandedPanelId === p.id;
+                    // Count how many tasks for this panel have customized rates
+                    const customCount = STANDARD_JOB_TYPES.filter(type => {
+                      const key = `${p.id}_${type.id}`;
+                      return !!masterGrid[key]?.id;
+                    }).length;
+
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="p-3 font-mono font-black text-amber-600">{p.code}</td>
-                        <td className="p-3">
-                          <input
-                            type="text"
-                            value={p.nameEn || ''}
-                            onChange={(e) => {
-                              const updated = [...panels];
-                              updated[idx] = { ...p, nameEn: e.target.value };
-                              setPanels(updated);
-                            }}
-                            className="bg-transparent border border-transparent hover:border-slate-300 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-800 px-2 py-1 rounded w-full font-bold text-slate-900 dark:text-white"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <input
-                            type="text"
-                            value={p.nameHi || ''}
-                            onChange={(e) => {
-                              const updated = [...panels];
-                              updated[idx] = { ...p, nameHi: e.target.value };
-                              setPanels(updated);
-                            }}
-                            className="bg-transparent border border-transparent hover:border-slate-300 focus:border-amber-500 focus:bg-white dark:focus:bg-slate-800 px-2 py-1 rounded w-full font-bold text-slate-900 dark:text-white"
-                          />
-                        </td>
-                        <td className="p-3 font-bold text-slate-400">{p.view || 'TOP'}</td>
-                        <td className="p-3 text-right">
-                          <div className="relative inline-block w-36">
-                            <span className="absolute left-2.5 top-2 text-slate-500 font-bold">₹</span>
-                            <input
-                              type="number"
-                              min="0"
-                              value={p.defaultPrice === 0 ? '' : p.defaultPrice}
-                              onChange={(e) => {
-                                const updated = [...panels];
-                                updated[idx] = { ...p, defaultPrice: e.target.value === '' ? 0 : Number(e.target.value) };
-                                setPanels(updated);
-                              }}
-                              className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg pl-6 pr-3 py-1.5 w-full font-mono font-black text-right text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            />
-                          </div>
-                        </td>
-                      </tr>
+                      <React.Fragment key={p.id}>
+                        {/* Panel Row */}
+                        <tr 
+                          onClick={() => setExpandedPanelId(isExpanded ? null : p.id)}
+                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-all ${
+                            isExpanded ? 'bg-amber-500/5 dark:bg-amber-950/5' : ''
+                          }`}
+                        >
+                          <td className="p-3 font-mono font-black text-amber-600">{p.code}</td>
+                          <td className="p-3 font-black text-slate-900 dark:text-white">{p.nameEn}</td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{p.nameHi}</td>
+                          <td className="p-3 font-bold text-slate-400">{p.view || 'TOP'}</td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-600 dark:text-slate-400">
+                            ₹{p.defaultPrice}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {customCount > 0 ? (
+                                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 uppercase">
+                                  ✅ {customCount} Custom Tasks
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 uppercase">
+                                  Default Multipliers
+                                </span>
+                              )}
+                              <span className="text-slate-400 text-xs font-black">
+                                {isExpanded ? '▲ Hide' : '▼ Expand'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Expanded Tasks List Sub-row */}
+                        {isExpanded && (
+                          <tr className="bg-slate-50/50 dark:bg-slate-900/40">
+                            <td colSpan={6} className="p-4 border-t border-b border-slate-200 dark:border-slate-800">
+                              <div className="space-y-3.5 animate-in slide-in-from-top-1 duration-150">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                                    🛠️ Task-Basis Rates Matrix for {p.nameEn} ({p.nameHi})
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    Directly override or enter any rate. Clearing any rate resets it to standard multiplier.
+                                  </span>
+                                </div>
+
+                                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-955 shadow-inner">
+                                  <table className="w-full text-[11px] text-left border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 font-extrabold uppercase border-b border-slate-200 dark:border-slate-800">
+                                        <th className="p-2.5">Task Description</th>
+                                        <th className="p-2.5 w-20 text-center">Est. Hours</th>
+                                        <th className="p-2.5 w-24 text-right">Retail Billing (₹)</th>
+                                        <th className="p-2.5 w-24 text-right">Cars24 Billing (₹)</th>
+                                        <th className="p-2.5 w-24 text-right bg-emerald-500/5 text-emerald-800 dark:text-emerald-400">Retail Painter</th>
+                                        <th className="p-2.5 w-24 text-right bg-emerald-500/5 text-emerald-800 dark:text-emerald-400">Retail Denter</th>
+                                        <th className="p-2.5 w-24 text-right bg-blue-500/5 text-blue-800 dark:text-blue-400">Cars24 Painter</th>
+                                        <th className="p-2.5 w-24 text-right bg-blue-500/5 text-blue-800 dark:text-blue-400">Cars24 Denter</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-850 font-bold">
+                                      {STANDARD_JOB_TYPES.map(type => {
+                                        const key = `${p.id}_${type.id}`;
+                                        const gridData = masterGrid[key] || {
+                                          retailPrice: 0,
+                                          cars24Price: 0,
+                                          estimatedHours: 1,
+                                          retailPainterPayout: 0,
+                                          retailDenterPayout: 0,
+                                          cars24PainterPayout: 0,
+                                          cars24DenterPayout: 0,
+                                          description: ''
+                                        };
+
+                                        return (
+                                          <tr key={type.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                            <td className="p-2.5">
+                                              <div className="font-extrabold text-slate-800 dark:text-slate-200">
+                                                {type.label}
+                                              </div>
+                                              <input
+                                                type="text"
+                                                value={gridData.description}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'description', e.target.value)}
+                                                className="mt-1 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-amber-500 px-1 py-0.5 text-[9.5px] w-full text-slate-400 dark:text-slate-500 focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-900"
+                                                placeholder="Custom description..."
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-center">
+                                              <input
+                                                type="number"
+                                                step="0.5"
+                                                min="0.5"
+                                                value={gridData.estimatedHours === 0 ? '' : gridData.estimatedHours}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'estimatedHours', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-16 px-1.5 py-1 text-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.retailPrice === 0 ? '' : gridData.retailPrice}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'retailPrice', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-black text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.cars24Price === 0 ? '' : gridData.cars24Price}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'cars24Price', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-black text-blue-600 dark:text-blue-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right bg-emerald-500/5">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.retailPainterPayout === 0 ? '' : gridData.retailPainterPayout}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'retailPainterPayout', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-extrabold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right bg-emerald-500/5">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.retailDenterPayout === 0 ? '' : gridData.retailDenterPayout}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'retailDenterPayout', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-extrabold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right bg-blue-500/5">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.cars24PainterPayout === 0 ? '' : gridData.cars24PainterPayout}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'cars24PainterPayout', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-extrabold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                              />
+                                            </td>
+                                            <td className="p-2.5 text-right bg-blue-500/5">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                value={gridData.cars24DenterPayout === 0 ? '' : gridData.cars24DenterPayout}
+                                                onChange={(e) => handleGridChange(p.id, type.id, 'cars24DenterPayout', e.target.value === '' ? 0 : Number(e.target.value))}
+                                                className="w-20 px-1.5 py-1 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono font-extrabold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                              />
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
 
-            <div className="flex justify-end pt-3">
+            <div className="flex justify-end pt-3 gap-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => {
-                  saveVehiclePanels(panels);
-                  alert('🎉 Master panel rates saved successfully & synced with database!');
-                }}
+                onClick={handleSaveMasterGrid}
                 className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Save className="w-4.5 h-4.5" />
