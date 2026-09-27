@@ -1081,7 +1081,22 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         contractorPayout: j.contractor_payout || 0,
         estimatedHours: j.estimated_hours || 1.0,
         description: j.description || '',
-        requiresCustomerApproval: j.requires_customer_approval ?? false
+        requiresCustomerApproval: j.requires_customer_approval ?? false,
+        panelKey: j.panel_key,
+        panelNameEn: j.panel_name_en,
+        paintScope: j.paint_scope,
+        retailPartialPrice: j.retail_partial_price || 0,
+        cars24PartialPrice: j.cars24_partial_price || 0,
+        retailInsidePrice: j.retail_inside_price || 0,
+        cars24InsidePrice: j.cars24_inside_price || 0,
+        retailFullOuterInsidePrice: j.retail_full_outer_inside_price || 0,
+        cars24FullOuterInsidePrice: j.cars24_full_outer_inside_price || 0,
+        retailPainterPayout: j.retail_painter_payout || 0,
+        retailDenterPayout: j.retail_denter_payout || 0,
+        retailContractorPayout: j.retail_contractor_payout || 0,
+        cars24PainterPayout: j.cars24_painter_payout || 0,
+        cars24DenterPayout: j.cars24_denter_payout || 0,
+        cars24ContractorPayout: j.cars24_contractor_payout || 0
       }));
 
       const currentStdJobs = getStandardJobs();
