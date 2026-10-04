@@ -1728,7 +1728,7 @@ Return valid JSON ONLY.`;
           // 15. Standard Jobs
           try {
             const { data: supaStdJobs } = await client.from('standard_jobs').select('*');
-            if (supaStdJobs && supaStdJobs.length > 0) {
+            if (Array.isArray(supaStdJobs)) {
               const mappedStdJobs = supaStdJobs.map((j: any) => ({
                 id: j.id,
                 title: j.title,

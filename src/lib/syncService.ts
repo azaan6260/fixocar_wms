@@ -449,9 +449,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
           saveWorkshopExpenses(mergedExpenses);
         }
 
-        const serverStdJobs = Array.isArray(store.standardJobs) ? store.standardJobs : [];
-        if (serverStdJobs.length > 0) {
-          saveStandardJobs(serverStdJobs, true);
+        if (Array.isArray(store.standardJobs)) {
+          saveStandardJobs(store.standardJobs, true);
         }
 
         const serverCarModels = Array.isArray(store.carModels) ? store.carModels : [];
@@ -1092,9 +1091,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         cars24ContractorPayout: j.cars24_contractor_payout || 0
       }));
 
-      if (supaStdJobs.length > 0) {
-        saveStandardJobs(supaStdJobs, true);
-      }
+      saveStandardJobs(supaStdJobs, true);
     }
 
     // 9. JOB CARD HISTORY (Chunked Fetch)
