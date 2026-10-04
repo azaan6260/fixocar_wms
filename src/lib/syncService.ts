@@ -450,15 +450,8 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         }
 
         const serverStdJobs = Array.isArray(store.standardJobs) ? store.standardJobs : [];
-        const currentLocalStdJobs = getStandardJobs();
-        const mergedStdJobs: StandardJob[] = [...serverStdJobs];
-        for (const loc of currentLocalStdJobs) {
-          if (!mergedStdJobs.some(m => m.id === loc.id)) {
-            mergedStdJobs.push(loc);
-          }
-        }
-        if (mergedStdJobs.length > 0) {
-          saveStandardJobs(mergedStdJobs, true);
+        if (serverStdJobs.length > 0) {
+          saveStandardJobs(serverStdJobs, true);
         }
 
         const serverCarModels = Array.isArray(store.carModels) ? store.carModels : [];
@@ -1099,14 +1092,9 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         cars24ContractorPayout: j.cars24_contractor_payout || 0
       }));
 
-      const currentStdJobs = getStandardJobs();
-      const mergedStdJobs = [...supaStdJobs];
-      for (const loc of currentStdJobs) {
-        if (!mergedStdJobs.some(m => m.id === loc.id)) {
-          mergedStdJobs.push(loc);
-        }
+      if (supaStdJobs.length > 0) {
+        saveStandardJobs(supaStdJobs, true);
       }
-      saveStandardJobs(mergedStdJobs, true);
     }
 
     // 9. JOB CARD HISTORY (Chunked Fetch)
@@ -1331,6 +1319,7 @@ export async function pushLocalDataToSupabase(): Promise<{
     workshops,
     vendors,
     vehicleCheckIns: checkIns,
+    standardJobs: getStandardJobs(),
     jobCardHistory: getJobCardHistoryRecords(),
     inventoryItems: getInventoryItems(),
     deliveryRecords: getDeliveries(),

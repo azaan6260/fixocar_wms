@@ -1759,7 +1759,7 @@ Return valid JSON ONLY.`;
                 retailFullOuterInsidePrice: Number(j.retail_full_outer_inside_price) || 0,
                 cars24FullOuterInsidePrice: Number(j.cars24_full_outer_inside_price) || 0
               }));
-              store.standardJobs = mergeArrayItems(store.standardJobs || [], mappedStdJobs, sj => sj.id);
+              store.standardJobs = mappedStdJobs;
             }
           } catch (stdJobErr) {
             console.warn('[CENTRAL_STORE] Supabase standard_jobs select error:', stdJobErr);
@@ -1801,8 +1801,8 @@ Return valid JSON ONLY.`;
       if (Array.isArray(vehicleCheckIns) && vehicleCheckIns.length > 0) {
         currentStore.vehicleCheckIns = mergeArrayItems(currentStore.vehicleCheckIns, vehicleCheckIns, ci => ci.id);
       }
-      if (Array.isArray(standardJobs) && standardJobs.length > 0) {
-        currentStore.standardJobs = mergeArrayItems(currentStore.standardJobs, standardJobs, sj => sj.id);
+      if (Array.isArray(standardJobs)) {
+        currentStore.standardJobs = standardJobs;
       }
       if (Array.isArray(carModels) && carModels.length > 0) {
         currentStore.carModels = mergeArrayItems(currentStore.carModels, carModels, cm => cm.id);

@@ -241,23 +241,19 @@ export function getPanelEnvironmentRates(
   }
 
   // Fallback if no matching standard job in table yet
-  const baseRetail = Math.round(2000 * multiplier);
-  const baseCars24 = Math.round(1350 * multiplier);
-  const defaultBasePrice = isCars24 ? baseCars24 : baseRetail;
-
   return {
-    price: defaultBasePrice,
-    retailPrice: baseRetail,
-    cars24Price: baseCars24,
-    retailPainterPayout: 950,
-    retailDenterPayout: 200,
-    retailContractorPayout: 1150,
-    cars24PainterPayout: 800,
-    cars24DenterPayout: 150,
-    cars24ContractorPayout: 950,
-    painterPayout: isCars24 ? 800 : 950,
-    denterPayout: isCars24 ? 150 : 200,
-    contractorPayout: isCars24 ? 950 : 1150,
+    price: 0,
+    retailPrice: 0,
+    cars24Price: 0,
+    retailPainterPayout: 0,
+    retailDenterPayout: 0,
+    retailContractorPayout: 0,
+    cars24PainterPayout: 0,
+    cars24DenterPayout: 0,
+    cars24ContractorPayout: 0,
+    painterPayout: 0,
+    denterPayout: 0,
+    contractorPayout: 0,
   };
 }
 

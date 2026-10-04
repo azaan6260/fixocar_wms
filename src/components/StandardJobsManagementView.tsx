@@ -251,28 +251,13 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
       setAssocDesc(existing.description || '');
     } else {
       setAssocEditingJobId(null);
-      let multiplier = 1.0;
-      if (assocJobType.id === 'PARTIAL_PAINT') multiplier = 0.6;
-      else if (assocJobType.id === 'INSIDE_PAINT') multiplier = 0.5;
-      else if (assocJobType.id === 'OUTER_INSIDE_PAINT') multiplier = 1.35;
-      else if (assocJobType.id === 'DENT_REPAIR') multiplier = 0.4;
-      else if (assocJobType.id === 'PART_REPLACEMENT') multiplier = 0.2;
-
-      const basePrice = assocPanel.defaultPrice || 1800;
-      setAssocRetailPrice(Math.round(basePrice * multiplier));
-      setAssocCars24Price(Math.round(basePrice * multiplier * 0.75));
-      
-      if (assocJobType.id === 'DENT_REPAIR') {
-        setAssocRetailPainter(0);
-        setAssocCars24Painter(0);
-        setAssocRetailDenter(Math.round(basePrice * multiplier * 0.5));
-        setAssocCars24Denter(Math.round(basePrice * multiplier * 0.4));
-      } else {
-        setAssocRetailPainter(Math.round(basePrice * multiplier * 0.4));
-        setAssocCars24Painter(Math.round(basePrice * multiplier * 0.3));
-        setAssocRetailDenter(Math.round(basePrice * multiplier * 0.1));
-        setAssocCars24Denter(Math.round(basePrice * multiplier * 0.08));
-      }
+      setAssocRetailPrice(0);
+      setAssocCars24Price(0);
+      setAssocHours(1);
+      setAssocRetailPainter(0);
+      setAssocCars24Painter(0);
+      setAssocRetailDenter(0);
+      setAssocCars24Denter(0);
       setAssocDesc('');
     }
   }, [assocPanel?.id, assocJobType?.id, standardJobs]);
@@ -575,24 +560,12 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
         j.panelKey === assocPanel.id && 
         (type.paintScope ? j.paintScope === type.paintScope : j.category === type.category)
       );
-      
-      // Calculate default rates for reference if no existing
-      let multiplier = 1.0;
-      if (type.id === 'PARTIAL_PAINT') multiplier = 0.6;
-      else if (type.id === 'INSIDE_PAINT') multiplier = 0.5;
-      else if (type.id === 'OUTER_INSIDE_PAINT') multiplier = 1.35;
-      else if (type.id === 'DENT_REPAIR') multiplier = 0.4;
-      else if (type.id === 'PART_REPLACEMENT') multiplier = 0.2;
-
-      const basePrice = assocPanel.defaultPrice || 1800;
-      const defaultRetail = Math.round(basePrice * multiplier);
-      const defaultCars24 = Math.round(basePrice * multiplier * 0.75);
 
       return {
         type,
         existing,
-        defaultRetail,
-        defaultCars24,
+        defaultRetail: existing ? existing.retailPrice : 0,
+        defaultCars24: existing ? existing.cars24Price : 0,
       };
     });
   }, [assocPanel, standardJobs, STANDARD_JOB_TYPES]);
@@ -906,13 +879,13 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                   </div>
 
                   <div className="grid grid-cols-1 gap-2.5 max-h-[500px] overflow-y-auto pr-1">
-                    {panelTasks.map(({ type, existing, defaultRetail, defaultCars24 }) => {
+                    {panelTasks.map(({ type, existing }) => {
                       const isSelected = assocJobType?.id === type.id;
                       const hasCustom = !!existing;
-                      const displayRetail = hasCustom ? existing.retailPrice : defaultRetail;
-                      const displayCars24 = hasCustom ? existing.cars24Price : defaultCars24;
-                      const displayPainter = hasCustom ? (existing.retailPainterPayout ?? existing.painterPayout) : Math.round(defaultRetail * 0.4);
-                      const displayDenter = hasCustom ? (existing.retailDenterPayout ?? existing.denterPayout) : Math.round(defaultRetail * 0.1);
+                      const displayRetail = hasCustom ? existing.retailPrice : 0;
+                      const displayCars24 = hasCustom ? existing.cars24Price : 0;
+                      const displayPainter = hasCustom ? (existing.retailPainterPayout ?? existing.painterPayout ?? 0) : 0;
+                      const displayDenter = hasCustom ? (existing.retailDenterPayout ?? existing.denterPayout ?? 0) : 0;
 
                       return (
                         <button
@@ -938,11 +911,11 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                             
                             {hasCustom ? (
                               <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-                                ✅ Customized
+                                ✅ Defined
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                                ⚙️ Default
+                              <span className="px-1.5 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-[9px] font-bold text-rose-500 dark:text-rose-400 uppercase tracking-wide">
+                                ❌ Not Set / Deleted
                               </span>
                             )}
                           </div>
@@ -951,13 +924,13 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                             <div>
                               <div className="text-slate-400 text-[9px] uppercase">Retail Price</div>
                               <div className="font-black text-slate-900 dark:text-white font-mono text-xs">
-                                ₹{displayRetail?.toLocaleString()}
+                                {displayRetail > 0 ? `₹${displayRetail.toLocaleString()}` : <span className="text-slate-400 text-[10px] font-normal italic">Not Set (₹0)</span>}
                               </div>
                             </div>
                             <div>
                               <div className="text-slate-400 text-[9px] uppercase">Cars24 Price</div>
                               <div className="font-black text-slate-900 dark:text-white font-mono text-xs">
-                                ₹{displayCars24?.toLocaleString()}
+                                {displayCars24 > 0 ? `₹${displayCars24.toLocaleString()}` : <span className="text-slate-400 text-[10px] font-normal italic">Not Set (₹0)</span>}
                               </div>
                             </div>
                           </div>

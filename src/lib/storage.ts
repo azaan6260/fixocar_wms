@@ -2194,7 +2194,7 @@ export function validateLocalStorageIntegrity(): StorageIntegrityResult {
         if (!Array.isArray(parsed)) {
           issues.push(`Table '${table.tableName}' schema is corrupted (expected Array, got ${typeof parsed})`);
           needsReset = true;
-        } else if (parsed.length === 0 && table.seedData.length > 0) {
+        } else if (parsed.length === 0 && table.seedData.length > 0 && table.key !== STORAGE_KEYS.STANDARD_JOBS) {
           issues.push(`Critical table '${table.tableName}' is empty (0 records)`);
           needsReset = true;
         }
@@ -2685,9 +2685,8 @@ export function getStandardJobs(): StandardJob[] {
   }
   try {
     const parsed = JSON.parse(data);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
-    return INITIAL_STANDARD_JOBS;
+    if (Array.isArray(parsed)) return parsed;
+    return [];
   } catch {
     return INITIAL_STANDARD_JOBS;
   }
@@ -2862,10 +2861,7 @@ export function addStandardJobToJobCard(
 
   const card = cards[cardIndex];
   const stdJobs = getStandardJobs();
-  let stdJob = stdJobs.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId));
-  if (!stdJob) {
-    stdJob = INITIAL_STANDARD_JOBS.find(j => j.id === standardJobId || j.panelKey === standardJobId);
-  }
+  const stdJob = stdJobs.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId));
   if (!stdJob) return null;
 
   // Dual pricing check: Cars24 B2B vs Retail
@@ -2971,10 +2967,7 @@ export function getContractorPayoutsReport(workshopIdFilter?: string): Contracto
       // Contract basis tasks (Denting, Paint, Sublet or marked isContractBasis)
       if (task.isContractBasis || task.category === 'DENTING' || task.category === 'PAINT' || (task.contractorPayout && task.contractorPayout > 0)) {
         // Look up standard job rate if standardJobId or panelKey matches
-        let stdJob = stdJobs.find(j => j.id === task.standardJobId || (j.panelKey && j.panelKey === task.panelKey));
-        if (!stdJob) {
-          stdJob = INITIAL_STANDARD_JOBS.find(j => j.id === task.standardJobId || (j.panelKey && j.panelKey === task.panelKey));
-        }
+        const stdJob = stdJobs.find(j => j.id === task.standardJobId || (j.panelKey && j.panelKey === task.panelKey));
 
         const isCars24 = card.isCars24 || false;
         let stdPayout = 0;
