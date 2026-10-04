@@ -79,6 +79,7 @@ const STORAGE_KEYS = {
   AUTH_USER: 'fixocar_auth_user_v4',
   ACTIVE_WORKSHOP: 'fixocar_active_workshop_v4',
   VEHICLE_PANELS: 'fixocar_vehicle_panels_v4',
+  DELETED_STANDARD_JOB_IDS: 'fixocar_deleted_std_jobs_v4',
 };
 
 // Global active workshop observer context helpers
@@ -2834,18 +2835,56 @@ export function updateStandardJob(id: string, updates: Partial<StandardJob>): St
   return jobs[idx];
 }
 
+export function getDeletedStandardJobIds(): string[] {
+  const raw = localStorage.getItem(STORAGE_KEYS.DELETED_STANDARD_JOB_IDS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function recordDeletedStandardJobId(id: string): void {
+  const current = getDeletedStandardJobIds();
+  if (!current.includes(id)) {
+    current.push(id);
+    localStorage.setItem(STORAGE_KEYS.DELETED_STANDARD_JOB_IDS, JSON.stringify(current));
+  }
+}
+
 export function deleteStandardJob(id: string): void {
   const jobs = getStandardJobs();
+  const target = jobs.find(j => j.id === id);
   const filtered = jobs.filter(j => j.id !== id);
+  
+  recordDeletedStandardJobId(id);
   saveStandardJobs(filtered);
 
   const client = getSupabaseClient();
   if (client) {
+    // Delete by exact ID
     client.from('standard_jobs').delete().eq('id', id).then(({ error }) => {
-      if (error) {
-        console.error('Supabase delete error (standard_jobs):', error);
-      }
+      if (error) console.error('Supabase delete error by id (standard_jobs):', error);
     });
+
+    // Delete by panel_key & paint_scope if present
+    if (target && target.panelKey && target.paintScope) {
+      client.from('standard_jobs').delete()
+        .eq('panel_key', target.panelKey)
+        .eq('paint_scope', target.paintScope)
+        .then(({ error }) => {
+          if (error) console.error('Supabase delete error by panel_key/paint_scope:', error);
+        });
+    }
+
+    // Delete by title if present
+    if (target && target.title) {
+      client.from('standard_jobs').delete().eq('title', target.title).then(({ error }) => {
+        if (error) console.error('Supabase delete error by title:', error);
+      });
+    }
   }
 }
 

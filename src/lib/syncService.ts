@@ -9,7 +9,7 @@ import {
   getJobCardHistoryRecords, saveJobCardHistoryRecords,
   getVehicleCheckIns, saveVehicleCheckIns,
   getCarModels, saveCarModels,
-  getStandardJobs, saveStandardJobs,
+  getStandardJobs, saveStandardJobs, getDeletedStandardJobIds,
   getInventoryItems, saveInventoryItems,
   getDeliveries, saveDeliveries,
   getPurchaseOrders, savePurchaseOrders,
@@ -1056,11 +1056,16 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     }
 
     // 8. STANDARD JOBS (Chunked Fetch)
+    const deletedJobIdsList = getDeletedStandardJobIds();
+    const deletedJobIdsSet = new Set(deletedJobIdsList);
+
     const { data: stdJobs, error: sjErr } = await fetchTableInChunks<any>(client, 'standard_jobs', { chunkSize: 100 });
     if (sjErr) {
       if (sjErr.code === '42P01') missingTables.push('standard_jobs');
     } else if (stdJobs !== null) {
-      const supaStdJobs: StandardJob[] = stdJobs.map((j: any) => ({
+      const supaStdJobs: StandardJob[] = stdJobs
+        .filter((j: any) => !deletedJobIdsSet.has(j.id))
+        .map((j: any) => ({
         id: j.id,
         title: j.title,
         category: j.category || 'REPAIR',
@@ -1092,6 +1097,12 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       }));
 
       saveStandardJobs(supaStdJobs, true);
+
+      if (deletedJobIdsList.length > 0) {
+        client.from('standard_jobs').delete().in('id', deletedJobIdsList).then(({ error }) => {
+          if (error) console.error('Supabase purge deleted standard_jobs error:', error);
+        });
+      }
     }
 
     // 9. JOB CARD HISTORY (Chunked Fetch)
@@ -1605,26 +1616,45 @@ export async function pushLocalDataToSupabase(): Promise<{
 
   // Push Standard Jobs
   const stdJobsList = getStandardJobs();
+  const deletedJobIds = getDeletedStandardJobIds();
+
+  if (deletedJobIds.length > 0) {
+    await client.from('standard_jobs').delete().in('id', deletedJobIds);
+  }
+
+  const { data: remoteJobRows } = await client.from('standard_jobs').select('id');
+  if (remoteJobRows && remoteJobRows.length > 0) {
+    const localIds = new Set(stdJobsList.map(j => j.id));
+    const orphanIds = remoteJobRows
+      .filter((r: any) => !localIds.has(r.id) || deletedJobIds.includes(r.id))
+      .map((r: any) => r.id);
+    if (orphanIds.length > 0) {
+      await client.from('standard_jobs').delete().in('id', orphanIds);
+    }
+  }
+
   let sjPushed = 0;
   for (const j of stdJobsList) {
-    const { error } = await client.from('standard_jobs').upsert({
-      id: j.id,
-      title: j.title,
-      category: j.category,
-      hsn_sac_code: j.hsnSacCode || '998729',
-      default_price: j.retailPrice || 0,
-      retail_price: j.retailPrice || 0,
-      cars24_price: j.cars24Price || 0,
-      is_contract_basis: j.isContractBasis || false,
-      painter_payout: j.painterPayout || j.retailPainterPayout || 0,
-      denter_payout: j.denterPayout || j.retailDenterPayout || 0,
-      contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
-      estimated_hours: j.estimatedHours || 1.0,
-      description: j.description || '',
-      requires_customer_approval: j.requiresCustomerApproval || false,
-    });
-    if (error) errors.push(`Standard Jobs table error (${j.title}): ${error.message}`);
-    else sjPushed++;
+    if (!deletedJobIds.includes(j.id)) {
+      const { error } = await client.from('standard_jobs').upsert({
+        id: j.id,
+        title: j.title,
+        category: j.category,
+        hsn_sac_code: j.hsnSacCode || '998729',
+        default_price: j.retailPrice || 0,
+        retail_price: j.retailPrice || 0,
+        cars24_price: j.cars24Price || 0,
+        is_contract_basis: j.isContractBasis || false,
+        painter_payout: j.painterPayout || j.retailPainterPayout || 0,
+        denter_payout: j.denterPayout || j.retailDenterPayout || 0,
+        contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
+        estimated_hours: j.estimatedHours || 1.0,
+        description: j.description || '',
+        requires_customer_approval: j.requiresCustomerApproval || false,
+      });
+      if (error) errors.push(`Standard Jobs table error (${j.title}): ${error.message}`);
+      else sjPushed++;
+    }
   }
 
   // Push Job Card History
