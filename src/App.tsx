@@ -66,6 +66,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { AppVersionModal } from './components/AppVersionModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { PullToRefresh } from './components/PullToRefresh';
 import { initMobileEnvironment, setupNativeBackButton } from './lib/mobileBridge';
 
 export default function App() {
@@ -111,10 +112,59 @@ export default function App() {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isAppVersionModalOpen, setIsAppVersionModalOpen] = useState(false);
 
+  const handleRefreshAllData = async () => {
+    try {
+      await syncFromSupabase();
+      await processOfflineQueue();
+      setJobCards(getJobCards());
+      setEmployees(getEmployees());
+      setVendors(getVendors());
+    } catch (err) {
+      console.warn('Data refresh failed:', err);
+    }
+  };
+
   useEffect(() => {
     const handlePopState = () => {
       setRoutePath(window.location.pathname.toLowerCase() + window.location.hash.toLowerCase() + window.location.search.toLowerCase());
+      
+      const state = uiStateRef.current;
+      const openModalsInDom = document.querySelectorAll('.fixed.inset-0.z-50, .fixed.inset-0.z-40, [role="dialog"]');
+
+      // 1. Close any active modal or detailed screen first
+      if (state.selectedJobCardId !== null) {
+        setSelectedJobCardId(null);
+      } else if (state.isCreateModalOpen) {
+        setIsCreateModalOpen(false);
+      } else if (state.customerPortalCardId !== null) {
+        setCustomerPortalCardId(null);
+      } else if (state.qcModalCardId !== null) {
+        setQcModalCardId(null);
+      } else if (state.qrModalCardId !== null) {
+        setQrModalCardId(null);
+      } else if (state.isScannerOpen) {
+        setIsScannerOpen(false);
+      } else if (state.isSupabaseModalOpen) {
+        setIsSupabaseModalOpen(false);
+      } else if (state.isAppVersionModalOpen) {
+        setIsAppVersionModalOpen(false);
+      } else if (state.isLoginModalOpen) {
+        setIsLoginModalOpen(false);
+      } else if (openModalsInDom.length > 0) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      }
+      // 2. If no modal is open, but inside WMS and on a sub-tab, return to home dashboard tab
+      else if (state.activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+      }
+      // 3. Otherwise, on home page with no open modals -> close/exit the application
+      else {
+        import('@capacitor/app').then(({ App: CapApp }) => {
+          CapApp.exitApp();
+        }).catch(() => {});
+      }
     };
+
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('hashchange', handlePopState);
     initMobileEnvironment();
@@ -210,16 +260,11 @@ export default function App() {
             // Trigger Escape key event to close nested child modals
             window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
           }
-          // 2. If no modal is open, but inside WMS and not on default 'dashboard' tab, navigate back to 'dashboard' tab
-          else if (state.routePath.includes('wms') && state.activeTab !== 'dashboard') {
+          // 2. If no modal is open, but on a secondary tab, navigate back to 'dashboard' home tab
+          else if (state.activeTab !== 'dashboard') {
             setActiveTab('dashboard');
           }
-          // 3. If no modal is open and on WMS dashboard tab, navigate back to home screen '/'
-          else if (state.routePath.includes('wms')) {
-            window.history.pushState({}, '', '/');
-            setRoutePath('/');
-          }
-          // 4. If already on home screen '/' with no modals open, exit the native application
+          // 3. On home page with no open modals -> close/exit the application!
           else {
             CapApp.exitApp();
           }
@@ -585,19 +630,21 @@ export default function App() {
   // VIEW 2: AUTHENTICATED AS CUSTOMER -> REDESIGNED CUSTOMER DASHBOARD
   if (authUser.userType === 'CUSTOMER') {
     return (
-      <div className="min-h-screen bg-slate-950 font-sans">
-        <CustomerDashboard
-          onLogout={handleLogout}
-        />
-
-        {/* Render Customer Approval Modal if opened */}
-        {activeCardForCustomerPortal && (
-          <CustomerApprovalPortalModal
-            card={activeCardForCustomerPortal}
-            onClose={() => setCustomerPortalCardId(null)}
+      <PullToRefresh onRefresh={handleRefreshAllData}>
+        <div className="min-h-screen bg-slate-950 font-sans">
+          <CustomerDashboard
+            onLogout={handleLogout}
           />
-        )}
-      </div>
+
+          {/* Render Customer Approval Modal if opened */}
+          {activeCardForCustomerPortal && (
+            <CustomerApprovalPortalModal
+              card={activeCardForCustomerPortal}
+              onClose={() => setCustomerPortalCardId(null)}
+            />
+          )}
+        </div>
+      </PullToRefresh>
     );
   }
 
@@ -605,9 +652,10 @@ export default function App() {
   const normalizedTab = normalizeTabId(activeTab);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
-      
-      {/* Global Toast Alert Notifications Container */}
+    <PullToRefresh onRefresh={handleRefreshAllData}>
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 flex flex-col">
+        
+        {/* Global Toast Alert Notifications Container */}
       <ToastContainer onSelectJobCard={(id) => setSelectedJobCardId(id)} />
 
       {/* Top Header Navigation */}
@@ -908,5 +956,6 @@ export default function App() {
       <OfflineIndicator />
 
     </div>
+    </PullToRefresh>
   );
 }
