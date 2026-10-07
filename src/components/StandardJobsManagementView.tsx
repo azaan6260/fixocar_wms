@@ -96,6 +96,8 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   const [assocCars24Denter, setAssocCars24Denter] = useState<number>(150);
   const [assocDesc, setAssocDesc] = useState<string>('');
 
+  const prevAssocKeyRef = React.useRef<string>('');
+
   // Set default panel and job type on load
   useEffect(() => {
     if (panels.length > 0 && !assocPanel) {
@@ -106,38 +108,44 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
     }
   }, [panels, assocPanel, assocJobType, STANDARD_JOB_TYPES]);
 
-  // Sync form values automatically when the selected panel or job type changes!
+  // Sync form values automatically ONLY when the selected panel or job type changes!
   useEffect(() => {
     if (!assocPanel || !assocJobType) return;
-    const panelId = assocPanel.id;
-    const paintScope = assocJobType.paintScope;
-    const category = assocJobType.category;
+    const currentKey = `${assocPanel.id}_${assocJobType.id}`;
 
-    const existing = standardJobs.find(j => 
-      j.panelKey === panelId && 
-      (paintScope ? j.paintScope === paintScope : j.category === category)
-    );
+    if (prevAssocKeyRef.current !== currentKey) {
+      prevAssocKeyRef.current = currentKey;
 
-    if (existing) {
-      setAssocEditingJobId(existing.id);
-      setAssocRetailPrice(existing.retailPrice || 0);
-      setAssocCars24Price(existing.cars24Price || 0);
-      setAssocHours(existing.estimatedHours || 1);
-      setAssocRetailPainter(existing.retailPainterPayout || 0);
-      setAssocRetailDenter(existing.retailDenterPayout || 0);
-      setAssocCars24Painter(existing.cars24PainterPayout || 0);
-      setAssocCars24Denter(existing.cars24DenterPayout || 0);
-      setAssocDesc(existing.description || '');
-    } else {
-      setAssocEditingJobId(null);
-      setAssocRetailPrice(0);
-      setAssocCars24Price(0);
-      setAssocHours(1);
-      setAssocRetailPainter(0);
-      setAssocCars24Painter(0);
-      setAssocRetailDenter(0);
-      setAssocCars24Denter(0);
-      setAssocDesc('');
+      const panelId = assocPanel.id;
+      const paintScope = assocJobType.paintScope;
+      const category = assocJobType.category;
+
+      const existing = standardJobs.find(j => 
+        j.panelKey === panelId && 
+        (paintScope ? j.paintScope === paintScope : j.category === category)
+      );
+
+      if (existing) {
+        setAssocEditingJobId(existing.id);
+        setAssocRetailPrice(existing.retailPrice || 0);
+        setAssocCars24Price(existing.cars24Price || 0);
+        setAssocHours(existing.estimatedHours || 1);
+        setAssocRetailPainter(existing.retailPainterPayout || 0);
+        setAssocRetailDenter(existing.retailDenterPayout || 0);
+        setAssocCars24Painter(existing.cars24PainterPayout || 0);
+        setAssocCars24Denter(existing.cars24DenterPayout || 0);
+        setAssocDesc(existing.description || '');
+      } else {
+        setAssocEditingJobId(null);
+        setAssocRetailPrice(0);
+        setAssocCars24Price(0);
+        setAssocHours(1);
+        setAssocRetailPainter(0);
+        setAssocCars24Painter(0);
+        setAssocRetailDenter(0);
+        setAssocCars24Denter(0);
+        setAssocDesc('');
+      }
     }
   }, [assocPanel?.id, assocJobType?.id, standardJobs]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1043,12 +1051,15 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
                               <button
                                 onClick={() => {
                                   setAssocEditingJobId(job.id);
-                                  setAssocPanel(panels.find(p => p.id === job.panelKey) || panels[0]);
-                                  setAssocJobType(
-                                    STANDARD_JOB_TYPES.find(
-                                      t => t.paintScope === job.paintScope || (t.category === job.category && !t.paintScope)
-                                    ) || STANDARD_JOB_TYPES[0]
-                                  );
+                                  const matchedPanel = panels.find(p => p.id === job.panelKey) || panels[0];
+                                  const matchedType = STANDARD_JOB_TYPES.find(
+                                    t => t.paintScope === job.paintScope || (t.category === job.category && !t.paintScope)
+                                  ) || STANDARD_JOB_TYPES[0];
+
+                                  prevAssocKeyRef.current = `${matchedPanel.id}_${matchedType.id}`;
+
+                                  setAssocPanel(matchedPanel);
+                                  setAssocJobType(matchedType);
                                   setAssocRetailPrice(job.retailPrice || 0);
                                   setAssocCars24Price(job.cars24Price || 0);
                                   setAssocHours(job.estimatedHours || 1);
