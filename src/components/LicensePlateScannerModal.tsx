@@ -186,32 +186,12 @@ export function LicensePlateScannerModal({
         });
         saveRecentScan(cleanedPlate);
       } else {
-        // Fallback OCR: Extract registration plate pattern or generate test plate
-        const randomPlate = 'MH12AB' + Math.floor(1000 + Math.random() * 9000);
-        const fallbackPlate = data?.plateNumber && data.plateNumber !== 'UNKNOWN' ? data.plateNumber : randomPlate;
-        
-        setScanResult(fallbackPlate);
-        setManualPlate(fallbackPlate);
-        setScanMeta({
-          vehicleType: 'Scanned Vehicle',
-          vehicleColor: 'Silver',
-          confidence: 'medium',
-        });
-        saveRecentScan(fallbackPlate);
-        setErrorMessage('Image processed. Confirm or edit the detected registration plate below.');
+        const errorText = data?.error || 'Could not clearly recognize the license plate from this photo. Please try again with better lighting, adjust camera angle, or type the plate number manually.';
+        setErrorMessage(errorText);
       }
-    } catch (err) {
-      console.warn('OCR Request Error, using fallback:', err);
-      const fallbackPlate = 'MH12AB' + Math.floor(1000 + Math.random() * 9000);
-      setScanResult(fallbackPlate);
-      setManualPlate(fallbackPlate);
-      setScanMeta({
-        vehicleType: 'Scanned Vehicle',
-        vehicleColor: 'Grey',
-        confidence: 'medium',
-      });
-      saveRecentScan(fallbackPlate);
-      setErrorMessage('Image processed. Confirm or edit the registration plate below.');
+    } catch (err: any) {
+      console.error('OCR Request Error:', err);
+      setErrorMessage('A network error occurred while scanning. Please check your internet connection or type the plate number manually.');
     } finally {
       setIsScanning(false);
     }
