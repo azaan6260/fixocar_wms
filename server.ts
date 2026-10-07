@@ -479,7 +479,7 @@ Rules:
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-flash-latest',
         contents: [
           {
             role: 'user',
@@ -509,10 +509,11 @@ Rules:
             required: ['detected', 'plateNumber']
           }
         }
-      }).catch(async () => {
-        // Fallback model attempt if 2.5 fails
+      }).catch(async (primaryError) => {
+        console.warn('Primary scan model failed, trying fallback gemini-3.8-flash:', primaryError);
+        // Fallback model attempt if primary fails
         return await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-3.8-flash',
           contents: [
             {
               role: 'user',
@@ -522,7 +523,10 @@ Rules:
               ]
             }
           ]
-        }).catch(() => null);
+        }).catch((fallbackError) => {
+          console.error('OCR fallback model failed:', fallbackError);
+          return null;
+        });
       });
 
       const rawText = aiResponse.text?.trim() || '';

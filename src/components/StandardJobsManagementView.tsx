@@ -111,43 +111,38 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   // Sync form values automatically ONLY when the selected panel or job type changes!
   useEffect(() => {
     if (!assocPanel || !assocJobType) return;
-    const currentKey = `${assocPanel.id}_${assocJobType.id}`;
 
-    if (prevAssocKeyRef.current !== currentKey) {
-      prevAssocKeyRef.current = currentKey;
+    const panelId = assocPanel.id;
+    const paintScope = assocJobType.paintScope;
+    const category = assocJobType.category;
 
-      const panelId = assocPanel.id;
-      const paintScope = assocJobType.paintScope;
-      const category = assocJobType.category;
+    const existing = standardJobs.find(j => 
+      j.panelKey === panelId && 
+      (paintScope ? j.paintScope === paintScope : j.category === category)
+    );
 
-      const existing = standardJobs.find(j => 
-        j.panelKey === panelId && 
-        (paintScope ? j.paintScope === paintScope : j.category === category)
-      );
-
-      if (existing) {
-        setAssocEditingJobId(existing.id);
-        setAssocRetailPrice(existing.retailPrice || 0);
-        setAssocCars24Price(existing.cars24Price || 0);
-        setAssocHours(existing.estimatedHours || 1);
-        setAssocRetailPainter(existing.retailPainterPayout || 0);
-        setAssocRetailDenter(existing.retailDenterPayout || 0);
-        setAssocCars24Painter(existing.cars24PainterPayout || 0);
-        setAssocCars24Denter(existing.cars24DenterPayout || 0);
-        setAssocDesc(existing.description || '');
-      } else {
-        setAssocEditingJobId(null);
-        setAssocRetailPrice(0);
-        setAssocCars24Price(0);
-        setAssocHours(1);
-        setAssocRetailPainter(0);
-        setAssocCars24Painter(0);
-        setAssocRetailDenter(0);
-        setAssocCars24Denter(0);
-        setAssocDesc('');
-      }
+    if (existing) {
+      setAssocEditingJobId(existing.id);
+      setAssocRetailPrice(existing.retailPrice || 0);
+      setAssocCars24Price(existing.cars24Price || 0);
+      setAssocHours(existing.estimatedHours || 1);
+      setAssocRetailPainter(existing.retailPainterPayout || 0);
+      setAssocRetailDenter(existing.retailDenterPayout || 0);
+      setAssocCars24Painter(existing.cars24PainterPayout || 0);
+      setAssocCars24Denter(existing.cars24DenterPayout || 0);
+      setAssocDesc(existing.description || '');
+    } else {
+      setAssocEditingJobId(null);
+      setAssocRetailPrice(0);
+      setAssocCars24Price(0);
+      setAssocHours(1);
+      setAssocRetailPainter(0);
+      setAssocCars24Painter(0);
+      setAssocRetailDenter(0);
+      setAssocCars24Denter(0);
+      setAssocDesc('');
     }
-  }, [assocPanel?.id, assocJobType?.id, standardJobs]);
+  }, [assocPanel?.id, assocJobType?.id]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCat, setFilterCat] = useState<string>('ALL');
 
