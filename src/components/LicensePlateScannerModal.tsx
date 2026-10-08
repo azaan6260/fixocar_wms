@@ -13,8 +13,10 @@ import {
   History, 
   ScanLine, 
   ChevronRight, 
-  ImageIcon 
+  ImageIcon,
+  Settings
 } from 'lucide-react';
+import { isNativeMobile, getApiUrl } from '../lib/mobileBridge';
 
 interface LicensePlateScannerModalProps {
   isOpen: boolean;
@@ -48,6 +50,10 @@ export function LicensePlateScannerModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [recentScans, setRecentScans] = useState<string[]>([]);
+  const [serverUrl, setServerUrl] = useState(() => {
+    return localStorage.getItem('autocraft_api_server_url') || '';
+  });
+  const [showServerConfig, setShowServerConfig] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,8 +172,9 @@ export function LicensePlateScannerModal({
     setScanResult(null);
     setScanMeta(null);
 
+    const apiPath = getApiUrl('/api/scan-plate');
     try {
-      const response = await fetch('/api/scan-plate', {
+      const response = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64 }),
@@ -191,7 +198,12 @@ export function LicensePlateScannerModal({
       }
     } catch (err: any) {
       console.error('OCR Request Error:', err);
-      setErrorMessage('A network error occurred while scanning. Please check your internet connection or type the plate number manually.');
+      let errMsg = 'A network error occurred while scanning. Please check your internet connection or type the plate number manually.';
+      if (isNativeMobile()) {
+        errMsg = `Could not connect to the API Server. If you are running the APK, make sure your Central API Server URL is correctly configured and accessible. Current target: ${apiPath}`;
+        setShowServerConfig(true);
+      }
+      setErrorMessage(errMsg);
     } finally {
       setIsScanning(false);
     }
@@ -269,13 +281,28 @@ export function LicensePlateScannerModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowServerConfig(!showServerConfig)}
+              title="API Server Settings"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                showServerConfig 
+                  ? 'bg-amber-500 text-slate-950' 
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Selection */}
@@ -336,6 +363,49 @@ export function LicensePlateScannerModal({
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+          {showServerConfig && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
+                <Settings className="w-4 h-4 text-amber-500 animate-spin-slow" />
+                <span>Central API Server Settings (Critical for APK Scanner)</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                Because native apps run on device localhost, relative paths like <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">/api/scan-plate</code> fail.
+                Enter your live deployed Vercel domain or your computer's local IP address during development.
+              </p>
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold uppercase text-slate-500">API Backend Server URL</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    placeholder="e.g. https://autocraft-workshop.vercel.app or http://192.168.1.100:3000"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs text-slate-900 dark:text-white outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleaned = serverUrl.trim();
+                      if (cleaned) {
+                        localStorage.setItem('autocraft_api_server_url', cleaned);
+                        alert(`API Server URL saved: ${cleaned}`);
+                        setShowServerConfig(false);
+                      } else {
+                        localStorage.removeItem('autocraft_api_server_url');
+                        alert('Reset to relative paths fallback.');
+                        setShowServerConfig(false);
+                      }
+                    }}
+                    className="px-4 py-2 bg-amber-500 text-slate-950 font-black rounded-xl hover:bg-amber-400 transition-all text-xs"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'camera' ? (
             <div className="space-y-3">
               {cameraError ? (

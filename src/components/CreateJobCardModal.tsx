@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop, FuelType } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
+import { getApiUrl } from '../lib/mobileBridge';
 import { createJobCard, getActiveJobCardForRegNo, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, getAuthUser } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
@@ -369,7 +370,7 @@ export function CreateJobCardModal({
     setAiError(null);
 
     try {
-      const res = await fetch('/api/ai-diagnosis', {
+      const res = await fetch(getApiUrl('/api/ai-diagnosis'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

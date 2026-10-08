@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Employee, AuthUser } from '../types';
+import { getApiUrl } from './mobileBridge';
 
 // Shadow localStorage with a safe fault-tolerant proxy wrapper to prevent Security/Quota exceptions on mobile devices
 const inMemoryStore = new Map<string, string>();
@@ -114,7 +115,7 @@ export async function fetchServerSupabaseConfig(): Promise<{
   supabaseServiceKey: string;
 }> {
   try {
-    const res = await fetch(`/api/supabase/config?_t=${Date.now()}`, {
+    const res = await fetch(getApiUrl(`/api/supabase/config?_t=${Date.now()}`), {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -167,7 +168,7 @@ export async function saveSupabaseConfig(url: string, anonKey: string, serviceKe
 
   // Sync to backend server globally so mobile & laptop share credentials
   try {
-    const res = await fetch('/api/supabase/config', {
+    const res = await fetch(getApiUrl('/api/supabase/config'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -190,7 +191,7 @@ export function clearSupabaseConfig() {
   localStorage.removeItem(STORAGE_KEY_SERVICE_ROLE);
   supabaseInstance = null;
 
-  fetch('/api/supabase/config', {
+  fetch(getApiUrl('/api/supabase/config'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -292,7 +293,7 @@ export async function signUpAndSyncEmployee(
 ): Promise<{ success: boolean; user?: any; employee?: Employee; message?: string; error?: string }> {
   const config = getStoredSupabaseConfig();
   try {
-    const res = await fetch('/api/supabase/auth/signup', {
+    const res = await fetch(getApiUrl('/api/supabase/auth/signup'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -322,7 +323,7 @@ export async function syncEmployeeToSupabaseAuth(
   const config = getStoredSupabaseConfig();
   
   try {
-    const res = await fetch('/api/supabase/admin/sync-user', {
+    const res = await fetch(getApiUrl('/api/supabase/admin/sync-user'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

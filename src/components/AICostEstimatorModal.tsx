@@ -18,6 +18,7 @@ import {
   getVendors,
   dispatchToastNotification 
 } from '../lib/storage';
+import { getApiUrl } from '../lib/mobileBridge';
 import { FUEL_TYPE_CONFIG } from '../lib/carModelsData';
 import { 
   Sparkles, 
@@ -210,7 +211,7 @@ export function AICostEstimatorModal({
     };
 
     try {
-      const res = await fetch('/api/ai-cost-estimate', {
+      const res = await fetch(getApiUrl('/api/ai-cost-estimate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

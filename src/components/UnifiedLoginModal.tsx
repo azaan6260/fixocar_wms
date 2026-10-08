@@ -6,6 +6,7 @@ import { AuthUser } from '../types';
 import { authenticateUser, saveAuthUser, getCities, getEmployees, saveEmployees } from '../lib/storage';
 import { authenticateViaSupabase, fetchServerSupabaseConfig, getStoredSupabaseConfig } from '../lib/supabaseClient';
 import { syncFromSupabase } from '../lib/syncService';
+import { getApiUrl } from '../lib/mobileBridge';
 import { 
   getSavedBiometricBinding, 
   authenticateWithBiometrics, 
@@ -118,7 +119,7 @@ export const UnifiedLoginModal: React.FC<UnifiedLoginModalProps> = ({
         setSyncStatus('Connecting to secure authentication gateway...');
         // Step 1: Try central server authentication endpoint first
         try {
-          const centralRes = await fetch('/api/central/auth/login', {
+          const centralRes = await fetch(getApiUrl('/api/central/auth/login'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ identifier: cleanId, password: cleanPass })

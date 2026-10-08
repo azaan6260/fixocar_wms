@@ -150,3 +150,34 @@ export async function initMobileEnvironment(): Promise<void> {
     }, 1500);
   }
 }
+
+/**
+ * Resolves relative API paths to absolute URLs when running inside a native mobile container (Capacitor).
+ * This ensures that fetch('/api/...') requests target the deployed backend server instead of failing on localhost.
+ */
+export function getApiUrl(path: string): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  // Try to read custom API server URL from localStorage
+  if (typeof window !== 'undefined') {
+    const customUrl = localStorage.getItem('autocraft_api_server_url');
+    if (customUrl && customUrl.trim()) {
+      const cleanBase = customUrl.trim().endsWith('/') ? customUrl.trim().slice(0, -1) : customUrl.trim();
+      return `${cleanBase}${cleanPath}`;
+    }
+
+    // On web preview / production, use the current origin
+    const origin = window.location.origin;
+    if (origin && !origin.includes('localhost:5173') && !origin.startsWith('capacitor://') && !origin.startsWith('https://localhost')) {
+      return `${origin}${cleanPath}`;
+    }
+  }
+
+  // Fallback default
+  return cleanPath;
+}

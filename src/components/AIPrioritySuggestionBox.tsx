@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { JobCard } from '../types';
+import { getApiUrl } from '../lib/mobileBridge';
 import { 
   Sparkles, 
   Flame, 
@@ -82,7 +83,7 @@ export function AIPrioritySuggestionBox({
     };
 
     try {
-      const res = await fetch('/api/ai-priority-suggestion', {
+      const res = await fetch(getApiUrl('/api/ai-priority-suggestion'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobContext }),

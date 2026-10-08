@@ -40,6 +40,9 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const [url, setUrl] = useState(config.supabaseUrl);
   const [anonKey, setAnonKey] = useState(config.supabaseAnonKey);
   const [serviceKey, setServiceKey] = useState(config.supabaseServiceKey || '');
+  const [apiServerUrl, setApiServerUrl] = useState(() => {
+    return localStorage.getItem('autocraft_api_server_url') || '';
+  });
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'config' | 'diagnostic' | 'schema'>('config');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
@@ -53,7 +56,12 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     saveSupabaseConfig(url, anonKey, serviceKey);
-    alert('Supabase credentials saved! Connecting to live Supabase database & Auth admin sync.');
+    if (apiServerUrl.trim()) {
+      localStorage.setItem('autocraft_api_server_url', apiServerUrl.trim());
+    } else {
+      localStorage.removeItem('autocraft_api_server_url');
+    }
+    alert('Credentials and API Server settings saved successfully!');
     onClose();
   };
 
@@ -218,6 +226,23 @@ export function SupabaseSettingsModal({ isOpen, onClose }: SupabaseSettingsModal
                 />
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   Find this in <strong>Supabase Dashboard -&gt; Project Settings -&gt; API -&gt; Project API keys -&gt; service_role (secret)</strong>.
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-amber-500/20 rounded-2xl space-y-3">
+                <label className="block font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                  <span>Central API Backend Server URL (Critical for Mobile Scanner / APK)</span>
+                  <span className="text-[10px] text-amber-500 font-bold">Capacitor Native Only</span>
+                </label>
+                <input
+                  type="text"
+                  value={apiServerUrl}
+                  onChange={(e) => setApiServerUrl(e.target.value)}
+                  placeholder="e.g., https://autocraft-workshop.vercel.app"
+                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
+                />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                  Since relative fetch paths like <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">/api/scan-plate</code> fail inside Capacitor APK containers, providing your live server URL allows the mobile scanner, AI estimators, and sync systems to reach your backend. Leave blank to default to browser relative paths.
                 </p>
               </div>
 
