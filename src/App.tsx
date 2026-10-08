@@ -293,7 +293,7 @@ export default function App() {
     
     // Employee view
     const activeCard = jobCards.find(j => 
-      j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg && 
+      j.vehicle?.registrationNumber?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg && 
       j.status !== 'CLOSED' && j.status !== 'DELIVERED'
     );
 
@@ -304,7 +304,7 @@ export default function App() {
 
     // No active card. Any historical ones?
     const historicalCards = jobCards.filter(j => 
-      j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg
+      j.vehicle?.registrationNumber?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg
     );
 
     if (historicalCards.length > 0) {

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 export const config = {
   api: {
@@ -64,6 +64,7 @@ If no license plate text is readable or present, return:
   "error": "No clear license plate found in image"
 }
 Rules:
+- Indian license plates typically follow the format: 2 letters (State Code), 2 digits (RTO Code), 1 or 2 letters (unique series), and 4 digits (Registration number). Ensure you extract and normalize to this standard format (e.g., MH12AB1234) if it fits.
 - Strip away header words like "IND", country/state names, slogans.
 - Format plateNumber as uppercase alphanumeric characters only without hyphens or spaces.`;
 
@@ -71,38 +72,53 @@ Rules:
     const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
-    const aiResponse = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType,
-                data: base64Data,
+    const runOcr = async (modelName: string) => {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64Data,
+                },
               },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            detected: { type: 'BOOLEAN' },
-            plateNumber: { type: 'STRING' },
-            confidence: { type: 'STRING' },
-            vehicleType: { type: 'STRING' },
-            vehicleColor: { type: 'STRING' },
-            error: { type: 'STRING' }
+            ],
           },
-          required: ['detected', 'plateNumber']
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              detected: { type: Type.BOOLEAN },
+              plateNumber: { type: Type.STRING },
+              confidence: { type: Type.STRING },
+              vehicleType: { type: Type.STRING },
+              vehicleColor: { type: Type.STRING },
+              error: { type: Type.STRING }
+            },
+            required: ['detected', 'plateNumber']
+          }
         }
+      });
+    };
+
+    let aiResponse;
+    try {
+      aiResponse = await runOcr('gemini-flash-latest');
+    } catch (primaryError) {
+      console.warn('Primary scan model failed, trying fallback gemini-3.8-flash:', primaryError);
+      try {
+        aiResponse = await runOcr('gemini-3.8-flash');
+      } catch (fallbackError) {
+        console.error('OCR fallback model failed:', fallbackError);
+        throw fallbackError;
       }
-    });
+    }
 
     const rawText = aiResponse.text || '';
     let parsed: any = null;
@@ -112,15 +128,18 @@ Rules:
     let confidence = 'high';
 
     try {
-      parsed = JSON.parse(rawText);
-      if (parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
-        detectedPlate = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        vehicleType = parsed.vehicleType || '';
-        vehicleColor = parsed.vehicleColor || '';
-        confidence = parsed.confidence || 'high';
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
+          detectedPlate = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          vehicleType = parsed.vehicleType || '';
+          vehicleColor = parsed.vehicleColor || '';
+          confidence = parsed.confidence || 'high';
+        }
       }
     } catch (e) {
-      // Fallback regex parsing
+      console.warn('Failed to parse JSON response:', e);
     }
 
     if (!detectedPlate || detectedPlate.length < 3) {
@@ -128,7 +147,11 @@ Rules:
       if (matches) {
         for (const m of matches) {
           const clean = m.toUpperCase();
-          if (!['UNKNOWN', 'DETECTED', 'LICENSE', 'PLATE', 'NUMBER', 'TRUE', 'FALSE', 'IMAGE'].includes(clean)) {
+          const excludeList = ['UNKNOWN', 'DETECTED', 'LICENSE', 'PLATE', 'NUMBER', 'TRUE', 'FALSE', 'IMAGE', 'HATCHBACK', 'SEDAN', 'SUV', 'WHITE', 'BLACK', 'GREY', 'SILVER', 'RED', 'BLUE', 'CONFIDENCE', 'HIGH', 'MEDIUM', 'LOW'];
+          const hasLetters = /[A-Z]/i.test(clean);
+          const hasDigits = /[0-9]/.test(clean);
+
+          if (hasLetters && hasDigits && !excludeList.includes(clean)) {
             detectedPlate = clean;
             confidence = 'medium';
             break;

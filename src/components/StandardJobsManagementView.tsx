@@ -112,6 +112,13 @@ export function StandardJobsManagementView({ currentRole }: StandardJobsManageme
   useEffect(() => {
     if (!assocPanel || !assocJobType) return;
 
+    const currentKey = `${assocPanel.id}_${assocJobType.id}`;
+    if (currentKey === prevAssocKeyRef.current) {
+      // If the selected panel & job type combination has not changed, do not overwrite the user's edits!
+      return;
+    }
+    prevAssocKeyRef.current = currentKey;
+
     const panelId = assocPanel.id;
     const paintScope = assocJobType.paintScope;
     const category = assocJobType.category;

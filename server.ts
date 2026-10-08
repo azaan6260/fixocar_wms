@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
 // Server-side persistent Supabase config file path
@@ -471,6 +471,7 @@ If no license plate text is readable or present, return:
   "error": "No clear license plate found in image"
 }
 Rules:
+- Indian license plates typically follow the format: 2 letters (State Code), 2 digits (RTO Code), 1 or 2 letters (unique series), and 4 digits (Registration number). Ensure you extract and normalize to this standard format (e.g., MH12AB1234) if it fits.
 - Strip away header words like "IND", country/state names, slogans.
 - Format plateNumber as uppercase alphanumeric characters only without hyphens or spaces.`;
 
@@ -478,85 +479,86 @@ Rules:
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
       const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
-      const aiResponse = await ai.models.generateContent({
-        model: 'gemini-flash-latest',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType
-                }
-              }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              detected: { type: 'BOOLEAN' },
-              plateNumber: { type: 'STRING' },
-              confidence: { type: 'STRING' },
-              vehicleType: { type: 'STRING' },
-              vehicleColor: { type: 'STRING' },
-              error: { type: 'STRING' }
-            },
-            required: ['detected', 'plateNumber']
-          }
-        }
-      }).catch(async (primaryError) => {
-        console.warn('Primary scan model failed, trying fallback gemini-3.8-flash:', primaryError);
-        // Fallback model attempt if primary fails
+      const runOcr = async (modelName: string) => {
         return await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: modelName,
           contents: [
             {
               role: 'user',
               parts: [
                 { text: prompt },
-                { inlineData: { data: base64Data, mimeType } }
-              ]
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                detected: { type: Type.BOOLEAN },
+                plateNumber: { type: Type.STRING },
+                confidence: { type: Type.STRING },
+                vehicleType: { type: Type.STRING },
+                vehicleColor: { type: Type.STRING },
+                error: { type: Type.STRING }
+              },
+              required: ['detected', 'plateNumber']
             }
-          ]
-        }).catch((fallbackError) => {
-          console.error('OCR fallback model failed:', fallbackError);
-          return null;
+          }
         });
-      });
+      };
 
-      const rawText = aiResponse.text?.trim() || '';
+      let aiResponse;
+      try {
+        aiResponse = await runOcr('gemini-flash-latest');
+      } catch (primaryError) {
+        console.warn('Primary scan model failed, trying fallback gemini-3.8-flash:', primaryError);
+        try {
+          aiResponse = await runOcr('gemini-3.8-flash');
+        } catch (fallbackError) {
+          console.error('OCR fallback model failed:', fallbackError);
+          throw fallbackError;
+        }
+      }
+
+      const rawText = aiResponse.text || '';
+      let parsed: any = null;
       let detectedPlate = '';
-      let confidence = 'high';
       let vehicleType = '';
       let vehicleColor = '';
+      let confidence = 'high';
 
       try {
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.detected && parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
+          parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.plateNumber && parsed.plateNumber !== 'UNKNOWN') {
             detectedPlate = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            confidence = parsed.confidence || 'high';
             vehicleType = parsed.vehicleType || '';
             vehicleColor = parsed.vehicleColor || '';
+            confidence = parsed.confidence || 'high';
           }
         }
       } catch (e) {
-        // Fallback parsing if needed
+        console.warn('Failed to parse JSON response:', e);
       }
 
       if (!detectedPlate || detectedPlate.length < 3) {
-        // Regex fallback to extract alphanumeric string of length 4 to 12
         const matches = rawText.match(/[A-Z0-9]{4,12}/gi);
         if (matches) {
           for (const m of matches) {
             const clean = m.toUpperCase();
-            if (!['UNKNOWN', 'DETECTED', 'LICENSE', 'PLATE', 'NUMBER', 'TRUE', 'FALSE', 'IMAGE'].includes(clean)) {
+            const excludeList = ['UNKNOWN', 'DETECTED', 'LICENSE', 'PLATE', 'NUMBER', 'TRUE', 'FALSE', 'IMAGE', 'HATCHBACK', 'SEDAN', 'SUV', 'WHITE', 'BLACK', 'GREY', 'SILVER', 'RED', 'BLUE', 'CONFIDENCE', 'HIGH', 'MEDIUM', 'LOW'];
+            const hasLetters = /[A-Z]/i.test(clean);
+            const hasDigits = /[0-9]/.test(clean);
+
+            if (hasLetters && hasDigits && !excludeList.includes(clean)) {
               detectedPlate = clean;
               confidence = 'medium';
               break;
@@ -577,7 +579,7 @@ Rules:
 
       return res.json({ 
         success: false, 
-        error: 'Could not clearly detect a valid vehicle registration plate from this image. Please adjust camera or type plate manually.' 
+        error: parsed?.error || 'Could not clearly detect a valid vehicle registration plate from this image. Please adjust camera or type plate manually.' 
       });
     } catch (err: any) {
       console.error('Gemini AI License Plate Scan Error:', err);
@@ -1981,39 +1983,60 @@ Return valid JSON ONLY.`;
         }
 
         // Standard Jobs (with ALL the new fields!)
-        if (Array.isArray(standardJobs) && standardJobs.length > 0) {
-          for (const j of standardJobs) {
-            client.from('standard_jobs').upsert({
-              id: j.id,
-              title: j.title,
-              category: j.category,
-              hsn_sac_code: j.hsnSacCode || '998729',
-              default_price: j.retailPrice || 0,
-              retail_price: j.retailPrice || 0,
-              cars24_price: j.cars24Price || 0,
-              is_contract_basis: j.isContractBasis || false,
-              painter_payout: j.painterPayout || j.retailPainterPayout || 0,
-              denter_payout: j.denterPayout || j.retailDenterPayout || 0,
-              contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
-              estimated_hours: j.estimatedHours || 1.0,
-              description: j.description || '',
-              requires_customer_approval: j.requiresCustomerApproval || false,
-              panel_key: j.panelKey,
-              panel_name_en: j.panelNameEn,
-              paint_scope: j.paintScope,
-              retail_partial_price: j.retailPartialPrice || 0,
-              cars24_partial_price: j.cars24PartialPrice || 0,
-              retail_inside_price: j.retailInsidePrice || 0,
-              cars24_inside_price: j.cars24InsidePrice || 0,
-              retail_full_outer_inside_price: j.retailFullOuterInsidePrice || 0,
-              cars24_full_outer_inside_price: j.cars24FullOuterInsidePrice || 0,
-              retail_painter_payout: j.retailPainterPayout || 0,
-              retail_denter_payout: j.retailDenterPayout || 0,
-              retail_contractor_payout: j.retailContractorPayout || 0,
-              cars24_painter_payout: j.cars24PainterPayout || 0,
-              cars24_denter_payout: j.cars24DenterPayout || 0,
-              cars24_contractor_payout: j.cars24ContractorPayout || 0
-            }).then(() => {}, () => {});
+        if (Array.isArray(standardJobs)) {
+          client.from('standard_jobs').select('id').then(
+            async ({ data: remoteJobs }) => {
+              if (remoteJobs && remoteJobs.length > 0) {
+                const incomingIds = new Set(standardJobs.map(j => j.id));
+                const orphanIds = remoteJobs
+                  .map((r: any) => r.id)
+                  .filter((id: string) => !incomingIds.has(id));
+                
+                if (orphanIds.length > 0) {
+                  console.log(`[CENTRAL_STORE] Purging ${orphanIds.length} deleted standard jobs from Supabase:`, orphanIds);
+                  await client.from('standard_jobs').delete().in('id', orphanIds);
+                }
+              }
+            },
+            (err) => {
+              console.error('[CENTRAL_STORE] Failed to query existing standard jobs for orphan cleanup:', err);
+            }
+          );
+
+          if (standardJobs.length > 0) {
+            for (const j of standardJobs) {
+              client.from('standard_jobs').upsert({
+                id: j.id,
+                title: j.title,
+                category: j.category,
+                hsn_sac_code: j.hsnSacCode || '998729',
+                default_price: j.retailPrice || 0,
+                retail_price: j.retailPrice || 0,
+                cars24_price: j.cars24Price || 0,
+                is_contract_basis: j.isContractBasis || false,
+                painter_payout: j.painterPayout || j.retailPainterPayout || 0,
+                denter_payout: j.denterPayout || j.retailDenterPayout || 0,
+                contractor_payout: j.contractorPayout || j.retailContractorPayout || 0,
+                estimated_hours: j.estimatedHours || 1.0,
+                description: j.description || '',
+                requires_customer_approval: j.requiresCustomerApproval || false,
+                panel_key: j.panelKey,
+                panel_name_en: j.panelNameEn,
+                paint_scope: j.paintScope,
+                retail_partial_price: j.retailPartialPrice || 0,
+                cars24_partial_price: j.cars24PartialPrice || 0,
+                retail_inside_price: j.retailInsidePrice || 0,
+                cars24_inside_price: j.cars24InsidePrice || 0,
+                retail_full_outer_inside_price: j.retailFullOuterInsidePrice || 0,
+                cars24_full_outer_inside_price: j.cars24FullOuterInsidePrice || 0,
+                retail_painter_payout: j.retailPainterPayout || 0,
+                retail_denter_payout: j.retailDenterPayout || 0,
+                retail_contractor_payout: j.retailContractorPayout || 0,
+                cars24_painter_payout: j.cars24PainterPayout || 0,
+                cars24_denter_payout: j.cars24DenterPayout || 0,
+                cars24_contractor_payout: j.cars24ContractorPayout || 0
+              }).then(() => {}, () => {});
+            }
           }
         }
 
