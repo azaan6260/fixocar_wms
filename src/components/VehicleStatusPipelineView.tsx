@@ -693,13 +693,47 @@ export function VehicleStatusPipelineView({
                             </div>
                           </div>
 
-                          {/* Sublet / Alert Flags */}
-                          {hasSublet && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                              <Building2 className="w-3 h-3" />
-                              Sublet Work
-                            </span>
-                          )}
+                          {/* Assigned Technicians Strip */}
+                          {(() => {
+                            const techSet = new Set<string>();
+                            card.tasks.forEach(t => {
+                              if (t.assignedPainterName) techSet.add(`🎨 ${t.assignedPainterName}`);
+                              if (t.assignedDenterName) techSet.add(`🔨 ${t.assignedDenterName}`);
+                              if (t.assignedEmployeeName && t.assignedEmployeeName !== t.assignedPainterName && t.assignedEmployeeName !== t.assignedDenterName) {
+                                techSet.add(`🔧 ${t.assignedEmployeeName}`);
+                              }
+                            });
+                            const techs = Array.from(techSet);
+                            const unassigned = card.tasks.filter(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId).length;
+                            return (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {techs.slice(0, 2).map((label, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold truncate max-w-[130px]"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                                {techs.length > 2 && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold">
+                                    +{techs.length - 2}
+                                  </span>
+                                )}
+                                {unassigned > 0 && card.status !== 'DELIVERED' && card.status !== 'CLOSED' && (
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+                                    {unassigned} Unallotted
+                                  </span>
+                                )}
+                                {hasSublet && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                    <Building2 className="w-2.5 h-2.5" />
+                                    Sublet
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Card Footer Actions & Bill */}
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
@@ -720,12 +754,39 @@ export function VehicleStatusPipelineView({
                                 <PackageCheck className="w-3.5 h-3.5" />
                               </button>
 
+                              {/* Quick 1-Click Next Stage Button */}
+                              {(() => {
+                                const nextMap: Partial<Record<JobCardStatus, { status: JobCardStatus; label: string }>> = {
+                                  CHECKED_IN: { status: 'ALLOTTED', label: 'Allot' },
+                                  INSPECTED: { status: 'ALLOTTED', label: 'Allot' },
+                                  AWAITING_APPROVAL: { status: 'IN_PROGRESS', label: 'Start WIP' },
+                                  ALLOTTED: { status: 'IN_PROGRESS', label: 'Start WIP' },
+                                  IN_PROGRESS: { status: 'PDI_QC', label: 'To QC' },
+                                  WAITING_PARTS: { status: 'IN_PROGRESS', label: 'Resume' },
+                                  SUBLET_WORK: { status: 'IN_PROGRESS', label: 'Resume' },
+                                  PDI_QC: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
+                                  READY_FOR_DELIVERY: { status: 'DELIVERED', label: 'Deliver' },
+                                };
+                                const nextAction = nextMap[card.status];
+                                if (!nextAction) return null;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateStatus(card.id, nextAction.status)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-600 text-blue-600 dark:text-blue-400 hover:text-white border border-blue-200 dark:border-blue-800/60 text-[11px] font-extrabold transition-all active:scale-95"
+                                    title={`Advance to ${nextAction.status.replace(/_/g, ' ')}`}
+                                  >
+                                    {nextAction.label} →
+                                  </button>
+                                );
+                              })()}
+
                               <button
                                 type="button"
                                 onClick={() => onSelectJobCard(card.id)}
-                                className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-0.5 shadow-xs active:scale-95"
                               >
-                                <span>Manage</span>
+                                <span>Open</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </button>
                             </div>

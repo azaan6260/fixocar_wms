@@ -675,6 +675,162 @@ export function JobCardDetailView({
 
         </div>
 
+        {/* =========================================================================
+            INTERACTIVE END-TO-END WORKSHOP LIFECYCLE PIPELINE BAR
+           ========================================================================= */}
+        {(() => {
+          const PIPELINE_STEPS: { id: string; status: JobCard['status']; label: string; short: string }[] = [
+            { id: 'INSPECTION', status: 'INSPECTION', label: '1. Inspection (PI)', short: '1. PI' },
+            { id: 'JOB_ALLOCATED', status: 'JOB_ALLOCATED', label: '2. Job Allotted', short: '2. Allotted' },
+            { id: 'ESTIMATE_PENDING', status: 'ESTIMATE_PENDING', label: '3. Approval', short: '3. Approval' },
+            { id: 'IN_PROGRESS', status: 'IN_PROGRESS', label: '4. In Repair (WIP)', short: '4. WIP' },
+            { id: 'QC_PENDING', status: 'QC_PENDING', label: '5. PDI / QC Audit', short: '5. QC' },
+            { id: 'RFC', status: 'RFC', label: '6. Ready (RFC)', short: '6. RFC' },
+            { id: 'DELIVERED', status: 'DELIVERED', label: '7. Gate Out', short: '7. Delivered' },
+          ];
+
+          const getStepIndex = (st: JobCard['status']) => {
+            if (st === 'INSPECTION' || st === 'CREATED') return 0;
+            if (st === 'JOB_ALLOCATED') return 1;
+            if (st === 'ESTIMATE_PENDING') return 2;
+            if (st === 'IN_PROGRESS') return 3;
+            if (st === 'QC_PENDING') return 4;
+            if (st === 'READY_FOR_DELIVERY' || st === 'OUT_FOR_DELIVERY' || st === 'RFC') return 5;
+            if (st === 'DELIVERED' || st === 'CLOSED') return 6;
+            return 3;
+          };
+
+          const currentStepIdx = getStepIndex(card.status);
+
+          const handleStageTransition = (targetStatus: JobCard['status'], customLabel?: string) => {
+            if (!isManagerOrHigher) return;
+            if (targetStatus === 'DELIVERED') {
+              setIsGateCheckOutOpen(true);
+              return;
+            }
+            updateJobCard(card.id, (prev) => ({
+              ...prev,
+              status: targetStatus,
+            }));
+            triggerSuccessHaptic();
+            dispatchToastNotification({
+              type: 'STATUS_CHANGE',
+              title: 'Pipeline Stage Updated',
+              message: `${card.vehicle.registrationNumber} moved to ${customLabel || formatJobCardStatus(targetStatus)}.`,
+              vehicleReg: card.vehicle.registrationNumber,
+              jobCardId: card.id,
+            });
+          };
+
+          return (
+            <div className="px-4 sm:px-6 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shrink-0">
+              {/* Interactive Stage Pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+                {PIPELINE_STEPS.map((stepItem, idx) => {
+                  const isDone = idx < currentStepIdx;
+                  const isCurrent = idx === currentStepIdx;
+                  return (
+                    <React.Fragment key={stepItem.id}>
+                      <button
+                        type="button"
+                        disabled={!isManagerOrHigher}
+                        onClick={() => handleStageTransition(stepItem.status, stepItem.label)}
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black whitespace-nowrap flex items-center gap-1.5 transition-all border ${
+                          isCurrent
+                            ? 'bg-blue-600 text-white border-blue-400 shadow-sm shadow-blue-600/30'
+                            : isDone
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:bg-slate-800 hover:text-slate-200'
+                        } ${isManagerOrHigher ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+                        title={isManagerOrHigher ? `Click to move vehicle to ${stepItem.label}` : stepItem.label}
+                      >
+                        {isDone && <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />}
+                        <span>{stepItem.label}</span>
+                      </button>
+                      {idx < PIPELINE_STEPS.length - 1 && (
+                        <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${idx < currentStepIdx ? 'text-emerald-500/60' : 'text-slate-700'}`} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {/* Smart Next-Stage Action Button for Managers */}
+              {isManagerOrHigher && (
+                <div className="flex items-center gap-2 shrink-0 justify-end">
+                  {card.status === 'ESTIMATE_PENDING' && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenCustomerApprovalPortal(card.id)}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>Customer Approval Portal →</span>
+                    </button>
+                  )}
+
+                  {(card.status === 'CREATED' || card.status === 'INSPECTION' || card.status === 'JOB_ALLOCATED') && (
+                    <button
+                      type="button"
+                      onClick={() => handleStageTransition('IN_PROGRESS', 'Work In Progress')}
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Start Repair (WIP) →</span>
+                    </button>
+                  )}
+
+                  {card.status === 'IN_PROGRESS' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleStageTransition('QC_PENDING', 'PDI / QC Audit');
+                        onOpenQCModal(card.id);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Send to 12-Point QC →</span>
+                    </button>
+                  )}
+
+                  {card.status === 'QC_PENDING' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onOpenQCModal(card.id)}
+                        className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                      >
+                        <ClipboardCheck className="w-3.5 h-3.5" />
+                        <span>Run QC Checklist</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStageTransition('RFC', 'Ready for Checkout (RFC)')}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Mark Ready (RFC) →</span>
+                      </button>
+                    </>
+                  )}
+
+                  {(card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY' || card.status === 'RFC') && (
+                    <button
+                      type="button"
+                      onClick={() => setIsGateCheckOutOpen(true)}
+                      className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Confirm Gate Exit & Handover →</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* VIEW CONTAINER */}
         <div className="p-4 sm:p-6 overflow-y-auto grow space-y-5 bg-slate-950">
           <div className="space-y-6">
@@ -1581,36 +1737,97 @@ export function JobCardDetailView({
               )}
 
               {activeManagerTab === 'qc' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h4 className="font-extrabold text-sm text-white">Floor Manager Quality Inspection</h4>
-                      <p className="text-xs text-slate-400">12-point pre-delivery audit</p>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-sm text-white">Floor Manager 12-Point Quality Inspection</h4>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                            card.qcPassed
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          }`}
+                        >
+                          {card.qcPassed ? 'QC PASSED' : 'QC PENDING'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Verify mechanical safety, paint finish, test drive & interior cleanliness before marking Ready for Checkout (RFC).
+                      </p>
                     </div>
-                    <button
-                      onClick={() => onOpenQCModal(card.id)}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold"
-                    >
-                      Open QC Audit
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onOpenQCModal(card.id)}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Open 12-Point QC Audit</span>
+                      </button>
+                      {card.qcPassed && card.status !== 'RFC' && card.status !== 'DELIVERED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateJobCard(card.id, prev => ({ ...prev, status: 'RFC' }));
+                            dispatchToastNotification({
+                              type: 'STATUS_CHANGE',
+                              title: 'Marked Ready for Checkout (RFC)',
+                              message: `${card.vehicle.registrationNumber} is now Ready for Checkout & Gate Dispatch.`,
+                              vehicleReg: card.vehicle.registrationNumber,
+                              jobCardId: card.id,
+                            });
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Move to RFC →</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeManagerTab === 'delivery' && (
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <h4 className="font-extrabold text-sm text-cyan-400 flex items-center gap-2">
-                    <Truck className="w-4 h-4" /> Pick & Delivery Service
-                  </h4>
-                  <p className="text-xs text-slate-300">
-                    Assign a delivery driver to pick up or deliver the vehicle.
-                  </p>
-                  <button
-                    onClick={handleAssignDeliveryDriver}
-                    className="px-4 py-2 bg-cyan-500 text-slate-950 font-black text-xs rounded-xl"
-                  >
-                    Dispatch Delivery Driver
-                  </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <h4 className="font-extrabold text-sm text-emerald-400 flex items-center gap-2">
+                        <LogOut className="w-4 h-4" /> Gate Pass Exit & Customer / Fleet Handover
+                      </h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Record physical vehicle departure at the workshop gate with pickup driver details, departure photo, and digital handover signature.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsGateCheckOutOpen(true)}
+                      className="w-full sm:w-fit px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Confirm Gate Check-Out & Handover</span>
+                    </button>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <h4 className="font-extrabold text-sm text-cyan-400 flex items-center gap-2">
+                        <Truck className="w-4 h-4" /> Home Drop / Pickup Logistics Driver
+                      </h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Assign a workshop delivery driver for doorstep vehicle pickup or post-repair customer drop-off with live status tracking.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAssignDeliveryDriver}
+                      className="w-full sm:w-fit px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                    >
+                      <Truck className="w-4 h-4" />
+                      <span>Dispatch Delivery Driver</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

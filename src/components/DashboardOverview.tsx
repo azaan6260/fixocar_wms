@@ -24,10 +24,11 @@ import {
   Flame,
   Users,
   Database,
-  LogIn
+  LogIn,
+  Layers
 } from 'lucide-react';
 import { getStoredSupabaseConfig } from '../lib/supabaseClient';
-import { respondToRequisition, resolveConcern, getEmployees, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
+import { respondToRequisition, resolveConcern, getEmployees, getVehicleCheckIns, subscribeToStore, dispatchToastNotification } from '../lib/storage';
 import { 
   ComposedChart, 
   Bar, 
@@ -46,7 +47,7 @@ import {
 interface DashboardOverviewProps {
   jobCards: JobCard[];
   currentRole: UserRole;
-  onOpenNewJobCard: (prefilledRegNum?: string) => void;
+  onOpenNewJobCard: (prefill?: any) => void;
   onSelectJobCard: (cardId: string) => void;
   onOpenAIDiagnostics: () => void;
   onNavigateTab: (tab: string) => void;
@@ -93,23 +94,54 @@ export function DashboardOverview({
   const isManagementRole = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
 
   const handleScannedPlate = (regNum: string) => {
-    // Search active job cards
+    const cleanScanned = regNum.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const activeCard = jobCards.find(
-      j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
+      j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanScanned && 
            j.status !== 'CLOSED' && j.status !== 'DELIVERED'
     );
 
     if (activeCard) {
-      alert(`Found active job card for ${regNum}. Opening details...`);
+      dispatchToastNotification({
+        type: 'INFO',
+        title: `Vehicle Found: ${regNum}`,
+        message: `Opening active job card ${activeCard.id}...`,
+        vehicleReg: activeCard.vehicle.registrationNumber,
+        jobCardId: activeCard.id,
+      });
       onSelectJobCard(activeCard.id);
-    } else {
-      if (isManagementRole) {
-        if (confirm(`No active job card found for ${regNum}. Create a new job card for this vehicle?`)) {
-          onOpenNewJobCard(regNum);
-        }
+    } else if (isManagementRole) {
+      const matchedGateIn = pendingCheckIns.find(
+        c => c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanScanned
+      );
+      if (matchedGateIn) {
+        onOpenNewJobCard({
+          regNo: matchedGateIn.registrationNumber,
+          make: matchedGateIn.make,
+          model: matchedGateIn.model,
+          variant: matchedGateIn.variant,
+          fuelType: matchedGateIn.fuelType,
+          color: matchedGateIn.color,
+          customerName: matchedGateIn.customerName,
+          customerPhone: matchedGateIn.customerPhone,
+          isCars24: matchedGateIn.isCars24,
+          cars24RefNo: matchedGateIn.cars24RefNo,
+          checkInRecordId: matchedGateIn.id,
+          cityId: matchedGateIn.cityId,
+          cityName: matchedGateIn.cityName,
+          workshopId: matchedGateIn.workshopId,
+          workshopName: matchedGateIn.workshopName,
+          workOrderNo: matchedGateIn.workOrderNo,
+          workOrderNotes: matchedGateIn.workOrderNotes,
+        });
       } else {
-        alert(`No active job card found for ${regNum}. Please request Service Advisor or Manager to create a job card.`);
+        onOpenNewJobCard(regNum);
       }
+    } else {
+      dispatchToastNotification({
+        type: 'WARNING',
+        title: `No Active Job Card (${regNum})`,
+        message: 'Please ask a Service Advisor or Floor Manager to open a Job Card for this vehicle.',
+      });
     }
   };
 
@@ -254,6 +286,96 @@ export function DashboardOverview({
           </button>
         </div>
       )}
+
+      {/* END-TO-END WORKSHOP LIFECYCLE PIPELINE FUNNEL */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+              End-to-End Workshop Pipeline Flow
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('status-pipeline')}
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+          >
+            <span>Open Full Kanban Pipeline Board</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
+          {[
+            {
+              step: '1. Gate Entry',
+              sub: 'Awaiting Job Card',
+              count: pendingCheckIns.length,
+              tab: 'gate-pass',
+              accent: 'border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400',
+            },
+            {
+              step: '2. Opened / Allotted',
+              sub: 'Inspection & Staff',
+              count: jobCards.filter(j => j.status === 'INSPECTION' || j.status === 'CREATED' || j.status === 'JOB_ALLOCATED').length,
+              tab: 'status-pipeline',
+              accent: 'border-cyan-500/30 bg-cyan-500/5 text-cyan-600 dark:text-cyan-400',
+            },
+            {
+              step: '3. Approval Pending',
+              sub: 'Customer Estimate',
+              count: estimatePending.length,
+              tab: 'job-cards',
+              accent: 'border-orange-500/30 bg-orange-500/5 text-orange-600 dark:text-orange-400',
+            },
+            {
+              step: '4. In Repair (WIP)',
+              sub: 'Active Bay Work',
+              count: inProgress.length,
+              tab: 'status-pipeline',
+              accent: 'border-blue-500/40 bg-blue-500/5 text-blue-600 dark:text-blue-400',
+            },
+            {
+              step: '5. PDI & QC Audit',
+              sub: '12-Point Check',
+              count: qcPending.length,
+              tab: 'status-pipeline',
+              accent: 'border-purple-500/30 bg-purple-500/5 text-purple-600 dark:text-purple-400',
+            },
+            {
+              step: '6. Ready (RFC)',
+              sub: 'Ready for Handover',
+              count: jobCards.filter(j => j.status === 'READY_FOR_DELIVERY' || j.status === 'OUT_FOR_DELIVERY' || j.status === 'RFC').length,
+              tab: 'rfc_quick',
+              accent: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400',
+            },
+            {
+              step: '7. Delivered',
+              sub: 'Dispatched & Closed',
+              count: jobCards.filter(j => j.status === 'DELIVERED' || j.status === 'CLOSED').length,
+              tab: 'job-cards-history',
+              accent: 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300',
+            },
+          ].map((stage, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onNavigateTab(stage.tab)}
+              className={`p-3 rounded-2xl border text-left transition-all hover:scale-[1.01] active:scale-98 cursor-pointer flex flex-col justify-between ${stage.accent}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] font-black uppercase tracking-tight truncate">{stage.step}</span>
+                <ChevronRight className="w-3 h-3 opacity-60 shrink-0" />
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between">
+                <span className="text-xl font-black font-mono text-slate-900 dark:text-white">{stage.count}</span>
+                <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 truncate ml-1">{stage.sub}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Daily Huddle Quick Entry Banner */}
       <div 
@@ -716,11 +838,31 @@ export function DashboardOverview({
 
                   <button
                     type="button"
-                    onClick={() => onOpenNewJobCard(checkIn.registrationNumber)}
+                    onClick={() =>
+                      onOpenNewJobCard({
+                        regNo: checkIn.registrationNumber,
+                        make: checkIn.make,
+                        model: checkIn.model,
+                        variant: checkIn.variant,
+                        fuelType: checkIn.fuelType,
+                        color: checkIn.color,
+                        customerName: checkIn.customerName,
+                        customerPhone: checkIn.customerPhone,
+                        isCars24: checkIn.isCars24,
+                        cars24RefNo: checkIn.cars24RefNo,
+                        checkInRecordId: checkIn.id,
+                        cityId: checkIn.cityId,
+                        cityName: checkIn.cityName,
+                        workshopId: checkIn.workshopId,
+                        workshopName: checkIn.workshopName,
+                        workOrderNo: checkIn.workOrderNo,
+                        workOrderNotes: checkIn.workOrderNotes,
+                      })
+                    }
                     className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>➕ Create Job Card for {checkIn.registrationNumber}</span>
+                    <span>Create Job Card for {checkIn.registrationNumber}</span>
                   </button>
                 </div>
               );
@@ -743,28 +885,21 @@ export function DashboardOverview({
                 <p className="text-xs text-slate-500 mt-0.5">Active vehicles in repair bays & inspection pipeline</p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setIsScannerOpen(true)}
-                  className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs px-3.5 py-2 rounded-full font-extrabold transition-all flex items-center gap-1.5 shadow-xs"
+                  className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs px-3.5 py-2 rounded-xl font-extrabold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Scan Plate Camera</span>
-                </button>
-                <button
-                  onClick={onOpenAIDiagnostics}
-                  className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-3.5 py-2 rounded-full font-bold transition-all flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  AI Diagnosis
+                  <span>Scan Plate</span>
                 </button>
                 {isManagementRole && (
                   <button
                     onClick={() => onOpenNewJobCard()}
-                    className="bg-blue-600 text-white text-xs px-4 py-2 rounded-full font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+                    className="bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
                   >
-                    + CREATE JOB CARD
+                    + Create Job Card
                   </button>
                 )}
               </div>
@@ -812,7 +947,7 @@ export function DashboardOverview({
                     <th className="px-4 py-3">ID</th>
                     <th className="px-4 py-3">Vehicle</th>
                     <th className="px-4 py-3">Primary Service</th>
-                    <th className="px-4 py-3">Team Assigned</th>
+                    <th className="px-4 py-3">Staff Allotted</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Action</th>
                   </tr>
@@ -825,9 +960,16 @@ export function DashboardOverview({
                       </td>
                     </tr>
                   ) : (
-                    filteredActiveCars.slice(0, 5).map((card) => {
+                    filteredActiveCars.slice(0, 6).map((card) => {
                       const primaryTask = card.tasks[0]?.title || 'General Inspection';
                       const hasPendingApproval = card.status === 'ESTIMATE_PENDING';
+                      const assignedNames = Array.from(
+                        new Set(
+                          card.tasks
+                            .flatMap(t => [t.assignedToName, t.pairedDenterName])
+                            .filter((n): n is string => Boolean(n && n !== 'Unassigned'))
+                        )
+                      );
 
                       return (
                         <tr
@@ -853,38 +995,55 @@ export function DashboardOverview({
                               {card.vehicle.registrationNumber} • {card.vehicle.color}
                             </p>
                           </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-                            hasPendingApproval
-                              ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-                              : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400'
-                          }`}>
-                            {primaryTask}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex -space-x-1.5 overflow-hidden">
-                            <div className="w-6 h-6 bg-blue-500 text-white rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-extrabold">
-                              M
-                            </div>
-                            <div className="w-6 h-6 bg-purple-500 text-white rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-extrabold">
-                              D
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-                            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                            {card.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                          View →
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                          <td className="px-4 py-3.5">
+                            <span className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold max-w-[180px] truncate ${
+                              hasPendingApproval
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
+                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400'
+                            }`}>
+                              {primaryTask}
+                            </span>
+                            {card.tasks.length > 1 && (
+                              <span className="ml-1 text-[10px] font-bold text-slate-400">
+                                +{card.tasks.length - 1}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {assignedNames.length === 0 ? (
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                Unassigned
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {assignedNames.slice(0, 2).map((name, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[95px]"
+                                    title={name}
+                                  >
+                                    {name.split(' ')[0]}
+                                  </span>
+                                ))}
+                                {assignedNames.length > 2 && (
+                                  <span className="text-[10px] font-bold text-slate-400">+{assignedNames.length - 2}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                              {card.status.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                            Manage →
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -892,7 +1051,7 @@ export function DashboardOverview({
 
           {/* Card Footer Link */}
           <div className="pt-4 flex items-center justify-between text-xs font-bold text-slate-500 border-t border-slate-100 dark:border-slate-800 mt-4">
-            <span>Showing {Math.min(5, activeCars.length)} of {activeCars.length} active job cards</span>
+            <span>Showing {Math.min(6, filteredActiveCars.length)} of {filteredActiveCars.length} active job cards</span>
             <button
               onClick={() => onNavigateTab('job-cards')}
               className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
@@ -903,62 +1062,98 @@ export function DashboardOverview({
           </div>
         </section>
 
-        {/* 2. Floor Capacity (Dark Bento Card) */}
-        <section className="col-span-12 lg:col-span-4 bg-slate-900 rounded-3xl p-6 text-white overflow-hidden relative shadow-md flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Floor Capacity
-              </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">LIVE BAYS</span>
-            </div>
+        {/* 2. Floor Capacity (Real Live Computed Bento Card) */}
+        {(() => {
+          const allMechanics = employees.filter(e => e.role === 'MECHANIC' || e.specializedTeam === 'Mechanical');
+          const allPainters = employees.filter(e => e.role === 'PAINTER' || e.specializedTeam === 'Paint');
+          const allDenters = employees.filter(e => e.role === 'DENTER' || e.specializedTeam === 'Denting');
 
-            <div className="space-y-4">
+          const activeStaffIds = new Set<string>();
+          activeCars.forEach(c => {
+            c.tasks.forEach(t => {
+              if (t.status !== 'COMPLETED') {
+                if (t.assignedToId) activeStaffIds.add(t.assignedToId);
+                if (t.pairedDenterId) activeStaffIds.add(t.pairedDenterId);
+              }
+            });
+          });
+
+          const busyMechanics = allMechanics.filter(e => activeStaffIds.has(e.id)).length;
+          const totalMechanics = Math.max(allMechanics.length, 1);
+          const mechPct = Math.min(100, Math.round((busyMechanics / totalMechanics) * 100));
+
+          const busyPainters = allPainters.filter(e => activeStaffIds.has(e.id)).length;
+          const totalPainters = Math.max(allPainters.length, 1);
+          const paintPct = Math.min(100, Math.round((busyPainters / totalPainters) * 100));
+
+          const busyDenters = allDenters.filter(e => activeStaffIds.has(e.id)).length;
+          const totalDenters = Math.max(allDenters.length, 1);
+          const dentPct = Math.min(100, Math.round((busyDenters / totalDenters) * 100));
+
+          return (
+            <section className="col-span-12 lg:col-span-4 bg-slate-900 rounded-3xl p-6 text-white overflow-hidden relative shadow-md flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-semibold text-slate-200">Mechanics</span>
-                  <span className="font-bold">8/12 <span className="text-[10px] font-normal text-slate-400">Busy</span></span>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Floor Capacity & Staff Load
+                  </h2>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-emerald-400">LIVE WORKLOAD</span>
                 </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full w-[66%]" />
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="font-semibold text-slate-200">Mechanics</span>
+                      <span className="font-bold font-mono">
+                        {busyMechanics}/{allMechanics.length} <span className="text-[10px] font-sans font-normal text-slate-400">Active</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2">
+                      <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${mechPct}%` }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="font-semibold text-slate-200">Painters & Booth</span>
+                      <span className="font-bold font-mono">
+                        {busyPainters}/{allPainters.length} <span className="text-[10px] font-sans font-normal text-slate-400">Active</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2">
+                      <div className="bg-pink-500 h-2 rounded-full transition-all" style={{ width: `${paintPct}%` }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="font-semibold text-slate-200">Denters & Bodyshop</span>
+                      <span className="font-bold font-mono">
+                        {busyDenters}/{allDenters.length} <span className="text-[10px] font-sans font-normal text-slate-400">Active</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2">
+                      <div className="bg-amber-500 h-2 rounded-full transition-all" style={{ width: `${dentPct}%` }} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-semibold text-slate-200">Painters & Booth</span>
-                  <span className="font-bold">3/4 <span className="text-[10px] font-normal text-slate-400">Busy</span></span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
-                  <div className="bg-pink-500 h-2 rounded-full w-[75%]" />
-                </div>
+              <div className="pt-6 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                <span>Gross Volume: <strong className="text-emerald-400 font-mono">₹{totalRevenue.toLocaleString('en-IN')}</strong></span>
+                <button
+                  onClick={() => onNavigateTab('role-workspace')}
+                  className="text-blue-400 font-bold hover:underline cursor-pointer"
+                >
+                  Role Workspaces →
+                </button>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-semibold text-slate-200">Denters & Metalwork</span>
-                  <span className="font-bold">2/6 <span className="text-[10px] font-normal text-slate-400">Busy</span></span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
-                  <div className="bg-amber-500 h-2 rounded-full w-[33%]" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Gross Revenue: <strong className="text-emerald-400 font-mono">₹{totalRevenue.toLocaleString('en-IN')}</strong></span>
-            <button
-              onClick={() => onNavigateTab('role-workspace')}
-              className="text-blue-400 font-bold hover:underline"
-            >
-              Role Workspaces →
-            </button>
-          </div>
-
-          {/* Ambient Glow */}
-          <div className="absolute -bottom-10 -right-10 w-36 h-36 bg-blue-600/25 blur-3xl pointer-events-none" />
-        </section>
+              {/* Ambient Glow */}
+              <div className="absolute -bottom-10 -right-10 w-36 h-36 bg-blue-600/25 blur-3xl pointer-events-none" />
+            </section>
+          );
+        })()}
 
         {/* 3. Pending Approvals (Bento Card) */}
         <section className="col-span-12 md:col-span-6 lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs flex flex-col justify-between">

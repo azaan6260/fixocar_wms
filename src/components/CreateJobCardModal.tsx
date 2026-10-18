@@ -472,7 +472,7 @@ export function CreateJobCardModal({
       cars24RefNo: isCars24 ? (cars24RefNo || `C24-${Date.now().toString().slice(-6)}`) : undefined,
       workOrderNo: workOrderNo.trim() || undefined,
       workOrderNotes: workOrderNotes.trim() || undefined,
-      estimatedCompletionDate: new Date(Date.now() + 86400000 * 2).toLocaleDateString(),
+      estimatedCompletionDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
       vehicle: {
         registrationNumber: formattedRegNo,
         make,

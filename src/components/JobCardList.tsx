@@ -444,18 +444,27 @@ export function JobCardList({
                   type="button"
                   onClick={() => {
                     onOpenNewJobCardModal({
+                      checkInRecordId: checkIn.id,
                       regNo: checkIn.registrationNumber,
+                      registrationNumber: checkIn.registrationNumber,
                       make: checkIn.make,
                       model: checkIn.model,
                       variant: checkIn.variant,
                       fuelType: checkIn.fuelType,
                       color: checkIn.color,
+                      year: checkIn.year,
+                      mileage: checkIn.mileage,
+                      fuelLevel: checkIn.fuelLevel,
                       customerName: checkIn.customerName,
                       customerPhone: checkIn.customerPhone,
                       isCars24: !!checkIn.isCars24,
                       cars24RefNo: checkIn.cars24RefNo,
                       workOrderNo: checkIn.workOrderNo,
                       workOrderNotes: checkIn.workOrderNotes,
+                      cityId: checkIn.cityId,
+                      cityName: checkIn.cityName,
+                      workshopId: checkIn.workshopId,
+                      workshopName: checkIn.workshopName,
                     });
                   }}
                   className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer"
@@ -617,6 +626,59 @@ export function JobCardList({
                         style={{ width: `${progress}%` }}
                       />
                     </div>
+
+                    {/* Allotted Technicians Summary Strip */}
+                    {(() => {
+                      const techMap = new Map<string, { name: string; roleLabel: string }>();
+                      card.tasks.forEach(t => {
+                        if (t.assignedPainterName) {
+                          techMap.set(`P-${t.assignedPainterName}`, { name: t.assignedPainterName, roleLabel: 'Painter' });
+                        }
+                        if (t.assignedDenterName) {
+                          techMap.set(`D-${t.assignedDenterName}`, { name: t.assignedDenterName, roleLabel: 'Denter' });
+                        }
+                        if (t.assignedEmployeeName && t.assignedEmployeeName !== t.assignedPainterName && t.assignedEmployeeName !== t.assignedDenterName) {
+                          techMap.set(`M-${t.assignedEmployeeName}`, { name: t.assignedEmployeeName, roleLabel: 'Tech' });
+                        }
+                      });
+                      const assignedTechs = Array.from(techMap.values());
+                      const unassignedCount = card.tasks.filter(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId).length;
+                      if (assignedTechs.length === 0 && (unassignedCount === 0 || isDeliveredOrClosed)) return null;
+                      return (
+                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/70 flex items-center gap-1.5 flex-wrap">
+                          {assignedTechs.length > 0 && (
+                            <>
+                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mr-0.5">Allotted:</span>
+                              {assignedTechs.slice(0, 3).map((tech, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                    tech.roleLabel === 'Painter'
+                                      ? 'bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border-pink-200/70 dark:border-pink-800/50'
+                                      : tech.roleLabel === 'Denter'
+                                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/70 dark:border-amber-800/50'
+                                      : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200/70 dark:border-blue-800/50'
+                                  }`}
+                                >
+                                  <span className="opacity-70 text-[8px] uppercase font-black">{tech.roleLabel[0]}:</span>
+                                  <span className="truncate max-w-[85px]">{tech.name}</span>
+                                </span>
+                              ))}
+                              {assignedTechs.length > 3 && (
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  +{assignedTechs.length - 3}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {unassignedCount > 0 && !isDeliveredOrClosed && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/50">
+                              <span>{unassignedCount} Unallotted</span>
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Checked out timestamp for history */}
