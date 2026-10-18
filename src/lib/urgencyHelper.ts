@@ -171,6 +171,38 @@ export function getDeadlineInfo(estimatedCompletionDate?: string, isUrgent?: boo
  * 5. Pending Customer Estimates get +150.
  * 6. Pending QC audits get +80.
  */
+export type JobCardPriorityLevel = 'HIGH' | 'MEDIUM' | 'LOW';
+
+/**
+ * Classifies a Job Card into High, Medium, or Low priority for filtering and badges:
+ * - HIGH: Marked Urgent, Overdue, or Promised Delivery Today
+ * - MEDIUM: Promised Tomorrow / within 3 days, Awaiting Customer Approval, or Pending Floor QC
+ * - LOW: Standard schedule (> 3 days out or no immediate blocker)
+ */
+export function getJobCardPriorityLevel(card: JobCard): JobCardPriorityLevel {
+  if (card.isUrgent) return 'HIGH';
+
+  const deadline = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
+  if (deadline.isOverdue || deadline.isToday) {
+    return 'HIGH';
+  }
+
+  const needsApproval =
+    card.status === 'ESTIMATE_PENDING' ||
+    card.tasks.some((t) => t.requiresCustomerApproval && t.isCustomerApproved === null);
+
+  if (
+    deadline.isTomorrow ||
+    (deadline.diffDays !== null && deadline.diffDays >= 0 && deadline.diffDays <= 3) ||
+    needsApproval ||
+    card.status === 'QC_PENDING'
+  ) {
+    return 'MEDIUM';
+  }
+
+  return 'LOW';
+}
+
 export function calculateJobCardPriorityScore(card: JobCard): number {
   let score = 0;
   if (card.isUrgent) score += 1000;

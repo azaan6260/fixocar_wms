@@ -28,7 +28,10 @@ import {
   LogIn,
   X,
   Users,
-  Filter
+  Filter,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { VehicleCheckIn } from '../types';
@@ -38,7 +41,10 @@ import {
   getDeadlineInfo, 
   calculateJobCardPriorityScore, 
   calculateJobCardStatusRank, 
-  parseDateOnly 
+  parseDateOnly,
+  getJobCardPriorityLevel,
+  JobCardPriorityLevel,
+  getLocalDateString
 } from '../lib/urgencyHelper';
 
 export type JobCardSortOption = 
@@ -84,8 +90,13 @@ export function JobCardList({
   const authUser = getAuthUser();
   const isManagementRole = authUser?.role === 'SUPER_ADMIN' || authUser?.role === 'ADMIN' || authUser?.role === 'SERVICE_ADVISOR' || authUser?.role === 'FLOOR_MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [searchScope, setSearchScope] = useState<'ALL' | 'REG_NO' | 'CUSTOMER' | 'TECHNICIAN'>('ALL');
   const [selectedTechnician, setSelectedTechnician] = useState<string>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | JobCardPriorityLevel>('ALL');
+  const [dateRangeField, setDateRangeField] = useState<'ANY' | 'CREATED' | 'TARGET'>('ANY');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [mainSection, setMainSection] = useState<'ACTIVE' | 'HISTORY'>(initialSection);
   const [activeSubFilter, setActiveSubFilter] = useState<string>('ALL');
@@ -235,6 +246,39 @@ export function JobCardList({
     return Array.from(namesMap.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [sectionCards, employees]);
 
+  // Count cards by priority level in current section
+  const priorityCounts = React.useMemo(() => {
+    const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+    sectionCards.forEach((c) => {
+      const level = getJobCardPriorityLevel(c);
+      counts[level] += 1;
+    });
+    return counts;
+  }, [sectionCards]);
+
+  // Count active advanced filters (excluding search text)
+  const activeAdvancedFilterCount =
+    (priorityFilter !== 'ALL' ? 1 : 0) +
+    (dateFrom !== '' || dateTo !== '' ? 1 : 0) +
+    (selectedTechnician !== 'ALL' ? 1 : 0) +
+    (searchScope !== 'ALL' ? 1 : 0);
+
+  const hasAnyActiveSearchOrFilter =
+    searchTerm.trim() !== '' ||
+    activeAdvancedFilterCount > 0 ||
+    activeSubFilter !== 'ALL';
+
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setSearchScope('ALL');
+    setSelectedTechnician('ALL');
+    setPriorityFilter('ALL');
+    setDateFrom('');
+    setDateTo('');
+    setDateRangeField('ANY');
+    setActiveSubFilter('ALL');
+  };
+
   const filteredCards = sectionCards.filter((card) => {
     const searchLower = searchTerm.toLowerCase().trim();
     const searchAlnum = searchLower.replace(/[^a-z0-9]/g, '');
@@ -312,6 +356,39 @@ export function JobCardList({
             t.assignedEmployeeName?.toLowerCase() === techLower
         ) || card.floorManagerName?.toLowerCase() === techLower;
         if (!hasSelectedTech) return false;
+      }
+    }
+
+    // Check Job Priority filter (HIGH / MEDIUM / LOW)
+    if (priorityFilter !== 'ALL') {
+      const cardPriority = getJobCardPriorityLevel(card);
+      if (cardPriority !== priorityFilter) return false;
+    }
+
+    // Check Date Range filter (dateFrom / dateTo)
+    if (dateFrom || dateTo) {
+      const fromDateObj = dateFrom ? parseDateOnly(dateFrom) : null;
+      const toDateObj = dateTo ? parseDateOnly(dateTo) : null;
+
+      const createdDateObj = parseDateOnly(card.createdAt);
+      const targetDateObj = parseDateOnly(card.estimatedCompletionDate);
+
+      const isDateWithinRange = (d: Date | null): boolean => {
+        if (!d) return false;
+        if (fromDateObj && d.getTime() < fromDateObj.getTime()) return false;
+        if (toDateObj && d.getTime() > toDateObj.getTime()) return false;
+        return true;
+      };
+
+      if (dateRangeField === 'CREATED') {
+        if (!isDateWithinRange(createdDateObj)) return false;
+      } else if (dateRangeField === 'TARGET') {
+        if (!isDateWithinRange(targetDateObj)) return false;
+      } else {
+        // ANY: match either Created Date or Target Completion Date
+        if (!isDateWithinRange(createdDateObj) && !isDateWithinRange(targetDateObj)) {
+          return false;
+        }
       }
     }
 
@@ -443,13 +520,11 @@ export function JobCardList({
           </button>
         </div>
 
-        {/* Enhanced Global Search Bar & Multi-Criteria Filter Controls */}
+        {/* Clean Global Search Bar (Always visible on page open; Advanced Filters collapsed until toggled) */}
         <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           
-          {/* Top Row: Global Search Input + Search Scope Pills + Technician Dropdown + Sort */}
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5">
-            
-            {/* Global Search Bar with Scope Indicator & Clear Button */}
+          {/* Primary Row: Search Input + Advanced Filters Toggle Button */}
+          <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
               <input
@@ -458,15 +533,15 @@ export function JobCardList({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder={
                   searchScope === 'REG_NO'
-                    ? 'Search by Vehicle Reg No (e.g. KA01AB1234, MH-12) or Job Card ID...'
+                    ? 'Type Vehicle Reg No (e.g. KA01AB1234, MH-12) or Job Card ID...'
                     : searchScope === 'CUSTOMER'
-                    ? 'Search by Customer Name, Phone Number, or Email...'
+                    ? 'Type Customer Name, Phone Number, or Email...'
                     : searchScope === 'TECHNICIAN'
-                    ? 'Search by Assigned Painter, Denter, Mechanic, or Floor Manager...'
-                    : 'Global Search: Customer Name, Vehicle Reg No (KA-01...), or Assigned Technician...'
+                    ? 'Type Assigned Painter, Denter, Mechanic, or Floor Manager...'
+                    : 'Search Job Cards by Customer Name, Vehicle Reg No, or Assigned Technician...'
                 }
                 aria-label="Global Job Card Search"
-                className="w-full pl-10 pr-24 min-h-[46px] text-xs sm:text-sm rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 font-semibold transition-all shadow-2xs"
+                className="w-full pl-10 pr-20 min-h-[46px] text-xs sm:text-sm rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 font-semibold transition-all shadow-2xs"
               />
               {searchTerm && (
                 <button
@@ -481,75 +556,238 @@ export function JobCardList({
               )}
             </div>
 
-            {/* Search Scope Selector Pills (All / Reg No / Customer / Technician) */}
-            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 overflow-x-auto scrollbar-none shrink-0">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2 hidden sm:inline">
-                Scope:
-              </span>
-              {[
-                { id: 'ALL', label: 'All Fields' },
-                { id: 'REG_NO', label: '🚗 Reg No' },
-                { id: 'CUSTOMER', label: '👤 Customer' },
-                { id: 'TECHNICIAN', label: '👨‍🔧 Technician' },
-              ].map((scope) => (
-                <button
-                  key={scope.id}
-                  type="button"
-                  onClick={() => setSearchScope(scope.id as any)}
-                  className={`min-h-[36px] px-3 py-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                    searchScope === scope.id
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
-                >
-                  {scope.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Technician Direct Filter Dropdown */}
-            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 min-h-[46px] rounded-2xl border border-slate-200 dark:border-slate-700">
-              <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Technician:</span>
-              <select
-                value={selectedTechnician}
-                onChange={(e) => setSelectedTechnician(e.target.value)}
-                aria-label="Filter by Assigned Technician"
-                className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1 max-w-[170px] truncate"
-              >
-                <option value="ALL">All Technicians ({sectionCards.length})</option>
-                <option value="UNASSIGNED">
-                  ⚠️ Unassigned Tasks ({sectionCards.filter(c => c.tasks.some(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId)).length})
-                </option>
-                {availableTechnicians.map((tech) => (
-                  <option key={tech.name} value={tech.name}>
-                    {tech.name} ({tech.role}) {tech.count > 0 ? `• ${tech.count}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sort By Dropdown */}
-            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 min-h-[46px] rounded-2xl border border-slate-200 dark:border-slate-700">
-              <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as JobCardSortOption)}
-                aria-label="Sort Job Cards"
-                className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1"
-              >
-                <option value="PRIORITY">🔥 Urgency & Priority</option>
-                <option value="TARGET_DATE_ASC">⏰ Target Delivery Date</option>
-                <option value="DATE_NEWEST">📅 Created (Newest)</option>
-                <option value="DATE_OLDEST">📅 Created (Oldest)</option>
-                <option value="STATUS">🚦 Pipeline Status</option>
-              </select>
-            </div>
+            {/* Toggle Button for Collapsible Advanced Filters (Hidden on Page Opening) */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((prev) => !prev)}
+              aria-expanded={showAdvancedFilters}
+              className={`min-h-[46px] px-3.5 sm:px-4 rounded-2xl border text-xs font-extrabold flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
+                showAdvancedFilters || activeAdvancedFilterCount > 0
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+              title="Toggle Advanced Filters (Priority, Date Range, Technician & Sort)"
+            >
+              <SlidersHorizontal className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">Advanced Filters</span>
+              {activeAdvancedFilterCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-white text-blue-700 text-[10px] font-black leading-none">
+                  {activeAdvancedFilterCount}
+                </span>
+              )}
+              {showAdvancedFilters ? (
+                <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+              )}
+            </button>
           </div>
 
+          {/* Collapsible Advanced Filters Drawer (Not visible on page opening) */}
+          {showAdvancedFilters && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3.5 animate-in fade-in duration-150">
+              
+              {/* Row 1: Job Priority (High / Medium / Low) + Date Range Filter */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                
+                {/* Job Priority Selector (High / Medium / Low) */}
+                <div className="lg:col-span-5 flex flex-col gap-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Flame className="w-3 h-3 text-amber-500" />
+                    Job Priority Level
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                    {[
+                      { id: 'ALL', label: `All (${sectionCards.length})`, activeClass: 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' },
+                      { id: 'HIGH', label: `High (${priorityCounts.HIGH})`, activeClass: 'bg-rose-600 text-white' },
+                      { id: 'MEDIUM', label: `Med (${priorityCounts.MEDIUM})`, activeClass: 'bg-amber-500 text-slate-950' },
+                      { id: 'LOW', label: `Low (${priorityCounts.LOW})`, activeClass: 'bg-emerald-600 text-white' },
+                    ].map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPriorityFilter(p.id as any)}
+                        className={`min-h-[34px] px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer truncate ${
+                          priorityFilter === p.id
+                            ? `${p.activeClass} shadow-2xs`
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date Range Filter (From Date / To Date + Date Field + Quick Presets) */}
+                <div className="lg:col-span-7 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      Date Range Filter
+                    </span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const today = getLocalDateString(0);
+                          setDateFrom(today);
+                          setDateTo(today);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:border-blue-500 cursor-pointer"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDateFrom(getLocalDateString(-7));
+                          setDateTo(getLocalDateString(0));
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:border-blue-500 cursor-pointer"
+                      >
+                        Last 7 Days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDateFrom(getLocalDateString(-30));
+                          setDateTo(getLocalDateString(0));
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:border-blue-500 cursor-pointer"
+                      >
+                        Last 30 Days
+                      </button>
+                      {(dateFrom || dateTo) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDateFrom('');
+                            setDateTo('');
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black hover:bg-rose-500 hover:text-white cursor-pointer"
+                        >
+                          Clear Dates
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <select
+                      value={dateRangeField}
+                      onChange={(e) => setDateRangeField(e.target.value as any)}
+                      aria-label="Date Filter Field"
+                      className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-extrabold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="ANY">📅 Created or Target Date</option>
+                      <option value="CREATED">📥 Created Date</option>
+                      <option value="TARGET">⏰ Target Delivery Date</option>
+                    </select>
+
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-1 min-h-[38px] rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">From:</span>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        aria-label="Start Date"
+                        className="w-full bg-transparent text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-1 min-h-[38px] rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0">To:</span>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        aria-label="End Date"
+                        className="w-full bg-transparent text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Row 2: Search Scope + Assigned Technician Filter + Sort By */}
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5 pt-2.5 border-t border-slate-200/70 dark:border-slate-700/70">
+                
+                {/* Search Scope Selector Pills */}
+                <div className="flex items-center gap-1 p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-none">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2 shrink-0">
+                    Search Scope:
+                  </span>
+                  {[
+                    { id: 'ALL', label: 'All Fields' },
+                    { id: 'REG_NO', label: '🚗 Reg No' },
+                    { id: 'CUSTOMER', label: '👤 Customer' },
+                    { id: 'TECHNICIAN', label: '👨‍🔧 Technician' },
+                  ].map((scope) => (
+                    <button
+                      key={scope.id}
+                      type="button"
+                      onClick={() => setSearchScope(scope.id as any)}
+                      className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                        searchScope === scope.id
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      {scope.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  {/* Technician Direct Filter Dropdown */}
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 min-h-[38px] rounded-xl border border-slate-200 dark:border-slate-700">
+                    <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Technician:</span>
+                    <select
+                      value={selectedTechnician}
+                      onChange={(e) => setSelectedTechnician(e.target.value)}
+                      aria-label="Filter by Assigned Technician"
+                      className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1 max-w-[180px] truncate"
+                    >
+                      <option value="ALL">All Technicians ({sectionCards.length})</option>
+                      <option value="UNASSIGNED">
+                        ⚠️ Unassigned Tasks ({sectionCards.filter(c => c.tasks.some(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId)).length})
+                      </option>
+                      {availableTechnicians.map((tech) => (
+                        <option key={tech.name} value={tech.name}>
+                          {tech.name} ({tech.role}) {tech.count > 0 ? `• ${tech.count}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Sort By Dropdown */}
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 min-h-[38px] rounded-xl border border-slate-200 dark:border-slate-700">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Sort:</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as JobCardSortOption)}
+                      aria-label="Sort Job Cards"
+                      className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1"
+                    >
+                      <option value="PRIORITY">🔥 Urgency & Priority</option>
+                      <option value="TARGET_DATE_ASC">⏰ Target Delivery Date</option>
+                      <option value="DATE_NEWEST">📅 Created (Newest)</option>
+                      <option value="DATE_OLDEST">📅 Created (Oldest)</option>
+                      <option value="STATUS">🚦 Pipeline Status</option>
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* Active Search / Filter Feedback Banner */}
-          {(searchTerm.trim() !== '' || selectedTechnician !== 'ALL' || searchScope !== 'ALL') && (
+          {(searchTerm.trim() !== '' || activeAdvancedFilterCount > 0) && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 text-xs">
               <div className="flex items-center gap-2 flex-wrap">
                 <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
@@ -561,6 +799,22 @@ export function JobCardList({
                     Query: "{searchTerm.trim()}" ({searchScope === 'ALL' ? 'Customer, Reg No & Technician' : searchScope.replace('_', ' ')})
                   </span>
                 )}
+                {priorityFilter !== 'ALL' && (
+                  <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                    priorityFilter === 'HIGH'
+                      ? 'bg-rose-600 text-white'
+                      : priorityFilter === 'MEDIUM'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-emerald-600 text-white'
+                  }`}>
+                    Priority: {priorityFilter}
+                  </span>
+                )}
+                {(dateFrom || dateTo) && (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold text-[11px]">
+                    Date: {dateFrom || 'Any'} → {dateTo || 'Any'}
+                  </span>
+                )}
                 {selectedTechnician !== 'ALL' && (
                   <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-bold text-[11px]">
                     Technician: {selectedTechnician === 'UNASSIGNED' ? 'Unallotted Tasks' : selectedTechnician}
@@ -569,12 +823,7 @@ export function JobCardList({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSearchTerm('');
-                  setSearchScope('ALL');
-                  setSelectedTechnician('ALL');
-                  setActiveSubFilter('ALL');
-                }}
+                onClick={resetAllFilters}
                 className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <X className="w-3 h-3" />
@@ -768,22 +1017,17 @@ export function JobCardList({
               No {mainSection === 'ACTIVE' ? 'Active' : 'History'} Job Cards Match Your Search
             </h3>
             <p className="text-xs mt-1 max-w-md mx-auto">
-              {searchTerm.trim() || selectedTechnician !== 'ALL' || activeSubFilter !== 'ALL'
-                ? `No job cards matched "${searchTerm.trim() || (selectedTechnician !== 'ALL' ? selectedTechnician : activeSubFilter)}". Try searching by Customer Name, Vehicle Reg No, or Assigned Technician.`
+              {hasAnyActiveSearchOrFilter
+                ? 'No job cards matched your active search or filter criteria. Try adjusting the search term, priority level, or date range.'
                 : mainSection === 'ACTIVE'
                 ? 'All delivered vehicles have been moved to the History of Job Cards section.'
                 : 'Delivered and closed vehicle job cards will automatically appear here.'}
             </p>
           </div>
-          {(searchTerm.trim() !== '' || selectedTechnician !== 'ALL' || activeSubFilter !== 'ALL' || searchScope !== 'ALL') && (
+          {hasAnyActiveSearchOrFilter && (
             <button
               type="button"
-              onClick={() => {
-                setSearchTerm('');
-                setSearchScope('ALL');
-                setSelectedTechnician('ALL');
-                setActiveSubFilter('ALL');
-              }}
+              onClick={resetAllFilters}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
@@ -802,6 +1046,7 @@ export function JobCardList({
             const hasSublet = card.tasks.some(t => t.category === 'SUBLET_VENDOR' || t.category === 'WASHING');
             const isDeliveredOrClosed = card.status === 'DELIVERED' || card.status === 'CLOSED';
             const deadlineInfo = getDeadlineInfo(card.estimatedCompletionDate, card.isUrgent);
+            const priorityLevel = getJobCardPriorityLevel(card);
 
             return (
               <div
@@ -812,12 +1057,29 @@ export function JobCardList({
                 {/* Card Top Header & Main Info */}
                 <div className="p-4 sm:p-5 space-y-3">
                   
-                  {/* Top Bar: ID, Urgency, Cars24 & Status */}
+                  {/* Top Bar: ID, Priority, Urgency, Cars24 & Status */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-mono text-[11px] font-extrabold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
                         {card.id}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPriorityFilter((prev) => (prev === priorityLevel ? 'ALL' : priorityLevel));
+                        }}
+                        title={`Filter by ${priorityLevel} Priority`}
+                        className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border cursor-pointer transition-all ${
+                          priorityLevel === 'HIGH'
+                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                            : priorityLevel === 'MEDIUM'
+                            ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        }`}
+                      >
+                        {priorityLevel === 'HIGH' ? '● High' : priorityLevel === 'MEDIUM' ? '● Med' : '● Low'}
+                      </button>
                       {card.isUrgent && (
                         <span className="bg-amber-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5 animate-pulse">
                           🔥 URGENT

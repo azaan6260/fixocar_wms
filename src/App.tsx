@@ -25,7 +25,7 @@ import {
   logoutAuthUser,
   validateLocalStorageIntegrity
 } from './lib/storage';
-import { Camera, Wrench, Home } from 'lucide-react';
+import { Camera, Wrench, Home, Bot } from 'lucide-react';
 import { syncFromSupabase } from './lib/syncService';
 import { fetchServerSupabaseConfig } from './lib/supabaseClient';
 import { initOfflineSyncListeners, processOfflineQueue } from './lib/offlineSync';
@@ -67,6 +67,7 @@ import { AppVersionModal } from './components/AppVersionModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PullToRefresh } from './components/PullToRefresh';
+import { AIWorkshopAgentView } from './components/AIWorkshopAgentView';
 import { initMobileEnvironment, setupNativeBackButton } from './lib/mobileBridge';
 
 export default function App() {
@@ -820,7 +821,28 @@ export default function App() {
           <CustomerDashboard onLogout={handleLogout} />
         )}
 
+        {(activeTab === 'ai-agent' || normalizedTab === 'ai-agent') && (
+          <AIWorkshopAgentView
+            currentRole={currentRole}
+            onOpenJobCard={(id) => setSelectedJobCardId(id)}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+          />
+        )}
+
       </main>
+
+      {/* Floating AI Co-Pilot Quick Launcher (when not already on AI Agent tab) */}
+      {activeTab !== 'ai-agent' && normalizedTab !== 'ai-agent' && currentRole !== 'CUSTOMER' && (
+        <button
+          type="button"
+          onClick={() => setActiveTab('ai-agent')}
+          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs shadow-xl shadow-indigo-600/30 border border-white/20 transition-all hover:scale-105 cursor-pointer"
+          title="Open AI Workshop Co-Pilot (Camera Plate Scan, Cars24 PDF Parser, Paint & Parts Purchase Lists)"
+        >
+          <Bot className="w-4 h-4 shrink-0" />
+          <span>AI Workshop Bot</span>
+        </button>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 text-center text-xs text-slate-500">

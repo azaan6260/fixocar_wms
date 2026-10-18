@@ -22,7 +22,8 @@ import {
   ArrowLeftRight,
   UserCheck,
   Building2,
-  ShieldAlert
+  ShieldAlert,
+  Bot
 } from 'lucide-react';
 import { getJobCards, getVehicleCheckIns, subscribeToStore, getAuthUser } from '../lib/storage';
 import { triggerLightHaptic, triggerMediumHaptic } from '../lib/mobileBridge';
@@ -217,6 +218,15 @@ export function MobileBottomNav({
                 >
                   <LayoutDashboard className="w-4 h-4 text-amber-400" />
                   <span className="text-[11px] font-bold">Home</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabClick('ai-agent')}
+                  className="p-2.5 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 flex flex-col items-center text-center gap-1 text-indigo-200 cursor-pointer"
+                >
+                  <Bot className="w-4 h-4 text-indigo-400" />
+                  <span className="text-[11px] font-bold">AI Co-Pilot</span>
                 </button>
 
                 <button

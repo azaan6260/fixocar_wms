@@ -51,7 +51,8 @@ import {
   Flame,
   FolderKanban,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Bot
 } from 'lucide-react';
 import { getSavedBiometricBinding, registerBiometricForUser } from '../lib/biometricAuth';
 import { NotificationDrawer } from './NotificationDrawer';
@@ -297,6 +298,7 @@ export function HeaderNav({
   // Core Workflow Pipeline Tabs (Always visible on primary bar)
   const primaryTabs = [
     { id: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, badge: 0 },
+    { id: 'ai-agent', label: 'AI Co-Pilot', icon: Bot, badge: 0, badgeColor: 'bg-indigo-600 text-white' },
     { id: 'gate-pass', label: 'Gate Entry', icon: LogIn, badge: pendingGateCheckInsCount, badgeColor: 'bg-amber-500 text-slate-950' },
     { id: 'job-cards', label: t('nav.jobCards'), icon: FileText, badge: activeJobCardsCount, badgeColor: 'bg-blue-500 text-white' },
     { id: 'status-pipeline', label: 'Pipeline Board', icon: Layers, badge: 0 },

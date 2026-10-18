@@ -896,6 +896,7 @@ export function normalizeTabId(tabId: string): string {
   if (lower === 'role-workspace' || lower === 'role_workspace') return 'role-workspace';
   if (lower === 'car-models' || lower === 'car_models') return 'car-models';
   if (lower === 'customer-portal' || lower === 'customer_portal') return 'customer-portal';
+  if (lower === 'ai-agent' || lower === 'ai_agent' || lower === 'ai' || lower === 'chatbot') return 'ai-agent';
   return lower;
 }
 
@@ -914,6 +915,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
   if (role === 'FLOOR_MANAGER') {
     return [
       'dashboard',
+      'ai-agent',
       'gate-pass',
       'daily-huddle',
       'workshops',
@@ -932,6 +934,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
   if (role === 'MECHANIC' || role === 'DENTER' || role === 'PAINTER') {
     return [
       'role-workspace',
+      'ai-agent',
       'job-cards',
       'job-cards-history',
       'status-pipeline',
@@ -943,6 +946,7 @@ export function isTabAllowedForRole(role: UserRole, tabId: string): boolean {
   if (role === 'DELIVERY_BOY') {
     return [
       'deliveries',
+      'ai-agent',
       'gate-pass',
       'role-workspace'
     ].includes(normalized);

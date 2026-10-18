@@ -652,7 +652,7 @@ Provide a structured repair recommendation JSON with:
 Return valid JSON ONLY without markdown backticks.`;
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
       });
 
@@ -664,6 +664,592 @@ Return valid JSON ONLY without markdown backticks.`;
     } catch (err: any) {
       console.error('Gemini AI Diagnosis Error:', err);
       res.status(500).json({ error: 'Failed to generate AI diagnosis', details: err.message });
+    }
+  });
+
+  // ============================================================================
+  // AI WORKSHOP CHAT AGENT ENDPOINTS (Vehicle Photo Recognition, PDF Job Card Parser & Chat)
+  // ============================================================================
+
+  // 1. Analyze Incoming Vehicle Photo (Camera / File) -> License Plate + Make/Model/Variant/Color + Damage & Suggested Checks
+  app.post('/api/ai-agent/analyze-vehicle-image', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const { imageBase64, carModels = [], learnedRules = [] } = req.body;
+
+      if (!imageBase64) {
+        return res.status(400).json({ success: false, error: 'imageBase64 is required' });
+      }
+
+      if (!apiKey) {
+        return res.json({
+          success: true,
+          isFallback: true,
+          analysis: {
+            detected: true,
+            plateNumber: 'MH02CB9988',
+            make: 'Hyundai',
+            model: 'Creta',
+            variant: 'SX (O) 1.5 Petrol',
+            year: 2023,
+            color: 'White',
+            fuelType: 'Petrol',
+            bodyType: 'SUV',
+            visibleDamages: ['Front Bumper RHS Scratch & Scuff', 'RHS Front Fender Minor Dent'],
+            suggestedTasks: [
+              { title: 'Front Bumper - Paint & Dent Repair', category: 'PAINT', panelKey: 'bumper_front', panelNameEn: 'Front Bumper', customerPrice: 2800, painterPayout: 850, denterPayout: 200 },
+              { title: 'Fender RHS Front - Paint & Dent Repair', category: 'PAINT', panelKey: 'fender_rhs_front', panelNameEn: 'Fender RHS Front', customerPrice: 2600, painterPayout: 800, denterPayout: 200 }
+            ],
+            suggestedParts: [
+              { name: 'Front Bumper Retainer Bracket & Clips Set', quantity: 1, unitPrice: 650, partNumber: 'HYU-CRT-FBRK' },
+              { name: 'PPG 2K Pearl White Basecoat + Clearcoat Kit', quantity: 1, unitPrice: 1250, partNumber: 'PNT-2K-WHT' }
+            ],
+            employeeVideoPrompts: [
+              'Record a 15-sec closeup video behind the RHS Front Bumper & Headlight Mounting Bracket to check for hidden clip breakage before denting.'
+            ],
+            confidence: 'high',
+            summary: 'Identified White Hyundai Creta (MH02CB9988) with Front Bumper and RHS Fender surface damage.'
+          }
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+
+      const knownModelsSummary = Array.isArray(carModels) && carModels.length > 0
+        ? carModels.slice(0, 40).map((m: any) => `${m.make} ${m.model} (${(m.variants || []).slice(0, 3).join(', ')})`).join('; ')
+        : 'Maruti Suzuki Swift, Baleno, Brezza, Dzire, Ertiga; Hyundai Creta, i20, Venue, Verna; Tata Nexon, Punch, Harrier; Mahindra XUV700, Scorpio-N, Thar; Honda City, Amaze; Toyota Innova Crysta, Fortuner; Kia Seltos, Sonet';
+
+      const rulesContext = Array.isArray(learnedRules) && learnedRules.length > 0
+        ? learnedRules.map((r: any) => `- [${r.triggerKeyword || 'General'}]: ${r.instruction}`).join('\n')
+        : 'None';
+
+      const prompt = `You are an expert Indian Automotive Workshop Gate Inspector & Master Bodyshop Estimator.
+Inspect this vehicle photo carefully.
+1. Read the license plate / registration number if visible (normalize to uppercase alphanumeric like KA01AB1234; strip "IND"). If not visible, set plateNumber to "UNREADABLE".
+2. Identify the Vehicle Make (e.g., Maruti Suzuki, Hyundai, Tata, Mahindra, Kia, Toyota, Honda, Volkswagen, Skoda, MG), Model (e.g., Baleno, Creta, Nexon, Swift), likely Variant, Color, Body Type, and Fuel Type.
+   Known workshop models directory: ${knownModelsSummary}
+3. Identify any visible exterior dents, scratches, bumper damage, panel misalignment, or routine service needs.
+4. Apply any relevant Workshop Learned Rules:
+${rulesContext}
+5. Recommend actionable workshop tasks (category: PAINT, DENTING, MECHANICAL, WASHING, INSPECTION), required spare parts/consumables, and a specific video inspection instruction for the technician.
+
+Return valid JSON matching the schema.`;
+
+      const runVision = async (modelName: string) => {
+        return await ai.models.generateContent({
+          model: modelName,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64Data,
+                },
+              },
+              { text: prompt },
+            ],
+          },
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                detected: { type: Type.BOOLEAN },
+                plateNumber: { type: Type.STRING },
+                make: { type: Type.STRING },
+                model: { type: Type.STRING },
+                variant: { type: Type.STRING },
+                year: { type: Type.INTEGER },
+                color: { type: Type.STRING },
+                fuelType: { type: Type.STRING },
+                bodyType: { type: Type.STRING },
+                visibleDamages: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                suggestedTasks: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      panelKey: { type: Type.STRING },
+                      panelNameEn: { type: Type.STRING },
+                      customerPrice: { type: Type.NUMBER },
+                      painterPayout: { type: Type.NUMBER },
+                      denterPayout: { type: Type.NUMBER }
+                    },
+                    required: ['title', 'category', 'customerPrice']
+                  }
+                },
+                suggestedParts: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      name: { type: Type.STRING },
+                      quantity: { type: Type.NUMBER },
+                      unitPrice: { type: Type.NUMBER },
+                      partNumber: { type: Type.STRING }
+                    },
+                    required: ['name', 'quantity', 'unitPrice']
+                  }
+                },
+                employeeVideoPrompts: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                confidence: { type: Type.STRING },
+                summary: { type: Type.STRING }
+              },
+              required: ['detected', 'plateNumber', 'make', 'model', 'summary']
+            }
+          }
+        });
+      };
+
+      let aiResponse;
+      try {
+        aiResponse = await runVision('gemini-3.8-flash');
+      } catch (err1) {
+        aiResponse = await runVision('gemini-flash-latest');
+      }
+
+      const rawText = aiResponse.text || '{}';
+      const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+      if (parsed.plateNumber) {
+        parsed.plateNumber = String(parsed.plateNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      }
+
+      return res.json({
+        success: true,
+        analysis: parsed
+      });
+    } catch (err: any) {
+      console.error('AI Vehicle Image Analysis Error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to analyze vehicle image'
+      });
+    }
+  });
+
+  // 2. Parse Uploaded PDF / Image Job Card (e.g. Cars24 Work Order / Inspection Sheet) -> Actionable Internal Job Card
+  app.post('/api/ai-agent/parse-job-card-pdf', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const {
+        fileBase64,
+        mimeType = 'application/pdf',
+        fileName = 'Cars24_WorkOrder.pdf',
+        extractedText = '',
+        standardJobs = [],
+        learnedRules = [],
+        userRole = 'ADMIN',
+      } = req.body;
+
+      const isManagementRole = ['SUPER_ADMIN', 'ADMIN', 'SERVICE_ADVISOR', 'FLOOR_MANAGER'].includes(String(userRole).toUpperCase());
+      if (!isManagementRole) {
+        return res.status(403).json({
+          success: false,
+          error: `Role Access Denied (${userRole}): Only Admin, Floor Manager, or Service Advisor accounts can parse PDF Work Orders to create Job Cards or allot tasks.`
+        });
+      }
+
+      if (!fileBase64 && !extractedText) {
+        return res.status(400).json({ success: false, error: 'fileBase64 or extractedText is required' });
+      }
+
+      if (!apiKey) {
+        return res.json({
+          success: true,
+          isFallback: true,
+          parsedJobCard: {
+            isCars24: true,
+            cars24RefNo: `C24-${Math.floor(100000 + Math.random() * 900000)}`,
+            workOrderNo: `WO-C24-${Math.floor(1000 + Math.random() * 9000)}`,
+            registrationNumber: 'KA01MJ4455',
+            make: 'Maruti Suzuki',
+            model: 'Baleno',
+            variant: 'Zeta 1.2 Petrol',
+            year: 2022,
+            color: 'Nexa Blue',
+            fuelType: 'Petrol',
+            mileage: 44800,
+            fuelLevel: 45,
+            customerName: 'Cars24 Fleet Hub',
+            customerPhone: '9820099110',
+            workOrderSummary: 'Cars24 Refurbishment Work Order: 3 Panel Dent & Paint (Front Bumper, Bonnet, RHS Front Door) + Periodic Mechanical Service & Front Brake Pad Replacement.',
+            tasks: [
+              {
+                title: 'Front Bumper - Paint & Dent Repair',
+                category: 'PAINT',
+                panelKey: 'bumper_front',
+                panelNameEn: 'Front Bumper',
+                paintScope: 'FULL_OUTER',
+                customerPrice: 2200,
+                estimatedCost: 1050,
+                painterPayout: 850,
+                denterPayout: 200,
+                requiresCustomerApproval: false
+              },
+              {
+                title: 'Hood / Bonnet - Paint & Dent Repair',
+                category: 'PAINT',
+                panelKey: 'hood_bonnet',
+                panelNameEn: 'Hood / Bonnet',
+                paintScope: 'FULL_OUTER',
+                customerPrice: 2500,
+                estimatedCost: 1100,
+                painterPayout: 900,
+                denterPayout: 200,
+                requiresCustomerApproval: false
+              },
+              {
+                title: 'Door RHS Front - Paint & Dent Repair',
+                category: 'PAINT',
+                panelKey: 'door_rhs_front',
+                panelNameEn: 'Door RHS Front',
+                paintScope: 'FULL_OUTER',
+                customerPrice: 2400,
+                estimatedCost: 1050,
+                painterPayout: 850,
+                denterPayout: 200,
+                requiresCustomerApproval: false
+              },
+              {
+                title: 'Periodic Engine Oil (0W-20 Synthetic) & Oil Filter Service',
+                category: 'MECHANICAL',
+                customerPrice: 1850,
+                estimatedCost: 1100,
+                requiresCustomerApproval: false
+              },
+              {
+                title: 'Front Disc Brake Pads Replacement & Rotor Skimming Check',
+                category: 'MECHANICAL',
+                customerPrice: 1650,
+                estimatedCost: 980,
+                requiresCustomerApproval: false
+              }
+            ],
+            requiredParts: [
+              { name: 'Synthetic Engine Oil 0W-20 (3.5L)', quantity: 1, unitPrice: 1150, partNumber: 'MS-OIL-0W20', category: 'OILS_LUBRICANTS' },
+              { name: 'OEM Spin-On Oil Filter & Air Filter Kit', quantity: 1, unitPrice: 520, partNumber: 'MS-FLT-BAL', category: 'SPARES' },
+              { name: 'Front Disc Brake Pad Set (Baleno)', quantity: 1, unitPrice: 1280, partNumber: 'MS-BP-BAL-FR', category: 'SPARES' },
+              { name: 'Front Bumper Side Retainer Clips (Set)', quantity: 1, unitPrice: 280, partNumber: 'MS-CLIP-BMP', category: 'SPARES' },
+              { name: 'Nexa Blue Basecoat + 2K Clearcoat & Primer (3 Panels)', quantity: 3, unitPrice: 650, partNumber: 'PNT-NEXA-BLU', category: 'CONSUMABLES' }
+            ],
+            employeeVideoPrompts: [
+              'Mechanic: Record a 15-sec video of Front Lower Arm Bushes, Link Rods & Brake Rotor thickness while wheels are off.',
+              'Denter: Record a short video of Front Bumper mounting brackets & Radiator Support before panel refitting.'
+            ]
+          }
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const stdCatalogContext = Array.isArray(standardJobs) && standardJobs.length > 0
+        ? standardJobs.slice(0, 35).map((j: any) => `${j.title} [cat:${j.category}, panelKey:${j.panelKey || ''}, c24Price:${j.cars24Price || j.retailPrice}, retailPrice:${j.retailPrice}, painter:${j.cars24PainterPayout || j.painterPayout || 800}, denter:${j.cars24DenterPayout || j.denterPayout || 150}]`).join('\n')
+        : '';
+
+      const rulesContext = Array.isArray(learnedRules) && learnedRules.length > 0
+        ? learnedRules.map((r: any) => `- [${r.triggerKeyword || 'General'}]: ${r.instruction}`).join('\n')
+        : 'None';
+
+      const prompt = `You are an expert Automotive Workshop Operations AI that parses uploaded Job Card PDFs, Cars24 Refurbishment Work Orders, and Estimate Sheets into structured internal FixoCar Job Card records.
+File Name: "${fileName}"
+${extractedText ? `Additional Extracted Text / Notes:\n${extractedText}\n` : ''}
+
+Standard Workshop Rate Catalog Reference:
+${stdCatalogContext}
+
+Learned Workshop Daily Rules & Teachings (MUST apply if matching vehicle or job type):
+${rulesContext}
+
+Instructions:
+1. Extract the vehicle registration number (uppercase alphanumeric, e.g. KA01AB1234), make, model, variant, year, color, fuelType, mileage, and whether this is a Cars24 work order (isCars24, cars24RefNo, workOrderNo).
+2. Extract all underlying jobs/tasks from the document:
+   - Separate Paint & Dent panels (category: "PAINT" with panelKey like "bumper_front", "bumper_rear", "hood_bonnet", "roof_panel", "trunk_boot", "fender_lhs_front", "fender_rhs_front", "door_lhs_front", "door_rhs_front", "door_lhs_rear", "door_rhs_rear", "quarter_panel_lhs", "quarter_panel_rhs", "running_board_lhs", "running_board_rhs") from Mechanical ("MECHANICAL"), Detailing ("WASHING"), Inspection ("INSPECTION"), or Sublet ("SUBLET_VENDOR") tasks.
+   - Include realistic INR pricing (customerPrice, estimatedCost, painterPayout, denterPayout) matched to the Standard Workshop Rate Catalog.
+3. Extract a complete list of "requiredParts" (spare parts, filters, oils, clips, paint consumables) needed for this vehicle so the workshop can generate a purchase order list.
+4. Generate specific "employeeVideoPrompts" instructing the assigned Mechanic/Denter/Painter what hidden components to inspect and record a video for (e.g. suspension bushes, radiator core, inner apron, brake discs) so additional jobs can be approved.
+
+Return valid JSON matching the schema.`;
+
+      const parts: any[] = [];
+      if (fileBase64) {
+        const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+        const detectedMime = fileBase64.match(/^data:([^;]+);base64,/)?.[1] || mimeType || 'application/pdf';
+        parts.push({
+          inlineData: {
+            mimeType: detectedMime,
+            data: cleanBase64,
+          }
+        });
+      }
+      parts.push({ text: prompt });
+
+      const runPdfParse = async (modelName: string) => {
+        return await ai.models.generateContent({
+          model: modelName,
+          contents: { parts },
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                isCars24: { type: Type.BOOLEAN },
+                cars24RefNo: { type: Type.STRING },
+                workOrderNo: { type: Type.STRING },
+                registrationNumber: { type: Type.STRING },
+                make: { type: Type.STRING },
+                model: { type: Type.STRING },
+                variant: { type: Type.STRING },
+                year: { type: Type.INTEGER },
+                color: { type: Type.STRING },
+                fuelType: { type: Type.STRING },
+                mileage: { type: Type.INTEGER },
+                fuelLevel: { type: Type.INTEGER },
+                customerName: { type: Type.STRING },
+                customerPhone: { type: Type.STRING },
+                workOrderSummary: { type: Type.STRING },
+                tasks: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      panelKey: { type: Type.STRING },
+                      panelNameEn: { type: Type.STRING },
+                      paintScope: { type: Type.STRING },
+                      customerPrice: { type: Type.NUMBER },
+                      estimatedCost: { type: Type.NUMBER },
+                      painterPayout: { type: Type.NUMBER },
+                      denterPayout: { type: Type.NUMBER },
+                      requiresCustomerApproval: { type: Type.BOOLEAN }
+                    },
+                    required: ['title', 'category', 'customerPrice']
+                  }
+                },
+                requiredParts: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      name: { type: Type.STRING },
+                      quantity: { type: Type.NUMBER },
+                      unitPrice: { type: Type.NUMBER },
+                      partNumber: { type: Type.STRING },
+                      category: { type: Type.STRING }
+                    },
+                    required: ['name', 'quantity', 'unitPrice']
+                  }
+                },
+                employeeVideoPrompts: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: ['registrationNumber', 'make', 'model', 'tasks', 'requiredParts', 'workOrderSummary']
+            }
+          }
+        });
+      };
+
+      let aiResponse;
+      try {
+        aiResponse = await runPdfParse('gemini-3.8-flash');
+      } catch (err1) {
+        aiResponse = await runPdfParse('gemini-flash-latest');
+      }
+
+      const rawText = aiResponse.text || '{}';
+      const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+      if (parsed.registrationNumber) {
+        parsed.registrationNumber = String(parsed.registrationNumber).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      }
+
+      return res.json({
+        success: true,
+        parsedJobCard: parsed
+      });
+    } catch (err: any) {
+      console.error('AI PDF Job Card Parse Error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to parse uploaded Job Card document'
+      });
+    }
+  });
+
+  // 3. Conversational AI Workshop Agent Chat (Enforces strict Role-Based Access Control & Account-Scoped Data Isolation)
+  app.post('/api/ai-agent/chat', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const {
+        message,
+        userRole = 'ADMIN',
+        userName = 'Manager',
+        employeeId = '',
+        accessPolicy = {},
+        workshopSnapshot = {},
+        learnedRules = []
+      } = req.body;
+
+      if (!message) {
+        return res.status(400).json({ success: false, error: 'message is required' });
+      }
+
+      const isManagementRole = ['SUPER_ADMIN', 'ADMIN', 'SERVICE_ADVISOR', 'FLOOR_MANAGER'].includes(String(userRole).toUpperCase());
+
+      if (!apiKey) {
+        return res.json({
+          success: true,
+          isFallback: true,
+          reply: {
+            answer: isManagementRole
+              ? `Hello ${userName} (${userRole})! You have full Workshop Management access across ${workshopSnapshot.activeCardCount || 0} active vehicle(s). Use the tools below to generate Copy-Paste Paint Lists, Consolidated Daily Parts Purchase Lists, or parse Cars24 PDFs into Job Cards.`
+              : `Hello ${userName} (${userRole})! Your AI Agent is connected to your personal employee account and filtered to your ${workshopSnapshot.activeCardCount || 0} allotted vehicle(s). Note: Creating Job Cards and editing/deleting tasks or rates are restricted to Admin & Floor Manager accounts.`,
+            suggestedActionType: 'NONE',
+            extractedNewRule: null,
+            followUpPrompts: isManagementRole
+              ? [
+                  'Give me all paint jobs to copy and paste',
+                  "Show today's total parts purchase list by vehicle",
+                  'Which vehicles need employee inspection videos?'
+                ]
+              : [
+                  'Show only my allotted vehicles and tasks',
+                  'What inspection videos do I need to record for my allotted cars?',
+                  'Show parts required for my allotted vehicles'
+                ]
+          }
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const rbacSystemRules = isManagementRole
+        ? `ROLE & ACCESS LEVEL: FULL WORKSHOP MANAGEMENT (${userRole})
+- User "${userName}" has full access to all workshop vehicles, financial billing rates, technician allotments, parts procurement budgets, and can create Job Cards, edit/delete tasks, and teach new workshop rules.`
+        : `ROLE & ACCESS LEVEL: RESTRICTED EMPLOYEE ACCOUNT (${userRole} — Name: ${userName}, Employee ID: ${employeeId || 'Staff'})
+- STRICT DATABASE & ACTION GUARDRAILS:
+  1. This employee ONLY has access to vehicles and tasks specifically allotted to "${userName}" (provided in the Scoped Database Snapshot below).
+  2. This employee CANNOT create a Job Card, CANNOT edit or delete any task in a Job Card, CANNOT change task rates/prices, CANNOT re-allot tasks to other staff, and CANNOT add/delete global workshop learning rules.
+  3. If the employee asks to create a job card, edit/delete a task, modify rates/prices, or view other employees' payouts/workshop billing totals, politely refuse and explain that their ${userRole} account is restricted from creating/editing/deleting Job Card tasks or viewing billing rates, and offer to help with their allotted vehicles, required parts for their tasks, or inspection video checklists.
+  4. Never set "extractedNewRule" for non-management employees (always return null for extractedNewRule).`;
+
+      const prompt = `You are the FixoCar AI Workshop Operations Co-Pilot assisting logged-in user "${userName}" (Role: ${userRole}).
+
+${rbacSystemRules}
+
+Explicit Account Permissions:
+${JSON.stringify(accessPolicy, null, 2)}
+
+Role-Scoped Workshop Database Snapshot (Already filtered to what ${userName} is authorized to access):
+${JSON.stringify(workshopSnapshot, null, 2)}
+
+Learned Workshop Rules:
+${JSON.stringify(learnedRules, null, 2)}
+
+User Message: "${message}"
+
+Instructions:
+1. Answer the user's request clearly, concisely, and practically using ONLY the Role-Scoped Workshop Database Snapshot above. Always acknowledge who is logged in (${userName} - ${userRole}) when relevant.
+2. Strictly enforce the Role & Access Level rules above. If a non-management employee asks to edit/delete a task, change prices, or create a job card, clearly refuse due to role permissions.
+3. ONLY if isManagementRole is true AND the user is teaching a new rule (e.g., "Remember when Creta comes...", "Teach:", "Always check..."), extract it into "extractedNewRule". Otherwise set "extractedNewRule" to null.
+4. Set "suggestedActionType" to:
+   - "PAINT_LIST" if the user asks for paint jobs / dent-paint list
+   - "PURCHASE_LIST" if the user asks for parts required / purchase list / order list
+   - "VIDEO_CHECKS" if the user asks about employee videos / additional work inspections
+   - "RULE_LEARNED" if a management user taught a new workshop rule
+   - "NONE" otherwise.
+
+Return valid JSON matching the schema.`;
+
+      const runChat = async (modelName: string) => {
+        return await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                answer: { type: Type.STRING },
+                suggestedActionType: { type: Type.STRING },
+                extractedNewRule: {
+                  type: Type.OBJECT,
+                  nullable: true,
+                  properties: {
+                    triggerKeyword: { type: Type.STRING },
+                    instruction: { type: Type.STRING },
+                    defaultParts: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    videoCheckPrompt: { type: Type.STRING }
+                  }
+                },
+                followUpPrompts: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: ['answer', 'suggestedActionType', 'followUpPrompts']
+            }
+          }
+        });
+      };
+
+      let aiResponse;
+      try {
+        aiResponse = await runChat('gemini-3.8-flash');
+      } catch (err1) {
+        aiResponse = await runChat('gemini-flash-latest');
+      }
+
+      const rawText = aiResponse.text || '{}';
+      const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+
+      return res.json({
+        success: true,
+        reply: parsed
+      });
+    } catch (err: any) {
+      console.error('AI Workshop Agent Chat Error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to process AI chat message'
+      });
     }
   });
 
