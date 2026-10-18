@@ -546,9 +546,6 @@ export function InteractiveVehicleInspectionChart({
   };
 
   const isPanelActive = (panelId: string) => {
-    if (mode === 'INTERACTIVE_SELECT') {
-      return selectedPanelIds.includes(panelId);
-    }
     return selectedPanelIds.includes(panelId) || Boolean(effectiveInspections[panelId]?.selected);
   };
 

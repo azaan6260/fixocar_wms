@@ -156,7 +156,7 @@ export function Interactive3DVehicleInspectionModel({
     }
 
     if (onPanelToggle) {
-      onPanelToggle(panelId, panelObj.standardJobId, 'FULL_OUTER');
+      onPanelToggle(panelId, panelObj.standardJobId);
     }
 
     setPanelToDeselect(null);
@@ -172,9 +172,10 @@ export function Interactive3DVehicleInspectionModel({
     if (!panelObj) return;
 
     const existing = effectiveInspections[panelId];
+    const isCurrentlyActive = selectedPanelIds.includes(panelId) || Boolean(existing?.selected);
     
     // Clicking on already selected panel on AR without a scope triggers confirmation
-    if (!scope && existing && existing.selected) {
+    if (!scope && isCurrentlyActive) {
       setPanelToDeselect({
         panelId,
         nameEn: panelObj.nameEn,
@@ -184,7 +185,7 @@ export function Interactive3DVehicleInspectionModel({
     }
 
     // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle.
-    const newSelected = scope ? true : (existing ? !existing.selected : true);
+    const newSelected = scope ? true : !isCurrentlyActive;
     const targetScope = scope || existing?.paintScope || (panelId.startsWith('pillar_') ? 'INSIDE_JAMB' : 'FULL_OUTER');
 
     const updatedObj = {

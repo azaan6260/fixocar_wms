@@ -169,29 +169,33 @@ export function JobAllotmentPipeline({
     const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, effectiveScope);
 
     const existingTasks = selectedTasks.filter(t => 
-      (t.panelKey && t.panelKey === panelId) ||
-      matchTaskToPanelDef(t)?.id === panelId ||
-      (t.title && panelDef.nameEn && t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()))
+      t.category === 'PAINT' && (
+        (t.panelKey && t.panelKey === panelId) ||
+        matchTaskToPanelDef(t)?.id === panelId
+      )
     );
 
-    if (existingTasks.length > 0 && (!scope || existingTasks[0].paintScope === effectiveScope)) {
-      // Deselect panel
-      const idsToRemove = new Set(existingTasks.map(t => t.id));
-      onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
-    } else {
-      if (effectiveScope === 'PARTIAL_TOUCHUP' || effectiveScope === 'INSIDE_JAMB') {
-        setCustomRatePrompt({
-          panelId,
-          panelName: panelDef.nameEn,
-          scope: effectiveScope,
-          matchedJobId,
-          billingPrice: rates.price,
-          painterPayout: rates.painterPayout,
-          denterPayout: rates.denterPayout
-        });
-      } else {
-        applyPanelTaskWithRates(panelId, effectiveScope, rates.price, rates.painterPayout, rates.denterPayout, matchedJobId);
+    if (existingTasks.length > 0) {
+      if (!scope || existingTasks[0].paintScope === effectiveScope) {
+        // Deselect panel
+        const idsToRemove = new Set(existingTasks.map(t => t.id));
+        onTasksChange(selectedTasks.filter(t => !idsToRemove.has(t.id)));
+        return;
       }
+    }
+
+    if (effectiveScope === 'PARTIAL_TOUCHUP' || effectiveScope === 'INSIDE_JAMB') {
+      setCustomRatePrompt({
+        panelId,
+        panelName: panelDef.nameEn,
+        scope: effectiveScope,
+        matchedJobId,
+        billingPrice: rates.price,
+        painterPayout: rates.painterPayout,
+        denterPayout: rates.denterPayout
+      });
+    } else {
+      applyPanelTaskWithRates(panelId, effectiveScope, rates.price, rates.painterPayout, rates.denterPayout, matchedJobId);
     }
   };
 
@@ -206,8 +210,9 @@ export function JobAllotmentPipeline({
       if (!panelDef) return;
 
       if (!inspection.selected) {
-        // Remove task if deselected
+        // Remove PAINT task if deselected
         updatedTasksList = updatedTasksList.filter(t => {
+          if (t.category !== 'PAINT') return true;
           const matchedDef = matchTaskToPanelDef(t);
           return t.panelKey !== panelId && (!matchedDef || matchedDef.id !== panelId);
         });
@@ -225,12 +230,12 @@ export function JobAllotmentPipeline({
 
       const dynamicTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
 
-      // Find by panelKey OR standard job match OR fuzzy title
+      // Find by panelKey OR standard job match (restricted to PAINT category)
       const existingTaskIndex = updatedTasksList.findIndex(t => {
+        if (t.category !== 'PAINT') return false;
         const matchedDef = matchTaskToPanelDef(t);
         return (t.panelKey && t.panelKey === panelId) || 
-               (matchedDef && matchedDef.id === panelId) ||
-               (t.title && panelDef.nameEn && t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()));
+               (matchedDef && matchedDef.id === panelId);
       });
 
       if (existingTaskIndex !== -1) {
@@ -244,7 +249,8 @@ export function JobAllotmentPipeline({
           denterPayout,
           contractorPayout: totalContractorPayout,
           estimatedCost: totalContractorPayout,
-          panelKey: panelId // preserve panelKey
+          panelKey: panelId,
+          panelNameEn: panelDef.nameEn
         };
       } else {
         // Create a new task
@@ -268,11 +274,12 @@ export function JobAllotmentPipeline({
       }
     });
 
-    // 2. Remove tasks for panels that are no longer in updatedInspections or marked selected=false
+    // 2. Remove tasks ONLY for PAINT category panels that are marked selected=false or missing from updatedInspections
     const finalTasks = updatedTasksList.filter(t => {
+      if (t.category !== 'PAINT') return true; // Always preserve mechanical, denting, washing, accessories etc.!
       const matchedDef = matchTaskToPanelDef(t);
       const resolvedPanelKey = t.panelKey || matchedDef?.id;
-      if (!resolvedPanelKey) return true; // Keep mechanical/other non-panel tasks
+      if (!resolvedPanelKey) return true;
       
       const inspection = updatedInspections[resolvedPanelKey];
       return inspection && inspection.selected;
@@ -857,11 +864,11 @@ export function JobAllotmentPipeline({
             <InteractiveVehicleInspectionChart
               mode="INTERACTIVE_SELECT"
               isCars24={isCars24}
-              selectedPanelIds={Array.from(new Set(selectedTasks.map(t => {
+              selectedPanelIds={Array.from(new Set(selectedTasks.filter(t => t.category === 'PAINT' || Boolean(t.panelKey)).map(t => {
                 const matchedDef = matchTaskToPanelDef(t);
                 return matchedDef ? matchedDef.id : (t.panelKey || '');
               }).filter(Boolean)))}
-              inspections={selectedTasks.reduce((acc, t) => {
+              inspections={selectedTasks.filter(t => t.category === 'PAINT' || Boolean(t.panelKey)).reduce((acc, t) => {
                 const matchedDef = matchTaskToPanelDef(t);
                 const panelId = matchedDef ? matchedDef.id : (t.panelKey || '');
                 if (panelId) {
