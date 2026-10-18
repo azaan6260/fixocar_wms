@@ -784,7 +784,13 @@ export function Interactive3DVehicleInspectionModel({
     let previousTouchDistance = 0;
     let previousTouchMidpoint = { x: 0, y: 0 };
 
+    let touchStartInfo = { x: 0, y: 0, time: 0, isTap: true };
+
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientX : 0) : e.clientX;
+      const clientY = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientY : 0) : e.clientY;
+      touchStartInfo = { x: clientX, y: clientY, time: Date.now(), isTap: true };
+
       if ('touches' in e) {
         if (e.touches.length === 1) {
           isMouseDown = true;
@@ -816,6 +822,10 @@ export function Interactive3DVehicleInspectionModel({
       const rect = renderer.domElement.getBoundingClientRect();
       const clientX = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientX : 0) : e.clientX;
       const clientY = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientY : 0) : e.clientY;
+
+      if (Math.hypot(clientX - touchStartInfo.x, clientY - touchStartInfo.y) > 10) {
+        touchStartInfo.isTap = false;
+      }
 
       mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -910,20 +920,10 @@ export function Interactive3DVehicleInspectionModel({
       }
     };
 
-    const handlePointerUp = (e: MouseEvent | TouchEvent) => {
-      isMouseDown = false;
-      isPanning = false;
-      previousTouchDistance = 0;
-      previousTouchMidpoint = { x: 0, y: 0 };
-    };
-
-    const handleCanvasClick = (e: MouseEvent) => {
-      // Ignore click triggers if they were meant as panning
-      if (e.button === 2 || e.shiftKey) return;
-
+    const processClickOrTap = (clientX: number, clientY: number) => {
       const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
       const selectableObjects: THREE.Object3D[] = [];
@@ -946,6 +946,29 @@ export function Interactive3DVehicleInspectionModel({
           handlePanelClick(hit.userData.panelId);
         }
       }
+    };
+
+    const handlePointerUp = (e: MouseEvent | TouchEvent) => {
+      const duration = Date.now() - touchStartInfo.time;
+      if (touchStartInfo.isTap && duration < 450) {
+        const clientX = 'changedTouches' in e && e.changedTouches.length > 0
+          ? e.changedTouches[0].clientX
+          : touchStartInfo.x;
+        const clientY = 'changedTouches' in e && e.changedTouches.length > 0
+          ? e.changedTouches[0].clientY
+          : touchStartInfo.y;
+        processClickOrTap(clientX, clientY);
+      }
+
+      isMouseDown = false;
+      isPanning = false;
+      previousTouchDistance = 0;
+      previousTouchMidpoint = { x: 0, y: 0 };
+    };
+
+    const handleCanvasClick = (e: MouseEvent) => {
+      // Handled via processClickOrTap in pointerUp/touchend to avoid duplicate triggers
+      if (e.button === 2 || e.shiftKey) return;
     };
 
     // Zoom via mouse wheel scroll

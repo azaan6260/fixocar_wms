@@ -882,6 +882,7 @@ export function JobAllotmentPipeline({
                 return acc;
               }, {} as Record<string, any>)}
               onInspectionChange={handleInspectionChange}
+              onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}
             />
           ) : (
