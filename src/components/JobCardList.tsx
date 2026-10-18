@@ -25,9 +25,12 @@ import {
   Check,
   Trash2,
   ArrowUpDown,
-  LogIn
+  LogIn,
+  X,
+  Users,
+  Filter
 } from 'lucide-react';
-import { deleteJobCard, getAuthUser, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
+import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { VehicleCheckIn } from '../types';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -81,11 +84,15 @@ export function JobCardList({
   const authUser = getAuthUser();
   const isManagementRole = authUser?.role === 'SUPER_ADMIN' || authUser?.role === 'ADMIN' || authUser?.role === 'SERVICE_ADVISOR' || authUser?.role === 'FLOOR_MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchScope, setSearchScope] = useState<'ALL' | 'REG_NO' | 'CUSTOMER' | 'TECHNICIAN'>('ALL');
+  const [selectedTechnician, setSelectedTechnician] = useState<string>('ALL');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [mainSection, setMainSection] = useState<'ACTIVE' | 'HISTORY'>(initialSection);
   const [activeSubFilter, setActiveSubFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<JobCardSortOption>('PRIORITY');
   const [requisitionModalCard, setRequisitionModalCard] = useState<JobCard | null>(null);
   const [checkInsList, setCheckInsList] = useState<VehicleCheckIn[]>(() => getVehicleCheckIns());
+  const employees = getEmployees();
 
   useEffect(() => {
     if (initialSection) {
@@ -102,6 +109,42 @@ export function JobCardList({
     return () => unsubscribe();
   }, []);
 
+  // Helper to extract all assigned technician names & roles from a JobCard
+  const getCardTechnicians = (card: JobCard): { id?: string; name: string; role: string }[] => {
+    const map = new Map<string, { id?: string; name: string; role: string }>();
+    if (card.floorManagerName) {
+      map.set(`fm-${card.floorManagerName.toLowerCase()}`, {
+        id: card.floorManagerId,
+        name: card.floorManagerName,
+        role: 'Floor Manager',
+      });
+    }
+    card.tasks.forEach((t) => {
+      if (t.assignedPainterName) {
+        map.set(`painter-${t.assignedPainterName.toLowerCase()}`, {
+          id: t.assignedPainterId,
+          name: t.assignedPainterName,
+          role: 'Painter',
+        });
+      }
+      if (t.assignedDenterName) {
+        map.set(`denter-${t.assignedDenterName.toLowerCase()}`, {
+          id: t.assignedDenterId,
+          name: t.assignedDenterName,
+          role: 'Denter',
+        });
+      }
+      if (t.assignedEmployeeName) {
+        map.set(`tech-${t.assignedEmployeeName.toLowerCase()}`, {
+          id: t.assignedEmployeeId,
+          name: t.assignedEmployeeName,
+          role: 'Technician',
+        });
+      }
+    });
+    return Array.from(map.values());
+  };
+
   const pendingCheckIns = checkInsList.filter((c) => {
     if (c.status === 'CHECKED_OUT') return false;
     const cleanRegC = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -117,12 +160,29 @@ export function JobCardList({
   const filteredPendingCheckIns = pendingCheckIns
     .filter((c) => {
       const searchLower = searchTerm.toLowerCase().trim();
+      const searchAlnum = searchLower.replace(/[^a-z0-9]/g, '');
       if (!searchLower) return true;
+      const regLower = c.registrationNumber.toLowerCase();
+      const regAlnum = regLower.replace(/[^a-z0-9]/g, '');
+      if (searchScope === 'REG_NO') {
+        return regLower.includes(searchLower) || (searchAlnum.length > 0 && regAlnum.includes(searchAlnum));
+      }
+      if (searchScope === 'CUSTOMER') {
+        return (
+          c.customerName.toLowerCase().includes(searchLower) ||
+          c.customerPhone.toLowerCase().includes(searchLower)
+        );
+      }
+      if (searchScope === 'TECHNICIAN') {
+        return c.checkInDriverName.toLowerCase().includes(searchLower);
+      }
       return (
-        c.registrationNumber.toLowerCase().includes(searchLower) ||
+        regLower.includes(searchLower) ||
+        (searchAlnum.length > 0 && regAlnum.includes(searchAlnum)) ||
         c.make.toLowerCase().includes(searchLower) ||
         c.model.toLowerCase().includes(searchLower) ||
         c.customerName.toLowerCase().includes(searchLower) ||
+        c.customerPhone.toLowerCase().includes(searchLower) ||
         c.checkInDriverName.toLowerCase().includes(searchLower) ||
         c.id.toLowerCase().includes(searchLower)
       );
@@ -135,23 +195,125 @@ export function JobCardList({
 
   const activeCards = jobCards.filter((c) => c.status !== 'DELIVERED' && c.status !== 'CLOSED');
   const historyCards = jobCards.filter((c) => c.status === 'DELIVERED' || c.status === 'CLOSED');
+  const sectionCards = mainSection === 'ACTIVE' ? activeCards : historyCards;
 
-  const filteredCards = (mainSection === 'ACTIVE' ? activeCards : historyCards).filter((card) => {
+  // Build unique list of all technicians allotted across current section cards + employees directory
+  const availableTechnicians = React.useMemo(() => {
+    const namesMap = new Map<string, { name: string; role: string; count: number }>();
+    sectionCards.forEach((card) => {
+      const cardTechs = new Set<string>();
+      card.tasks.forEach((t) => {
+        if (t.assignedPainterName) {
+          const key = t.assignedPainterName.trim();
+          cardTechs.add(key);
+          if (!namesMap.has(key)) namesMap.set(key, { name: key, role: 'Painter', count: 0 });
+        }
+        if (t.assignedDenterName) {
+          const key = t.assignedDenterName.trim();
+          cardTechs.add(key);
+          if (!namesMap.has(key)) namesMap.set(key, { name: key, role: 'Denter', count: 0 });
+        }
+        if (t.assignedEmployeeName) {
+          const key = t.assignedEmployeeName.trim();
+          cardTechs.add(key);
+          if (!namesMap.has(key)) namesMap.set(key, { name: key, role: 'Technician', count: 0 });
+        }
+      });
+      cardTechs.forEach((techName) => {
+        const entry = namesMap.get(techName);
+        if (entry) entry.count += 1;
+      });
+    });
+    employees.forEach((emp) => {
+      if (['MECHANIC', 'PAINTER', 'DENTER', 'ELECTRICIAN', 'FLOOR_MANAGER'].includes(emp.role)) {
+        const key = emp.name.trim();
+        if (!namesMap.has(key)) {
+          namesMap.set(key, { name: key, role: emp.role.replace('_', ' '), count: 0 });
+        }
+      }
+    });
+    return Array.from(namesMap.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [sectionCards, employees]);
+
+  const filteredCards = sectionCards.filter((card) => {
     const searchLower = searchTerm.toLowerCase().trim();
-    const matchesSearch = !searchLower || (
-      card.id.toLowerCase().includes(searchLower) ||
-      card.vehicle.registrationNumber.toLowerCase().includes(searchLower) ||
+    const searchAlnum = searchLower.replace(/[^a-z0-9]/g, '');
+
+    // Check vehicle registration match (both raw and normalized alphanumeric without spaces/hyphens)
+    const regLower = card.vehicle.registrationNumber.toLowerCase();
+    const regAlnum = regLower.replace(/[^a-z0-9]/g, '');
+    const matchesRegistration =
+      regLower.includes(searchLower) ||
+      (searchAlnum.length > 0 && regAlnum.includes(searchAlnum)) ||
       card.vehicle.make.toLowerCase().includes(searchLower) ||
       card.vehicle.model.toLowerCase().includes(searchLower) ||
-      (card.vehicle.variant && card.vehicle.variant.toLowerCase().includes(searchLower)) ||
-      (card.vehicle.fuelType && card.vehicle.fuelType.toLowerCase().includes(searchLower)) ||
+      Boolean(card.vehicle.variant && card.vehicle.variant.toLowerCase().includes(searchLower)) ||
+      Boolean(card.vehicle.vin && card.vehicle.vin.toLowerCase().includes(searchLower)) ||
+      card.id.toLowerCase().includes(searchLower) ||
+      Boolean(card.cars24RefNo && card.cars24RefNo.toLowerCase().includes(searchLower)) ||
+      Boolean(card.workOrderNo && card.workOrderNo.toLowerCase().includes(searchLower));
+
+    // Check customer match
+    const matchesCustomer =
       card.customer.name.toLowerCase().includes(searchLower) ||
-      card.customer.phone.includes(searchLower) ||
-      (card.cityName && card.cityName.toLowerCase().includes(searchLower)) ||
-      (card.workshopName && card.workshopName.toLowerCase().includes(searchLower))
-    );
+      card.customer.phone.toLowerCase().includes(searchLower) ||
+      Boolean(card.customer.email && card.customer.email.toLowerCase().includes(searchLower));
+
+    // Check assigned technician match across all task roles (Painter, Denter, Mechanic/Tech, Floor Manager, Sublet Vendor)
+    const cardTechnicians = getCardTechnicians(card);
+    const matchesTechnicianSearch =
+      cardTechnicians.some(
+        (tech) =>
+          tech.name.toLowerCase().includes(searchLower) ||
+          tech.role.toLowerCase().includes(searchLower)
+      ) ||
+      card.tasks.some(
+        (t) =>
+          (t.assignedEmployeeName && t.assignedEmployeeName.toLowerCase().includes(searchLower)) ||
+          (t.assignedPainterName && t.assignedPainterName.toLowerCase().includes(searchLower)) ||
+          (t.assignedDenterName && t.assignedDenterName.toLowerCase().includes(searchLower)) ||
+          (t.vendorName && t.vendorName.toLowerCase().includes(searchLower))
+      );
+
+    // Check scope-based search match
+    let matchesSearch = true;
+    if (searchLower) {
+      if (searchScope === 'REG_NO') {
+        matchesSearch = matchesRegistration;
+      } else if (searchScope === 'CUSTOMER') {
+        matchesSearch = matchesCustomer;
+      } else if (searchScope === 'TECHNICIAN') {
+        matchesSearch = matchesTechnicianSearch;
+      } else {
+        matchesSearch =
+          matchesRegistration ||
+          matchesCustomer ||
+          matchesTechnicianSearch ||
+          Boolean(card.cityName && card.cityName.toLowerCase().includes(searchLower)) ||
+          Boolean(card.workshopName && card.workshopName.toLowerCase().includes(searchLower));
+      }
+    }
 
     if (!matchesSearch) return false;
+
+    // Check explicit Technician dropdown filter
+    if (selectedTechnician !== 'ALL') {
+      if (selectedTechnician === 'UNASSIGNED') {
+        const hasUnassigned = card.tasks.some(
+          (t) => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId
+        );
+        if (!hasUnassigned) return false;
+      } else {
+        const techLower = selectedTechnician.toLowerCase();
+        const hasSelectedTech = card.tasks.some(
+          (t) =>
+            t.assignedPainterName?.toLowerCase() === techLower ||
+            t.assignedDenterName?.toLowerCase() === techLower ||
+            t.assignedEmployeeName?.toLowerCase() === techLower
+        ) || card.floorManagerName?.toLowerCase() === techLower;
+        if (!hasSelectedTech) return false;
+      }
+    }
 
     if (mainSection === 'ACTIVE') {
       if (activeSubFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
@@ -281,42 +443,148 @@ export function JobCardList({
           </button>
         </div>
 
-        {/* Filter Controls & Search Input */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+        {/* Enhanced Global Search Bar & Multi-Criteria Filter Controls */}
+        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
-            <div className="relative w-full sm:w-80 shrink-0">
-              <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+          {/* Top Row: Global Search Input + Search Scope Pills + Technician Dropdown + Sort */}
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5">
+            
+            {/* Global Search Bar with Scope Indicator & Clear Button */}
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search Reg No, Customer, Make, Model..."
-                className="w-full pl-9 pr-4 min-h-[44px] text-xs rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                placeholder={
+                  searchScope === 'REG_NO'
+                    ? 'Search by Vehicle Reg No (e.g. KA01AB1234, MH-12) or Job Card ID...'
+                    : searchScope === 'CUSTOMER'
+                    ? 'Search by Customer Name, Phone Number, or Email...'
+                    : searchScope === 'TECHNICIAN'
+                    ? 'Search by Assigned Painter, Denter, Mechanic, or Floor Manager...'
+                    : 'Global Search: Customer Name, Vehicle Reg No (KA-01...), or Assigned Technician...'
+                }
+                aria-label="Global Job Card Search"
+                className="w-full pl-10 pr-24 min-h-[46px] text-xs sm:text-sm rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 font-semibold transition-all shadow-2xs"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[10px] font-black flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Clear search query"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search Scope Selector Pills (All / Reg No / Customer / Technician) */}
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 overflow-x-auto scrollbar-none shrink-0">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2 hidden sm:inline">
+                Scope:
+              </span>
+              {[
+                { id: 'ALL', label: 'All Fields' },
+                { id: 'REG_NO', label: '🚗 Reg No' },
+                { id: 'CUSTOMER', label: '👤 Customer' },
+                { id: 'TECHNICIAN', label: '👨‍🔧 Technician' },
+              ].map((scope) => (
+                <button
+                  key={scope.id}
+                  type="button"
+                  onClick={() => setSearchScope(scope.id as any)}
+                  className={`min-h-[36px] px-3 py-1 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                    searchScope === scope.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {scope.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Technician Direct Filter Dropdown */}
+            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 min-h-[46px] rounded-2xl border border-slate-200 dark:border-slate-700">
+              <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Technician:</span>
+              <select
+                value={selectedTechnician}
+                onChange={(e) => setSelectedTechnician(e.target.value)}
+                aria-label="Filter by Assigned Technician"
+                className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1 max-w-[170px] truncate"
+              >
+                <option value="ALL">All Technicians ({sectionCards.length})</option>
+                <option value="UNASSIGNED">
+                  ⚠️ Unassigned Tasks ({sectionCards.filter(c => c.tasks.some(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId)).length})
+                </option>
+                {availableTechnicians.map((tech) => (
+                  <option key={tech.name} value={tech.name}>
+                    {tech.name} ({tech.role}) {tech.count > 0 ? `• ${tech.count}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Sort By Dropdown */}
-            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 min-h-[46px] rounded-2xl border border-slate-200 dark:border-slate-700">
               <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Sort By:</span>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">Sort:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as JobCardSortOption)}
                 aria-label="Sort Job Cards"
                 className="bg-transparent text-slate-900 dark:text-slate-100 text-xs font-black focus:outline-none cursor-pointer pr-1"
               >
-                <option value="PRIORITY">🔥 Urgency & Priority (Most Urgent)</option>
-                <option value="TARGET_DATE_ASC">⏰ Target Delivery Date (Earliest)</option>
-                <option value="DATE_NEWEST">📅 Created Date (Newest First)</option>
-                <option value="DATE_OLDEST">📅 Created Date (Oldest First)</option>
-                <option value="STATUS">🚦 Workflow Pipeline Status</option>
+                <option value="PRIORITY">🔥 Urgency & Priority</option>
+                <option value="TARGET_DATE_ASC">⏰ Target Delivery Date</option>
+                <option value="DATE_NEWEST">📅 Created (Newest)</option>
+                <option value="DATE_OLDEST">📅 Created (Oldest)</option>
+                <option value="STATUS">🚦 Pipeline Status</option>
               </select>
             </div>
           </div>
 
-          {/* Sub-Filter Pills */}
-          <div className="flex items-center gap-1.5 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+          {/* Active Search / Filter Feedback Banner */}
+          {(searchTerm.trim() !== '' || selectedTechnician !== 'ALL' || searchScope !== 'ALL') && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  Found <span className="font-black text-blue-600 dark:text-blue-400">{sortedCards.length}</span> matching {mainSection === 'ACTIVE' ? 'active' : 'history'} job card{sortedCards.length === 1 ? '' : 's'}
+                </span>
+                {searchTerm.trim() && (
+                  <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300">
+                    Query: "{searchTerm.trim()}" ({searchScope === 'ALL' ? 'Customer, Reg No & Technician' : searchScope.replace('_', ' ')})
+                  </span>
+                )}
+                {selectedTechnician !== 'ALL' && (
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-bold text-[11px]">
+                    Technician: {selectedTechnician === 'UNASSIGNED' ? 'Unallotted Tasks' : selectedTechnician}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setSearchScope('ALL');
+                  setSelectedTechnician('ALL');
+                  setActiveSubFilter('ALL');
+                }}
+                className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                <span>Reset All Filters</span>
+              </button>
+            </div>
+          )}
+
+          {/* Bottom Row: Sub-Filter Stage Pills */}
+          <div className="flex items-center gap-1.5 w-full overflow-x-auto pb-1 scrollbar-none">
             {mainSection === 'ACTIVE' ? (
               [
                 { id: 'ALL', label: `All Active (${activeCards.length})` },
@@ -493,16 +761,35 @@ export function JobCardList({
           </div>
         )
       ) : sortedCards.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
-          <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 mb-3 stroke-[1.5]" />
-          <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
-            No {mainSection === 'ACTIVE' ? 'Active' : 'History'} Job Cards Found
-          </h3>
-          <p className="text-xs mt-1">
-            {mainSection === 'ACTIVE'
-              ? 'All delivered vehicles have been moved to the History of Job Cards section.'
-              : 'Delivered and closed vehicle job cards will automatically appear here.'}
-          </p>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500 space-y-3">
+          <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 stroke-[1.5]" />
+          <div>
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
+              No {mainSection === 'ACTIVE' ? 'Active' : 'History'} Job Cards Match Your Search
+            </h3>
+            <p className="text-xs mt-1 max-w-md mx-auto">
+              {searchTerm.trim() || selectedTechnician !== 'ALL' || activeSubFilter !== 'ALL'
+                ? `No job cards matched "${searchTerm.trim() || (selectedTechnician !== 'ALL' ? selectedTechnician : activeSubFilter)}". Try searching by Customer Name, Vehicle Reg No, or Assigned Technician.`
+                : mainSection === 'ACTIVE'
+                ? 'All delivered vehicles have been moved to the History of Job Cards section.'
+                : 'Delivered and closed vehicle job cards will automatically appear here.'}
+            </p>
+          </div>
+          {(searchTerm.trim() !== '' || selectedTechnician !== 'ALL' || activeSubFilter !== 'ALL' || searchScope !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setSearchScope('ALL');
+                setSelectedTechnician('ALL');
+                setActiveSubFilter('ALL');
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Clear Search & Filters</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
@@ -649,32 +936,60 @@ export function JobCardList({
                           {assignedTechs.length > 0 && (
                             <>
                               <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mr-0.5">Allotted:</span>
-                              {assignedTechs.slice(0, 3).map((tech, idx) => (
-                                <span
-                                  key={idx}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                                    tech.roleLabel === 'Painter'
-                                      ? 'bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border-pink-200/70 dark:border-pink-800/50'
-                                      : tech.roleLabel === 'Denter'
-                                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/70 dark:border-amber-800/50'
-                                      : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200/70 dark:border-blue-800/50'
-                                  }`}
-                                >
-                                  <span className="opacity-70 text-[8px] uppercase font-black">{tech.roleLabel[0]}:</span>
-                                  <span className="truncate max-w-[85px]">{tech.name}</span>
-                                </span>
-                              ))}
-                              {assignedTechs.length > 3 && (
+                              {assignedTechs.slice(0, 4).map((tech, idx) => {
+                                const searchLow = searchTerm.toLowerCase().trim();
+                                const isHighlighted =
+                                  (selectedTechnician !== 'ALL' && selectedTechnician.toLowerCase() === tech.name.toLowerCase()) ||
+                                  (searchLow.length > 0 && tech.name.toLowerCase().includes(searchLow));
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedTechnician((prev) =>
+                                        prev.toLowerCase() === tech.name.toLowerCase() ? 'ALL' : tech.name
+                                      );
+                                    }}
+                                    title={`Filter Job Cards allotted to ${tech.name} (${tech.roleLabel})`}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                      isHighlighted
+                                        ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-500/30 shadow-2xs'
+                                        : tech.roleLabel === 'Painter'
+                                        ? 'bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border-pink-200/70 dark:border-pink-800/50 hover:border-pink-400'
+                                        : tech.roleLabel === 'Denter'
+                                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/70 dark:border-amber-800/50 hover:border-amber-400'
+                                        : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200/70 dark:border-blue-800/50 hover:border-blue-400'
+                                    }`}
+                                  >
+                                    <span className="opacity-75 text-[8px] uppercase font-black">{tech.roleLabel[0]}:</span>
+                                    <span className="truncate max-w-[95px]">{tech.name}</span>
+                                  </button>
+                                );
+                              })}
+                              {assignedTechs.length > 4 && (
                                 <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                                  +{assignedTechs.length - 3}
+                                  +{assignedTechs.length - 4}
                                 </span>
                               )}
                             </>
                           )}
                           {unassignedCount > 0 && !isDeliveredOrClosed && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/50">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTechnician((prev) => (prev === 'UNASSIGNED' ? 'ALL' : 'UNASSIGNED'));
+                              }}
+                              title="Filter Job Cards with unallotted tasks"
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                                selectedTechnician === 'UNASSIGNED'
+                                  ? 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-amber-500/30'
+                                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200/70 dark:border-amber-800/50 hover:border-amber-400'
+                              }`}
+                            >
                               <span>{unassignedCount} Unallotted</span>
-                            </span>
+                            </button>
                           )}
                         </div>
                       );
@@ -753,19 +1068,39 @@ export function JobCardList({
                     )}
 
                     {isManagementRole && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(`🗑️ Delete Job Card ${card.id}?\n\nVehicle: ${card.vehicle.registrationNumber} (${card.vehicle.make} ${card.vehicle.model})\nCustomer: ${card.customer.name}\nStatus: ${card.status}\n\nAre you sure you want to delete this job card? This action cannot be undone.`)) {
-                            deleteJobCard(card.id);
-                          }
-                        }}
-                        className="w-9 h-9 rounded-full bg-rose-500/10 hover:bg-rose-500 text-rose-600 dark:text-rose-400 hover:text-white transition-colors flex items-center justify-center shrink-0 active:scale-95"
-                        title="Delete Job Card"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      confirmDeleteId === card.id ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteJobCard(card.id);
+                              setConfirmDeleteId(null);
+                            }}
+                            className="px-2.5 py-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black hover:bg-rose-700 transition-colors cursor-pointer"
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-1.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(card.id);
+                          }}
+                          className="w-9 h-9 rounded-full bg-rose-500/10 hover:bg-rose-500 text-rose-600 dark:text-rose-400 hover:text-white transition-colors flex items-center justify-center shrink-0 active:scale-95 cursor-pointer"
+                          title="Delete Job Card"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )
                     )}
 
                     <button
