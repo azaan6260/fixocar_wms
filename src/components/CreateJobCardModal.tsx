@@ -522,26 +522,43 @@ export function CreateJobCardModal({
       qcPassed: false,
       tasks: (() => {
         const finalJobCardTasks: any[] = [];
+        // Find any batch painter or denter selected across PAINT tasks so no paint panel is accidentally left unassigned
+        const fallbackPaintTaskWithPainter = tasks.find(t => t.category === 'PAINT' && t.assignedToId);
+        const fallbackPaintTaskWithDenter = tasks.find(t => t.category === 'PAINT' && t.pairedDenterId);
+
         tasks.forEach((t, idx) => {
+          const effectiveAssignedId = t.category === 'PAINT'
+            ? (t.assignedToId || fallbackPaintTaskWithPainter?.assignedToId)
+            : t.assignedToId;
+          const effectiveAssignedName = t.category === 'PAINT'
+            ? (t.assignedToName || fallbackPaintTaskWithPainter?.assignedToName)
+            : t.assignedToName;
+          const effectivePairedDenterId = t.category === 'PAINT'
+            ? (t.pairedDenterId || fallbackPaintTaskWithDenter?.pairedDenterId)
+            : t.pairedDenterId;
+          const effectivePairedDenterName = t.category === 'PAINT'
+            ? (t.pairedDenterName || fallbackPaintTaskWithDenter?.pairedDenterName)
+            : t.pairedDenterName;
+
           finalJobCardTasks.push({
-            id: `task-gen-${Date.now()}-${idx}`,
+            id: (t as any).id || `task-gen-${Date.now()}-${idx}`,
             jobCardId: 'PENDING',
             title: t.title,
             category: t.category,
-            assignedToId: t.assignedToId,
-            assignedToName: t.assignedToName,
-            assignedType: t.assignedType,
-            estimatedCost: t.estimatedCost,
-            customerPrice: t.customerPrice,
+            assignedToId: effectiveAssignedId,
+            assignedToName: effectiveAssignedName,
+            assignedType: t.assignedType || 'EMPLOYEE',
+            estimatedCost: Number(t.estimatedCost) || 0,
+            customerPrice: Number(t.customerPrice ?? 0),
             status: 'PENDING',
             requiresCustomerApproval: t.requiresCustomerApproval,
             isCustomerApproved: t.requiresCustomerApproval ? null : true,
-            isContractBasis: t.isContractBasis,
-            contractorPayout: (t as any).contractorPayout || t.estimatedCost,
+            isContractBasis: t.isContractBasis ?? (t.category === 'PAINT' || t.category === 'DENTING'),
+            contractorPayout: (t as any).contractorPayout ?? t.estimatedCost ?? 0,
             painterPayout: t.painterPayout,
             denterPayout: t.denterPayout,
-            pairedDenterId: t.pairedDenterId,
-            pairedDenterName: t.pairedDenterName,
+            pairedDenterId: effectivePairedDenterId,
+            pairedDenterName: effectivePairedDenterName,
             standardJobId: t.standardJobId,
             panelKey: (t as any).panelKey,
             panelNameEn: (t as any).panelNameEn,
@@ -549,7 +566,7 @@ export function CreateJobCardModal({
           });
 
           // Auto-generate explicit Pre-Denting task for Denter if paint panel has denter assigned
-          if (t.category === 'PAINT' && (t.pairedDenterId || (t.denterPayout && t.denterPayout > 0))) {
+          if (t.category === 'PAINT' && (effectivePairedDenterId || (t.denterPayout && t.denterPayout > 0))) {
             const hasExistingDentTask = tasks.some(other => 
               other.category === 'DENTING' && 
               ((other as any).panelKey === (t as any).panelKey || (t.panelNameEn && other.title.toLowerCase().includes(t.panelNameEn.toLowerCase())))
@@ -562,19 +579,19 @@ export function CreateJobCardModal({
                 jobCardId: 'PENDING',
                 title: `${pName} - Pre-Denting & Panel Prep (डेंटिंग व पैनल तैयारी)`,
                 category: 'DENTING',
-                assignedToId: t.pairedDenterId,
-                assignedToName: t.pairedDenterName,
+                assignedToId: effectivePairedDenterId,
+                assignedToName: effectivePairedDenterName,
                 assignedType: 'EMPLOYEE',
-                estimatedCost: t.denterPayout || 150,
+                estimatedCost: t.denterPayout ?? 150,
                 customerPrice: 0,
                 status: 'PENDING',
                 requiresCustomerApproval: false,
                 isCustomerApproved: true,
                 isContractBasis: true,
-                contractorPayout: t.denterPayout || 150,
-                denterPayout: t.denterPayout || 150,
-                pairedDenterId: t.pairedDenterId,
-                pairedDenterName: t.pairedDenterName,
+                contractorPayout: t.denterPayout ?? 150,
+                denterPayout: t.denterPayout ?? 150,
+                pairedDenterId: effectivePairedDenterId,
+                pairedDenterName: effectivePairedDenterName,
                 panelKey: (t as any).panelKey,
                 panelNameEn: (t as any).panelNameEn,
                 standardJobId: t.standardJobId
@@ -1198,61 +1215,66 @@ export function CreateJobCardModal({
                             <span>Category: <strong>{task.category}</strong></span>
                           </div>
 
-                          {/* Editable Painter/Denter or Contractor Payouts inline */}
-                          {task.isContractBasis && (
-                            <div className="flex items-center gap-2 pt-1 text-[11px]">
-                              <span className="font-bold text-amber-600 dark:text-amber-400">Payout:</span>
-                              {task.category === 'PAINT' ? (
-                                <div className="flex items-center gap-2">
-                                  <label className="flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-medium">
-                                    P: ₹
-                                    <input
-                                      type="number"
-                                      value={task.painterPayout ?? 800}
-                                      onChange={(e) => {
-                                        const pVal = Number(e.target.value) || 0;
-                                        setTasks(prev => prev.map((t, i) => i === idx ? {
-                                          ...t,
-                                          painterPayout: pVal,
-                                          estimatedCost: pVal + (t.denterPayout || 0)
-                                        } : t));
-                                      }}
-                                      className="w-14 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-purple-300 dark:border-purple-800 font-mono font-bold"
-                                    />
-                                  </label>
-                                  <label className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400 font-medium">
-                                    D: ₹
-                                    <input
-                                      type="number"
-                                      value={task.denterPayout ?? 150}
-                                      onChange={(e) => {
-                                        const dVal = Number(e.target.value) || 0;
-                                        setTasks(prev => prev.map((t, i) => i === idx ? {
-                                          ...t,
-                                          denterPayout: dVal,
-                                          estimatedCost: (t.painterPayout || 0) + dVal
-                                        } : t));
-                                      }}
-                                      className="w-14 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-orange-300 dark:border-orange-800 font-mono font-bold"
-                                    />
-                                  </label>
-                                </div>
-                              ) : (
-                                <label className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                                  Total: ₹
+                          {/* Editable Painter/Denter or Labor/Contractor Payouts inline for ALL tasks */}
+                          <div className="flex items-center gap-2 pt-1 text-[11px] flex-wrap">
+                            <span className="font-bold text-amber-600 dark:text-amber-400">Rate / Payout:</span>
+                            {task.category === 'PAINT' ? (
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                                  Painter: ₹
                                   <input
                                     type="number"
-                                    value={task.estimatedCost}
+                                    value={task.painterPayout ?? 800}
                                     onChange={(e) => {
-                                      const cost = Number(e.target.value) || 0;
-                                      setTasks(prev => prev.map((t, i) => i === idx ? { ...t, estimatedCost: cost } : t));
+                                      const pVal = Number(e.target.value) || 0;
+                                      setTasks(prev => prev.map((t, i) => i === idx ? {
+                                        ...t,
+                                        painterPayout: pVal,
+                                        contractorPayout: pVal + (t.denterPayout || 0),
+                                        estimatedCost: pVal + (t.denterPayout || 0)
+                                      } : t));
                                     }}
-                                    className="w-16 px-1 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-800 font-mono font-bold"
+                                    className="w-16 px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-purple-300 dark:border-purple-800 font-mono font-bold"
                                   />
                                 </label>
-                              )}
-                            </div>
-                          )}
+                                <label className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400 font-medium">
+                                  Denter: ₹
+                                  <input
+                                    type="number"
+                                    value={task.denterPayout ?? 150}
+                                    onChange={(e) => {
+                                      const dVal = Number(e.target.value) || 0;
+                                      setTasks(prev => prev.map((t, i) => i === idx ? {
+                                        ...t,
+                                        denterPayout: dVal,
+                                        contractorPayout: (t.painterPayout || 0) + dVal,
+                                        estimatedCost: (t.painterPayout || 0) + dVal
+                                      } : t));
+                                    }}
+                                    className="w-16 px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-orange-300 dark:border-orange-800 font-mono font-bold"
+                                  />
+                                </label>
+                              </div>
+                            ) : (
+                              <label className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                Cost/Payout: ₹
+                                <input
+                                  type="number"
+                                  value={(task as any).contractorPayout ?? task.estimatedCost ?? 0}
+                                  onChange={(e) => {
+                                    const cost = Number(e.target.value) || 0;
+                                    setTasks(prev => prev.map((t, i) => i === idx ? {
+                                      ...t,
+                                      estimatedCost: cost,
+                                      contractorPayout: cost,
+                                      denterPayout: t.category === 'DENTING' ? cost : t.denterPayout
+                                    } : t));
+                                  }}
+                                  className="w-20 px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-800 border border-amber-300 dark:border-amber-800 font-mono font-bold"
+                                />
+                              </label>
+                            )}
+                          </div>
                         </div>
 
                         {/* Team Assignment & Customer Price */}
@@ -1268,7 +1290,6 @@ export function CreateJobCardModal({
                                     const selectedId = e.target.value;
                                     const emp = employees.find(emp => emp.id === selectedId);
                                     setTasks(prev => prev.map((t) => {
-                                      // If user changed painter on one panel, ask/update all paint panels together if desired
                                       if (t.category === 'PAINT') {
                                         return {
                                           ...t,
@@ -1285,7 +1306,7 @@ export function CreateJobCardModal({
                                 >
                                   <option value="">-- Painter --</option>
                                   {employees.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
+                                    <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
                                   ))}
                                 </select>
                               </div>
@@ -1314,58 +1335,64 @@ export function CreateJobCardModal({
                                 >
                                   <option value="">-- Denter --</option>
                                   {employees.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
+                                    <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
                                   ))}
                                 </select>
                               </div>
                             </div>
                           ) : (
-                            <select
-                              value={task.assignedToId || ''}
-                              onChange={(e) => {
-                                const emp = employees.find(emp => emp.id === e.target.value);
-                                const ven = vendors.find(v => v.id === e.target.value);
-                                setTasks(prev => prev.map((t, i) => i === idx ? {
-                                  ...t,
-                                  assignedToId: e.target.value || undefined,
-                                  assignedToName: emp?.name || ven?.name || undefined,
-                                  assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
-                                } : t));
-                              }}
-                              className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
-                            >
-                              <option value="">-- Unassigned (Allot Later) --</option>
-                              <optgroup label="Workshop Staff">
-                                {employees.map(e => (
-                                  <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
-                                ))}
-                              </optgroup>
-                              <optgroup label="Sublet Vendors">
-                                {vendors.map(v => (
-                                  <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
-                                ))}
-                              </optgroup>
-                            </select>
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase">Dept / Staff</span>
+                              <select
+                                value={task.assignedToId || ''}
+                                onChange={(e) => {
+                                  const emp = employees.find(emp => emp.id === e.target.value);
+                                  const ven = vendors.find(v => v.id === e.target.value);
+                                  setTasks(prev => prev.map((t, i) => i === idx ? {
+                                    ...t,
+                                    assignedToId: e.target.value || undefined,
+                                    assignedToName: emp?.name || ven?.name || undefined,
+                                    assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                                  } : t));
+                                }}
+                                className="px-2 py-1 text-xs rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium"
+                              >
+                                <option value="">-- Allot Staff / Dept --</option>
+                                <optgroup label="Workshop Staff">
+                                  {employees.map(e => (
+                                    <option key={e.id} value={e.id}>{e.name} ({e.role})</option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="Sublet Vendors">
+                                  {vendors.map(v => (
+                                    <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                                  ))}
+                                </optgroup>
+                              </select>
+                            </div>
                           )}
 
-                          <div className="flex items-center gap-1">
-                            <span className="text-emerald-600 font-bold text-[10px]">Bill: ₹</span>
-                            <input
-                              type="number"
-                              value={task.customerPrice}
-                              onChange={(e) => {
-                                const price = Number(e.target.value);
-                                setTasks(prev => prev.map((t, i) => i === idx ? { ...t, customerPrice: price } : t));
-                              }}
-                              className="w-16 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-mono font-bold"
-                              title="Customer Billing Price"
-                            />
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Customer Price</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-emerald-600 font-bold text-[10px]">₹</span>
+                              <input
+                                type="number"
+                                value={task.customerPrice ?? 0}
+                                onChange={(e) => {
+                                  const price = Number(e.target.value) || 0;
+                                  setTasks(prev => prev.map((t, i) => i === idx ? { ...t, customerPrice: price } : t));
+                                }}
+                                className="w-20 px-1.5 py-1 text-xs rounded-md bg-slate-50 dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-mono font-bold"
+                                title="Customer Billing Price"
+                              />
+                            </div>
                           </div>
 
                           <button
                             type="button"
                             onClick={() => handleRemoveTask(idx)}
-                            className="px-2 py-1 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 border border-rose-200 dark:border-rose-900/50 rounded-lg flex items-center gap-1 font-bold text-xs transition-colors"
+                            className="px-2 py-1 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 border border-rose-200 dark:border-rose-900/50 rounded-lg flex items-center gap-1 font-bold text-xs transition-colors mt-3"
                             title="Remove job from card"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-500" />

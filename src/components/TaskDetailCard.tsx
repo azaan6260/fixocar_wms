@@ -114,10 +114,10 @@ export function TaskDetailCard({
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editCategory, setEditCategory] = useState<TaskCategory>(task.category);
-  const [editCustomerPrice, setEditCustomerPrice] = useState(task.customerPrice || 0);
-  const [editContractorPayout, setEditContractorPayout] = useState(task.contractorPayout || task.estimatedCost || 0);
-  const [editPainterPayout, setEditPainterPayout] = useState(task.painterPayout || 0);
-  const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout || 0);
+  const [editCustomerPrice, setEditCustomerPrice] = useState(task.customerPrice ?? 0);
+  const [editContractorPayout, setEditContractorPayout] = useState(task.contractorPayout ?? task.estimatedCost ?? 0);
+  const [editPainterPayout, setEditPainterPayout] = useState(task.painterPayout ?? 0);
+  const [editDenterPayout, setEditDenterPayout] = useState(task.denterPayout ?? 0);
   const [editAssignedId, setEditAssignedId] = useState(task.assignedToId || '');
   const [editPairedDenterId, setEditPairedDenterId] = useState(task.pairedDenterId || '');
   const [editPaintScope, setEditPaintScope] = useState<PaintScope>(task.paintScope || 'FULL_OUTER');
@@ -148,7 +148,9 @@ export function TaskDetailCard({
 
     const painter = Number(editPainterPayout) || 0;
     const denter = Number(editDenterPayout) || 0;
-    const totalContractor = Number(editContractorPayout) || (painter + denter);
+    const totalContractor = editCategory === 'PAINT'
+      ? (painter + denter)
+      : (Number(editContractorPayout) || 0);
 
     updateJobCardTask(card.id, task.id, {
       title: editTitle.trim(),
@@ -157,8 +159,8 @@ export function TaskDetailCard({
       contractorPayout: totalContractor,
       estimatedCost: totalContractor,
       painterPayout: painter,
-      denterPayout: denter,
-      assignedToId: editAssignedId,
+      denterPayout: editCategory === 'DENTING' ? totalContractor : denter,
+      assignedToId: editAssignedId || undefined,
       assignedToName: matchedEmp ? matchedEmp.name : matchedVendor ? matchedVendor.name : (editAssignedId ? 'Assigned Staff' : 'Unassigned'),
       assignedType: matchedVendor ? 'VENDOR' : 'EMPLOYEE',
       pairedDenterId: editPairedDenterId || undefined,
@@ -451,6 +453,180 @@ export function TaskDetailCard({
           )}
         </div>
       </div>
+
+      {/* INLINE QUICK ALLOTMENT & RATE EDITOR BAR FOR MANAGERS */}
+      {isManager && !isEditingTask && (
+        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Quick Staff / Department Allotment */}
+          <div className="flex flex-wrap items-center gap-2">
+            {task.category === 'PAINT' ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase">Painter:</span>
+                  <select
+                    value={task.assignedToId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const emp = employees.find(emp => emp.id === val);
+                      updateJobCardTask(card.id, task.id, {
+                        assignedToId: val || undefined,
+                        assignedToName: emp ? emp.name : 'Unassigned',
+                        assignedType: 'EMPLOYEE'
+                      });
+                      reassignAllPaintTasksForJobCard(
+                        card.id,
+                        val || undefined,
+                        emp ? emp.name : undefined,
+                        task.pairedDenterId,
+                        task.pairedDenterName
+                      );
+                    }}
+                    className="px-2 py-1 rounded-lg border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold text-xs"
+                  >
+                    <option value="">-- Select Painter --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase">Denter:</span>
+                  <select
+                    value={task.pairedDenterId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const emp = employees.find(emp => emp.id === val);
+                      updateJobCardTask(card.id, task.id, {
+                        pairedDenterId: val || undefined,
+                        pairedDenterName: emp ? emp.name : undefined
+                      });
+                      reassignAllPaintTasksForJobCard(
+                        card.id,
+                        task.assignedToId,
+                        task.assignedToName,
+                        val || undefined,
+                        emp ? emp.name : undefined
+                      );
+                    }}
+                    className="px-2 py-1 rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold text-xs"
+                  >
+                    <option value="">-- Select Denter --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">Allot Staff / Dept:</span>
+                <select
+                  value={task.assignedToId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const emp = employees.find(emp => emp.id === val);
+                    const ven = vendors.find(v => v.id === val);
+                    updateJobCardTask(card.id, task.id, {
+                      assignedToId: val || undefined,
+                      assignedToName: emp ? emp.name : ven ? ven.name : 'Unassigned',
+                      assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                    });
+                  }}
+                  className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-bold text-xs"
+                >
+                  <option value="">-- Unassigned (Select Staff / Vendor) --</option>
+                  <optgroup label="Workshop Staff">
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Sublet Vendors">
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Rate & Price Inputs */}
+          <div className="flex flex-wrap items-center gap-2">
+            {task.category === 'PAINT' ? (
+              <>
+                <label className="flex items-center gap-1 text-[11px] font-bold text-purple-600 dark:text-purple-400">
+                  <span>Painter ₹</span>
+                  <input
+                    type="number"
+                    value={task.painterPayout ?? 800}
+                    onChange={(e) => {
+                      const pVal = Number(e.target.value) || 0;
+                      const dVal = Number(task.denterPayout ?? 150) || 0;
+                      updateJobCardTask(card.id, task.id, {
+                        painterPayout: pVal,
+                        contractorPayout: pVal + dVal,
+                        estimatedCost: pVal + dVal
+                      });
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded-lg border border-purple-300 dark:border-purple-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1 text-[11px] font-bold text-orange-600 dark:text-orange-400">
+                  <span>Denter ₹</span>
+                  <input
+                    type="number"
+                    value={task.denterPayout ?? 150}
+                    onChange={(e) => {
+                      const dVal = Number(e.target.value) || 0;
+                      const pVal = Number(task.painterPayout ?? 800) || 0;
+                      updateJobCardTask(card.id, task.id, {
+                        denterPayout: dVal,
+                        contractorPayout: pVal + dVal,
+                        estimatedCost: pVal + dVal
+                      });
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded-lg border border-orange-300 dark:border-orange-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                  />
+                </label>
+              </>
+            ) : (
+              <label className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                <span>Payout/Rate ₹</span>
+                <input
+                  type="number"
+                  value={task.contractorPayout ?? task.estimatedCost ?? 0}
+                  onChange={(e) => {
+                    const cost = Number(e.target.value) || 0;
+                    updateJobCardTask(card.id, task.id, {
+                      contractorPayout: cost,
+                      estimatedCost: cost,
+                      denterPayout: task.category === 'DENTING' ? cost : task.denterPayout
+                    });
+                  }}
+                  className="w-20 px-1.5 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                />
+              </label>
+            )}
+
+            <label className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span>Customer Bill ₹</span>
+              <input
+                type="number"
+                value={task.customerPrice ?? 0}
+                onChange={(e) => {
+                  const price = Number(e.target.value) || 0;
+                  updateJobCardTask(card.id, task.id, {
+                    customerPrice: price
+                  });
+                }}
+                className="w-20 px-1.5 py-0.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-mono font-bold text-xs"
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* EDIT TASK & PAYOUTS PANEL */}
       {isEditingTask && (

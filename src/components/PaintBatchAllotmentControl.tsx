@@ -57,19 +57,23 @@ export function PaintBatchAllotmentControl({
 
   if (paintTasks.length === 0) return null;
 
-  const handleApply = () => {
-    const painterObj = availablePainters.find(e => e.id === selectedPainterId) || employees.find(e => e.id === selectedPainterId);
-    const denterObj = availableDenters.find(e => e.id === selectedDenterId) || employees.find(e => e.id === selectedDenterId);
+  const applyAllotmentNow = (nextPainterId: string, nextDenterId: string) => {
+    const painterObj = availablePainters.find(e => e.id === nextPainterId) || employees.find(e => e.id === nextPainterId);
+    const denterObj = availableDenters.find(e => e.id === nextDenterId) || employees.find(e => e.id === nextDenterId);
 
     onApplyBatchAllotment(
-      selectedPainterId || undefined,
+      nextPainterId || undefined,
       painterObj?.name || undefined,
-      selectedDenterId || undefined,
+      nextDenterId || undefined,
       denterObj?.name || undefined
     );
 
     setJustApplied(true);
-    setTimeout(() => setJustApplied(false), 3000);
+    setTimeout(() => setJustApplied(false), 2500);
+  };
+
+  const handleApply = () => {
+    applyAllotmentNow(selectedPainterId, selectedDenterId);
   };
 
   return (
@@ -89,7 +93,7 @@ export function PaintBatchAllotmentControl({
               </span>
             </div>
             <p className="text-[11px] text-purple-300/80 mt-0.5">
-              Allot all vehicle paint jobs to <span className="font-bold text-white">1 Painter & 1 Denter</span>. Changing here reassigns all panels together.
+              Select <span className="font-bold text-white">1 Painter & 1 Denter</span> below — all {paintTasks.length} paint panels on this vehicle are allotted automatically.
             </p>
           </div>
         </div>
@@ -112,7 +116,11 @@ export function PaintBatchAllotmentControl({
           </label>
           <select
             value={selectedPainterId}
-            onChange={(e) => setSelectedPainterId(e.target.value)}
+            onChange={(e) => {
+              const nextPainterId = e.target.value;
+              setSelectedPainterId(nextPainterId);
+              applyAllotmentNow(nextPainterId, selectedDenterId);
+            }}
             className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-purple-500/40 text-white font-medium focus:ring-2 focus:ring-purple-400 focus:outline-none"
           >
             <option value="">-- Select Painter for All Panels --</option>
@@ -132,7 +140,11 @@ export function PaintBatchAllotmentControl({
           </label>
           <select
             value={selectedDenterId}
-            onChange={(e) => setSelectedDenterId(e.target.value)}
+            onChange={(e) => {
+              const nextDenterId = e.target.value;
+              setSelectedDenterId(nextDenterId);
+              applyAllotmentNow(selectedPainterId, nextDenterId);
+            }}
             className="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-orange-500/40 text-white font-medium focus:ring-2 focus:ring-orange-400 focus:outline-none"
           >
             <option value="">-- Select Denter for All Panels --</option>
@@ -150,7 +162,7 @@ export function PaintBatchAllotmentControl({
             type="button"
             onClick={handleApply}
             className={`w-full py-2 px-4 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-lg ${
-              justApplied
+              justApplied || (selectedPainterId && allSamePainter) || (selectedDenterId && allSameDenter)
                 ? 'bg-emerald-500 text-slate-950 border border-emerald-400'
                 : 'bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300'
             }`}
@@ -158,12 +170,17 @@ export function PaintBatchAllotmentControl({
             {justApplied ? (
               <>
                 <CheckCircle2 className="w-4 h-4 stroke-[3]" />
-                <span>All {paintTasks.length} Panels Reassigned Together!</span>
+                <span>All {paintTasks.length} Panels Allotted!</span>
+              </>
+            ) : (selectedPainterId || selectedDenterId) ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                <span>Synced to All {paintTasks.length} Panels</span>
               </>
             ) : (
               <>
                 <RefreshCw className="w-4 h-4" />
-                <span>Assign / Change All {paintTasks.length} Panels Together</span>
+                <span>Assign All {paintTasks.length} Panels Together</span>
               </>
             )}
           </button>
