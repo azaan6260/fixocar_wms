@@ -2680,14 +2680,28 @@ export function consumeInventoryItemForTask(
 
 export function getStandardJobs(): StandardJob[] {
   const data = localStorage.getItem(STORAGE_KEYS.STANDARD_JOBS);
+  const deletedIds = new Set(getDeletedStandardJobIds());
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(INITIAL_STANDARD_JOBS));
-    return INITIAL_STANDARD_JOBS;
+    const seeded = INITIAL_STANDARD_JOBS.filter(j => !deletedIds.has(j.id));
+    localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(seeded));
+    return seeded;
   }
   try {
     const parsed = JSON.parse(data);
-    if (Array.isArray(parsed)) return parsed;
-    return [];
+    if (Array.isArray(parsed)) {
+      const existingIds = new Set(parsed.map((j: StandardJob) => j.id));
+      const existingPanelKeys = new Set(parsed.map((j: StandardJob) => j.panelKey).filter(Boolean));
+      const missingDefaults = INITIAL_STANDARD_JOBS.filter(
+        j => !deletedIds.has(j.id) && !existingIds.has(j.id) && (!j.panelKey || !existingPanelKeys.has(j.panelKey))
+      );
+      if (missingDefaults.length > 0) {
+        const merged = [...parsed, ...missingDefaults];
+        localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(merged));
+        return merged;
+      }
+      return parsed;
+    }
+    return INITIAL_STANDARD_JOBS;
   } catch {
     return INITIAL_STANDARD_JOBS;
   }
@@ -2770,6 +2784,13 @@ export function getVehiclePanels(): any[] {
   if (list.length === 0) {
     list = [...INITIAL_VEHICLE_PANELS];
     localStorage.setItem(STORAGE_KEYS.VEHICLE_PANELS, JSON.stringify(list));
+  } else {
+    const existingIds = new Set(list.map(p => p.id));
+    const missingPanels = INITIAL_VEHICLE_PANELS.filter(p => !existingIds.has(p.id));
+    if (missingPanels.length > 0) {
+      list = [...list, ...missingPanels];
+      localStorage.setItem(STORAGE_KEYS.VEHICLE_PANELS, JSON.stringify(list));
+    }
   }
   return list;
 }
@@ -2892,7 +2913,8 @@ export function addStandardJobToJobCard(
   jobCardId: string, 
   standardJobId: string, 
   customAssignedId?: string,
-  customDenterId?: string
+  customDenterId?: string,
+  taskOverrides?: Partial<JobTask>
 ): JobTask[] | null {
   const cards = getJobCards();
   const cardIndex = cards.findIndex(c => c.id === jobCardId);
@@ -2900,32 +2922,66 @@ export function addStandardJobToJobCard(
 
   const card = cards[cardIndex];
   const stdJobs = getStandardJobs();
-  const stdJob = stdJobs.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId));
+  let stdJob = stdJobs.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId))
+    || INITIAL_STANDARD_JOBS.find(j => j.id === standardJobId || (j.panelKey && j.panelKey === standardJobId));
+
+  if (!stdJob) {
+    const panelDef = INITIAL_VEHICLE_PANELS.find(p => p.id === standardJobId || p.standardJobId === standardJobId);
+    if (panelDef) {
+      stdJob = {
+        id: panelDef.standardJobId || `std-${panelDef.id}`,
+        title: `${panelDef.nameEn} (Full Outer Paint)`,
+        category: 'PAINT',
+        panelKey: panelDef.id,
+        panelNameEn: panelDef.nameEn,
+        paintScope: 'FULL_OUTER',
+        retailPrice: panelDef.defaultPrice || 2000,
+        cars24Price: panelDef.defaultPrice || 1350,
+        isContractBasis: true,
+        retailPainterPayout: 950,
+        retailDenterPayout: 200,
+        retailContractorPayout: 1150,
+        cars24PainterPayout: 800,
+        cars24DenterPayout: 150,
+        cars24ContractorPayout: 950,
+        contractorPayout: 950,
+        estimatedHours: 4
+      };
+    }
+  }
   if (!stdJob) return null;
 
   // Dual pricing check: Cars24 B2B vs Retail
   const isCars24 = isCars24JobCard(card);
-  const customerPrice = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
+  const customerPrice = taskOverrides?.customerPrice !== undefined
+    ? taskOverrides.customerPrice
+    : (isCars24 ? stdJob.cars24Price : stdJob.retailPrice);
   const employees = getAllEmployees();
   const vendorList = getVendors();
 
   // Dual contract pricing check: Cars24 vs Retail
-  const painterPayout = isCars24
-    ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
-    : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 950);
+  const painterPayout = taskOverrides?.painterPayout !== undefined
+    ? taskOverrides.painterPayout
+    : (isCars24
+      ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
+      : (stdJob.retailPainterPayout ?? stdJob.painterPayout ?? 950));
 
-  const denterPayout = isCars24
-    ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
-    : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200);
+  const denterPayout = taskOverrides?.denterPayout !== undefined
+    ? taskOverrides.denterPayout
+    : (isCars24
+      ? (stdJob.cars24DenterPayout ?? stdJob.denterPayout ?? 150)
+      : (stdJob.retailDenterPayout ?? stdJob.denterPayout ?? 200));
 
-  const contractorPayout = isCars24
-    ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
-    : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout));
+  const contractorPayout = taskOverrides?.contractorPayout !== undefined
+    ? taskOverrides.contractorPayout
+    : (isCars24
+      ? (stdJob.cars24ContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout))
+      : (stdJob.retailContractorPayout ?? stdJob.contractorPayout ?? (painterPayout + denterPayout)));
 
   const createdTasks: JobTask[] = [];
 
   let assignedType: 'EMPLOYEE' | 'VENDOR' = 'EMPLOYEE';
-  let assignedName: string | undefined = undefined;
+  let assignedName: string | undefined = taskOverrides?.assignedToName;
 
   if (customAssignedId) {
     const emp = employees.find(e => e.id === customAssignedId);
@@ -2953,17 +3009,25 @@ export function addStandardJobToJobCard(
     }
   }
 
+  let pairedDenterName = taskOverrides?.pairedDenterName;
+  if (customDenterId && !pairedDenterName) {
+    const dEmp = employees.find(e => e.id === customDenterId);
+    if (dEmp) pairedDenterName = dEmp.name;
+  }
+
   const newTask: JobTask = {
-    id: `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: taskOverrides?.id || `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     jobCardId,
-    title: stdJob.title,
-    category: stdJob.category,
-    panelKey: stdJob.panelKey,
-    panelNameEn: stdJob.panelNameEn,
-    paintScope: stdJob.paintScope,
+    title: taskOverrides?.title || stdJob.title,
+    category: taskOverrides?.category || stdJob.category,
+    panelKey: taskOverrides?.panelKey || stdJob.panelKey,
+    panelNameEn: taskOverrides?.panelNameEn || stdJob.panelNameEn,
+    paintScope: taskOverrides?.paintScope || stdJob.paintScope,
     assignedToId: customAssignedId,
     assignedToName: assignedName,
     assignedType,
+    pairedDenterId: customDenterId || taskOverrides?.pairedDenterId,
+    pairedDenterName,
     estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(customerPrice * 0.5),
     customerPrice,
     status: 'PENDING',

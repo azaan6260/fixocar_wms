@@ -37,11 +37,15 @@ export function StandardJobsCatalogModal({
     customerPrice: t.customerPrice,
     requiresCustomerApproval: Boolean(t.requiresCustomerApproval),
     isContractBasis: t.isContractBasis,
+    contractorPayout: t.contractorPayout,
     painterPayout: t.painterPayout,
     denterPayout: t.denterPayout,
+    pairedDenterId: t.pairedDenterId,
+    pairedDenterName: t.pairedDenterName,
     standardJobId: t.standardJobId,
     panelKey: t.panelKey || matchTaskToPanelDef(t)?.id,
-    panelNameEn: t.panelNameEn || matchTaskToPanelDef(t)?.nameEn
+    panelNameEn: t.panelNameEn || matchTaskToPanelDef(t)?.nameEn,
+    paintScope: t.paintScope
   }));
 
   const handleTasksPipelineChange = (updatedTasks: AllocatedTaskItem[]) => {
@@ -54,11 +58,16 @@ export function StandardJobsCatalogModal({
 
     // 2. Determine newly added tasks
     const existingTaskIds = new Set(existingTasks.map(t => t.id));
-    const existingPanelKeys = new Set(existingTasks.map(t => t.panelKey || matchTaskToPanelDef(t)?.id).filter(Boolean));
+    const existingPaintPanelKeys = new Set(
+      existingTasks
+        .filter(t => t.category === 'PAINT')
+        .map(t => t.panelKey || matchTaskToPanelDef(t)?.id)
+        .filter(Boolean)
+    );
 
     const newTasks = updatedTasks.filter(t => 
       !existingTaskIds.has(t.id) && 
-      (!t.panelKey || !existingPanelKeys.has(t.panelKey))
+      (t.category !== 'PAINT' || !t.panelKey || !existingPaintPanelKeys.has(t.panelKey))
     );
 
     if (newTasks.length > 0) {
@@ -69,7 +78,22 @@ export function StandardJobsCatalogModal({
             card.id, 
             stdId, 
             newTask.assignedToId,
-            newTask.category === 'DENTING' ? newTask.assignedToId : undefined
+            newTask.category === 'DENTING' ? newTask.assignedToId : newTask.pairedDenterId,
+            {
+              id: newTask.id,
+              title: newTask.title,
+              category: newTask.category,
+              panelKey: newTask.panelKey,
+              panelNameEn: newTask.panelNameEn,
+              paintScope: newTask.paintScope,
+              customerPrice: newTask.customerPrice,
+              painterPayout: newTask.painterPayout,
+              denterPayout: newTask.denterPayout,
+              contractorPayout: newTask.contractorPayout,
+              pairedDenterId: newTask.pairedDenterId,
+              pairedDenterName: newTask.pairedDenterName,
+              assignedToName: newTask.assignedToName,
+            }
           );
         }
       });
@@ -85,7 +109,9 @@ export function StandardJobsCatalogModal({
           existing.customerPrice !== newTask.customerPrice ||
           existing.painterPayout !== newTask.painterPayout ||
           existing.denterPayout !== newTask.denterPayout ||
-          existing.title !== newTask.title;
+          existing.title !== newTask.title ||
+          existing.assignedToId !== newTask.assignedToId ||
+          existing.pairedDenterId !== newTask.pairedDenterId;
 
         if (hasChanged) {
           hasModifications = true;
@@ -96,8 +122,13 @@ export function StandardJobsCatalogModal({
             painterPayout: newTask.painterPayout,
             denterPayout: newTask.denterPayout,
             contractorPayout: newTask.contractorPayout,
-            estimatedCost: newTask.contractorPayout,
-            panelKey: newTask.panelKey
+            estimatedCost: newTask.contractorPayout ?? newTask.estimatedCost,
+            panelKey: newTask.panelKey,
+            panelNameEn: newTask.panelNameEn,
+            assignedToId: newTask.assignedToId,
+            assignedToName: newTask.assignedToName,
+            pairedDenterId: newTask.pairedDenterId,
+            pairedDenterName: newTask.pairedDenterName
           });
         }
       }

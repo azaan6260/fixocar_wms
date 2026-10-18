@@ -8,6 +8,9 @@ import {
   updateVehicleCheckIn, 
   getInventoryConsumptionRecords,
   getStandardJobs,
+  getVehiclePanels,
+  addStandardJobToJobCard,
+  updateJobCardTask,
   dispatchToastNotification,
   reassignAllPaintTasksForJobCard,
   deleteJobCard,
@@ -18,9 +21,9 @@ import {
   getAuthUser
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
-import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
+import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { AddCustomJobModal } from './AddCustomJobModal';
-import { mapPanelToStandardJob, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
+import { mapPanelToStandardJob, getPanelEnvironmentRates, matchTaskToPanelDef, formatPaintTaskTitle } from '../lib/panelMappingHelper';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { triggerSuccessHaptic } from '../lib/mobileBridge';
 import { ProofMediaGallery } from './ProofMediaGallery';
@@ -1327,7 +1330,7 @@ export function JobCardDetailView({
                   </div>
 
                   {/* Single Unified AR Vehicle Body Inspection Chart at the top of Paint / Denting Jobs */}
-                  {card.tasks.some(t => (t.category === 'PAINT' || t.category === 'DENTING') && t.panelKey) && (
+                  {(isManagerOrHigher || card.tasks.some(t => (t.category === 'PAINT' || t.category === 'DENTING') && (t.panelKey || matchTaskToPanelDef(t)))) && (
                     <div className="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-3 animate-in fade-in duration-200">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1336,39 +1339,113 @@ export function JobCardDetailView({
                             <span>Allotted Job Panels (Unified AR View)</span>
                           </h5>
                           <p className="text-[10px] text-slate-400">
-                            Highlighted areas represent the complete body shop workload for {card.vehicle.registrationNumber}
+                            {isManagerOrHigher
+                              ? `Touch any 3D panel to add or deselect body shop jobs for ${card.vehicle.registrationNumber}`
+                              : `Highlighted areas represent the complete body shop workload for ${card.vehicle.registrationNumber}`}
                           </p>
                         </div>
                         <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md uppercase">
                           Body Map
                         </span>
                       </div>
-                      <div className="border border-slate-800/80 rounded-xl bg-slate-900/30 p-2 overflow-hidden max-w-md mx-auto">
+                      <div className="border border-slate-800/80 rounded-xl bg-slate-900/30 p-2 overflow-hidden w-full">
                         <InteractiveVehicleInspectionChart
-                          mode="VIEW"
+                          mode={isManagerOrHigher ? 'INTERACTIVE_SELECT' : 'VIEW'}
+                          isCars24={isCars24}
                           selectedPanelIds={
-                            card.tasks
-                              .filter(t => t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING'))
-                              .map(t => t.panelKey as string)
+                            Array.from(new Set(
+                              card.tasks
+                                .filter(t => t.category === 'PAINT')
+                                .map(t => matchTaskToPanelDef(t)?.id || t.panelKey || '')
+                                .filter(Boolean)
+                            ))
                           }
                           inspections={card.tasks.reduce((acc, t) => {
-                            if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                              acc[t.panelKey] = {
-                                panelId: t.panelKey,
-                                nameEn: t.panelNameEn || t.title,
-                                nameHi: t.title,
-                                category: 'EXTERIOR_BODY',
-                                selected: true,
-                                paintScope: t.paintScope || 'FULL_OUTER',
-                                painterName: t.assignedToName,
-                                denterName: t.pairedDenterName,
-                                customPrice: t.customerPrice,
-                                customPainterPayout: t.painterPayout,
-                                customDenterPayout: t.denterPayout
-                              };
+                            if (t.category === 'PAINT') {
+                              const matchedDef = matchTaskToPanelDef(t);
+                              const panelId = matchedDef?.id || t.panelKey;
+                              if (panelId) {
+                                acc[panelId] = {
+                                  panelId,
+                                  nameEn: t.panelNameEn || matchedDef?.nameEn || t.title,
+                                  nameHi: matchedDef?.nameHi || t.title,
+                                  category: 'EXTERIOR_BODY',
+                                  selected: true,
+                                  paintScope: t.paintScope || 'FULL_OUTER',
+                                  painterName: t.assignedToName,
+                                  denterName: t.pairedDenterName,
+                                  customPrice: t.customerPrice,
+                                  customPainterPayout: t.painterPayout,
+                                  customDenterPayout: t.denterPayout
+                                };
+                              }
                             }
                             return acc;
                           }, {} as Record<string, any>)}
+                          onInspectionChange={isManagerOrHigher ? (updatedInspections) => {
+                            const allKnownPanels = [...VEHICLE_PANELS, ...getVehiclePanels()];
+                            const freshJobs = getStandardJobs();
+
+                            Object.keys(updatedInspections).forEach(panelId => {
+                              const inspection = updatedInspections[panelId];
+                              const panelDef = allKnownPanels.find(p => p.id === panelId);
+                              if (!panelDef) return;
+
+                              const existingTask = card.tasks.find(t =>
+                                t.category === 'PAINT' && (
+                                  t.panelKey === panelId ||
+                                  matchTaskToPanelDef(t)?.id === panelId
+                                )
+                              );
+
+                              if (!inspection.selected) {
+                                if (existingTask) {
+                                  deleteJobCardTask(card.id, existingTask.id);
+                                }
+                                return;
+                              }
+
+                              const scope = inspection.paintScope || 'FULL_OUTER';
+                              const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, scope);
+                              const price = inspection.customPrice !== undefined ? inspection.customPrice : rates.price;
+                              const painterPayout = inspection.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout;
+                              const denterPayout = inspection.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout;
+                              const totalContractorPayout = painterPayout + denterPayout;
+                              const dynamicTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
+
+                              if (existingTask) {
+                                updateJobCardTask(card.id, existingTask.id, {
+                                  title: dynamicTitle,
+                                  paintScope: scope,
+                                  customerPrice: price,
+                                  painterPayout,
+                                  denterPayout,
+                                  contractorPayout: totalContractorPayout,
+                                  estimatedCost: totalContractorPayout,
+                                  panelKey: panelId,
+                                  panelNameEn: panelDef.nameEn
+                                });
+                              } else {
+                                addStandardJobToJobCard(
+                                  card.id,
+                                  panelDef.standardJobId || panelId,
+                                  undefined,
+                                  undefined,
+                                  {
+                                    title: dynamicTitle,
+                                    category: 'PAINT',
+                                    panelKey: panelId,
+                                    panelNameEn: panelDef.nameEn,
+                                    paintScope: scope,
+                                    customerPrice: price,
+                                    painterPayout,
+                                    denterPayout,
+                                    contractorPayout: totalContractorPayout
+                                  }
+                                );
+                              }
+                            });
+                          } : undefined}
                           compact={true}
                           currentRole={currentRole}
                           vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}

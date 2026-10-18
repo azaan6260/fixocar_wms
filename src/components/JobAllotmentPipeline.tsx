@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TaskCategory, SpecializedTeam, Employee, Vendor, StandardJob, PaintScope } from '../types';
-import { getStandardJobs } from '../lib/storage';
+import { getStandardJobs, getVehiclePanels } from '../lib/storage';
 import { mapPanelToStandardJob, matchTaskToPanelDef, getPanelEnvironmentRates, isPartialPaintAllowedForPanel, formatPaintTaskTitle } from '../lib/panelMappingHelper';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS, PanelInspectionItem } from './InteractiveVehicleInspectionChart';
 import { 
@@ -104,7 +104,7 @@ export function JobAllotmentPipeline({
     denterPayout: number, 
     matchedJobId?: string
   ) => {
-    const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
+    const panelDef = VEHICLE_PANELS.find(p => p.id === panelId) || getVehiclePanels().find((p: any) => p.id === panelId);
     if (!panelDef) return;
 
     const totalContractorPayout = painterPayout + denterPayout;
@@ -127,9 +127,10 @@ export function JobAllotmentPipeline({
     };
 
     const existingTasks = selectedTasks.filter(t => 
-      (t.panelKey && t.panelKey === panelId) ||
-      matchTaskToPanelDef(t)?.id === panelId ||
-      (t.title && panelDef.nameEn && t.title.toLowerCase().includes(panelDef.nameEn.toLowerCase()))
+      t.category === 'PAINT' && (
+        (t.panelKey && t.panelKey === panelId) ||
+        matchTaskToPanelDef(t)?.id === panelId
+      )
     );
 
     if (existingTasks.length > 0) {
@@ -161,7 +162,7 @@ export function JobAllotmentPipeline({
 
   // Helper to handle panel toggles from interactive visual sketch chart
   const handlePanelChartToggle = (panelId: string, matchedJobId?: string, scope?: PaintScope) => {
-    const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
+    const panelDef = VEHICLE_PANELS.find(p => p.id === panelId) || getVehiclePanels().find((p: any) => p.id === panelId);
     if (!panelDef) return;
 
     const freshJobs = getStandardJobs();
@@ -202,11 +203,12 @@ export function JobAllotmentPipeline({
   // Synchronize entire visual AR inspection changes with selectedTasks state
   const handleInspectionChange = (updatedInspections: Record<string, PanelInspectionItem>) => {
     let updatedTasksList = [...selectedTasks];
+    const allKnownPanels = [...VEHICLE_PANELS, ...getVehiclePanels()];
 
-    // 1. Process all selected panels in updatedInspections
+    // 1. Process all panels in updatedInspections
     Object.keys(updatedInspections).forEach(panelId => {
       const inspection = updatedInspections[panelId];
-      const panelDef = VEHICLE_PANELS.find(p => p.id === panelId);
+      const panelDef = allKnownPanels.find(p => p.id === panelId);
       if (!panelDef) return;
 
       if (!inspection.selected) {
@@ -288,6 +290,32 @@ export function JobAllotmentPipeline({
     onTasksChange(finalTasks);
   };
 
+  const chartSelectedPanelIds = useMemo(() => Array.from(new Set(selectedTasks.filter(t => t.category === 'PAINT').map(t => {
+    const matchedDef = matchTaskToPanelDef(t);
+    return matchedDef ? matchedDef.id : (t.panelKey || '');
+  }).filter(Boolean))), [selectedTasks]);
+
+  const chartInspections = useMemo(() => selectedTasks.filter(t => t.category === 'PAINT').reduce((acc, t) => {
+    const matchedDef = matchTaskToPanelDef(t);
+    const panelId = matchedDef ? matchedDef.id : (t.panelKey || '');
+    if (panelId) {
+      acc[panelId] = {
+        panelId,
+        nameEn: t.panelNameEn || matchedDef?.nameEn || '',
+        nameHi: matchedDef?.nameHi || '',
+        category: 'EXTERIOR_BODY',
+        selected: true,
+        paintScope: t.paintScope || 'FULL_OUTER',
+        customPrice: t.customerPrice,
+        customPainterPayout: t.painterPayout,
+        customDenterPayout: t.denterPayout,
+        painterName: t.assignedToName,
+        denterName: t.pairedDenterName
+      };
+    }
+    return acc;
+  }, {} as Record<string, PanelInspectionItem>), [selectedTasks]);
+
   const sections = [
     { id: 'PAINTING_DENTING', label: 'Painting & Denting', icon: Paintbrush, color: 'text-purple-600 dark:text-purple-400', count: selectedTasks.filter(t => t.category === 'PAINT').length },
     { id: 'DENTING', label: 'Exclusive Denting', icon: Hammer, color: 'text-orange-600 dark:text-orange-400', count: selectedTasks.filter(t => t.category === 'DENTING').length },
@@ -354,6 +382,7 @@ export function JobAllotmentPipeline({
         customerPrice: price,
         requiresCustomerApproval: false,
         isContractBasis: true,
+        contractorPayout: contractorPayout,
         painterPayout: painterPayout,
         denterPayout: denterPayout,
         pairedDenterId: selectedDenterId || undefined,
@@ -864,32 +893,9 @@ export function JobAllotmentPipeline({
             <InteractiveVehicleInspectionChart
               mode="INTERACTIVE_SELECT"
               isCars24={isCars24}
-              selectedPanelIds={Array.from(new Set(selectedTasks.filter(t => t.category === 'PAINT' || Boolean(t.panelKey)).map(t => {
-                const matchedDef = matchTaskToPanelDef(t);
-                return matchedDef ? matchedDef.id : (t.panelKey || '');
-              }).filter(Boolean)))}
-              inspections={selectedTasks.filter(t => t.category === 'PAINT' || Boolean(t.panelKey)).reduce((acc, t) => {
-                const matchedDef = matchTaskToPanelDef(t);
-                const panelId = matchedDef ? matchedDef.id : (t.panelKey || '');
-                if (panelId) {
-                  acc[panelId] = {
-                    panelId,
-                    nameEn: t.panelNameEn || matchedDef?.nameEn || '',
-                    nameHi: matchedDef?.nameHi || '',
-                    category: 'EXTERIOR_BODY',
-                    selected: true,
-                    paintScope: t.paintScope || 'FULL_OUTER',
-                    customPrice: t.customerPrice,
-                    customPainterPayout: t.painterPayout,
-                    customDenterPayout: t.denterPayout,
-                    painterName: t.assignedToName,
-                    denterName: t.pairedDenterName
-                  };
-                }
-                return acc;
-              }, {} as Record<string, any>)}
+              selectedPanelIds={chartSelectedPanelIds}
+              inspections={chartInspections}
               onInspectionChange={handleInspectionChange}
-              onPanelToggle={handlePanelChartToggle}
               availableStandardJobs={standardJobs}
             />
           ) : (

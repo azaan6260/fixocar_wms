@@ -109,8 +109,47 @@ export function Interactive3DVehicleInspectionModel({
   }>({});
 
   const effectivePanels = useMemo(() => {
-    return getVehiclePanels();
+    const stored = getVehiclePanels();
+    const map = new Map<string, PanelDefinition>();
+    VEHICLE_PANELS.forEach(p => map.set(p.id, p));
+    stored.forEach((p: PanelDefinition) => map.set(p.id, p));
+    return Array.from(map.values());
   }, []);
+
+  // Sync localInspections with controlled props (inspections & selectedPanelIds) when parent updates
+  useEffect(() => {
+    if (!onInspectionChange) return;
+    setLocalInspections(prev => {
+      const next: Record<string, PanelInspectionItem> = {};
+      Object.keys(inspections).forEach(k => {
+        if (inspections[k]) next[k] = inspections[k];
+      });
+      selectedPanelIds.forEach(id => {
+        if (!next[id]) {
+          const panelObj = effectivePanels.find(p => p.id === id);
+          if (panelObj) {
+            next[id] = prev[id]?.selected ? prev[id] : {
+              panelId: id,
+              nameEn: panelObj.nameEn,
+              nameHi: panelObj.nameHi,
+              category: 'EXTERIOR_BODY',
+              selected: true,
+              paintScope: (id.startsWith('pillar_') || id === 'boot_floor') ? 'INSIDE_JAMB' : 'FULL_OUTER'
+            };
+          }
+        }
+      });
+      return next;
+    });
+  }, [inspections, selectedPanelIds, effectivePanels, Boolean(onInspectionChange)]);
+
+  const isPanelActive = (panelId: string) => {
+    const existing = effectiveInspections[panelId];
+    if (existing !== undefined) {
+      return Boolean(existing.selected);
+    }
+    return selectedPanelIds.includes(panelId);
+  };
 
   // Active panel definition
   const activePanelObj = useMemo(() => {
@@ -130,13 +169,14 @@ export function Interactive3DVehicleInspectionModel({
       return;
     }
 
+    const isInsideOnly = panelId.startsWith('pillar_') || panelId === 'boot_floor';
     const updatedObj = {
       panelId,
       nameEn: panelObj.nameEn,
       nameHi: panelObj.nameHi,
       category: 'EXTERIOR_BODY' as const,
       selected: false,
-      paintScope: 'FULL_OUTER' as const,
+      paintScope: (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER') as PaintScope,
       customPrice: undefined,
       customPainterPayout: undefined,
       customDenterPayout: undefined
@@ -162,31 +202,31 @@ export function Interactive3DVehicleInspectionModel({
     setPanelToDeselect(null);
   };
 
-  // Toggle panel selection
+  // Toggle panel selection directly on 1-click (select or deselect)
   const handlePanelClick = (panelId: string, scope?: PaintScope) => {
     if ((panelId === 'boot_floor' || panelId === 'boot_trunk') && !dickyOpen) {
       setDickyOpen(true);
     }
+    if ((panelId === 'apron_lhs' || panelId === 'apron_rhs') && !bonnetOpen) {
+      setBonnetOpen(true);
+    }
+    setIsPillDismissed(false);
     setActivePanelId(panelId);
     const panelObj = effectivePanels.find(p => p.id === panelId);
     if (!panelObj) return;
 
-    const existing = effectiveInspections[panelId];
-    const isCurrentlyActive = selectedPanelIds.includes(panelId) || Boolean(existing?.selected);
-    
-    // Clicking on already selected panel on AR without a scope triggers confirmation
-    if (!scope && isCurrentlyActive) {
-      setPanelToDeselect({
-        panelId,
-        nameEn: panelObj.nameEn,
-        nameHi: panelObj.nameHi
-      });
+    // In pure VIEW mode without interactive handlers, only focus the panel for inspection details/voice
+    if (mode === 'VIEW' && !onInspectionChange && !onPanelToggle) {
       return;
     }
 
-    // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle.
+    const existing = effectiveInspections[panelId];
+    const isCurrentlyActive = isPanelActive(panelId);
+
+    // If an explicit scope is chosen, keep/force selection to true. If clicking 3D panel without scope, toggle selection directly.
     const newSelected = scope ? true : !isCurrentlyActive;
-    const targetScope = scope || existing?.paintScope || (panelId.startsWith('pillar_') ? 'INSIDE_JAMB' : 'FULL_OUTER');
+    const isInsideOnly = panelId.startsWith('pillar_') || panelId === 'boot_floor';
+    const targetScope = scope || existing?.paintScope || (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER');
 
     const updatedObj = {
       panelId,
@@ -214,9 +254,15 @@ export function Interactive3DVehicleInspectionModel({
     }
 
     if (onPanelToggle) {
-      onPanelToggle(panelId, panelObj.standardJobId, targetScope);
+      onPanelToggle(panelId, panelObj.standardJobId, newSelected ? targetScope : undefined);
     }
   };
+
+  // Refs to ensure Three.js WebGL event listeners always invoke latest handlers without stale closures
+  const handlePanelClickRef = useRef(handlePanelClick);
+  handlePanelClickRef.current = handlePanelClick;
+  const dickyOpenRef = useRef(dickyOpen);
+  dickyOpenRef.current = dickyOpen;
 
   // Voice speech handler
   const speakPanelInfo = (panel: PanelDefinition) => {
@@ -785,9 +831,16 @@ export function Interactive3DVehicleInspectionModel({
     let previousTouchDistance = 0;
     let previousTouchMidpoint = { x: 0, y: 0 };
 
-    let touchStartInfo = { x: 0, y: 0, time: 0, isTap: true };
+    let touchStartInfo = { x: 0, y: 0, time: 0, isTap: false };
+    let lastTouchTime = 0;
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if ('touches' in e) {
+        lastTouchTime = Date.now();
+      } else if (Date.now() - lastTouchTime < 500) {
+        return;
+      }
+
       const clientX = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientX : 0) : e.clientX;
       const clientY = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientY : 0) : e.clientY;
       touchStartInfo = { x: clientX, y: clientY, time: Date.now(), isTap: true };
@@ -800,6 +853,7 @@ export function Interactive3DVehicleInspectionModel({
         } else if (e.touches.length === 2) {
           isMouseDown = false;
           isPanning = true;
+          touchStartInfo.isTap = false;
           // Calculate initial touch distance
           const dx = e.touches[0].clientX - e.touches[1].clientX;
           const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -815,16 +869,20 @@ export function Interactive3DVehicleInspectionModel({
         isMouseDown = true;
         // Right click (button 2) or Shift + Left click activates Pan Mode
         isPanning = (e.button === 2 || e.shiftKey);
+        if (isPanning) touchStartInfo.isTap = false;
         previousMousePosition = { x: e.clientX, y: e.clientY };
       }
     };
 
     const handlePointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!('touches' in e) && Date.now() - lastTouchTime < 500) {
+        return;
+      }
       const rect = renderer.domElement.getBoundingClientRect();
       const clientX = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientX : 0) : e.clientX;
       const clientY = 'touches' in e ? (e.touches.length > 0 ? e.touches[0].clientY : 0) : e.clientY;
 
-      if (Math.hypot(clientX - touchStartInfo.x, clientY - touchStartInfo.y) > 10) {
+      if (touchStartInfo.isTap && Math.hypot(clientX - touchStartInfo.x, clientY - touchStartInfo.y) > 12) {
         touchStartInfo.isTap = false;
       }
 
@@ -906,12 +964,14 @@ export function Interactive3DVehicleInspectionModel({
         });
         const intersects = raycaster.intersectObjects(selectableObjects, true);
         if (intersects.length > 0) {
-          // Prioritize structural/internal panels like pillars, boot floor, and spoiler if they are in the hit path
-          const targetPanelIds = ['pillar_a', 'pillar_b', 'pillar_c', 'boot_floor', 'spoiler', 'apron_lhs', 'apron_rhs'];
-          const hitTarget = intersects.find(it => 
-            it.object.userData && targetPanelIds.includes(it.object.userData.panelId)
-          );
-          const hit = hitTarget ? hitTarget.object : intersects[0].object;
+          let hit = intersects[0].object;
+          if (
+            dickyOpenRef.current &&
+            hit.userData?.panelId === 'windshield_rear' &&
+            intersects[1]?.object?.userData?.panelId === 'boot_floor'
+          ) {
+            hit = intersects[1].object;
+          }
           if (hit.userData && hit.userData.panelId) {
             setHoveredPanelId(hit.userData.panelId);
           }
@@ -937,21 +997,35 @@ export function Interactive3DVehicleInspectionModel({
       });
       const intersects = raycaster.intersectObjects(selectableObjects, true);
       if (intersects.length > 0) {
-        // Prioritize structural/internal panels like pillars, boot floor, and spoiler if they are in the hit path
-        const targetPanelIds = ['pillar_a', 'pillar_b', 'pillar_c', 'boot_floor', 'spoiler', 'apron_lhs', 'apron_rhs'];
-        const hitTarget = intersects.find(it => 
-          it.object.userData && targetPanelIds.includes(it.object.userData.panelId)
-        );
-        const hit = hitTarget ? hitTarget.object : intersects[0].object;
+        let hit = intersects[0].object;
+        if (
+          dickyOpenRef.current &&
+          hit.userData?.panelId === 'windshield_rear' &&
+          intersects[1]?.object?.userData?.panelId === 'boot_floor'
+        ) {
+          hit = intersects[1].object;
+        }
         if (hit.userData && hit.userData.panelId) {
-          handlePanelClick(hit.userData.panelId);
+          handlePanelClickRef.current(hit.userData.panelId);
         }
       }
     };
 
     const handlePointerUp = (e: MouseEvent | TouchEvent) => {
+      if ('changedTouches' in e) {
+        lastTouchTime = Date.now();
+      } else if (Date.now() - lastTouchTime < 500) {
+        isMouseDown = false;
+        isPanning = false;
+        touchStartInfo.isTap = false;
+        return;
+      }
+
+      const wasTap = touchStartInfo.isTap;
+      touchStartInfo.isTap = false;
+
       const duration = Date.now() - touchStartInfo.time;
-      if (touchStartInfo.isTap && duration < 450) {
+      if (wasTap && duration < 800) {
         const clientX = 'changedTouches' in e && e.changedTouches.length > 0
           ? e.changedTouches[0].clientX
           : touchStartInfo.x;
@@ -1156,9 +1230,15 @@ export function Interactive3DVehicleInspectionModel({
 
           child.visible = shouldKeepVisible;
         } else {
-          // No active isolation: keep all body panels visible except boot floor which requires dickyOpen
-          if (child.userData?.panelId === 'boot_floor') {
-            child.visible = dickyOpen;
+          // No active isolation: keep outer panels visible; internal/underbody panels visible when open or selected
+          const pId = child.userData?.panelId;
+          const isSelected = Boolean(pId && (effectiveInspections[pId]?.selected || selectedPanelIds.includes(pId)));
+          if (pId === 'boot_floor') {
+            child.visible = dickyOpen || isSelected;
+          } else if (pId === 'apron_lhs' || pId === 'apron_rhs') {
+            child.visible = bonnetOpen || isSelected;
+          } else if (pId === 'underbody') {
+            child.visible = cameraPreset === 'UNDERBODY' || isSelected;
           } else {
             child.visible = true;
           }
@@ -1176,7 +1256,7 @@ export function Interactive3DVehicleInspectionModel({
     } else if (isolatedComponent === 'Doors') {
       setCameraPreset('ISO');
     }
-  }, [isolatedComponent, dickyOpen]);
+  }, [isolatedComponent, dickyOpen, bonnetOpen, cameraPreset, effectiveInspections, selectedPanelIds]);
 
   // Handle AR Camera Feed Stream allocation and release
   useEffect(() => {
@@ -1258,7 +1338,7 @@ export function Interactive3DVehicleInspectionModel({
       if (!panelId) return;
 
       const inspection = effectiveInspections[panelId];
-      const isSelected = Boolean(inspection?.selected || selectedPanelIds.includes(panelId));
+      const isSelected = inspection !== undefined ? Boolean(inspection.selected) : selectedPanelIds.includes(panelId);
       const isHovered = hoveredPanelId === panelId;
       const scope: PaintScope = inspection?.paintScope || 'FULL_OUTER';
 
@@ -1455,16 +1535,34 @@ export function Interactive3DVehicleInspectionModel({
 
           <div ref={mountRef} className="relative w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing z-10" />
 
-          {/* Hovered Panel Floating Pill */}
+          {/* Hovered / Active Panel Floating Pill */}
           {activePanelObj && !isPillDismissed && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center justify-between gap-4 z-20 animate-in fade-in zoom-in-95 duration-200">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center justify-between gap-3 z-20 animate-in fade-in zoom-in-95 duration-200">
               <div>
-                <div className="text-[9px] text-amber-400 font-black uppercase tracking-wider">चयनित पैनल (Selected Panel)</div>
+                <div className="text-[9px] text-amber-400 font-black uppercase tracking-wider">
+                  {isPanelActive(activePanelObj.id) ? '✓ चयनित पैनल (Selected Panel)' : 'पैनल जानकारी (Panel Info)'}
+                </div>
                 <div className="text-xs font-extrabold text-white">{activePanelObj.nameHi}</div>
                 <div className="text-[10px] font-mono text-slate-300 font-semibold">
                   {activePanelObj.nameEn}
                 </div>
               </div>
+              {(onInspectionChange || onPanelToggle) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePanelClick(activePanelObj.id);
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${
+                    isPanelActive(activePanelObj.id)
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                  }`}
+                >
+                  {isPanelActive(activePanelObj.id) ? '✕ हटाएं (Deselect)' : '+ जोड़ें (Select)'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => {
@@ -1644,7 +1742,7 @@ export function Interactive3DVehicleInspectionModel({
                 { id: 'pillar_c', label: '🚪 C-Pillar' },
                 { id: 'boot_floor', label: '🚗 Dicky Floor' },
               ].map(item => {
-                const isActive = selectedPanelIds.includes(item.id) || Boolean(effectiveInspections[item.id]?.selected);
+                const isActive = isPanelActive(item.id);
                 return (
                   <button
                     key={item.id}
@@ -1722,7 +1820,7 @@ export function Interactive3DVehicleInspectionModel({
       {/* Selected Panel Detail & Scope Selector */}
       {activePanelObj && (
         <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/80 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <span className="text-[10px] font-black uppercase text-amber-400">
                 पेंट का दायरा चुनें (Select Paint Scope):
@@ -1732,18 +1830,34 @@ export function Interactive3DVehicleInspectionModel({
               </h4>
             </div>
 
-            <button
-              type="button"
-              onClick={() => speakPanelInfo(activePanelObj)}
-              className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
-                isSpeaking
-                  ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
-                  : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-slate-950'
-              }`}
-            >
-              {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <span>🔊 सुनिए (Voice Assistant)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {(onInspectionChange || onPanelToggle) && (
+                <button
+                  type="button"
+                  onClick={() => handlePanelClick(activePanelObj.id)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    isPanelActive(activePanelObj.id)
+                      ? 'bg-rose-600/20 text-rose-300 border-rose-500/40 hover:bg-rose-600 hover:text-white'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500 hover:text-slate-950'
+                  }`}
+                >
+                  {isPanelActive(activePanelObj.id) ? '✕ पैनल हटाएं (Deselect)' : '+ पैनल चुनें (Select)'}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => speakPanelInfo(activePanelObj)}
+                className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
+                  isSpeaking
+                    ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
+                    : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-slate-950'
+                }`}
+              >
+                {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                <span>🔊 सुनिए (Voice Assistant)</span>
+              </button>
+            </div>
           </div>
 
           {/* Scope Selector Buttons */}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Hammer, 
   Paintbrush, 
@@ -490,7 +490,11 @@ export function InteractiveVehicleInspectionChart({
   const [speakingPanelId, setSpeakingPanelId] = useState<string | null>(null);
 
   const effectivePanels = useMemo(() => {
-    return getVehiclePanels();
+    const stored = getVehiclePanels();
+    const map = new Map<string, PanelDefinition>();
+    VEHICLE_PANELS.forEach(p => map.set(p.id, p));
+    stored.forEach((p: PanelDefinition) => map.set(p.id, p));
+    return Array.from(map.values());
   }, []);
 
   // Lifted state to control dicky and bonnet open states
@@ -500,6 +504,33 @@ export function InteractiveVehicleInspectionChart({
   // Local state to track scope overrides or panel clicks locally so the interactive preview updates in real-time
   const [localInspections, setLocalInspections] = useState<Record<string, PanelInspectionItem>>({});
   const [panelToDeselect, setPanelToDeselect] = useState<PanelDefinition | null>(null);
+
+  // Sync localInspections with controlled props (inspections & selectedPanelIds) when parent updates
+  useEffect(() => {
+    if (!onInspectionChange && !onPanelToggle) return;
+    setLocalInspections(prev => {
+      const next: Record<string, PanelInspectionItem> = {};
+      Object.keys(inspections).forEach(k => {
+        if (inspections[k]) next[k] = inspections[k];
+      });
+      selectedPanelIds.forEach(id => {
+        if (!next[id]) {
+          const panelObj = effectivePanels.find(p => p.id === id);
+          if (panelObj) {
+            next[id] = prev[id]?.selected ? prev[id] : {
+              panelId: id,
+              nameEn: panelObj.nameEn,
+              nameHi: panelObj.nameHi,
+              category: 'EXTERIOR_BODY',
+              selected: true,
+              paintScope: (id.startsWith('pillar_') || id === 'boot_floor') ? 'INSIDE_JAMB' : 'FULL_OUTER'
+            };
+          }
+        }
+      });
+      return next;
+    });
+  }, [inspections, selectedPanelIds, effectivePanels, Boolean(onInspectionChange), Boolean(onPanelToggle)]);
 
   // Merge inspections prop with local interaction overrides
   const effectiveInspections = useMemo(() => {
@@ -546,7 +577,11 @@ export function InteractiveVehicleInspectionChart({
   };
 
   const isPanelActive = (panelId: string) => {
-    return selectedPanelIds.includes(panelId) || Boolean(effectiveInspections[panelId]?.selected);
+    const existing = effectiveInspections[panelId];
+    if (existing !== undefined) {
+      return Boolean(existing.selected);
+    }
+    return selectedPanelIds.includes(panelId);
   };
 
   const confirmDeselect = () => {
@@ -572,29 +607,21 @@ export function InteractiveVehicleInspectionChart({
       [panel.id]: updatedObj
     }));
 
-    if (onPanelToggle) {
-      onPanelToggle(panel.id, panel.standardJobId);
-    }
-
     if (onInspectionChange) {
       const updated = {
         ...effectiveInspections,
         [panel.id]: updatedObj
       };
       onInspectionChange(updated);
+    } else if (onPanelToggle) {
+      onPanelToggle(panel.id, panel.standardJobId);
     }
   };
 
-  const handlePanelClick = (panel: PanelDefinition, forceConfirm = false) => {
-    setSelectedPanelForDetail(prev => prev?.id === panel.id ? null : panel);
+  const handlePanelClick = (panel: PanelDefinition) => {
+    setSelectedPanelForDetail(panel);
 
     const wasActive = isPanelActive(panel.id);
-
-    if (wasActive && !forceConfirm) {
-      setPanelToDeselect(panel);
-      return;
-    }
-
     const isInsideOnly = panel.id.startsWith('pillar_') || panel.id === 'boot_floor';
 
     const current = effectiveInspections[panel.id] || {
@@ -612,7 +639,10 @@ export function InteractiveVehicleInspectionChart({
       damageType: !wasActive ? activeSeverity : undefined,
       actionRequired: !wasActive ? activeRepairAction : undefined,
       matchedStandardJobId: panel.standardJobId,
-      paintScope: current.paintScope || (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER')
+      paintScope: current.paintScope || (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER'),
+      customPrice: !wasActive ? current.customPrice : undefined,
+      customPainterPayout: !wasActive ? current.customPainterPayout : undefined,
+      customDenterPayout: !wasActive ? current.customDenterPayout : undefined
     };
 
     setLocalInspections(prev => ({
@@ -620,16 +650,14 @@ export function InteractiveVehicleInspectionChart({
       [panel.id]: updatedObj
     }));
 
-    if (onPanelToggle) {
-      onPanelToggle(panel.id, panel.standardJobId);
-    }
-
     if (onInspectionChange) {
       const updated = {
         ...effectiveInspections,
         [panel.id]: updatedObj
       };
       onInspectionChange(updated);
+    } else if (onPanelToggle) {
+      onPanelToggle(panel.id, panel.standardJobId, !wasActive ? updatedObj.paintScope : undefined);
     }
   };
 
@@ -660,9 +688,22 @@ export function InteractiveVehicleInspectionChart({
           mode={mode}
           isCars24={isCars24}
           selectedPanelIds={selectedPanelIds}
-          inspections={inspections}
-          onInspectionChange={onInspectionChange}
-          onPanelToggle={onPanelToggle}
+          inspections={effectiveInspections}
+          onInspectionChange={(updated) => {
+            setLocalInspections(updated);
+            if (onInspectionChange) {
+              onInspectionChange(updated);
+            }
+          }}
+          onPanelToggle={(panelId, jobId, scope) => {
+            const found = effectivePanels.find(p => p.id === panelId);
+            if (found) {
+              setSelectedPanelForDetail(found);
+            }
+            if (!onInspectionChange && onPanelToggle) {
+              onPanelToggle(panelId, jobId, scope);
+            }
+          }}
           availableStandardJobs={availableStandardJobs}
           compact={true}
           bonnetOpen={bonnetOpen}
@@ -723,15 +764,20 @@ export function InteractiveVehicleInspectionChart({
             mode={mode}
             isCars24={isCars24}
             selectedPanelIds={selectedPanelIds}
-            inspections={inspections}
-            onInspectionChange={onInspectionChange}
+            inspections={effectiveInspections}
+            onInspectionChange={(updated) => {
+              setLocalInspections(updated);
+              if (onInspectionChange) {
+                onInspectionChange(updated);
+              }
+            }}
             onPanelToggle={(panelId, jobId, scope) => {
               // Sync selected panel details on 3D click so the right edit sidebar updates
               const found = effectivePanels.find(p => p.id === panelId);
               if (found) {
                 setSelectedPanelForDetail(found);
               }
-              if (onPanelToggle) {
+              if (!onInspectionChange && onPanelToggle) {
                 onPanelToggle(panelId, jobId, scope);
               }
             }}
@@ -867,15 +913,14 @@ export function InteractiveVehicleInspectionChart({
                               [activePanelObj.id]: updatedObj
                             }));
 
-                            if (onPanelToggle) {
-                              onPanelToggle(activePanelObj.id, activePanelObj.standardJobId, s.id as PaintScope);
-                            }
                             if (onInspectionChange) {
                               const updated = {
                                 ...effectiveInspections,
                                 [activePanelObj.id]: updatedObj
                               };
                               onInspectionChange(updated);
+                            } else if (onPanelToggle) {
+                              onPanelToggle(activePanelObj.id, activePanelObj.standardJobId, s.id as PaintScope);
                             }
                           }}
                           className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
@@ -985,6 +1030,7 @@ export function InteractiveVehicleInspectionChart({
                   type="button"
                   onClick={() => {
                     const cleared: Record<string, PanelInspectionItem> = {};
+                    setLocalInspections(cleared);
                     onInspectionChange(cleared);
                   }}
                   className="text-rose-400 hover:underline font-bold text-[11px]"
@@ -1109,15 +1155,14 @@ export function InteractiveVehicleInspectionChart({
                                   [p.id]: updatedObj
                                 }));
 
-                                if (onPanelToggle) {
-                                  onPanelToggle(p.id, p.standardJobId, s.id as PaintScope);
-                                }
                                 if (onInspectionChange) {
                                   const updated = {
                                     ...effectiveInspections,
                                     [p.id]: updatedObj
                                   };
                                   onInspectionChange(updated);
+                                } else if (onPanelToggle) {
+                                  onPanelToggle(p.id, p.standardJobId, s.id as PaintScope);
                                 }
                               }}
                               className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
@@ -1147,14 +1192,17 @@ export function InteractiveVehicleInspectionChart({
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-amber-400 focus:outline-none focus:border-amber-400"
                                 value={(inspection?.customPrice !== undefined ? inspection.customPrice : rates.price) ?? ""}
                                 onChange={(e) => {
-                                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                                  const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                  const updatedObj: PanelInspectionItem = {
+                                    ...(effectiveInspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                    selected: true,
+                                    customPrice: val
+                                  };
+                                  setLocalInspections(prev => ({ ...prev, [p.id]: updatedObj }));
                                   if (onInspectionChange) {
                                     onInspectionChange({
-                                      ...inspections,
-                                      [p.id]: {
-                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customPrice: val as any
-                                      }
+                                      ...effectiveInspections,
+                                      [p.id]: updatedObj
                                     });
                                   }
                                 }}
@@ -1171,14 +1219,17 @@ export function InteractiveVehicleInspectionChart({
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-emerald-400 focus:outline-none focus:border-emerald-400"
                                 value={(inspection?.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout) ?? ""}
                                 onChange={(e) => {
-                                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                                  const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                  const updatedObj: PanelInspectionItem = {
+                                    ...(effectiveInspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                    selected: true,
+                                    customPainterPayout: val
+                                  };
+                                  setLocalInspections(prev => ({ ...prev, [p.id]: updatedObj }));
                                   if (onInspectionChange) {
                                     onInspectionChange({
-                                      ...inspections,
-                                      [p.id]: {
-                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customPainterPayout: val as any
-                                      }
+                                      ...effectiveInspections,
+                                      [p.id]: updatedObj
                                     });
                                   }
                                 }}
@@ -1195,14 +1246,17 @@ export function InteractiveVehicleInspectionChart({
                                 className="w-full bg-slate-900 border border-slate-700 rounded px-0.5 pl-3.5 py-0.5 font-mono text-[10px] font-extrabold text-blue-400 focus:outline-none focus:border-blue-400"
                                 value={(inspection?.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout) ?? ""}
                                 onChange={(e) => {
-                                  const val = e.target.value === '' ? '' : Number(e.target.value);
+                                  const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                  const updatedObj: PanelInspectionItem = {
+                                    ...(effectiveInspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                    selected: true,
+                                    customDenterPayout: val
+                                  };
+                                  setLocalInspections(prev => ({ ...prev, [p.id]: updatedObj }));
                                   if (onInspectionChange) {
                                     onInspectionChange({
-                                      ...inspections,
-                                      [p.id]: {
-                                        ...(inspections[p.id] || { panelId: p.id, nameEn: p.nameEn, nameHi: p.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                                        customDenterPayout: val as any
-                                      }
+                                      ...effectiveInspections,
+                                      [p.id]: updatedObj
                                     });
                                   }
                                 }}
