@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { JobCard, StandardServicePackage, TaskCategory, SpecializedTeam, Employee, Vendor, City, Workshop, FuelType } from '../types';
 import { STANDARD_PACKAGES } from '../lib/mockData';
 import { getApiUrl } from '../lib/mobileBridge';
-import { createJobCard, getActiveJobCardForRegNo, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, getAuthUser } from '../lib/storage';
+import { createJobCard, getActiveJobCardForRegNo, getDefaultWorkshopForCreation, normalizeRegNo, getCities, getWorkshops, getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, updateJobCard, getAuthUser } from '../lib/storage';
 import { JobAllotmentPipeline, AllocatedTaskItem } from './JobAllotmentPipeline';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { AddCustomJobModal, CustomJobData } from './AddCustomJobModal';
@@ -178,13 +178,16 @@ export function CreateJobCardModal({
         targetWorkshopId = matchedCheckIn.workshopId || targetWorkshopId;
       }
 
-      // If no workshop set from check-in, check assigned staff workshop
-      if (!targetWorkshopId && authUser?.workshopId) {
-        targetWorkshopId = authUser.workshopId;
-        targetCityId = authUser.cityId || loadedWorkshops.find(w => w.id === authUser.workshopId)?.cityId || targetCityId;
+      // If no workshop set from check-in, check assigned staff workshop or smart operational default
+      const defaultLoc = getDefaultWorkshopForCreation(authUser);
+      if (!targetWorkshopId) {
+        targetWorkshopId = authUser?.workshopId || defaultLoc.workshopId;
+      }
+      if (!targetCityId) {
+        targetCityId = authUser?.cityId || loadedWorkshops.find(w => w.id === targetWorkshopId)?.cityId || defaultLoc.cityId;
       }
 
-      // Fallbacks
+      // Final Fallbacks
       if (!targetCityId && loadedCities.length > 0) {
         targetCityId = loadedCities[0].id;
       }
@@ -416,6 +419,10 @@ export function CreateJobCardModal({
   };
 
   const activeDuplicateCard = getActiveJobCardForRegNo(safeRegStr);
+  const isDuplicateCardIncomplete = Boolean(
+    activeDuplicateCard && (!activeDuplicateCard.tasks || activeDuplicateCard.tasks.length === 0)
+  );
+  const isStrictDuplicateBlocked = Boolean(activeDuplicateCard && !isDuplicateCardIncomplete);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -426,8 +433,8 @@ export function CreateJobCardModal({
 
     const formattedRegNo = safeRegStr.toUpperCase().trim();
     const existingActive = getActiveJobCardForRegNo(formattedRegNo);
-    if (existingActive) {
-      alert(`🚫 Duplicate Job Card Blocked!\nVehicle ${formattedRegNo} already has an active Job Card (${existingActive.id} - Status: ${existingActive.status}).\n\nOnly 1 active job card is allowed per vehicle at a time. Please complete or close the existing card first.`);
+    if (existingActive && existingActive.tasks && existingActive.tasks.length > 0) {
+      alert(`🚫 Duplicate Job Card Blocked!\nVehicle ${formattedRegNo} already has an active Job Card (${existingActive.id} - Status: ${existingActive.status}).\n\nOnly 1 active job card is allowed per vehicle at a time. Please complete or check out the existing card first.`);
       return;
     }
 
@@ -436,7 +443,7 @@ export function CreateJobCardModal({
 
     // Sync Gate Check-In Record
     const existingCheckIns = getVehicleCheckIns();
-    let matchingCheckIn = existingCheckIns.find(c => c.registrationNumber === formattedRegNo && c.status !== 'CHECKED_OUT');
+    let matchingCheckIn = existingCheckIns.find(c => normalizeRegNo(c.registrationNumber) === normalizeRegNo(formattedRegNo) && c.status !== 'CHECKED_OUT');
 
     if (!matchingCheckIn) {
       // Create Gate Check-In record automatically upon Job Card creation if not already created
@@ -777,14 +784,45 @@ export function CreateJobCardModal({
                         <Camera className="w-4 h-4" />
                       </button>
                     </div>
-                    {activeDuplicateCard && (
+                    {activeDuplicateCard && isDuplicateCardIncomplete && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div className="space-y-1.5">
+                          <p className="font-bold">Incomplete Job Card Found ({activeDuplicateCard.id})</p>
+                          <p className="text-[11px]">
+                            Vehicle <strong className="font-mono">{regNo.toUpperCase()}</strong> has an incomplete Job Card (<strong className="font-mono">{activeDuplicateCard.id}</strong>) with 0 allotted tasks. Continuing will complete and allot tasks directly to <strong className="font-mono">{activeDuplicateCard.id}</strong>.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onCardCreated(activeDuplicateCard);
+                              onClose();
+                            }}
+                            className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] transition-colors cursor-pointer"
+                          >
+                            Open {activeDuplicateCard.id} Directly
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {activeDuplicateCard && isStrictDuplicateBlocked && (
                       <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                        <div>
+                        <div className="space-y-1.5">
                           <p className="font-bold">Active Job Card Exists ({activeDuplicateCard.id})</p>
-                          <p className="text-[11px] mt-0.5">
-                            Vehicle <strong className="font-mono">{regNo.toUpperCase()}</strong> already has an active Job Card with status <span className="font-bold underline">{activeDuplicateCard.status}</span>. Only 1 active job card is allowed per vehicle at a time.
+                          <p className="text-[11px]">
+                            Vehicle <strong className="font-mono">{regNo.toUpperCase()}</strong> already has an active Job Card with status <span className="font-bold underline">{activeDuplicateCard.status}</span> ({activeDuplicateCard.tasks?.length || 0} tasks). Same vehicle number can have multiple job cards over time, but only 1 active job card is allowed before check-out.
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onCardCreated(activeDuplicateCard);
+                              onClose();
+                            }}
+                            className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] transition-colors cursor-pointer"
+                          >
+                            Open Active Job Card ({activeDuplicateCard.id})
+                          </button>
                         </div>
                       </div>
                     )}
@@ -1436,33 +1474,37 @@ export function CreateJobCardModal({
                     alert('Please enter Registration Number, Customer Name, and Phone Number.');
                     return;
                   }
-                  if (activeDuplicateCard) {
+                  if (isStrictDuplicateBlocked && activeDuplicateCard) {
                     alert(`🚫 Duplicate Active Job Card Blocked!\nVehicle ${regNo.toUpperCase().trim()} already has active Job Card ${activeDuplicateCard.id} (Status: ${activeDuplicateCard.status}).\n\nOnly 1 active job card is permitted per vehicle.`);
                     return;
                   }
                   setStep(2);
                 }}
-                disabled={Boolean(activeDuplicateCard)}
+                disabled={isStrictDuplicateBlocked}
                 className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-colors shadow-md ${
-                  activeDuplicateCard 
+                  isStrictDuplicateBlocked 
                     ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                 }`}
               >
-                Continue to Task Allotments →
+                {isDuplicateCardIncomplete && activeDuplicateCard
+                  ? `Complete & Allot ${activeDuplicateCard.id} →`
+                  : 'Continue to Task Allotments →'}
               </button>
             ) : (
               <button
                 type="submit"
-                disabled={Boolean(activeDuplicateCard)}
+                disabled={isStrictDuplicateBlocked}
                 className={`px-6 py-2.5 rounded-xl font-extrabold text-xs transition-colors shadow-md flex items-center gap-2 ${
-                  activeDuplicateCard
+                  isStrictDuplicateBlocked
                     ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Create Job Card
+                {isDuplicateCardIncomplete && activeDuplicateCard
+                  ? `Save & Allot ${activeDuplicateCard.id}`
+                  : 'Create Job Card'}
               </button>
             )}
           </div>

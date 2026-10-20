@@ -143,6 +143,117 @@ function notifyCentralServer(key: string, data: any) {
   }).catch(() => {});
 }
 
+export function normalizeRegNo(reg?: string | null): string {
+  if (!reg) return '';
+  return String(reg).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+const TASK_META_REGEX = /\s*<!--META:(\{.*?\})-->\s*$/;
+
+export function serializeTaskMetaToNotes(task: JobTask): string {
+  const baseNotes = (task.notes || '').replace(TASK_META_REGEX, '').trim();
+  const meta: Record<string, any> = {};
+  if (task.pairedDenterId) meta.pdId = task.pairedDenterId;
+  if (task.pairedDenterName) meta.pdName = task.pairedDenterName;
+  if (task.painterPayout !== undefined) meta.pPay = task.painterPayout;
+  if (task.denterPayout !== undefined) meta.dPay = task.denterPayout;
+  if (task.contractorPayout !== undefined) meta.cPay = task.contractorPayout;
+  if (task.isContractBasis !== undefined) meta.cb = task.isContractBasis;
+  if (task.panelKey) meta.pKey = task.panelKey;
+  if (task.panelNameEn) meta.pName = task.panelNameEn;
+  if (task.paintScope) meta.pScope = task.paintScope;
+  if (task.standardJobId) meta.sjId = task.standardJobId;
+  if (Object.keys(meta).length === 0) return baseNotes;
+  return `${baseNotes} <!--META:${JSON.stringify(meta)}-->`.trim();
+}
+
+export function extractTaskMetaFromNotes(rawNotes?: string | null): {
+  cleanNotes: string;
+  meta: Record<string, any>;
+} {
+  if (!rawNotes) return { cleanNotes: '', meta: {} };
+  const match = String(rawNotes).match(TASK_META_REGEX);
+  let meta: Record<string, any> = {};
+  if (match && match[1]) {
+    try {
+      meta = JSON.parse(match[1]);
+    } catch {}
+  }
+  const cleanNotes = String(rawNotes).replace(TASK_META_REGEX, '').trim();
+  return { cleanNotes, meta };
+}
+
+export function getDefaultWorkshopForCreation(
+  workshopsListOrUser?: Workshop[] | any,
+  activeWsId?: string
+): {
+  workshop: Workshop | undefined;
+  city: City | undefined;
+  workshopId: string;
+  workshopName: string;
+  cityId: string;
+  cityName: string;
+} {
+  const isWorkshopArray = Array.isArray(workshopsListOrUser);
+  const workshops = isWorkshopArray && workshopsListOrUser.length > 0 ? workshopsListOrUser : getWorkshops();
+  const cities = getCities();
+  const user = !isWorkshopArray && workshopsListOrUser ? workshopsListOrUser : getAuthUser();
+  const currentActive = activeWsId !== undefined ? activeWsId : getActiveWorkshopId();
+
+  let chosenWorkshop: Workshop | undefined;
+
+  // 1. User's explicitly assigned workshop
+  if (user?.workshopId) {
+    chosenWorkshop = workshops.find(w => w.id === user.workshopId || w.name === user.workshopId);
+  }
+
+  // 2. Specific active workshop filter selected in header
+  if (!chosenWorkshop && currentActive && currentActive !== 'ALL' && !currentActive.startsWith('CITY:')) {
+    chosenWorkshop = workshops.find(w => w.id === currentActive || w.name === currentActive);
+  }
+
+  // 3. City filter selected in header
+  if (!chosenWorkshop && currentActive && currentActive.startsWith('CITY:')) {
+    const cityKey = currentActive.replace('CITY:', '').toLowerCase();
+    const targetCity = cities.find(c => c.id.toLowerCase() === cityKey || c.name.toLowerCase() === cityKey);
+    const cityWorkshops = workshops.filter(
+      w => (w.cityId && w.cityId.toLowerCase() === cityKey) || (targetCity && w.cityName.toLowerCase() === targetCity.name.toLowerCase())
+    );
+    chosenWorkshop = cityWorkshops.find(w => !['ws-mumbai-central', 'ws-delhi-hub', 'ws-bengaluru-main'].includes(w.id)) || cityWorkshops[0];
+  }
+
+  // 4. Prefer custom/staffed workshop (e.g. FixoCar Main) over static seed workshops when 'ALL' is active
+  if (!chosenWorkshop) {
+    const allEmps = getAllEmployees();
+    const customWorkshops = workshops.filter(w => !['ws-mumbai-central', 'ws-delhi-hub', 'ws-bengaluru-main'].includes(w.id));
+    if (customWorkshops.length > 0) {
+      chosenWorkshop = customWorkshops.sort((a, b) => {
+        const aCount = allEmps.filter(e => e.workshopId === a.id || e.workshopName === a.name).length;
+        const bCount = allEmps.filter(e => e.workshopId === b.id || e.workshopName === b.name).length;
+        return bCount - aCount;
+      })[0];
+    } else {
+      chosenWorkshop = workshops[0];
+    }
+  }
+
+  const chosenCity =
+    cities.find(
+      c =>
+        (chosenWorkshop && (c.id === chosenWorkshop.cityId || c.name.toLowerCase() === (chosenWorkshop.cityName || '').toLowerCase())) ||
+        (user?.cityId && c.id === user.cityId)
+    ) || cities[0];
+
+  return {
+    workshop: chosenWorkshop,
+    city: chosenCity,
+    workshopId: chosenWorkshop?.id || 'ws-1787487534626',
+    workshopName: chosenWorkshop?.name || 'FixoCar Main',
+    cityId: chosenCity?.id || chosenWorkshop?.cityId || 'city-1787485147699',
+    cityName: chosenCity?.name || chosenWorkshop?.cityName || 'Indore',
+  };
+}
+
 // 1. JOB CARDS STORAGE
 export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
   if (!card) return false;
@@ -152,6 +263,146 @@ export function isCars24JobCard(card?: Partial<JobCard> | null): boolean {
     (card.customer?.name && card.customer.name.toLowerCase().includes('cars24')) ||
     (card.packageName && card.packageName.toLowerCase().includes('cars24'))
   );
+}
+
+export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorkshops?: Workshop[]): JobCard {
+  const employees = allEmps || getAllEmployees();
+  const workshops = allWorkshops || getWorkshops();
+
+  // 1. Heal tasks: unpack embedded META or recover pairedDenterId/pairedDenterName from batch allotment notes
+  const healedTasks: JobTask[] = (Array.isArray(card.tasks) ? card.tasks : []).map(t => {
+    const { cleanNotes, meta } = extractTaskMetaFromNotes(t.notes);
+    let pairedDenterId = t.pairedDenterId || meta.pdId;
+    let pairedDenterName = t.pairedDenterName || meta.pdName;
+    let assignedToId = t.assignedToId;
+    let assignedToName = t.assignedToName;
+
+    if (cleanNotes) {
+      // Check latest "Denter set to <Name>" in notes if pairedDenterId is missing
+      if (!pairedDenterId && !pairedDenterName) {
+        const denterMatches = [...cleanNotes.matchAll(/Denter set to\s+([^|&\n]+?)(?:\s+on\s+[^|]+|$)/gi)];
+        if (denterMatches.length > 0) {
+          const lastDenterName = denterMatches[denterMatches.length - 1][1].trim();
+          if (lastDenterName) {
+            pairedDenterName = lastDenterName;
+            const matchedDenter = employees.find(
+              e => e.name && e.name.toLowerCase().trim() === lastDenterName.toLowerCase().trim()
+            );
+            if (matchedDenter) {
+              pairedDenterId = matchedDenter.id;
+              pairedDenterName = matchedDenter.name;
+            }
+          }
+        }
+      }
+      if (pairedDenterName && !pairedDenterId) {
+        const matchedDenter = employees.find(
+          e => e.name && e.name.toLowerCase().trim() === pairedDenterName!.toLowerCase().trim()
+        );
+        if (matchedDenter) pairedDenterId = matchedDenter.id;
+      }
+      if (assignedToName && !assignedToId) {
+        const matchedEmp = employees.find(
+          e => e.name && e.name.toLowerCase().trim() === assignedToName!.toLowerCase().trim()
+        );
+        if (matchedEmp) assignedToId = matchedEmp.id;
+      }
+    }
+
+    const isPaintOrDent = t.category === 'PAINT' || t.category === 'DENTING';
+    const estCost = Number(t.estimatedCost ?? 0);
+
+    return {
+      ...t,
+      notes: cleanNotes || undefined,
+      assignedToId,
+      assignedToName,
+      pairedDenterId,
+      pairedDenterName,
+      painterPayout: t.painterPayout ?? meta.pPay ?? (t.category === 'PAINT' && estCost > 0 ? estCost : undefined),
+      denterPayout: t.denterPayout ?? meta.dPay ?? (t.category === 'PAINT' && pairedDenterId ? 200 : undefined),
+      contractorPayout: t.contractorPayout ?? meta.cPay ?? (isPaintOrDent && estCost > 0 ? estCost : undefined),
+      isContractBasis: t.isContractBasis ?? meta.cb ?? isPaintOrDent,
+      panelKey: t.panelKey || meta.pKey,
+      panelNameEn: t.panelNameEn || meta.pName,
+      paintScope: t.paintScope || meta.pScope,
+      standardJobId: t.standardJobId || meta.sjId,
+    };
+  });
+
+  // 2. Propagate vehicle-level batch Painter / Denter across PAINT tasks on the same card if any panel lost its denter during sync
+  const batchPaintWithDenter = healedTasks.find(t => t.category === 'PAINT' && t.pairedDenterId);
+  const batchPaintWithPainter = healedTasks.find(t => t.category === 'PAINT' && t.assignedToId);
+  if (batchPaintWithDenter || batchPaintWithPainter) {
+    for (let i = 0; i < healedTasks.length; i++) {
+      const t = healedTasks[i];
+      if (t.category === 'PAINT') {
+        if (!t.pairedDenterId && batchPaintWithDenter?.pairedDenterId) {
+          t.pairedDenterId = batchPaintWithDenter.pairedDenterId;
+          t.pairedDenterName = batchPaintWithDenter.pairedDenterName;
+          if (t.denterPayout === undefined) t.denterPayout = 200;
+        }
+        if (!t.assignedToId && batchPaintWithPainter?.assignedToId) {
+          t.assignedToId = batchPaintWithPainter.assignedToId;
+          t.assignedToName = batchPaintWithPainter.assignedToName;
+        }
+      }
+    }
+  }
+
+  // 3. Heal workshop assignment: if card has no workshop or defaulted to 'ws-mumbai-central' while its Floor Manager or assigned staff belong to another workshop (e.g. FixoCar Main)
+  let workshopId = card.workshopId;
+  let workshopName = card.workshopName;
+  let cityId = card.cityId;
+  let cityName = card.cityName;
+
+  const isSeedMumbai = !workshopId || workshopId === 'ws-mumbai-central';
+  if (isSeedMumbai && employees.length > 0) {
+    // Check Floor Manager's workshop first
+    const fmEmp = employees.find(
+      e =>
+        (card.floorManagerId && e.id === card.floorManagerId) ||
+        (card.floorManagerName && e.name && e.name.toLowerCase().trim() === card.floorManagerName.toLowerCase().trim())
+    );
+    // Or check first assigned technician's workshop
+    const techEmp = healedTasks
+      .map(t => employees.find(e => e.id === t.assignedToId || e.id === t.pairedDenterId))
+      .find(Boolean);
+
+    const staffWithWs = (fmEmp && fmEmp.workshopId) ? fmEmp : (techEmp && techEmp.workshopId ? techEmp : undefined);
+    if (staffWithWs && staffWithWs.workshopId) {
+      const targetWsObj = workshops.find(w => w.id === staffWithWs.workshopId || (w.name && staffWithWs.workshopName && w.name.toLowerCase() === staffWithWs.workshopName.toLowerCase()));
+      workshopId = targetWsObj?.id || staffWithWs.workshopId;
+      workshopName = targetWsObj?.name || staffWithWs.workshopName || workshopName;
+      cityId = targetWsObj?.cityId || staffWithWs.cityId || cityId;
+      cityName = targetWsObj?.cityName || staffWithWs.cityName || cityName;
+    }
+  }
+
+  // If workshop has a single Denter (e.g. Atif in FixoCar Main), ensure any PAINT task on this card without a pairedDenterId gets paired with that workshop's Denter
+  if (workshopId && workshopId !== 'ws-mumbai-central') {
+    const wsDenters = employees.filter(e => e.role === 'DENTER' && e.workshopId === workshopId);
+    if (wsDenters.length === 1) {
+      const soleDenter = wsDenters[0];
+      for (const t of healedTasks) {
+        if (t.category === 'PAINT' && !t.pairedDenterId) {
+          t.pairedDenterId = soleDenter.id;
+          t.pairedDenterName = soleDenter.name;
+          if (t.denterPayout === undefined) t.denterPayout = 200;
+        }
+      }
+    }
+  }
+
+  return {
+    ...card,
+    workshopId,
+    workshopName,
+    cityId,
+    cityName,
+    tasks: healedTasks,
+    isCars24: isCars24JobCard(card)
+  };
 }
 
 export function getAllJobCards(): JobCard[] {
@@ -167,15 +418,85 @@ export function getAllJobCards(): JobCard[] {
     list = [...INITIAL_JOB_CARDS];
     localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
   }
-  return list.map(c => ({
-    ...c,
-    isCars24: isCars24JobCard(c)
-  }));
+  const allEmps = getAllEmployees();
+  const allWorkshops = getWorkshops();
+  const healedList = list.map(c => healJobCardRecord(c, allEmps, allWorkshops));
+
+  // Enforce: Same vehicle number can have multiple historical job cards, but at most ONE active job card.
+  // If an empty/incomplete active job card (0 tasks) co-exists with a populated active job card for the same regNo, keep the populated/newest one.
+  const activeByReg = new Map<string, JobCard[]>();
+  for (const c of healedList) {
+    if (c.status !== 'DELIVERED' && c.status !== 'CLOSED') {
+      const norm = normalizeRegNo(c.vehicle?.registrationNumber);
+      if (norm) {
+        const arr = activeByReg.get(norm) || [];
+        arr.push(c);
+        activeByReg.set(norm, arr);
+      }
+    }
+  }
+
+  const redundantIds = new Set<string>();
+  for (const [, group] of activeByReg.entries()) {
+    if (group.length > 1) {
+      // Sort so card with most tasks comes first; tie-break by highest numeric ID
+      const sorted = [...group].sort((a, b) => {
+        const aTasks = Array.isArray(a.tasks) ? a.tasks.length : 0;
+        const bTasks = Array.isArray(b.tasks) ? b.tasks.length : 0;
+        if (bTasks !== aTasks) return bTasks - aTasks;
+        return String(b.id).localeCompare(String(a.id));
+      });
+      // Keep sorted[0] as the single active card; if any other active card in the group is an incomplete 0-task card, drop it
+      for (let i = 1; i < sorted.length; i++) {
+        if (!sorted[i].tasks || sorted[i].tasks.length === 0) {
+          redundantIds.add(sorted[i].id);
+        }
+      }
+    }
+  }
+
+  if (redundantIds.size > 0) {
+    return healedList.filter(c => !redundantIds.has(c.id));
+  }
+  return healedList;
 }
 
 export function getJobCards(workshopIdFilter?: string): JobCard[] {
   const allCards = getAllJobCards();
   const targetWs = workshopIdFilter !== undefined ? workshopIdFilter : getActiveWorkshopId();
+  const authUser = getAuthUser();
+  const allEmps = getAllEmployees();
+  const workshops = getWorkshops();
+  const targetWsObj = workshops.find(w => w.id === targetWs || w.name === targetWs);
+
+  // Helper: check if the currently logged-in user is directly assigned to this job card
+  const isAssignedToCurrentUser = (card: JobCard): boolean => {
+    if (!authUser) return false;
+    const uId = authUser.id || authUser.employeeId || authUser.vendorId;
+    const uName = (authUser.name || '').toLowerCase().trim();
+    if (uId && card.floorManagerId === uId) return true;
+    if (uName && card.floorManagerName && card.floorManagerName.toLowerCase().trim() === uName) return true;
+    return (card.tasks || []).some(t => {
+      if (uId && (t.assignedToId === uId || t.pairedDenterId === uId || t.outsourcedVendorId === uId)) return true;
+      if (uName) {
+        if (t.assignedToName && t.assignedToName.toLowerCase().includes(uName)) return true;
+        if (t.pairedDenterName && t.pairedDenterName.toLowerCase().includes(uName)) return true;
+      }
+      return false;
+    });
+  };
+
+  // Helper: check if card's assigned staff belong to targetWs
+  const hasStaffInTargetWorkshop = (card: JobCard, wsId: string, wsName?: string): boolean => {
+    const matchEmpWs = (empId?: string) => {
+      if (!empId) return false;
+      const emp = allEmps.find(e => e.id === empId);
+      if (!emp) return false;
+      return emp.workshopId === wsId || Boolean(wsName && emp.workshopName && emp.workshopName.toLowerCase() === wsName.toLowerCase());
+    };
+    if (matchEmpWs(card.floorManagerId)) return true;
+    return (card.tasks || []).some(t => matchEmpWs(t.assignedToId) || matchEmpWs(t.pairedDenterId));
+  };
 
   if (!targetWs || targetWs === 'ALL' || targetWs === '') {
     return allCards;
@@ -188,6 +509,7 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
     const cityNameLower = targetCity ? targetCity.name.toLowerCase() : cityKey;
 
     return allCards.filter(c => 
+      isAssignedToCurrentUser(c) ||
       (c.cityId && c.cityId.toLowerCase() === cityKey) ||
       (c.cityName && c.cityName.toLowerCase() === cityNameLower) ||
       !c.workshopId
@@ -195,8 +517,11 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
   }
 
   const filtered = allCards.filter(c => 
+    isAssignedToCurrentUser(c) ||
     c.workshopId === targetWs || 
     c.workshopName === targetWs || 
+    (targetWsObj && (c.workshopId === targetWsObj.id || (c.workshopName && c.workshopName.toLowerCase() === targetWsObj.name.toLowerCase()))) ||
+    hasStaffInTargetWorkshop(c, targetWs, targetWsObj?.name) ||
     !c.workshopId
   );
   if (filtered.length === 0 && allCards.length > 0) {
@@ -206,7 +531,11 @@ export function getJobCards(workshopIdFilter?: string): JobCard[] {
 }
 
 export function saveJobCards(cards: JobCard[], skipPush = false) {
-  localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(cards));
+  const allEmps = getAllEmployees();
+  const allWorkshops = getWorkshops();
+  const healedCards = cards.map(c => healJobCardRecord(c, allEmps, allWorkshops));
+
+  localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(healedCards));
   notifyStoreChange();
   
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -217,7 +546,7 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
         m.addToOfflineQueue('jobCardUpdate');
       });
     } else {
-      notifyCentralServer('jobCards', cards);
+      notifyCentralServer('jobCards', healedCards);
     }
   }
 
@@ -225,8 +554,8 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
     // Async sync to Supabase if connected
     const client = getSupabaseClient();
     if (client) {
-      cards.forEach(card => {
-        const fullPayload = {
+      healedCards.forEach(card => {
+        const corePayload = {
           id: card.id,
           registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
           vehicle_make: card.vehicle?.make || 'Vehicle',
@@ -258,21 +587,29 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
           advance_paid: card.advancePaid || 0,
           qc_passed: card.qcPassed || false,
           qc_notes: card.qcNotes || null,
+          updated_at: new Date().toISOString()
+        };
+
+        const extendedPayload = {
+          ...corePayload,
           is_urgent: Boolean(card.isUrgent),
           estimated_completion_date: card.estimatedCompletionDate || null,
           notes: card.notes || card.huddleNotes || null,
-          updated_at: new Date().toISOString()
         };
 
         // Self-executing async function to safely sync to Supabase in the background
         (async () => {
           try {
-            const { error } = await client.from('job_cards').upsert(fullPayload);
+            let { error } = await client.from('job_cards').upsert(extendedPayload);
             if (error) {
-              console.warn('Supabase job_cards upsert warning, retrying with fallback payload without FKs:', error.message);
-              // Fallback retry without FK constraint fields if foreign key missing in target table
+              // Retry with corePayload (in case is_urgent/notes/estimated_completion_date columns don't exist)
+              const retryCore = await client.from('job_cards').upsert(corePayload);
+              error = retryCore.error;
+            }
+            if (error) {
+              // Fallback retry without FK constraint fields if foreign key missing in target table, keeping names
               const fallbackPayload = {
-                ...fullPayload,
+                ...corePayload,
                 floor_manager_id: null,
                 city_id: null,
                 workshop_id: null
@@ -286,11 +623,12 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
             console.warn('[SUPABASE_CATCH] Job card upsert exception:', err);
           }
 
-          // Also upsert tasks
+          // Also upsert tasks with serialized metadata in notes so pairedDenterId & payouts persist across devices
           if (card.tasks && card.tasks.length > 0) {
             for (const t of card.tasks) {
               try {
-                const { error } = await client.from('job_tasks').upsert({
+                const encodedNotes = serializeTaskMetaToNotes(t);
+                const taskCorePayload = {
                   id: t.id,
                   job_card_id: card.id,
                   title: t.title || 'Task',
@@ -304,15 +642,19 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
                   requires_customer_approval: t.requiresCustomerApproval || false,
                   is_customer_approved: t.isCustomerApproved ?? null,
                   rejection_reason: t.rejectionReason || null,
-                  notes: t.notes || '',
+                  notes: encodedNotes || null,
                   completed_at: t.completedAt || null,
+                  updated_at: new Date().toISOString()
+                };
+                const { error } = await client.from('job_tasks').upsert({
+                  ...taskCorePayload,
                   is_additional_work: t.isAdditionalWork || false,
                   additional_work_requested_by: t.additionalWorkRequestedBy || null,
                   additional_work_requested_at: t.additionalWorkRequestedAt || null,
                   approval_status: t.approvalStatus || 'PENDING'
                 });
                 if (error) {
-                  console.warn(`Supabase task sync error (${t.id}):`, error.message);
+                  await client.from('job_tasks').upsert(taskCorePayload);
                 }
               } catch (err) {
                 console.warn(`[SUPABASE_CATCH] Task upsert exception (${t.id}):`, err);
@@ -326,23 +668,26 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
 }
 
 export function getJobCardById(id: string): JobCard | undefined {
-  return getJobCards().find(card => card.id === id);
+  return getAllJobCards().find(card => card.id === id);
 }
 
 export function getActiveJobCardForRegNo(registrationNumber: string, excludeJobCardId?: string): JobCard | undefined {
-  if (!registrationNumber || !registrationNumber.trim()) return undefined;
-  const cleanReg = registrationNumber.toUpperCase().trim();
-  const cards = getJobCards();
-  return cards.find(card => 
-    card.vehicle.registrationNumber.toUpperCase().trim() === cleanReg &&
+  const cleanReg = normalizeRegNo(registrationNumber);
+  if (!cleanReg) return undefined;
+  const cards = getAllJobCards();
+  const matches = cards.filter(card => 
+    normalizeRegNo(card.vehicle?.registrationNumber) === cleanReg &&
     card.status !== 'DELIVERED' &&
     card.status !== 'CLOSED' &&
     card.id !== excludeJobCardId
   );
+  if (matches.length === 0) return undefined;
+  // Prefer the card with tasks if multiple exist
+  return matches.sort((a, b) => (b.tasks?.length || 0) - (a.tasks?.length || 0))[0];
 }
 
 export function deleteJobCard(id: string): boolean {
-  const cards = getJobCards();
+  const cards = getAllJobCards();
   const cardToDelete = cards.find(c => c.id === id);
   if (!cardToDelete) return false;
 
@@ -418,19 +763,52 @@ export function recordJobCardHistory(entry: Omit<JobCardHistoryRecord, 'id' | 'c
 }
 
 export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCard {
+  const cards = getAllJobCards();
   const existingActive = getActiveJobCardForRegNo(newCard.vehicle.registrationNumber);
+
+  // If an existing active Job Card exists:
+  // - If it already has tasks, block creating a second active Job Card (only 1 active job card allowed per vehicle).
+  // - If the existing active Job Card is incomplete (0 tasks), complete/update it in-place so we don't end up with two active job cards!
   if (existingActive) {
-    throw new Error(`An active Job Card (${existingActive.id}) already exists for vehicle ${newCard.vehicle.registrationNumber}. Close or complete the existing job card before creating a new one.`);
+    if (existingActive.tasks && existingActive.tasks.length > 0) {
+      throw new Error(`An active Job Card (${existingActive.id}) already exists for vehicle ${newCard.vehicle.registrationNumber}. Close or complete the existing job card before creating a new one.`);
+    } else {
+      const completedCard: JobCard = healJobCardRecord({
+        ...existingActive,
+        ...newCard,
+        id: existingActive.id,
+        createdAt: existingActive.createdAt || new Date().toISOString(),
+        tasks: (newCard.tasks || []).map(t => ({
+          ...t,
+          jobCardId: existingActive.id
+        }))
+      });
+      const updatedList = cards.map(c => c.id === existingActive.id ? completedCard : c);
+      saveJobCards(updatedList);
+      return completedCard;
+    }
   }
 
-  const cards = getJobCards();
-  const nextNum = cards.length + 105;
-  const cardId = `JC-2026-${nextNum}`;
-  const fullCard: JobCard = {
+  // Compute safe non-colliding ID across all job cards
+  let maxNum = 105;
+  cards.forEach(c => {
+    const parts = String(c.id || '').split('-');
+    const lastPart = parts[parts.length - 1];
+    const num = parseInt(lastPart, 10);
+    if (!isNaN(num) && num < 100000 && num > maxNum) {
+      maxNum = num;
+    }
+  });
+  const cardId = `JC-2026-${maxNum + 1}`;
+  const fullCard: JobCard = healJobCardRecord({
     ...newCard,
     id: cardId,
-    createdAt: new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }),
-  };
+    createdAt: new Date().toISOString(),
+    tasks: (newCard.tasks || []).map(t => ({
+      ...t,
+      jobCardId: cardId
+    }))
+  });
   cards.unshift(fullCard);
   saveJobCards(cards);
 
@@ -482,11 +860,11 @@ export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCa
 }
 
 export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
-  const cards = getJobCards();
+  const cards = getAllJobCards();
   const index = cards.findIndex(c => c.id === id);
   if (index !== -1) {
     const oldCard = cards[index];
-    const newCard = updater(oldCard);
+    const newCard = healJobCardRecord(updater(oldCard));
     cards[index] = newCard;
 
     // 1. Detect vehicle pipeline status changes (log audit trail without popup toast)
@@ -3441,6 +3819,19 @@ export function deleteCustomerVehicle(id: string): void {
 // ----------------------------------------------------
 // VEHICLE GATE CHECK-IN & WORKSHOP PRESENCE STORAGE
 // ----------------------------------------------------
+export function sanitizeGateCheckInId(rawId: string): string {
+  if (!rawId) return rawId;
+  if (/e\+|NaN/i.test(String(rawId))) {
+    return 'GATE-2026-120';
+  }
+  const cleaned = String(rawId).replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
+  const match = cleaned.match(/^GATE-2026-(\d+)$/i);
+  if (match && match[1].length > 6) {
+    return `GATE-2026-${match[1].slice(-3)}`;
+  }
+  return cleaned;
+}
+
 export function getVehicleCheckIns(): VehicleCheckIn[] {
   const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
   let list: VehicleCheckIn[] = [];
@@ -3454,16 +3845,84 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
     list = [...INITIAL_VEHICLE_CHECKINS];
     localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(list));
   }
-  return list;
+
+  // Normalize IDs and deduplicate active check-ins per registration number so at most 1 non-checked-out gate pass exists per vehicle
+  const seenIds = new Set<string>();
+  const activeByReg = new Map<string, VehicleCheckIn>();
+  const checkedOutList: VehicleCheckIn[] = [];
+
+  for (const rawItem of list) {
+    if (!rawItem) continue;
+    const item: VehicleCheckIn = {
+      ...rawItem,
+      id: sanitizeGateCheckInId(rawItem.id)
+    };
+    if (seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+
+    if (item.status === 'CHECKED_OUT') {
+      checkedOutList.push(item);
+    } else {
+      const normReg = normalizeRegNo(item.registrationNumber);
+      if (!normReg) {
+        checkedOutList.push(item);
+        continue;
+      }
+      const existingActive = activeByReg.get(normReg);
+      if (!existingActive) {
+        activeByReg.set(normReg, item);
+      } else {
+        // Prefer the check-in that has a linked jobCardId or newer ID
+        const existingHasJc = Boolean(existingActive.jobCardId);
+        const currentHasJc = Boolean(item.jobCardId);
+        if (currentHasJc && !existingHasJc) {
+          activeByReg.set(normReg, {
+            ...item,
+            workshopId: item.workshopId || existingActive.workshopId,
+            workshopName: item.workshopName || existingActive.workshopName,
+            cityId: item.cityId || existingActive.cityId,
+            cityName: item.cityName || existingActive.cityName,
+          });
+        } else {
+          activeByReg.set(normReg, {
+            ...existingActive,
+            jobCardId: existingActive.jobCardId || item.jobCardId,
+            workshopId: existingActive.workshopId || item.workshopId,
+            workshopName: existingActive.workshopName || item.workshopName,
+            cityId: existingActive.cityId || item.cityId,
+            cityName: existingActive.cityName || item.cityName,
+          });
+        }
+      }
+    }
+  }
+
+  return [...Array.from(activeByReg.values()), ...checkedOutList];
 }
 
-export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
+export function getActiveCheckInForRegNo(registrationNumber: string, excludeCheckInId?: string): VehicleCheckIn | undefined {
+  const cleanReg = normalizeRegNo(registrationNumber);
+  if (!cleanReg) return undefined;
+  const checkIns = getVehicleCheckIns();
+  return checkIns.find(
+    c =>
+      normalizeRegNo(c.registrationNumber) === cleanReg &&
+      c.status !== 'CHECKED_OUT' &&
+      c.id !== excludeCheckInId
+  );
+}
+
+export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false): void {
+  const normalized = checkIns.map(c => ({
+    ...c,
+    id: sanitizeGateCheckInId(c.id)
+  }));
   try {
-    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(checkIns));
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(normalized));
   } catch (err) {
     console.warn('LocalStorage quota limit reached in saveVehicleCheckIns. Sanitizing large image data:', err);
     // Fallback: replace any huge base64 strings with a compressed sample vehicle photo URL across ALL records
-    const sanitized = checkIns.map(c => ({
+    const sanitized = normalized.map(c => ({
       ...c,
       checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000)
         ? 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&auto=format&fit=crop&q=80'
@@ -3479,19 +3938,37 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[]): void {
     }
   }
   notifyStoreChange();
-  notifyCentralServer('vehicleCheckIns', checkIns);
+  if (!skipPush) {
+    notifyCentralServer('vehicleCheckIns', normalized);
+  }
 }
 
 export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'checkedInAt'>): VehicleCheckIn {
+  const existingActiveCheckIn = getActiveCheckInForRegNo(newCheckIn.registrationNumber);
+  if (existingActiveCheckIn) {
+    throw new Error(
+      `Vehicle ${newCheckIn.registrationNumber.toUpperCase()} is already checked in at the gate (${existingActiveCheckIn.id}) and has not checked out yet. New gate check-in is not allowed before checking out.`
+    );
+  }
+
+  const existingActiveJobCard = getActiveJobCardForRegNo(newCheckIn.registrationNumber);
+  if (existingActiveJobCard) {
+    throw new Error(
+      `Vehicle ${newCheckIn.registrationNumber.toUpperCase()} already has an active Job Card (${existingActiveJobCard.id} - ${existingActiveJobCard.status}). Only one active job card is allowed per vehicle, and new gate check-in is not allowed before checking out.`
+    );
+  }
+
   const checkIns = getVehicleCheckIns();
   
-  // Calculate max numeric suffix from existing checkIns to guarantee new ID is strictly higher
+  // Calculate max numeric suffix from existing checkIns (using only the trailing number after the last hyphen)
   let maxNum = 105;
   checkIns.forEach(c => {
-    const digits = c.id.replace(/\D/g, '');
-    if (digits) {
-      const num = parseInt(digits, 10);
-      if (num > maxNum) maxNum = num;
+    const cleanId = sanitizeGateCheckInId(c.id);
+    const parts = String(cleanId || '').split('-');
+    const lastPart = parts[parts.length - 1];
+    const num = parseInt(lastPart, 10);
+    if (!isNaN(num) && num < 100000 && num > maxNum) {
+      maxNum = num;
     }
   });
 
@@ -3508,11 +3985,37 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
   checkIns.unshift(fullRecord);
   saveVehicleCheckIns(checkIns);
 
+  // Also sync to Supabase vehicle_check_ins in background if connected
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('vehicle_check_ins').upsert({
+      id: fullRecord.id,
+      registration_number: fullRecord.registrationNumber,
+      make: fullRecord.make,
+      model: fullRecord.model,
+      variant: fullRecord.variant || null,
+      fuel_type: fullRecord.fuelType || 'Petrol',
+      color: fullRecord.color || 'White',
+      fuel_level: fullRecord.fuelLevel || 50,
+      mileage: fullRecord.mileage || 0,
+      is_cars24: Boolean(fullRecord.isCars24),
+      cars24_ref_no: fullRecord.cars24RefNo || null,
+      customer_name: fullRecord.customerName || 'Customer',
+      customer_phone: fullRecord.customerPhone || '',
+      check_in_driver_name: fullRecord.checkInDriverName || 'Driver',
+      check_in_driver_phone: fullRecord.checkInDriverPhone || '',
+      driver_photo_url: fullRecord.checkInPhotoWithDriverUrl || null,
+      check_in_notes: fullRecord.checkInNotes || null,
+      status: fullRecord.status,
+      job_card_id: fullRecord.jobCardId || null
+    }).then(() => {}, () => {});
+  }
+
   // Sync with Customer Vehicles directory
   try {
     const existingVehicles = getCustomerVehicles();
-    const cleanReg = fullRecord.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const exists = existingVehicles.some(v => v.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg);
+    const cleanReg = normalizeRegNo(fullRecord.registrationNumber);
+    const exists = existingVehicles.some(v => normalizeRegNo(v.registrationNumber) === cleanReg);
     if (!exists) {
       addCustomerVehicle({
         customerPhone: fullRecord.customerPhone || 'N/A',
@@ -3543,13 +4046,64 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
 
 export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn) => VehicleCheckIn): VehicleCheckIn | null {
   const checkIns = getVehicleCheckIns();
-  const index = checkIns.findIndex(c => c.id === id);
+  const cleanId = sanitizeGateCheckInId(id);
+  const index = checkIns.findIndex(c => c.id === id || c.id === cleanId);
   if (index === -1) return null;
 
   const oldRecord = checkIns[index];
   const updatedRecord = updater(oldRecord);
   checkIns[index] = updatedRecord;
+
+  // If this vehicle is being checked out at the gate, also ensure any other active check-in for the same regNo is marked CHECKED_OUT
+  if (updatedRecord.status === 'CHECKED_OUT') {
+    const targetReg = normalizeRegNo(updatedRecord.registrationNumber);
+    for (let i = 0; i < checkIns.length; i++) {
+      if (i !== index && normalizeRegNo(checkIns[i].registrationNumber) === targetReg && checkIns[i].status !== 'CHECKED_OUT') {
+        checkIns[i] = {
+          ...checkIns[i],
+          status: 'CHECKED_OUT',
+          checkedOutAt: updatedRecord.checkedOutAt,
+          checkedOutByName: updatedRecord.checkedOutByName,
+          checkOutDriverName: updatedRecord.checkOutDriverName,
+          checkOutDriverPhone: updatedRecord.checkOutDriverPhone,
+          checkOutPhotoWithDriverUrl: updatedRecord.checkOutPhotoWithDriverUrl,
+          checkOutNotes: updatedRecord.checkOutNotes,
+        };
+      }
+    }
+  }
+
   saveVehicleCheckIns(checkIns);
+
+  // Sync updated check-in status to Supabase in background
+  const client = getSupabaseClient();
+  if (client) {
+    client.from('vehicle_check_ins').upsert({
+      id: updatedRecord.id,
+      registration_number: updatedRecord.registrationNumber,
+      make: updatedRecord.make,
+      model: updatedRecord.model,
+      variant: updatedRecord.variant || null,
+      fuel_type: updatedRecord.fuelType || 'Petrol',
+      color: updatedRecord.color || 'White',
+      fuel_level: updatedRecord.fuelLevel || 50,
+      mileage: updatedRecord.mileage || 0,
+      is_cars24: Boolean(updatedRecord.isCars24),
+      cars24_ref_no: updatedRecord.cars24RefNo || null,
+      customer_name: updatedRecord.customerName || 'Customer',
+      customer_phone: updatedRecord.customerPhone || '',
+      check_in_driver_name: updatedRecord.checkInDriverName || 'Driver',
+      check_in_driver_phone: updatedRecord.checkInDriverPhone || '',
+      driver_photo_url: updatedRecord.checkInPhotoWithDriverUrl || null,
+      check_in_notes: updatedRecord.checkInNotes || null,
+      status: updatedRecord.status,
+      job_card_id: updatedRecord.jobCardId || null,
+      check_out_time: updatedRecord.checkedOutAt || null,
+      check_out_driver_name: updatedRecord.checkOutDriverName || null,
+      check_out_driver_phone: updatedRecord.checkOutDriverPhone || null,
+      check_out_driver_photo_url: updatedRecord.checkOutPhotoWithDriverUrl || null
+    }).then(() => {}, () => {});
+  }
 
   if (oldRecord.status !== 'CHECKED_OUT' && updatedRecord.status === 'CHECKED_OUT') {
     dispatchToastNotification({
@@ -3565,7 +4119,8 @@ export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn)
 }
 
 export function getVehicleCheckInById(id: string): VehicleCheckIn | undefined {
-  return getVehicleCheckIns().find(c => c.id === id);
+  const cleanId = sanitizeGateCheckInId(id);
+  return getVehicleCheckIns().find(c => c.id === id || c.id === cleanId);
 }
 
 export function deleteVehicleCheckIn(id: string): boolean {

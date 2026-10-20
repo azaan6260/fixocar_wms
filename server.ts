@@ -197,6 +197,288 @@ function getInitialCentralStore(): CentralStoreData {
 
 let memoryCentralStore: CentralStoreData | null = null;
 
+const SERVER_TASK_META_REGEX = /\s*<!--META:(\{.*?\})-->\s*$/;
+
+function serializeServerTaskMetaToNotes(task: any): string {
+  const baseNotes = String(task.notes || '').replace(SERVER_TASK_META_REGEX, '').trim();
+  const meta: Record<string, any> = {};
+  if (task.pairedDenterId) meta.pdId = task.pairedDenterId;
+  if (task.pairedDenterName) meta.pdName = task.pairedDenterName;
+  if (task.painterPayout !== undefined) meta.pPay = task.painterPayout;
+  if (task.denterPayout !== undefined) meta.dPay = task.denterPayout;
+  if (task.contractorPayout !== undefined) meta.cPay = task.contractorPayout;
+  if (task.isContractBasis !== undefined) meta.cb = task.isContractBasis;
+  if (task.panelKey) meta.pKey = task.panelKey;
+  if (task.panelNameEn) meta.pName = task.panelNameEn;
+  if (task.paintScope) meta.pScope = task.paintScope;
+  if (task.standardJobId) meta.sjId = task.standardJobId;
+  if (Object.keys(meta).length === 0) return baseNotes;
+  return `${baseNotes} <!--META:${JSON.stringify(meta)}-->`.trim();
+}
+
+function extractServerTaskMetaFromNotes(rawNotes?: string | null): {
+  cleanNotes: string;
+  meta: Record<string, any>;
+} {
+  if (!rawNotes) return { cleanNotes: '', meta: {} };
+  const match = String(rawNotes).match(SERVER_TASK_META_REGEX);
+  let meta: Record<string, any> = {};
+  if (match && match[1]) {
+    try {
+      meta = JSON.parse(match[1]);
+    } catch {}
+  }
+  const cleanNotes = String(rawNotes).replace(SERVER_TASK_META_REGEX, '').trim();
+  return { cleanNotes, meta };
+}
+
+function normalizeServerRegNo(reg?: string | null): string {
+  if (!reg) return '';
+  return String(reg).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+function sanitizeServerGateId(rawId?: string | null): string {
+  if (!rawId) return '';
+  if (/e\+|NaN/i.test(String(rawId))) {
+    return 'GATE-2026-120';
+  }
+  const cleaned = String(rawId).replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
+  const match = cleaned.match(/^GATE-2026-(\d+)$/i);
+  if (match && match[1].length > 6) {
+    return `GATE-2026-${match[1].slice(-3)}`;
+  }
+  return cleaned;
+}
+
+function healServerStore(store: CentralStoreData): CentralStoreData {
+  const employees = Array.isArray(store.employees) ? store.employees : [];
+  const workshops = Array.isArray(store.workshops) ? store.workshops : [];
+
+  // 1. Heal jobCards
+  const healedCards = (Array.isArray(store.jobCards) ? store.jobCards : []).map((card: any) => {
+    if (!card) return card;
+    const healedTasks = (Array.isArray(card.tasks) ? card.tasks : []).map((t: any) => {
+      if (!t) return t;
+      const { cleanNotes, meta } = extractServerTaskMetaFromNotes(t.notes || t.description);
+      let pairedDenterId = t.pairedDenterId || t.paired_denter_id || meta.pdId;
+      let pairedDenterName = t.pairedDenterName || t.paired_denter_name || meta.pdName;
+      let assignedToId = t.assignedToId || t.assigned_to_id;
+      let assignedToName = t.assignedToName || t.assigned_to_name;
+
+      if (cleanNotes) {
+        if (!pairedDenterId && !pairedDenterName) {
+          const denterMatches = [...cleanNotes.matchAll(/Denter set to\s+([^|&\n]+?)(?:\s+on\s+[^|]+|$)/gi)];
+          if (denterMatches.length > 0) {
+            const lastDenterName = denterMatches[denterMatches.length - 1][1].trim();
+            if (lastDenterName) {
+              pairedDenterName = lastDenterName;
+              const matchedDenter = employees.find(
+                (e: any) => e.name && e.name.toLowerCase().trim() === lastDenterName.toLowerCase().trim()
+              );
+              if (matchedDenter) {
+                pairedDenterId = matchedDenter.id;
+                pairedDenterName = matchedDenter.name;
+              }
+            }
+          }
+        }
+        if (pairedDenterName && !pairedDenterId) {
+          const matchedDenter = employees.find(
+            (e: any) => e.name && e.name.toLowerCase().trim() === pairedDenterName.toLowerCase().trim()
+          );
+          if (matchedDenter) pairedDenterId = matchedDenter.id;
+        }
+        if (assignedToName && !assignedToId) {
+          const matchedEmp = employees.find(
+            (e: any) => e.name && e.name.toLowerCase().trim() === assignedToName.toLowerCase().trim()
+          );
+          if (matchedEmp) assignedToId = matchedEmp.id;
+        }
+      }
+
+      const isPaintOrDent = t.category === 'PAINT' || t.category === 'DENTING';
+      const estCost = Number(t.estimatedCost ?? t.estimated_cost ?? 0);
+
+      return {
+        ...t,
+        notes: cleanNotes || undefined,
+        assignedToId,
+        assignedToName,
+        pairedDenterId,
+        pairedDenterName,
+        painterPayout: t.painterPayout ?? meta.pPay ?? (t.category === 'PAINT' && estCost > 0 ? estCost : undefined),
+        denterPayout: t.denterPayout ?? meta.dPay ?? (t.category === 'PAINT' && pairedDenterId ? 200 : undefined),
+        contractorPayout: t.contractorPayout ?? meta.cPay ?? (isPaintOrDent && estCost > 0 ? estCost : undefined),
+        isContractBasis: t.isContractBasis ?? meta.cb ?? isPaintOrDent,
+        panelKey: t.panelKey || meta.pKey,
+        panelNameEn: t.panelNameEn || meta.pName,
+        paintScope: t.paintScope || meta.pScope,
+        standardJobId: t.standardJobId || meta.sjId,
+      };
+    });
+
+    // Propagate vehicle-level batch Painter / Denter across PAINT tasks on the same card
+    const batchPaintWithDenter = healedTasks.find((t: any) => t.category === 'PAINT' && t.pairedDenterId);
+    const batchPaintWithPainter = healedTasks.find((t: any) => t.category === 'PAINT' && t.assignedToId);
+    if (batchPaintWithDenter || batchPaintWithPainter) {
+      for (const t of healedTasks) {
+        if (t.category === 'PAINT') {
+          if (!t.pairedDenterId && batchPaintWithDenter?.pairedDenterId) {
+            t.pairedDenterId = batchPaintWithDenter.pairedDenterId;
+            t.pairedDenterName = batchPaintWithDenter.pairedDenterName;
+            if (t.denterPayout === undefined) t.denterPayout = 200;
+          }
+          if (!t.assignedToId && batchPaintWithPainter?.assignedToId) {
+            t.assignedToId = batchPaintWithPainter.assignedToId;
+            t.assignedToName = batchPaintWithPainter.assignedToName;
+          }
+        }
+      }
+    }
+
+    let workshopId = card.workshopId;
+    let workshopName = card.workshopName;
+    let cityId = card.cityId;
+    let cityName = card.cityName;
+
+    const isSeedMumbai = !workshopId || workshopId === 'ws-mumbai-central';
+    if (isSeedMumbai && employees.length > 0 && !['JC-2026-101', 'JC-2026-102', 'JC-2026-103'].includes(card.id)) {
+      const fmEmp = employees.find(
+        (e: any) =>
+          (card.floorManagerId && e.id === card.floorManagerId) ||
+          (card.floorManagerName && e.name && e.name.toLowerCase().trim() === card.floorManagerName.toLowerCase().trim())
+      );
+      const techEmp = healedTasks
+        .map((t: any) => employees.find((e: any) => e.id === t.assignedToId || e.id === t.pairedDenterId))
+        .find(Boolean);
+
+      const staffWithWs = (fmEmp && fmEmp.workshopId) ? fmEmp : (techEmp && techEmp.workshopId ? techEmp : undefined);
+      if (staffWithWs && staffWithWs.workshopId) {
+        const targetWsObj = workshops.find(
+          (w: any) => w.id === staffWithWs.workshopId || (w.name && staffWithWs.workshopName && w.name.toLowerCase() === staffWithWs.workshopName.toLowerCase())
+        );
+        workshopId = targetWsObj?.id || staffWithWs.workshopId;
+        workshopName = targetWsObj?.name || staffWithWs.workshopName || workshopName;
+        cityId = targetWsObj?.cityId || staffWithWs.cityId || cityId;
+        cityName = targetWsObj?.cityName || staffWithWs.cityName || cityName;
+      }
+    }
+
+    if (workshopId && workshopId !== 'ws-mumbai-central') {
+      const wsDenters = employees.filter((e: any) => e.role === 'DENTER' && e.workshopId === workshopId);
+      if (wsDenters.length === 1) {
+        const soleDenter = wsDenters[0];
+        for (const t of healedTasks) {
+          if (t.category === 'PAINT' && !t.pairedDenterId) {
+            t.pairedDenterId = soleDenter.id;
+            t.pairedDenterName = soleDenter.name;
+            if (t.denterPayout === undefined) t.denterPayout = 200;
+          }
+        }
+      }
+    }
+
+    return {
+      ...card,
+      workshopId,
+      workshopName,
+      cityId,
+      cityName,
+      tasks: healedTasks,
+    };
+  });
+
+  // Deduplicate active job cards per registration number (drop 0-task incomplete duplicate if another active card exists for same regNo)
+  const activeByReg = new Map<string, any[]>();
+  for (const c of healedCards) {
+    if (c && c.status !== 'DELIVERED' && c.status !== 'CLOSED') {
+      const norm = normalizeServerRegNo(c.vehicle?.registrationNumber);
+      if (norm) {
+        const arr = activeByReg.get(norm) || [];
+        arr.push(c);
+        activeByReg.set(norm, arr);
+      }
+    }
+  }
+  const redundantCardIds = new Set<string>();
+  for (const [, group] of activeByReg.entries()) {
+    if (group.length > 1) {
+      const sorted = [...group].sort((a, b) => {
+        const aTasks = Array.isArray(a.tasks) ? a.tasks.length : 0;
+        const bTasks = Array.isArray(b.tasks) ? b.tasks.length : 0;
+        if (bTasks !== aTasks) return bTasks - aTasks;
+        return String(b.id).localeCompare(String(a.id));
+      });
+      for (let i = 1; i < sorted.length; i++) {
+        if (!sorted[i].tasks || sorted[i].tasks.length === 0) {
+          redundantCardIds.add(sorted[i].id);
+        }
+      }
+    }
+  }
+  store.jobCards = healedCards.filter((c: any) => c && !redundantCardIds.has(c.id));
+
+  // 2. Heal & deduplicate vehicleCheckIns
+  const rawCheckIns = Array.isArray(store.vehicleCheckIns) ? store.vehicleCheckIns : [];
+  const seenGateIds = new Set<string>();
+  const activeGateByReg = new Map<string, any>();
+  const checkedOutGates: any[] = [];
+
+  for (const rawCi of rawCheckIns) {
+    if (!rawCi) continue;
+    const ci = {
+      ...rawCi,
+      id: sanitizeServerGateId(rawCi.id || `GATE-2026-${Date.now()}`)
+    };
+    if (seenGateIds.has(ci.id)) continue;
+    seenGateIds.add(ci.id);
+
+    if (ci.status === 'CHECKED_OUT') {
+      checkedOutGates.push(ci);
+    } else {
+      const normReg = normalizeServerRegNo(ci.registrationNumber);
+      if (!normReg) {
+        checkedOutGates.push(ci);
+        continue;
+      }
+      // Link to active jobCard for this regNo if jobCardId is missing
+      const matchingActiveJc = store.jobCards.find(
+        (jc: any) => normalizeServerRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
+      );
+      if (matchingActiveJc) {
+        if (!ci.jobCardId) ci.jobCardId = matchingActiveJc.id;
+        ci.status = 'JOB_CARD_CREATED';
+        ci.workshopId = ci.workshopId || matchingActiveJc.workshopId;
+        ci.workshopName = ci.workshopName || matchingActiveJc.workshopName;
+        ci.cityId = ci.cityId || matchingActiveJc.cityId;
+        ci.cityName = ci.cityName || matchingActiveJc.cityName;
+      }
+
+      const exGate = activeGateByReg.get(normReg);
+      if (!exGate) {
+        activeGateByReg.set(normReg, ci);
+      } else {
+        if (ci.jobCardId && !exGate.jobCardId) {
+          activeGateByReg.set(normReg, { ...exGate, ...ci });
+        } else {
+          activeGateByReg.set(normReg, {
+            ...ci,
+            ...exGate,
+            jobCardId: exGate.jobCardId || ci.jobCardId,
+            workshopId: exGate.workshopId || ci.workshopId,
+            workshopName: exGate.workshopName || ci.workshopName,
+            cityId: exGate.cityId || ci.cityId,
+            cityName: exGate.cityName || ci.cityName,
+          });
+        }
+      }
+    }
+  }
+  store.vehicleCheckIns = [...Array.from(activeGateByReg.values()), ...checkedOutGates];
+
+  return store;
+}
+
 function loadCentralStore(): CentralStoreData {
   if (memoryCentralStore) return memoryCentralStore;
   try {
@@ -241,21 +523,23 @@ function loadCentralStore(): CentralStoreData {
         if (!memoryCentralStore.workshops || memoryCentralStore.workshops.length === 0) {
           memoryCentralStore.workshops = DEFAULT_INITIAL_WORKSHOPS;
         }
+        memoryCentralStore = healServerStore(memoryCentralStore);
+        saveCentralStore(memoryCentralStore);
         return memoryCentralStore;
       }
     }
   } catch (err) {
     console.warn('Could not read central store file:', err);
   }
-  memoryCentralStore = getInitialCentralStore();
+  memoryCentralStore = healServerStore(getInitialCentralStore());
   saveCentralStore(memoryCentralStore);
   return memoryCentralStore;
 }
 
 function saveCentralStore(store: CentralStoreData) {
-  memoryCentralStore = store;
+  memoryCentralStore = healServerStore(store);
   try {
-    fs.writeFileSync(CENTRAL_STORE_FILE_PATH, JSON.stringify(store, null, 2), 'utf-8');
+    fs.writeFileSync(CENTRAL_STORE_FILE_PATH, JSON.stringify(memoryCentralStore, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Could not save central store file:', err);
   }
@@ -344,9 +628,9 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
           status: finalStatus,
           completedAt: finalCompletedAt,
           completed_at: finalCompletedAt,
-          assignedToId: it.assignedToId ?? it.assigned_to_id ?? et.assignedToId,
-          assignedToName: it.assignedToName ?? it.assigned_to_name ?? et.assignedToName,
-          assignedType: it.assignedType ?? it.assigned_type ?? et.assignedType ?? 'EMPLOYEE',
+          assignedToId: it.assignedToId || it.assigned_to_id || et.assignedToId,
+          assignedToName: it.assignedToName || it.assigned_to_name || et.assignedToName,
+          assignedType: it.assignedType || it.assigned_type || et.assignedType || 'EMPLOYEE',
           category: it.category || et.category,
           estimatedCost: it.estimatedCost ?? it.estimated_cost ?? et.estimatedCost ?? 0,
           customerPrice: it.customerPrice ?? it.customer_price ?? et.customerPrice ?? 0,
@@ -354,8 +638,8 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
           denterPayout: it.denterPayout ?? et.denterPayout,
           contractorPayout: it.contractorPayout ?? et.contractorPayout,
           isContractBasis: it.isContractBasis ?? et.isContractBasis,
-          pairedDenterId: it.pairedDenterId ?? et.pairedDenterId,
-          pairedDenterName: it.pairedDenterName ?? et.pairedDenterName,
+          pairedDenterId: it.pairedDenterId || et.pairedDenterId,
+          pairedDenterName: it.pairedDenterName || et.pairedDenterName,
           panelKey: it.panelKey || et.panelKey,
           panelNameEn: it.panelNameEn || et.panelNameEn,
           paintScope: it.paintScope || et.paintScope,
@@ -401,6 +685,9 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
       }
     }
 
+    const useIncWs = incCard.workshopId && incCard.workshopId !== 'ws-mumbai-central';
+    const useExWs = existing.workshopId && existing.workshopId !== 'ws-mumbai-central';
+
     map.set(key, {
       ...existing,
       ...incCard,
@@ -414,10 +701,10 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
       },
       floorManagerId: incCard.floorManagerId || existing.floorManagerId,
       floorManagerName: incCard.floorManagerName || existing.floorManagerName,
-      workshopId: incCard.workshopId || existing.workshopId,
-      workshopName: incCard.workshopName || existing.workshopName,
-      cityId: incCard.cityId || existing.cityId,
-      cityName: incCard.cityName || existing.cityName,
+      workshopId: useIncWs ? incCard.workshopId : (useExWs ? existing.workshopId : (incCard.workshopId || existing.workshopId)),
+      workshopName: useIncWs ? incCard.workshopName : (useExWs ? existing.workshopName : (incCard.workshopName || existing.workshopName)),
+      cityId: useIncWs ? incCard.cityId : (useExWs ? existing.cityId : (incCard.cityId || existing.cityId)),
+      cityName: useIncWs ? incCard.cityName : (useExWs ? existing.cityName : (incCard.cityName || existing.cityName)),
       status: finalStatus,
       tasks: mergedTasks
     });
@@ -1998,38 +2285,41 @@ Return valid JSON ONLY.`;
               }
               const rawTasks = Array.from(taskMap.values());
 
-              const tasks = rawTasks.map((t: any, idx: number) => ({
-                ...t,
-                id: String(t.id || `task-${cardIdStr}-${idx}`),
-                jobCardId: cardIdStr,
-                title: t.title || t.notes || t.description || 'Service Task',
-                category: t.category || 'REPAIR',
-                assignedToId: t.assignedToId || t.assigned_to_id || t.assigned_to || undefined,
-                assignedToName: t.assignedToName || t.assigned_to_name || undefined,
-                assignedType: t.assignedType || t.assigned_type || 'EMPLOYEE',
-                estimatedCost: Number(t.estimatedCost ?? t.estimated_cost ?? 0),
-                customerPrice: Number(t.customerPrice ?? t.customer_price ?? t.estimatedCost ?? t.estimated_cost ?? 0),
-                contractorPayout: t.contractorPayout !== undefined ? Number(t.contractorPayout) : undefined,
-                painterPayout: t.painterPayout !== undefined ? Number(t.painterPayout) : undefined,
-                denterPayout: t.denterPayout !== undefined ? Number(t.denterPayout) : undefined,
-                isContractBasis: Boolean(t.isContractBasis ?? (t.category === 'PAINT' || t.category === 'DENTING')),
-                pairedDenterId: t.pairedDenterId || t.paired_denter_id || undefined,
-                pairedDenterName: t.pairedDenterName || t.paired_denter_name || undefined,
-                panelKey: t.panelKey || t.panel_key || undefined,
-                panelNameEn: t.panelNameEn || t.panel_name_en || undefined,
-                paintScope: t.paintScope || t.paint_scope || undefined,
-                standardJobId: t.standardJobId || t.standard_job_id || undefined,
-                status: t.status || 'PENDING',
-                requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
-                isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
-                rejectionReason: t.rejection_reason || t.rejectionReason,
-                notes: t.notes || t.description,
-                completedAt: t.completed_at || t.completedAt,
-                isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
-                additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
-                additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
-                approvalStatus: t.approval_status || t.approvalStatus
-              }));
+              const tasks = rawTasks.map((t: any, idx: number) => {
+                const { cleanNotes, meta } = extractServerTaskMetaFromNotes(t.notes || t.description);
+                return {
+                  ...t,
+                  id: String(t.id || `task-${cardIdStr}-${idx}`),
+                  jobCardId: cardIdStr,
+                  title: t.title || cleanNotes || 'Service Task',
+                  category: t.category || 'REPAIR',
+                  assignedToId: t.assignedToId || t.assigned_to_id || t.assigned_to || undefined,
+                  assignedToName: t.assignedToName || t.assigned_to_name || undefined,
+                  assignedType: t.assignedType || t.assigned_type || 'EMPLOYEE',
+                  estimatedCost: Number(t.estimatedCost ?? t.estimated_cost ?? 0),
+                  customerPrice: Number(t.customerPrice ?? t.customer_price ?? t.estimatedCost ?? t.estimated_cost ?? 0),
+                  contractorPayout: t.contractorPayout !== undefined ? Number(t.contractorPayout) : (meta.cPay !== undefined ? Number(meta.cPay) : undefined),
+                  painterPayout: t.painterPayout !== undefined ? Number(t.painterPayout) : (meta.pPay !== undefined ? Number(meta.pPay) : undefined),
+                  denterPayout: t.denterPayout !== undefined ? Number(t.denterPayout) : (meta.dPay !== undefined ? Number(meta.dPay) : undefined),
+                  isContractBasis: Boolean(t.isContractBasis ?? meta.cb ?? (t.category === 'PAINT' || t.category === 'DENTING')),
+                  pairedDenterId: t.pairedDenterId || t.paired_denter_id || meta.pdId || undefined,
+                  pairedDenterName: t.pairedDenterName || t.paired_denter_name || meta.pdName || undefined,
+                  panelKey: t.panelKey || t.panel_key || meta.pKey || undefined,
+                  panelNameEn: t.panelNameEn || t.panel_name_en || meta.pName || undefined,
+                  paintScope: t.paintScope || t.paint_scope || meta.pScope || undefined,
+                  standardJobId: t.standardJobId || t.standard_job_id || meta.sjId || undefined,
+                  status: t.status || 'PENDING',
+                  requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
+                  isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
+                  rejectionReason: t.rejection_reason || t.rejectionReason,
+                  notes: cleanNotes || undefined,
+                  completedAt: t.completed_at || t.completedAt,
+                  isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
+                  additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
+                  additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
+                  approvalStatus: t.approval_status || t.approvalStatus
+                };
+              });
 
               // QC Checklist & Comments
               let qcChecklist: any[] = [];
@@ -2401,6 +2691,119 @@ Return valid JSON ONLY.`;
           }
 
           saveCentralStore(store);
+
+          // Persist healed job_cards, job_tasks (with pairedDenter META), and cleaned vehicle_check_ins back to Supabase in background
+          (async () => {
+            try {
+              const cardRows = (store.jobCards || []).map((c: any) => ({
+                id: c.id,
+                registration_number: c.vehicle?.registrationNumber || '',
+                vehicle_make: c.vehicle?.make || 'Unknown',
+                vehicle_model: c.vehicle?.model || 'Vehicle',
+                vehicle_year: c.vehicle?.year || 2022,
+                vehicle_color: c.vehicle?.color || 'White',
+                vehicle_vin: c.vehicle?.vin || '',
+                fuel_level: c.vehicle?.fuelLevel || 50,
+                mileage: c.vehicle?.mileage || 0,
+                customer_id: c.customer?.id || `cust-${c.id}`,
+                customer_name: c.customer?.name || 'Customer',
+                customer_phone: c.customer?.phone || '',
+                customer_email: c.customer?.email || null,
+                customer_address: c.customer?.address || null,
+                status: c.status,
+                service_type: c.serviceType,
+                package_name: c.packageName || null,
+                floor_manager_id: c.floorManagerId || null,
+                floor_manager_name: c.floorManagerName || null,
+                pickup_requested: Boolean(c.pickupRequested),
+                delivery_requested: Boolean(c.deliveryRequested),
+                discount: c.discount || 0,
+                tax_rate: c.taxRate || 18,
+                advance_paid: c.advancePaid || 0,
+                qc_passed: Boolean(c.qcPassed),
+                qc_notes: c.qcNotes || null,
+                city_id: c.cityId || null,
+                city_name: c.cityName || null,
+                workshop_id: c.workshopId || null,
+                workshop_name: c.workshopName || null,
+                is_cars24: Boolean(c.isCars24),
+                cars24_ref_no: c.cars24RefNo || null,
+                qc_checklist: c.qcChecklist || [],
+                comments: c.comments || [],
+                created_at: c.createdAt || new Date().toISOString(),
+                estimated_completion_date: c.estimatedCompletionDate || new Date().toISOString()
+              }));
+              if (cardRows.length > 0) {
+                await client.from('job_cards').upsert(cardRows, { onConflict: 'id' });
+              }
+
+              const taskRows: any[] = [];
+              for (const c of store.jobCards || []) {
+                for (const t of c.tasks || []) {
+                  taskRows.push({
+                    id: t.id,
+                    job_card_id: c.id,
+                    title: t.title,
+                    category: t.category,
+                    assigned_to_id: t.assignedToId || null,
+                    assigned_to_name: t.assignedToName || null,
+                    assigned_type: t.assignedType || 'EMPLOYEE',
+                    estimated_cost: t.estimatedCost || 0,
+                    customer_price: t.customerPrice ?? 0,
+                    status: t.status || 'PENDING',
+                    requires_customer_approval: Boolean(t.requiresCustomerApproval),
+                    is_customer_approved: t.isCustomerApproved ?? null,
+                    proof_image_url: t.proofImageUrl || null,
+                    completed_at: t.completedAt || null,
+                    notes: serializeServerTaskMetaToNotes(t) || null
+                  });
+                }
+              }
+              if (taskRows.length > 0) {
+                await client.from('job_tasks').upsert(taskRows, { onConflict: 'id' });
+              }
+
+              // Clean up corrupted vehicle_check_ins IDs in Supabase and upsert healed check-ins
+              const badGateIds = [
+                'GATE-2026-2.026202620262026e+22',
+                'GATE-2026-2026202620262026200',
+                'GATE-2026-202620262026119',
+                'GATE-2026-2026117',
+                'GATE-2026-20262026118',
+                'GATE-2026-116'
+              ];
+              await client.from('vehicle_check_ins').delete().in('id', badGateIds);
+              const ciRows = (store.vehicleCheckIns || []).map((v: any) => ({
+                id: v.id,
+                registration_number: v.registrationNumber,
+                make: v.make || 'Vehicle',
+                model: v.model || '',
+                variant: v.variant || null,
+                fuel_type: v.fuelType || 'Petrol',
+                color: v.color || 'White',
+                fuel_level: v.fuelLevel || 50,
+                mileage: v.mileage || 0,
+                is_cars24: Boolean(v.isCars24),
+                cars24_ref_no: v.cars24RefNo || null,
+                customer_name: v.customerName || 'Customer',
+                customer_phone: v.customerPhone || '',
+                check_in_driver_name: v.checkInDriverName || 'Driver',
+                check_in_driver_phone: v.checkInDriverPhone || '',
+                driver_photo_url: v.checkInPhotoWithDriverUrl || null,
+                check_in_notes: v.checkInNotes || null,
+                status: v.status || 'CHECKED_IN',
+                job_card_id: v.jobCardId || null,
+                check_out_driver_name: v.checkOutDriverName || null,
+                check_out_driver_phone: v.checkOutDriverPhone || null,
+                check_out_driver_photo_url: v.checkOutPhotoWithDriverUrl || null
+              }));
+              if (ciRows.length > 0) {
+                await client.from('vehicle_check_ins').upsert(ciRows, { onConflict: 'id' });
+              }
+            } catch (bgErr) {
+              console.warn('[CENTRAL_STORE] Background Supabase heal error:', bgErr);
+            }
+          })();
         } catch (supaFetchErr) {
           console.warn('[CENTRAL_STORE] Supabase query warning:', supaFetchErr);
         }
@@ -2571,6 +2974,7 @@ Return valid JSON ONLY.`;
 
             if (Array.isArray(card.tasks) && card.tasks.length > 0) {
               for (const t of card.tasks) {
+                const encodedNotes = serializeServerTaskMetaToNotes(t);
                 client.from('job_tasks').upsert({
                   id: t.id,
                   job_card_id: card.id,
@@ -2585,7 +2989,7 @@ Return valid JSON ONLY.`;
                   requires_customer_approval: t.requiresCustomerApproval || false,
                   is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
                   rejection_reason: t.rejectionReason || null,
-                  notes: t.notes || null,
+                  notes: encodedNotes || null,
                   completed_at: t.completedAt || null,
                   updated_at: new Date().toISOString()
                 }).then(() => {}, () => {});

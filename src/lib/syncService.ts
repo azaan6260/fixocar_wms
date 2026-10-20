@@ -18,7 +18,9 @@ import {
   getSalaries, saveSalaries,
   dispatchToastNotification,
   getAuthUser, saveAuthUser,
-  getActiveWorkshopId, setActiveWorkshopId
+  getActiveWorkshopId, setActiveWorkshopId,
+  serializeTaskMetaToNotes, extractTaskMetaFromNotes,
+  healJobCardRecord, sanitizeGateCheckInId
 } from './storage';
 import { INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { JobCard, JobTask, JobCardStatus, VehicleCheckIn, CarModelRecord, StandardJob, Employee, City, Workshop, Vendor, JobCardHistoryRecord, InventoryItem, DeliveryRecord, PurchaseOrder, WorkshopExpense, AttendanceRecord, SalaryRecord } from '../types';
@@ -91,9 +93,9 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             ...lt,
             status: finalStatus,
             completedAt: finalCompletedAt,
-            assignedToId: lt.assignedToId ?? rt.assignedToId,
-            assignedToName: lt.assignedToName ?? rt.assignedToName,
-            assignedType: lt.assignedType ?? rt.assignedType ?? 'EMPLOYEE',
+            assignedToId: lt.assignedToId || rt.assignedToId,
+            assignedToName: lt.assignedToName || rt.assignedToName,
+            assignedType: lt.assignedType || rt.assignedType || 'EMPLOYEE',
             estimatedCost: lt.estimatedCost ?? rt.estimatedCost ?? 0,
             customerPrice: lt.customerPrice ?? rt.customerPrice ?? 0,
             contractorPayout: lt.contractorPayout ?? rt.contractorPayout,
@@ -103,8 +105,8 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             panelKey: lt.panelKey || rt.panelKey,
             panelNameEn: lt.panelNameEn || rt.panelNameEn,
             paintScope: lt.paintScope || rt.paintScope,
-            pairedDenterId: lt.pairedDenterId ?? rt.pairedDenterId,
-            pairedDenterName: lt.pairedDenterName ?? rt.pairedDenterName,
+            pairedDenterId: lt.pairedDenterId || rt.pairedDenterId,
+            pairedDenterName: lt.pairedDenterName || rt.pairedDenterName,
             standardJobId: lt.standardJobId || rt.standardJobId,
           });
           localTasksMap.delete(rtId);
@@ -149,9 +151,23 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
       }
     }
 
-    mergedList.push({
+    mergedList.push(healJobCardRecord({
       ...remoteCard,
       ...localCard,
+      floorManagerId: localCard.floorManagerId || remoteCard.floorManagerId,
+      floorManagerName: localCard.floorManagerName || remoteCard.floorManagerName,
+      workshopId: (localCard.workshopId && localCard.workshopId !== 'ws-mumbai-central')
+        ? localCard.workshopId
+        : (remoteCard.workshopId && remoteCard.workshopId !== 'ws-mumbai-central' ? remoteCard.workshopId : (localCard.workshopId || remoteCard.workshopId)),
+      workshopName: (localCard.workshopId && localCard.workshopId !== 'ws-mumbai-central')
+        ? localCard.workshopName
+        : (remoteCard.workshopId && remoteCard.workshopId !== 'ws-mumbai-central' ? remoteCard.workshopName : (localCard.workshopName || remoteCard.workshopName)),
+      cityId: (localCard.workshopId && localCard.workshopId !== 'ws-mumbai-central')
+        ? localCard.cityId
+        : (remoteCard.workshopId && remoteCard.workshopId !== 'ws-mumbai-central' ? remoteCard.cityId : (localCard.cityId || remoteCard.cityId)),
+      cityName: (localCard.workshopId && localCard.workshopId !== 'ws-mumbai-central')
+        ? localCard.cityName
+        : (remoteCard.workshopId && remoteCard.workshopId !== 'ws-mumbai-central' ? remoteCard.cityName : (localCard.cityName || remoteCard.cityName)),
       status: finalCardStatus,
       tasks: mergedTasks,
       estimatedCompletionDate: remoteCard.estimatedCompletionDate || localCard.estimatedCompletionDate,
@@ -159,13 +175,13 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
       huddleNotes: remoteCard.huddleNotes || localCard.huddleNotes,
       qcChecklist: (remoteCard.qcChecklist && remoteCard.qcChecklist.length > 0) ? remoteCard.qcChecklist : localCard.qcChecklist,
       comments: (remoteCard.comments && remoteCard.comments.length > 0) ? remoteCard.comments : localCard.comments
-    });
+    }));
   }
 
   // Any local cards missing from remote
   for (const localCard of localCards) {
     if (!mergedList.some(m => String(m.id) === String(localCard.id))) {
-      mergedList.push(localCard);
+      mergedList.push(healJobCardRecord(localCard));
     }
   }
 
@@ -896,38 +912,41 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         }
         const rawTasks = Array.from(taskMap.values());
 
-        const tasks: JobTask[] = rawTasks.map((t: any, idx: number) => ({
-          ...t,
-          id: String(t.id || `task-${cardIdStr}-${idx}`),
-          jobCardId: cardIdStr,
-          title: t.title || t.notes || t.description || 'Service Task',
-          category: t.category || 'REPAIR',
-          assignedToId: t.assignedToId || t.assigned_to_id || t.assigned_to || undefined,
-          assignedToName: t.assignedToName || t.assigned_to_name || undefined,
-          assignedType: t.assignedType || t.assigned_type || 'EMPLOYEE',
-          estimatedCost: Number(t.estimatedCost ?? t.estimated_cost ?? 0),
-          customerPrice: Number(t.customerPrice ?? t.customer_price ?? t.estimatedCost ?? t.estimated_cost ?? 0),
-          contractorPayout: t.contractorPayout !== undefined ? Number(t.contractorPayout) : undefined,
-          painterPayout: t.painterPayout !== undefined ? Number(t.painterPayout) : undefined,
-          denterPayout: t.denterPayout !== undefined ? Number(t.denterPayout) : undefined,
-          isContractBasis: Boolean(t.isContractBasis ?? (t.category === 'PAINT' || t.category === 'DENTING')),
-          pairedDenterId: t.pairedDenterId || t.paired_denter_id || undefined,
-          pairedDenterName: t.pairedDenterName || t.paired_denter_name || undefined,
-          panelKey: t.panelKey || t.panel_key || undefined,
-          panelNameEn: t.panelNameEn || t.panel_name_en || undefined,
-          paintScope: t.paintScope || t.paint_scope || undefined,
-          standardJobId: t.standardJobId || t.standard_job_id || undefined,
-          status: t.status || 'PENDING',
-          requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
-          isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
-          rejectionReason: t.rejection_reason || t.rejectionReason,
-          notes: t.notes || t.description,
-          completedAt: t.completed_at || t.completedAt,
-          isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
-          additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
-          additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
-          approvalStatus: t.approval_status || t.approvalStatus
-        }));
+        const tasks: JobTask[] = rawTasks.map((t: any, idx: number) => {
+          const { cleanNotes, meta } = extractTaskMetaFromNotes(t.notes || t.description);
+          return {
+            ...t,
+            id: String(t.id || `task-${cardIdStr}-${idx}`),
+            jobCardId: cardIdStr,
+            title: t.title || cleanNotes || 'Service Task',
+            category: t.category || 'REPAIR',
+            assignedToId: t.assignedToId || t.assigned_to_id || t.assigned_to || undefined,
+            assignedToName: t.assignedToName || t.assigned_to_name || undefined,
+            assignedType: t.assignedType || t.assigned_type || 'EMPLOYEE',
+            estimatedCost: Number(t.estimatedCost ?? t.estimated_cost ?? 0),
+            customerPrice: Number(t.customerPrice ?? t.customer_price ?? t.estimatedCost ?? t.estimated_cost ?? 0),
+            contractorPayout: t.contractorPayout !== undefined ? Number(t.contractorPayout) : (meta.cPay !== undefined ? Number(meta.cPay) : undefined),
+            painterPayout: t.painterPayout !== undefined ? Number(t.painterPayout) : (meta.pPay !== undefined ? Number(meta.pPay) : undefined),
+            denterPayout: t.denterPayout !== undefined ? Number(t.denterPayout) : (meta.dPay !== undefined ? Number(meta.dPay) : undefined),
+            isContractBasis: Boolean(t.isContractBasis ?? meta.cb ?? (t.category === 'PAINT' || t.category === 'DENTING')),
+            pairedDenterId: t.pairedDenterId || t.paired_denter_id || meta.pdId || undefined,
+            pairedDenterName: t.pairedDenterName || t.paired_denter_name || meta.pdName || undefined,
+            panelKey: t.panelKey || t.panel_key || meta.pKey || undefined,
+            panelNameEn: t.panelNameEn || t.panel_name_en || meta.pName || undefined,
+            paintScope: t.paintScope || t.paint_scope || meta.pScope || undefined,
+            standardJobId: t.standardJobId || t.standard_job_id || meta.sjId || undefined,
+            status: t.status || 'PENDING',
+            requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
+            isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
+            rejectionReason: t.rejection_reason || t.rejectionReason,
+            notes: cleanNotes || undefined,
+            completedAt: t.completed_at || t.completedAt,
+            isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
+            additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
+            additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
+            approvalStatus: t.approval_status || t.approvalStatus
+          };
+        });
 
         // QC Checklist & Comments
         let qcChecklist: any[] = [];
@@ -1017,42 +1036,61 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     if (vciErr) {
       if (vciErr.code === '42P01') missingTables.push('vehicle_check_ins');
     } else if (vehicleCheckIns !== null) {
-      const supaCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => ({
-        id: v.id,
-        registrationNumber: v.registration_number,
-        make: v.make || 'Vehicle',
-        model: v.model || '',
-        variant: v.variant,
-        fuelType: v.fuel_type || 'Petrol',
-        color: v.color || 'White',
-        fuelLevel: v.fuel_level || 50,
-        mileage: v.mileage || 10000,
-        isCars24: v.is_cars24 ?? false,
-        cars24RefNo: v.cars24_ref_no,
-        customerName: v.customer_name || 'Customer',
-        customerPhone: v.customer_phone || '',
-        checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
-        checkedInByName: v.check_in_driver_name || 'Security',
-        checkInDriverName: v.check_in_driver_name || 'Driver',
-        checkInDriverPhone: v.check_in_driver_phone || '',
-        checkInPhotoWithDriverUrl: v.driver_photo_url,
-        checkInNotes: v.check_in_notes,
-        status: v.status || 'CHECKED_IN',
-        jobCardId: v.job_card_id,
-        checkedOutAt: v.check_out_time,
-        checkOutDriverName: v.check_out_driver_name,
-        checkOutDriverPhone: v.check_out_driver_phone,
-        checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url
-      }));
-
       const currentCheckIns = getVehicleCheckIns();
+      const localCheckInMap = new Map<string, VehicleCheckIn>();
+      for (const loc of currentCheckIns) {
+        if (loc && loc.id) localCheckInMap.set(sanitizeGateCheckInId(loc.id), loc);
+      }
+
+      const supaCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => {
+        const cleanId = sanitizeGateCheckInId(v.id);
+        const existingLoc = localCheckInMap.get(cleanId);
+        return {
+          ...(existingLoc || {}),
+          id: cleanId,
+          registrationNumber: v.registration_number || existingLoc?.registrationNumber || 'UNKNOWN',
+          make: v.make || existingLoc?.make || 'Vehicle',
+          model: v.model || existingLoc?.model || '',
+          variant: v.variant ?? existingLoc?.variant,
+          fuelType: v.fuel_type || existingLoc?.fuelType || 'Petrol',
+          color: v.color || existingLoc?.color || 'White',
+          fuelLevel: v.fuel_level ?? existingLoc?.fuelLevel ?? 50,
+          mileage: v.mileage ?? existingLoc?.mileage ?? 10000,
+          isCars24: v.is_cars24 ?? existingLoc?.isCars24 ?? false,
+          cars24RefNo: v.cars24_ref_no || existingLoc?.cars24RefNo,
+          customerName: v.customer_name || existingLoc?.customerName || 'Customer',
+          customerPhone: v.customer_phone || existingLoc?.customerPhone || '',
+          cityId: v.city_id || existingLoc?.cityId,
+          cityName: v.city_name || existingLoc?.cityName,
+          workshopId: v.workshop_id || existingLoc?.workshopId,
+          workshopName: v.workshop_name || existingLoc?.workshopName,
+          checkedInAt: v.check_in_time || v.created_at || existingLoc?.checkedInAt || new Date().toISOString(),
+          checkedInByName: v.check_in_driver_name || existingLoc?.checkedInByName || 'Security',
+          checkInDriverName: v.check_in_driver_name || existingLoc?.checkInDriverName || 'Driver',
+          checkInDriverPhone: v.check_in_driver_phone || existingLoc?.checkInDriverPhone || '',
+          checkInPhotoWithDriverUrl: v.driver_photo_url || existingLoc?.checkInPhotoWithDriverUrl,
+          checkInNotes: v.check_in_notes || existingLoc?.checkInNotes,
+          status: (existingLoc?.status === 'CHECKED_OUT' || v.status === 'CHECKED_OUT')
+            ? 'CHECKED_OUT'
+            : (existingLoc?.status === 'JOB_CARD_CREATED' || v.status === 'JOB_CARD_CREATED'
+                ? 'JOB_CARD_CREATED'
+                : (v.status || existingLoc?.status || 'CHECKED_IN')),
+          jobCardId: existingLoc?.jobCardId || v.job_card_id,
+          checkedOutAt: v.check_out_time || existingLoc?.checkedOutAt,
+          checkOutDriverName: v.check_out_driver_name || existingLoc?.checkOutDriverName,
+          checkOutDriverPhone: v.check_out_driver_phone || existingLoc?.checkOutDriverPhone,
+          checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url || existingLoc?.checkOutPhotoWithDriverUrl
+        };
+      });
+
       const mergedCheckIns = [...supaCheckIns];
       for (const loc of currentCheckIns) {
-        if (!mergedCheckIns.some(m => m.id === loc.id)) {
-          mergedCheckIns.push(loc);
+        const cleanId = sanitizeGateCheckInId(loc.id);
+        if (!mergedCheckIns.some(m => m.id === cleanId)) {
+          mergedCheckIns.push({ ...loc, id: cleanId });
         }
       }
-      saveVehicleCheckIns(mergedCheckIns);
+      saveVehicleCheckIns(mergedCheckIns, true);
     }
 
     // 7. CAR MODELS & VARIANTS (Chunked Fetch)
@@ -1569,6 +1607,7 @@ export async function pushLocalDataToSupabase(): Promise<{
 
     if (Array.isArray(card.tasks) && card.tasks.length > 0) {
       for (const t of card.tasks) {
+        const encodedNotes = serializeTaskMetaToNotes(t);
         await client.from('job_tasks').upsert({
           id: t.id,
           job_card_id: card.id,
@@ -1583,7 +1622,7 @@ export async function pushLocalDataToSupabase(): Promise<{
           requires_customer_approval: t.requiresCustomerApproval || false,
           is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
           rejection_reason: t.rejectionReason || null,
-          notes: t.notes || null,
+          notes: encodedNotes || null,
           completed_at: t.completedAt || null,
           updated_at: new Date().toISOString()
         });

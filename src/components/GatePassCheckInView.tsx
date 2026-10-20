@@ -26,7 +26,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
-import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
+import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, getAllJobCards, getActiveCheckInForRegNo, getActiveJobCardForRegNo, getDefaultWorkshopForCreation, normalizeRegNo, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
 import { compressImageFile } from '../lib/imageCompressor';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
@@ -242,14 +242,15 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   const citiesList = getCities();
   const workshopsList = getWorkshops();
 
-  // Determine assigned workshop / city for current user
-  const assignedWorkshop = workshopsList.find(w => w.id === authUser?.workshopId) || workshopsList[0];
-  const assignedCity = citiesList.find(c => c.id === authUser?.cityId || c.name.toLowerCase() === assignedWorkshop?.cityName.toLowerCase()) || citiesList[0];
+  // Determine assigned workshop / city for current user (with smart operational workshop fallback)
+  const defaultLoc = getDefaultWorkshopForCreation(authUser);
+  const assignedWorkshop = workshopsList.find(w => w.id === (authUser?.workshopId || defaultLoc.workshopId)) || workshopsList[0];
+  const assignedCity = citiesList.find(c => c.id === (authUser?.cityId || defaultLoc.cityId) || c.name.toLowerCase() === assignedWorkshop?.cityName?.toLowerCase()) || citiesList[0];
 
-  const [selectedCityId, setSelectedCityId] = useState<string>(assignedCity?.id || '');
-  const [selectedCityName, setSelectedCityName] = useState<string>(assignedCity?.name || 'Mumbai');
-  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>(assignedWorkshop?.id || '');
-  const [selectedWorkshopName, setSelectedWorkshopName] = useState<string>(assignedWorkshop?.name || 'Andheri West Hub');
+  const [selectedCityId, setSelectedCityId] = useState<string>(assignedCity?.id || defaultLoc.cityId || '');
+  const [selectedCityName, setSelectedCityName] = useState<string>(assignedCity?.name || defaultLoc.cityName || 'Indore');
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState<string>(assignedWorkshop?.id || defaultLoc.workshopId || '');
+  const [selectedWorkshopName, setSelectedWorkshopName] = useState<string>(assignedWorkshop?.name || defaultLoc.workshopName || 'FixoCar Main');
 
   // Customer Email for Retail Customer
   const [customerEmail, setCustomerEmail] = useState('');
@@ -282,9 +283,57 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     w => !selectedCityId || w.cityId === selectedCityId || w.cityName.toLowerCase() === selectedCityName.toLowerCase()
   );
 
+  const existingActiveGatePass = regNo.trim() ? getActiveCheckInForRegNo(regNo) : undefined;
+  const existingActiveCard = regNo.trim() ? getActiveJobCardForRegNo(regNo) : undefined;
+  const isGateCheckInBlocked = Boolean(existingActiveGatePass || existingActiveCard);
+
+  // Check if returning vehicle has historical (checked-out / closed) records to prefill convenience info
+  const historicalVehicleMatch = React.useMemo(() => {
+    const clean = normalizeRegNo(regNo);
+    if (!clean || clean.length < 4 || isGateCheckInBlocked) return null;
+    const pastCard = getAllJobCards().find(c => normalizeRegNo(c.vehicle?.registrationNumber) === clean);
+    if (pastCard) {
+      return {
+        make: pastCard.vehicle.make,
+        model: pastCard.vehicle.model,
+        variant: pastCard.vehicle.variant,
+        fuelType: pastCard.vehicle.fuelType,
+        color: pastCard.vehicle.color,
+        isCars24: pastCard.isCars24,
+        customerName: pastCard.customer.name,
+        customerPhone: pastCard.customer.phone,
+        lastJobCardId: pastCard.id,
+      };
+    }
+    const pastCheckIn = checkIns.find(c => normalizeRegNo(c.registrationNumber) === clean && c.status === 'CHECKED_OUT');
+    if (pastCheckIn) {
+      return {
+        make: pastCheckIn.make,
+        model: pastCheckIn.model,
+        variant: pastCheckIn.variant,
+        fuelType: pastCheckIn.fuelType,
+        color: pastCheckIn.color,
+        isCars24: pastCheckIn.isCars24,
+        customerName: pastCheckIn.customerName,
+        customerPhone: pastCheckIn.customerPhone,
+        lastJobCardId: pastCheckIn.jobCardId,
+      };
+    }
+    return null;
+  }, [regNo, isGateCheckInBlocked, checkIns]);
+
   const handleCreateCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!regNo.trim()) return;
+
+    if (isGateCheckInBlocked) {
+      dispatchToastNotification(
+        'Duplicate Gate Entry Blocked',
+        `Vehicle ${regNo.toUpperCase().trim()} is already in the workshop (${existingActiveCard ? `Active Job Card ${existingActiveCard.id}` : `Gate Pass ${existingActiveGatePass?.id}`}). New check-in is not allowed before checking out.`,
+        'warning'
+      );
+      return;
+    }
 
     const stampedTime = new Date().toLocaleString('en-US', {
       dateStyle: 'medium',
@@ -1009,6 +1058,100 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                         <Camera className="w-5 h-5" />
                       </button>
                     </div>
+
+                    {isGateCheckInBlocked && (
+                      <div className="mt-2.5 p-3 rounded-2xl bg-rose-500/10 border-2 border-rose-500/40 text-rose-800 dark:text-rose-200 text-xs space-y-2">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-black text-rose-700 dark:text-rose-300">
+                              New Gate Check-In Blocked — Vehicle Already In Workshop
+                            </p>
+                            <p className="text-[11px] mt-0.5 leading-relaxed">
+                              Vehicle <strong className="font-mono">{regNo.toUpperCase().trim()}</strong> already has an active {existingActiveCard ? `Job Card (${existingActiveCard.id} • Status: ${existingActiveCard.status})` : `Gate Check-In (${existingActiveGatePass?.id})`}.
+                              Same vehicle number can have multiple job cards over time, but <strong>only one active job card / gate check-in</strong> at a time. Please check out the vehicle first before creating a new gate entry.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
+                          {existingActiveCard && onSelectJobCard && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCheckInModalOpen(false);
+                                onSelectJobCard(existingActiveCard.id);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
+                            >
+                              <span>Open Active Job Card ({existingActiveCard.id})</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!existingActiveCard && existingActiveGatePass && isManagementRole && onOpenCreateJobCardWithPrefill && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCheckInModalOpen(false);
+                                onOpenCreateJobCardWithPrefill({
+                                  regNo: existingActiveGatePass.registrationNumber,
+                                  make: existingActiveGatePass.make,
+                                  model: existingActiveGatePass.model,
+                                  variant: existingActiveGatePass.variant,
+                                  fuelType: existingActiveGatePass.fuelType as FuelType,
+                                  color: existingActiveGatePass.color,
+                                  customerName: existingActiveGatePass.customerName,
+                                  customerPhone: existingActiveGatePass.customerPhone,
+                                  isCars24: existingActiveGatePass.isCars24,
+                                  cars24RefNo: existingActiveGatePass.cars24RefNo,
+                                  checkInRecordId: existingActiveGatePass.id,
+                                  cityId: existingActiveGatePass.cityId,
+                                  cityName: existingActiveGatePass.cityName,
+                                  workshopId: existingActiveGatePass.workshopId,
+                                  workshopName: existingActiveGatePass.workshopName,
+                                  driverName: existingActiveGatePass.checkInDriverName,
+                                  driverPhone: existingActiveGatePass.checkInDriverPhone,
+                                  driverPhotoUrl: existingActiveGatePass.checkInPhotoWithDriverUrl,
+                                  workOrderNo: existingActiveGatePass.workOrderNo,
+                                  workOrderNotes: existingActiveGatePass.workOrderNotes,
+                                });
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] flex items-center gap-1 shadow-xs cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Create Job Card for Existing Gate Pass ({existingActiveGatePass.id})</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!isGateCheckInBlocked && historicalVehicleMatch && (
+                      <div className="mt-2.5 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <div>
+                            <p className="font-bold">Returning Vehicle ({historicalVehicleMatch.make} {historicalVehicleMatch.model})</p>
+                            <p className="text-[10px] opacity-80">Previous visit checked out ({historicalVehicleMatch.lastJobCardId || 'Gate Exit'}). Ready for new check-in!</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (historicalVehicleMatch.make) setMake(historicalVehicleMatch.make);
+                            if (historicalVehicleMatch.model) setModel(historicalVehicleMatch.model);
+                            if (historicalVehicleMatch.variant) setVariant(historicalVehicleMatch.variant);
+                            if (historicalVehicleMatch.fuelType) setFuelType(historicalVehicleMatch.fuelType as FuelType);
+                            if (historicalVehicleMatch.color) setColor(historicalVehicleMatch.color);
+                            setIsCars24( Boolean(historicalVehicleMatch.isCars24));
+                            if (historicalVehicleMatch.customerName) setCustomerName(historicalVehicleMatch.customerName);
+                            if (historicalVehicleMatch.customerPhone) setCustomerPhone(historicalVehicleMatch.customerPhone);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] shrink-0 cursor-pointer"
+                        >
+                          Prefill Vehicle
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1116,9 +1259,13 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                     </button>
                     <button
                       type="button"
+                      disabled={isGateCheckInBlocked}
                       onClick={() => {
                         if (!regNo.trim()) {
                           alert('Please enter or scan registration number.');
+                          return;
+                        }
+                        if (isGateCheckInBlocked) {
                           return;
                         }
                         if (!isCars24 && (!customerName.trim() || !customerPhone.trim())) {
@@ -1127,7 +1274,11 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                         }
                         setCheckInStep(2);
                       }}
-                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md ${
+                        isGateCheckInBlocked
+                          ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer'
+                      }`}
                     >
                       <span>Next: Vehicle Model</span>
                       <ChevronRight className="w-4 h-4" />
