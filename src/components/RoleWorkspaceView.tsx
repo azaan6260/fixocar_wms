@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, JobCard } from '../types';
-import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary } from '../lib/storage';
+import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary, getVehicleCheckIns } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
 import { TechnicianTaskCard } from './TechnicianTaskCard';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
@@ -21,7 +21,8 @@ import {
   Filter,
   Plus,
   Receipt,
-  CreditCard
+  CreditCard,
+  Car
 } from 'lucide-react';
 
 interface RoleWorkspaceViewProps {
@@ -248,6 +249,21 @@ export function RoleWorkspaceView({
     }
   };
 
+  const getVehiclePhoto = (c: JobCard): string | null => {
+    if (c.vehicle?.photoUrl) return c.vehicle.photoUrl;
+    if ((c as any).vehiclePhotoUrl) return (c as any).vehiclePhotoUrl;
+    if (c.checkInPhotoWithDriverUrl) return c.checkInPhotoWithDriverUrl;
+    const allCheckIns = getVehicleCheckIns();
+    const match = allCheckIns.find(ci => 
+      (c.checkInRecordId && ci.id === c.checkInRecordId) ||
+      (ci.registrationNumber && c.vehicle?.registrationNumber && 
+       ci.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === c.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
+    );
+    if (match?.checkInPhotoWithDriverUrl) return match.checkInPhotoWithDriverUrl;
+    if ((match as any)?.photoUrl) return (match as any).photoUrl;
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       
@@ -377,68 +393,93 @@ export function RoleWorkspaceView({
               return (
                 <div key={card.id} className="bg-white dark:bg-slate-900 rounded-3xl border-2 border-slate-200 dark:border-slate-800 shadow-md overflow-hidden transition-all">
                   {/* Vehicle Card Header */}
-                  <div 
-                    onClick={() => toggleExpandCard(card.id)}
-                    className="p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 text-white cursor-pointer hover:bg-slate-800/90 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-black text-amber-400 bg-amber-500/20 px-3 py-1 rounded-xl border border-amber-500/30 text-sm">
-                          🚘 {card.vehicle.registrationNumber}
-                        </span>
-                        <span className="text-xs font-bold text-slate-300 bg-slate-800 px-2.5 py-1 rounded-xl">
-                          {card.vehicle.make} {card.vehicle.model}
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-lg">
-                          {card.id}
-                        </span>
-                      </div>
+                  {(() => {
+                    const vehiclePhoto = getVehiclePhoto(card);
+                    return (
+                      <div 
+                        onClick={() => toggleExpandCard(card.id)}
+                        className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 text-white cursor-pointer hover:bg-slate-800/90 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          {/* Vehicle Photo Thumbnail to make vehicle instantly recognizable */}
+                          <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 bg-slate-800 border-2 border-slate-700 shadow-md flex items-center justify-center">
+                            {vehiclePhoto ? (
+                              <img
+                                src={vehiclePhoto}
+                                alt={`${card.vehicle.make} ${card.vehicle.model}`}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 text-slate-400">
+                                <Car className="w-7 h-7 text-amber-400" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Photo</span>
+                              </div>
+                            )}
+                          </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                        <span>👤 Customer: <strong className="text-slate-200">{card.customer.name}</strong></span>
-                        {card.customer.phone && (
-                          <span>📞 <a href={`tel:${card.customer.phone}`} onClick={e => e.stopPropagation()} className="hover:underline text-blue-400">{card.customer.phone}</a></span>
-                        )}
-                      </div>
-                    </div>
+                          {/* Vehicle Details */}
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-black text-amber-400 bg-amber-500/20 px-3 py-1 rounded-xl border border-amber-500/30 text-sm">
+                                🚘 {card.vehicle.registrationNumber}
+                              </span>
+                              <span className="text-xs font-bold text-slate-200 bg-slate-800 px-2.5 py-1 rounded-xl">
+                                {card.vehicle.make} {card.vehicle.model}
+                              </span>
+                              <span className="text-[11px] font-mono text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-lg">
+                                {card.id}
+                              </span>
+                            </div>
 
-                    <div className="flex items-center gap-3 shrink-0 flex-wrap">
-                      {/* Sanctioned Payout Pill */}
-                      {totalSanctionedPayout > 0 && (
-                        <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-1 shadow-sm">
-                          <span>💰 Sanctioned:</span>
-                          <span className="font-mono text-emerald-300">₹{totalSanctionedPayout.toLocaleString('en-IN')}</span>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                              <span>👤 Customer: <strong className="text-slate-200">{card.customer.name}</strong></span>
+                              {card.customer.phone && (
+                                <span>📞 <a href={`tel:${card.customer.phone}`} onClick={e => e.stopPropagation()} className="hover:underline text-blue-400">{card.customer.phone}</a></span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      )}
 
-                      {/* Tasks Count Badge */}
-                      <div className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700">
-                        <span>{completedCount}/{assignedTasks.length} Done</span>
+                        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                          {/* Sanctioned Payout Pill */}
+                          {totalSanctionedPayout > 0 && (
+                            <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-black flex items-center gap-1 shadow-sm">
+                              <span>💰 Sanctioned:</span>
+                              <span className="font-mono text-emerald-300">₹{totalSanctionedPayout.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+
+                          {/* Tasks Count Badge */}
+                          <div className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700">
+                            <span>{completedCount}/{assignedTasks.length} Done</span>
+                          </div>
+
+                          {/* Request Additional Work Button (Available to Employees & All Roles) */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRequestWorkCard(card);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                            title="Submit request for additional job/work for manager approval"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>Request Extra Work</span>
+                          </button>
+
+                          {/* Expand/Collapse Toggle Button */}
+                          <button
+                            type="button"
+                            className="p-2 rounded-xl bg-amber-500 text-slate-950 font-black hover:bg-amber-400 transition-transform cursor-pointer"
+                          >
+                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Request Additional Work Button (Available to Employees & All Roles) */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRequestWorkCard(card);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-sm transition-all"
-                        title="Submit request for additional job/work for manager approval"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Request Extra Work</span>
-                      </button>
-
-                      {/* Expand/Collapse Toggle Button */}
-                      <button
-                        type="button"
-                        className="p-2 rounded-xl bg-amber-500 text-slate-950 font-black hover:bg-amber-400 transition-transform"
-                      >
-                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Expanded Vehicle Details: Jobs List First + Collapsible AR Map */}
                   {isExpanded && (
@@ -454,13 +495,10 @@ export function RoleWorkspaceView({
                             <div>
                               <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                                 <span>गाड़ी के कार्य (Allotted Jobs)</span>
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold border border-slate-200 dark:border-slate-700">
                                   {completedCount}/{assignedTasks.length} Done
                                 </span>
                               </h4>
-                              <p className="text-[11px] text-slate-500">
-                                वाहन: <strong className="text-slate-800 dark:text-slate-200">{card.vehicle.registrationNumber}</strong> • {card.vehicle.make} {card.vehicle.model}
-                              </p>
                             </div>
                           </div>
 

@@ -16,7 +16,6 @@ import {
   stopTechnicianSpeech 
 } from '../lib/technicianVoiceHelper';
 import { 
-  Wrench, 
   CheckCircle2, 
   Play, 
   Pause, 
@@ -32,10 +31,7 @@ import {
   RotateCcw,
   SlidersHorizontal,
   ChevronDown,
-  ChevronUp,
-  FileText,
-  Clock,
-  Car
+  FileText
 } from 'lucide-react';
 
 export interface TechnicianTaskCardProps {
@@ -222,82 +218,44 @@ export function TechnicianTaskCard({
         : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
     }`}>
       
-      <div className="p-4 space-y-3.5">
+      <div className="p-3.5 sm:p-4 space-y-3">
         
-        {/* ROW 1: CRYSTAL CLEAR VEHICLE IDENTIFIER & STATUS BADGE */}
-        <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/80 dark:border-slate-800">
-          
-          {/* Unmistakable Car Context Badge */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-slate-950 text-amber-400 border border-slate-700 flex items-center gap-1.5 shadow-xs">
-              <Car className="w-3.5 h-3.5 text-amber-400" />
-              <span>{card.vehicle.registrationNumber}</span>
-            </span>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              {card.vehicle.make} {card.vehicle.model}
-            </span>
-            <span className="text-[11px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-              #{card.id}
-            </span>
-          </div>
-
-          {/* Current Status Pill */}
-          <div className="flex items-center gap-2">
-            {isCompleted && (
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs font-black flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                <span>काम पूरा (Completed)</span>
-              </span>
-            )}
-            {isInProgress && (
-              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-700 dark:text-amber-300 text-xs font-black flex items-center gap-1.5 animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-                <span>काम चालू (In Progress)</span>
-              </span>
-            )}
-            {isPending && (
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-bold flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                <span>शुरू बाकी (Pending)</span>
-              </span>
-            )}
-
-            {/* Quick Audio Assist Button */}
-            <button
-              type="button"
-              onClick={handleToggleSpeech}
-              className={`p-1.5 rounded-lg border transition-all ${
-                isPlayingAudio 
-                  ? 'bg-rose-500 text-white animate-pulse border-rose-600' 
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
-              }`}
-              title="Click to hear task read out loud in Hindi"
-            >
-              {isPlayingAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-
-        {/* ROW 2: WHAT IS THE JOB FOR (CLEAR, PROMINENT TITLE & METADATA) */}
+        {/* ROW 1: JOB TEXT & CATEGORY ONLY (Vehicle details and repeated status removed as requested) */}
         <div className="space-y-1.5">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="space-y-0.5">
               <h3 className="text-base sm:text-lg font-black text-slate-950 dark:text-white tracking-tight leading-snug">
                 {task.title}
               </h3>
               {vernacular.hindiTitle !== task.title && (
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                   <span>{vernacular.icon}</span>
                   <span>{vernacular.hindiTitle}</span>
                 </p>
               )}
             </div>
 
-            {/* Category Badge */}
-            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 flex items-center gap-1 border shadow-xs ${catConfig.bg} ${catConfig.text}`}>
-              <span>{catConfig.emoji}</span>
-              <span>{catConfig.label}</span>
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Category Badge */}
+              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black flex items-center gap-1 border shadow-xs ${catConfig.bg} ${catConfig.text}`}>
+                <span>{catConfig.emoji}</span>
+                <span className="hidden sm:inline">{catConfig.label}</span>
+              </span>
+
+              {/* Quick Audio Speak Button */}
+              <button
+                type="button"
+                onClick={handleToggleSpeech}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  isPlayingAudio 
+                    ? 'bg-rose-500 text-white animate-pulse border-rose-600' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
+                }`}
+                title="Click to hear task read out loud in Hindi"
+              >
+                {isPlayingAudio ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
           {/* Sub-tags: Body Panel, Paint Scope, Payout, Add-on */}
@@ -343,17 +301,17 @@ export function TechnicianTaskCard({
           )}
         </div>
 
-        {/* ROW 3: CLEAN PRIMARY ACTION (START / COMPLETE) + "MORE ACTIONS" BUTTON */}
-        <div className="pt-1 flex items-center gap-2">
+        {/* ROW 2: START WORKING / COMPLETE / REOPEN BUTTON + MORE ACTIONS BUTTON */}
+        <div className="pt-0.5 flex items-center gap-2">
           
           {/* PRIMARY BUTTON 1: START (When Pending) */}
           {isPending && (
             <button
               type="button"
               onClick={() => handleSetStatus('IN_PROGRESS')}
-              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <Play className="w-5 h-5 fill-slate-950" />
+              <Play className="w-4 h-4 fill-slate-950" />
               <span>काम शुरू करें (START WORK)</span>
             </button>
           )}
@@ -363,31 +321,31 @@ export function TechnicianTaskCard({
             <button
               type="button"
               onClick={() => handleSetStatus('COMPLETED')}
-              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
               <span>काम पूरा हो गया (COMPLETE)</span>
             </button>
           )}
 
-          {/* PRIMARY DISPLAY 3: COMPLETED BANNER */}
+          {/* PRIMARY DISPLAY 3: COMPLETED BANNER WITH REOPEN */}
           {isCompleted && (
-            <div className="grow py-2.5 px-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs sm:text-sm flex items-center justify-between">
+            <div className="grow py-2.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs sm:text-sm flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Check className="w-4 h-4 stroke-[3] text-emerald-500" />
-                <span>काम पूरा हो चुका है (Completed)</span>
+                <span>काम पूरा हुआ (Done)</span>
               </span>
               <button
                 type="button"
                 onClick={() => handleSetStatus('IN_PROGRESS')}
                 className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-amber-500 flex items-center gap-1 underline cursor-pointer"
               >
-                <RotateCcw className="w-3 h-3" /> Reopen
+                <RotateCcw className="w-3 h-3" /> दोबारा खोलें (Reopen)
               </button>
             </div>
           )}
 
-          {/* SINGLE "MORE ACTIONS" BUTTON (CLUBS ALL OTHER ACTIONS INTO A CLEAN POPUP) */}
+          {/* SINGLE "MORE ACTIONS" BUTTON */}
           <div className="relative shrink-0" ref={actionsMenuRef}>
             <button
               type="button"
@@ -397,7 +355,7 @@ export function TechnicianTaskCard({
                   ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md'
                   : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
               }`}
-              title="Open more actions (Request parts, photo proof, report problem, extra work)"
+              title="More Actions"
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span className="hidden sm:inline">Actions</span>
@@ -418,7 +376,7 @@ export function TechnicianTaskCard({
                     setShowActionsMenu(false);
                     setShowPartReqModal(true);
                   }}
-                  className="w-full px-3 py-2.5 rounded-xl hover:bg-amber-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-amber-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
                     <PackagePlus className="w-4 h-4" />
@@ -436,7 +394,7 @@ export function TechnicianTaskCard({
                     setShowActionsMenu(false);
                     setShowPhotoModal(true);
                   }}
-                  className="w-full px-3 py-2.5 rounded-xl hover:bg-blue-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-blue-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <span className="p-1.5 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400">
                     <Camera className="w-4 h-4" />
@@ -456,7 +414,7 @@ export function TechnicianTaskCard({
                     setShowActionsMenu(false);
                     setShowIssueModal(true);
                   }}
-                  className="w-full px-3 py-2.5 rounded-xl hover:bg-rose-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-rose-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <span className="p-1.5 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400">
                     <AlertTriangle className="w-4 h-4" />
@@ -474,7 +432,7 @@ export function TechnicianTaskCard({
                     setShowActionsMenu(false);
                     setShowAddWorkModal(true);
                   }}
-                  className="w-full px-3 py-2.5 rounded-xl hover:bg-orange-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-orange-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <span className="p-1.5 rounded-lg bg-orange-500/20 text-orange-600 dark:text-orange-400">
                     <Plus className="w-4 h-4" />
@@ -493,7 +451,7 @@ export function TechnicianTaskCard({
                       setShowActionsMenu(false);
                       handleSetStatus('PENDING');
                     }}
-                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
                     <span className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                       <Pause className="w-4 h-4" />
@@ -513,7 +471,7 @@ export function TechnicianTaskCard({
                       setShowActionsMenu(false);
                       setShowDetails(prev => !prev);
                     }}
-                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors border-t border-slate-100 dark:border-slate-800 mt-1"
+                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors border-t border-slate-100 dark:border-slate-800 mt-1 cursor-pointer"
                   >
                     <span className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                       <FileText className="w-4 h-4" />
