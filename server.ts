@@ -378,6 +378,18 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
       }
     }
 
+    const isTerminalOrRfc = ['RFC', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CLOSED'].includes(card.status);
+    if (isTerminalOrRfc) {
+      for (const t of healedTasks) {
+        if (!t.status || t.status === 'PENDING' || t.status === 'IN_PROGRESS') {
+          t.status = 'COMPLETED';
+          if (!t.completedAt) {
+            t.completedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+        }
+      }
+    }
+
     return {
       ...card,
       workshopId,
@@ -441,10 +453,17 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
         checkedOutGates.push(ci);
         continue;
       }
-      // Link to active jobCard for this regNo if jobCardId is missing
+      // Check if explicitly linked job card is already DELIVERED or CLOSED
+      const linkedJc = ci.jobCardId ? store.jobCards.find((jc: any) => jc.id === ci.jobCardId) : undefined;
       const matchingActiveJc = store.jobCards.find(
         (jc: any) => normalizeServerRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
       );
+      if (linkedJc && (linkedJc.status === 'DELIVERED' || linkedJc.status === 'CLOSED') && !matchingActiveJc) {
+        ci.status = 'CHECKED_OUT';
+        ci.checkedOutAt = ci.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+        checkedOutGates.push(ci);
+        continue;
+      }
       if (matchingActiveJc) {
         if (!ci.jobCardId) ci.jobCardId = matchingActiveJc.id;
         ci.status = 'JOB_CARD_CREATED';
@@ -658,6 +677,7 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
       'CLOSED': 100,
       'DELIVERED': 90,
       'OUT_FOR_DELIVERY': 80,
+      'RFC': 75,
       'READY_FOR_DELIVERY': 70,
       'QC_PENDING': 60,
       'IN_PROGRESS': 50,
@@ -2345,6 +2365,7 @@ Return valid JSON ONLY.`;
               else if (['ESTIMATE_PENDING'].includes(rawStatus)) normalizedStatus = 'ESTIMATE_PENDING';
               else if (['QC_PENDING', 'QUALITY_CHECK_PENDING', 'WORK_COMPLETED'].includes(rawStatus)) normalizedStatus = 'QC_PENDING';
               else if (['READY_FOR_DELIVERY', 'QUALITY_CHECK_PASSED'].includes(rawStatus)) normalizedStatus = 'READY_FOR_DELIVERY';
+              else if (['RFC'].includes(rawStatus)) normalizedStatus = 'RFC';
               else if (['OUT_FOR_DELIVERY'].includes(rawStatus)) normalizedStatus = 'OUT_FOR_DELIVERY';
               else if (['DELIVERED', 'INVOICED'].includes(rawStatus)) normalizedStatus = 'DELIVERED';
               else if (['CLOSED', 'CANCELLED'].includes(rawStatus)) normalizedStatus = 'CLOSED';
@@ -2737,6 +2758,12 @@ Return valid JSON ONLY.`;
                 await client.from('job_cards').upsert(cardRows, { onConflict: 'id' });
               }
 
+              const toIsoTs = (val: any): string | null => {
+                if (!val) return null;
+                const d = new Date(val);
+                return !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+              };
+
               const taskRows: any[] = [];
               for (const c of store.jobCards || []) {
                 for (const t of c.tasks || []) {
@@ -2753,8 +2780,8 @@ Return valid JSON ONLY.`;
                     status: t.status || 'PENDING',
                     requires_customer_approval: Boolean(t.requiresCustomerApproval),
                     is_customer_approved: t.isCustomerApproved ?? null,
-                    proof_image_url: t.proofImageUrl || null,
-                    completed_at: t.completedAt || null,
+                    rejection_reason: t.rejectionReason || null,
+                    completed_at: t.status === 'COMPLETED' ? toIsoTs(t.completedAt || new Date().toISOString()) : toIsoTs(t.completedAt),
                     notes: serializeServerTaskMetaToNotes(t) || null
                   });
                 }
@@ -2793,6 +2820,7 @@ Return valid JSON ONLY.`;
                 check_in_notes: v.checkInNotes || null,
                 status: v.status || 'CHECKED_IN',
                 job_card_id: v.jobCardId || null,
+                check_out_time: v.status === 'CHECKED_OUT' ? toIsoTs(v.checkedOutAt || new Date().toISOString()) : toIsoTs(v.checkedOutAt),
                 check_out_driver_name: v.checkOutDriverName || null,
                 check_out_driver_phone: v.checkOutDriverPhone || null,
                 check_out_driver_photo_url: v.checkOutPhotoWithDriverUrl || null
@@ -2975,6 +3003,10 @@ Return valid JSON ONLY.`;
             if (Array.isArray(card.tasks) && card.tasks.length > 0) {
               for (const t of card.tasks) {
                 const encodedNotes = serializeServerTaskMetaToNotes(t);
+                const parsedCompleted = t.completedAt ? new Date(t.completedAt) : null;
+                const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
+                  ? parsedCompleted.toISOString()
+                  : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
                 client.from('job_tasks').upsert({
                   id: t.id,
                   job_card_id: card.id,
@@ -2990,11 +3022,44 @@ Return valid JSON ONLY.`;
                   is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
                   rejection_reason: t.rejectionReason || null,
                   notes: encodedNotes || null,
-                  completed_at: t.completedAt || null,
-                  updated_at: new Date().toISOString()
+                  completed_at: isoCompletedAt
                 }).then(() => {}, () => {});
               }
             }
+          }
+        }
+        // Vehicle Check-Ins
+        if (Array.isArray(vehicleCheckIns) && vehicleCheckIns.length > 0) {
+          for (const ci of currentStore.vehicleCheckIns || []) {
+            const parsedOut = ci.checkedOutAt ? new Date(ci.checkedOutAt) : null;
+            const isoOut = parsedOut && !isNaN(parsedOut.getTime())
+              ? parsedOut.toISOString()
+              : (ci.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
+            client.from('vehicle_check_ins').upsert({
+              id: ci.id,
+              registration_number: ci.registrationNumber,
+              make: ci.make || 'Vehicle',
+              model: ci.model || '',
+              variant: ci.variant || null,
+              fuel_type: ci.fuelType || 'Petrol',
+              color: ci.color || 'White',
+              fuel_level: ci.fuelLevel || 50,
+              mileage: ci.mileage || 0,
+              is_cars24: Boolean(ci.isCars24),
+              cars24_ref_no: ci.cars24RefNo || null,
+              customer_name: ci.customerName || 'Customer',
+              customer_phone: ci.customerPhone || '',
+              check_in_driver_name: ci.checkInDriverName || 'Driver',
+              check_in_driver_phone: ci.checkInDriverPhone || '',
+              driver_photo_url: ci.checkInPhotoWithDriverUrl || null,
+              check_in_notes: ci.checkInNotes || null,
+              status: ci.status || 'CHECKED_IN',
+              job_card_id: ci.jobCardId || null,
+              check_out_time: isoOut,
+              check_out_driver_name: ci.checkOutDriverName || null,
+              check_out_driver_phone: ci.checkOutDriverPhone || null,
+              check_out_driver_photo_url: ci.checkOutPhotoWithDriverUrl || null
+            }).then(() => {}, () => {});
           }
         }
         // Job Card History

@@ -18,7 +18,9 @@ import {
   isCars24JobCard,
   getJobCardHistoryRecords,
   formatJobCardStatus,
-  getAuthUser
+  getAuthUser,
+  getVehicleCheckIns,
+  saveVehicleCheckIns
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
@@ -490,27 +492,47 @@ export function JobCardDetailView({
     e.preventDefault();
     const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
 
+    const cleanReg = (card.vehicle.registrationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const checkIns = getVehicleCheckIns();
+    let matchedCheckInId: string | undefined = card.checkInRecordId;
+    const updatedCheckIns = checkIns.map(c => {
+      const cReg = (c.registrationNumber || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      const isMatch =
+        (card.checkInRecordId && c.id === card.checkInRecordId) ||
+        c.jobCardId === card.id ||
+        (cleanReg && cReg === cleanReg && c.status !== 'CHECKED_OUT');
+      if (isMatch) {
+        matchedCheckInId = c.id;
+        return {
+          ...c,
+          jobCardId: c.jobCardId || card.id,
+          status: 'CHECKED_OUT' as const,
+          checkedOutAt: nowStr,
+          checkOutDriverName: gateDriverName,
+          checkOutDriverPhone: gateDriverPhone,
+          checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
+          checkOutDriverSignatureUrl: gateDriverSignature || undefined,
+        };
+      }
+      return c;
+    });
+    saveVehicleCheckIns(updatedCheckIns);
+
     updateJobCard(card.id, (prev) => ({
       ...prev,
       status: 'DELIVERED',
+      checkInRecordId: prev.checkInRecordId || matchedCheckInId,
       checkedOutAt: nowStr,
       checkOutDriverName: gateDriverName,
       checkOutDriverPhone: gateDriverPhone,
       checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
       checkOutDriverSignatureUrl: gateDriverSignature || undefined,
+      tasks: (prev.tasks || []).map(t =>
+        (!t.status || t.status === 'PENDING' || t.status === 'IN_PROGRESS')
+          ? { ...t, status: 'COMPLETED' as const, completedAt: t.completedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+          : t
+      ),
     }));
-
-    if (card.checkInRecordId) {
-      updateVehicleCheckIn(card.checkInRecordId, (prev) => ({
-        ...prev,
-        status: 'CHECKED_OUT',
-        checkedOutAt: nowStr,
-        checkOutDriverName: gateDriverName,
-        checkOutDriverPhone: gateDriverPhone,
-        checkOutPhotoWithDriverUrl: gateExitPhotoUrl,
-        checkOutDriverSignatureUrl: gateDriverSignature || undefined,
-      }));
-    }
 
     triggerSuccessHaptic();
     setIsGateCheckOutOpen(false);
@@ -708,9 +730,18 @@ export function JobCardDetailView({
               setIsGateCheckOutOpen(true);
               return;
             }
+            const shouldCompleteAllTasks = ['RFC', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CLOSED'].includes(targetStatus);
             updateJobCard(card.id, (prev) => ({
               ...prev,
               status: targetStatus,
+              qcPassed: targetStatus === 'READY_FOR_DELIVERY' || targetStatus === 'RFC' ? true : prev.qcPassed,
+              tasks: shouldCompleteAllTasks
+                ? (prev.tasks || []).map(t =>
+                    (!t.status || t.status === 'PENDING' || t.status === 'IN_PROGRESS')
+                      ? { ...t, status: 'COMPLETED' as const, completedAt: t.completedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+                      : t
+                  )
+                : prev.tasks,
             }));
             triggerSuccessHaptic();
             dispatchToastNotification({

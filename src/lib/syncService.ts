@@ -124,6 +124,7 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
       'CLOSED': 100,
       'DELIVERED': 90,
       'OUT_FOR_DELIVERY': 80,
+      'RFC': 75,
       'READY_FOR_DELIVERY': 70,
       'QC_PENDING': 60,
       'IN_PROGRESS': 50,
@@ -591,24 +592,45 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
         const serverCheckIns = Array.isArray(store.vehicleCheckIns) ? store.vehicleCheckIns : [];
         const currentLocalCheckIns = getVehicleCheckIns();
-        const mergedCheckIns: VehicleCheckIn[] = [...serverCheckIns];
-        for (const loc of currentLocalCheckIns) {
-          if (!mergedCheckIns.some(m => m.id === loc.id)) {
-            mergedCheckIns.push(loc);
+        const checkInMap = new Map<string, VehicleCheckIn>();
+        for (const sci of serverCheckIns) {
+          if (sci && sci.id) {
+            const cleanId = sanitizeGateCheckInId(sci.id);
+            checkInMap.set(cleanId, { ...sci, id: cleanId });
           }
         }
+        for (const loc of currentLocalCheckIns) {
+          if (!loc || !loc.id) continue;
+          const cleanId = sanitizeGateCheckInId(loc.id);
+          const existing = checkInMap.get(cleanId);
+          if (!existing) {
+            checkInMap.set(cleanId, { ...loc, id: cleanId });
+          } else {
+            const finalStatus: VehicleCheckIn['status'] =
+              (existing.status === 'CHECKED_OUT' || loc.status === 'CHECKED_OUT')
+                ? 'CHECKED_OUT'
+                : (existing.status === 'JOB_CARD_CREATED' || loc.status === 'JOB_CARD_CREATED'
+                    ? 'JOB_CARD_CREATED'
+                    : (existing.status || loc.status || 'CHECKED_IN'));
+            checkInMap.set(cleanId, {
+              ...loc,
+              ...existing,
+              id: cleanId,
+              status: finalStatus,
+              jobCardId: existing.jobCardId || loc.jobCardId,
+              checkedOutAt: existing.checkedOutAt || loc.checkedOutAt,
+              checkOutDriverName: existing.checkOutDriverName || loc.checkOutDriverName,
+              checkOutDriverPhone: existing.checkOutDriverPhone || loc.checkOutDriverPhone,
+              checkOutPhotoWithDriverUrl: existing.checkOutPhotoWithDriverUrl || loc.checkOutPhotoWithDriverUrl
+            });
+          }
+        }
+        const mergedCheckIns = Array.from(checkInMap.values());
         if (mergedCheckIns.length > 0) {
-          saveVehicleCheckIns(mergedCheckIns);
+          saveVehicleCheckIns(mergedCheckIns, true);
         }
       }
     }
-    }
-
-    // Always push local datasets up to central server store after merging
-    try {
-      await pushLocalDataToSupabase();
-    } catch (pushStoreErr) {
-      console.warn('[SYNC_TRACE] Post-pull push to central store warning:', pushStoreErr);
     }
   } catch (centralErr) {
     console.warn('[SYNC_TRACE] Central server store sync warning:', centralErr);
@@ -631,12 +653,6 @@ export async function syncFromSupabase(): Promise<SyncResult> {
   }
 
   try {
-    // 0. Push any un-synced local records first so they are saved to Supabase central database
-    try {
-      await pushLocalDataToSupabase();
-    } catch (pushFirstErr) {
-      console.warn('[SYNC_TRACE] Initial pushLocalDataToSupabase warning:', pushFirstErr);
-    }
 
     // 1. EMPLOYEES (Chunked Fetch)
     const { data: employees, error: empErr } = await fetchTableInChunks<any>(client, 'employees', { chunkSize: 100 });
@@ -972,6 +988,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         else if (['ESTIMATE_PENDING'].includes(rawStatus)) normalizedStatus = 'ESTIMATE_PENDING';
         else if (['QC_PENDING', 'QUALITY_CHECK_PENDING', 'WORK_COMPLETED'].includes(rawStatus)) normalizedStatus = 'QC_PENDING';
         else if (['READY_FOR_DELIVERY', 'QUALITY_CHECK_PASSED'].includes(rawStatus)) normalizedStatus = 'READY_FOR_DELIVERY';
+        else if (['RFC'].includes(rawStatus)) normalizedStatus = 'RFC';
         else if (['OUT_FOR_DELIVERY'].includes(rawStatus)) normalizedStatus = 'OUT_FOR_DELIVERY';
         else if (['DELIVERED', 'INVOICED'].includes(rawStatus)) normalizedStatus = 'DELIVERED';
         else if (['CLOSED', 'CANCELLED'].includes(rawStatus)) normalizedStatus = 'CLOSED';
@@ -1608,6 +1625,10 @@ export async function pushLocalDataToSupabase(): Promise<{
     if (Array.isArray(card.tasks) && card.tasks.length > 0) {
       for (const t of card.tasks) {
         const encodedNotes = serializeTaskMetaToNotes(t);
+        const parsedCompleted = t.completedAt ? new Date(t.completedAt) : null;
+        const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
+          ? parsedCompleted.toISOString()
+          : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
         await client.from('job_tasks').upsert({
           id: t.id,
           job_card_id: card.id,
@@ -1623,8 +1644,7 @@ export async function pushLocalDataToSupabase(): Promise<{
           is_customer_approved: t.isCustomerApproved !== undefined ? t.isCustomerApproved : null,
           rejection_reason: t.rejectionReason || null,
           notes: encodedNotes || null,
-          completed_at: t.completedAt || null,
-          updated_at: new Date().toISOString()
+          completed_at: isoCompletedAt
         });
       }
     }
@@ -1636,6 +1656,10 @@ export async function pushLocalDataToSupabase(): Promise<{
   // Push Vehicle Check-Ins (Gate Pass)
   let vciPushed = 0;
   for (const ci of checkIns) {
+    const parsedOut = ci.checkedOutAt ? new Date(ci.checkedOutAt) : null;
+    const isoOut = parsedOut && !isNaN(parsedOut.getTime())
+      ? parsedOut.toISOString()
+      : (ci.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
     const { error } = await client.from('vehicle_check_ins').upsert({
       id: ci.id,
       registration_number: ci.registrationNumber,
@@ -1655,7 +1679,11 @@ export async function pushLocalDataToSupabase(): Promise<{
       driver_photo_url: ci.checkInPhotoWithDriverUrl,
       check_in_notes: ci.checkInNotes,
       status: ci.status,
-      job_card_id: ci.jobCardId
+      job_card_id: ci.jobCardId,
+      check_out_time: isoOut,
+      check_out_driver_name: ci.checkOutDriverName || null,
+      check_out_driver_phone: ci.checkOutDriverPhone || null,
+      check_out_driver_photo_url: ci.checkOutPhotoWithDriverUrl || null
     });
     if (error) errors.push(`Vehicle Check-ins table error (${ci.id}): ${error.message}`);
     else vciPushed++;

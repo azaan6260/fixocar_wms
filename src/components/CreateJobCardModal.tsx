@@ -516,7 +516,9 @@ export function CreateJobCardModal({
       checkedInAt: matchingCheckIn.checkedInAt || nowStr,
       checkInDriverName: matchingCheckIn.checkInDriverName,
       checkInDriverPhone: matchingCheckIn.checkInDriverPhone,
-      checkInPhotoWithDriverUrl: matchingCheckIn.checkInPhotoWithDriverUrl,
+      checkInPhotoWithDriverUrl: (matchingCheckIn.checkInPhotoWithDriverUrl && matchingCheckIn.checkInPhotoWithDriverUrl.length > 50000)
+        ? undefined
+        : matchingCheckIn.checkInPhotoWithDriverUrl,
 
       qcChecklist: [
         { id: 'qc-1', label: 'Engine oil cap & dipstick tightened', category: 'ENGINE', isPassed: false },

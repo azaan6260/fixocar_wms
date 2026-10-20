@@ -429,15 +429,27 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
       checkOutNotes: exitNotes,
     }));
 
-    // If linked to a Job Card, update Job Card status to DELIVERED / closed
-    if (checkOutItem.jobCardId) {
-      updateJobCard(checkOutItem.jobCardId, (card) => ({
+    // If linked to a Job Card (by jobCardId or active registrationNumber), update Job Card status to DELIVERED and complete tasks
+    const allCards = getAllJobCards();
+    const cleanReg = normalizeRegNo(checkOutItem.registrationNumber);
+    const matchedJobCard = allCards.find(
+      jc =>
+        (checkOutItem.jobCardId && jc.id === checkOutItem.jobCardId) ||
+        (cleanReg && normalizeRegNo(jc.vehicle?.registrationNumber) === cleanReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED')
+    );
+    if (matchedJobCard) {
+      updateJobCard(matchedJobCard.id, (card) => ({
         ...card,
         status: 'DELIVERED',
         checkedOutAt: nowStr,
         checkOutDriverName: exitDriverName,
         checkOutDriverPhone: exitDriverPhone,
         checkOutPhotoWithDriverUrl: exitPhotoUrl,
+        tasks: (card.tasks || []).map(t =>
+          (!t.status || t.status === 'PENDING' || t.status === 'IN_PROGRESS')
+            ? { ...t, status: 'COMPLETED' as const, completedAt: t.completedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+            : t
+        ),
       }));
     }
 

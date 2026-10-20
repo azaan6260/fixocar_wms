@@ -394,6 +394,18 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
     }
   }
 
+  const isTerminalOrRfc = ['RFC', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CLOSED'].includes(card.status);
+  if (isTerminalOrRfc) {
+    for (const t of healedTasks) {
+      if (!t.status || t.status === 'PENDING' || t.status === 'IN_PROGRESS') {
+        t.status = 'COMPLETED';
+        if (!t.completedAt) {
+          t.completedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+    }
+  }
+
   return {
     ...card,
     workshopId,
@@ -535,7 +547,21 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
   const allWorkshops = getWorkshops();
   const healedCards = cards.map(c => healJobCardRecord(c, allEmps, allWorkshops));
 
-  localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(healedCards));
+  try {
+    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(healedCards));
+  } catch (err) {
+    console.warn('LocalStorage quota limit reached in saveJobCards. Stripping inline base64 images for local cache:', err);
+    const slimCards = healedCards.map(c => ({
+      ...c,
+      checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000) ? undefined : c.checkInPhotoWithDriverUrl,
+      checkOutPhotoWithDriverUrl: (c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000) ? undefined : c.checkOutPhotoWithDriverUrl,
+    }));
+    try {
+      localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(slimCards));
+    } catch (e2) {
+      console.error('Critical storage save error in saveJobCards:', e2);
+    }
+  }
   notifyStoreChange();
   
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -628,6 +654,10 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
             for (const t of card.tasks) {
               try {
                 const encodedNotes = serializeTaskMetaToNotes(t);
+                const parsedCompleted = t.completedAt ? new Date(t.completedAt) : null;
+                const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
+                  ? parsedCompleted.toISOString()
+                  : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
                 const taskCorePayload = {
                   id: t.id,
                   job_card_id: card.id,
@@ -643,8 +673,7 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
                   is_customer_approved: t.isCustomerApproved ?? null,
                   rejection_reason: t.rejectionReason || null,
                   notes: encodedNotes || null,
-                  completed_at: t.completedAt || null,
-                  updated_at: new Date().toISOString()
+                  completed_at: isoCompletedAt
                 };
                 const { error } = await client.from('job_tasks').upsert({
                   ...taskCorePayload,
@@ -3868,6 +3897,18 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
         checkedOutList.push(item);
         continue;
       }
+      // If linked job card is already DELIVERED or CLOSED and no other active job card exists for this regNo, heal to CHECKED_OUT
+      const allCards = getAllJobCards();
+      const linkedCard = item.jobCardId ? allCards.find(jc => jc.id === item.jobCardId) : undefined;
+      const activeCard = allCards.find(
+        jc => normalizeRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
+      );
+      if (linkedCard && (linkedCard.status === 'DELIVERED' || linkedCard.status === 'CLOSED') && !activeCard) {
+        item.status = 'CHECKED_OUT';
+        item.checkedOutAt = item.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+        checkedOutList.push(item);
+        continue;
+      }
       const existingActive = activeByReg.get(normReg);
       if (!existingActive) {
         activeByReg.set(normReg, item);
@@ -3940,6 +3981,40 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
   notifyStoreChange();
   if (!skipPush) {
     notifyCentralServer('vehicleCheckIns', normalized);
+    const client = getSupabaseClient();
+    if (client) {
+      normalized.forEach(ci => {
+        const parsedOut = ci.checkedOutAt ? new Date(ci.checkedOutAt) : null;
+        const isoOut = parsedOut && !isNaN(parsedOut.getTime())
+          ? parsedOut.toISOString()
+          : (ci.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
+        client.from('vehicle_check_ins').upsert({
+          id: ci.id,
+          registration_number: ci.registrationNumber,
+          make: ci.make || 'Vehicle',
+          model: ci.model || '',
+          variant: ci.variant || null,
+          fuel_type: ci.fuelType || 'Petrol',
+          color: ci.color || 'White',
+          fuel_level: ci.fuelLevel || 50,
+          mileage: ci.mileage || 0,
+          is_cars24: Boolean(ci.isCars24),
+          cars24_ref_no: ci.cars24RefNo || null,
+          customer_name: ci.customerName || 'Customer',
+          customer_phone: ci.customerPhone || '',
+          check_in_driver_name: ci.checkInDriverName || 'Driver',
+          check_in_driver_phone: ci.checkInDriverPhone || '',
+          driver_photo_url: ci.checkInPhotoWithDriverUrl || null,
+          check_in_notes: ci.checkInNotes || null,
+          status: ci.status || 'CHECKED_IN',
+          job_card_id: ci.jobCardId || null,
+          check_out_time: isoOut,
+          check_out_driver_name: ci.checkOutDriverName || null,
+          check_out_driver_phone: ci.checkOutDriverPhone || null,
+          check_out_driver_photo_url: ci.checkOutPhotoWithDriverUrl || null
+        }).then(() => {}, () => {});
+      });
+    }
   }
 }
 
