@@ -229,6 +229,8 @@ export function RoleWorkspaceView({
     );
   };
 
+  const [showARMapForCard, setShowARMapForCard] = useState<Record<string, boolean>>({});
+  const [taskStatusFilter, setTaskStatusFilter] = useState<Record<string, 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>>({});
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [requestWorkCard, setRequestWorkCard] = useState<JobCard | null>(null);
 
@@ -438,124 +440,188 @@ export function RoleWorkspaceView({
                     </div>
                   </div>
 
-                  {/* Expanded Vehicle Details: AR Panel Map + Tasks List */}
+                  {/* Expanded Vehicle Details: Jobs List First + Collapsible AR Map */}
                   {isExpanded && (
-                    <div className="p-5 space-y-6 bg-slate-50/50 dark:bg-slate-950/40 border-t border-slate-200 dark:border-slate-800 animate-in fade-in duration-200">
+                    <div className="p-4 sm:p-5 space-y-5 bg-slate-50/50 dark:bg-slate-950/40 border-t border-slate-200 dark:border-slate-800 animate-in fade-in duration-200">
                       
-                      {/* 1. AR VEHICLE PANEL MAP (For Painters & Denters) */}
-                      {showARMap && (
-                        <div className="space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
-                            <span className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                              <span>🚗 3D AR Body Panels &amp; Allotted Work Inspection View:</span>
+                      {/* 1. JOB / TASK LIST FOR THIS VEHICLE (FRONT & CENTER) */}
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="p-1.5 rounded-xl bg-amber-500/20 text-amber-500">
+                              <Wrench className="w-4 h-4" />
                             </span>
-                            <div className="flex items-center bg-slate-250 dark:bg-slate-900 rounded-xl p-1 border border-slate-300 dark:border-slate-800 self-start sm:self-auto shadow-xs">
-                              <button
-                                type="button"
-                                onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: true }))}
-                                className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
-                                  use3DView[card.id] !== false
-                                    ? 'bg-amber-500 text-slate-950 font-black shadow'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                                }`}
-                              >
-                                🌟 Interactive 3D Model
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: false }))}
-                                className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
-                                  use3DView[card.id] === false
-                                    ? 'bg-amber-500 text-slate-950 font-black shadow'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                                }`}
-                              >
-                                📊 2D Diagram
-                              </button>
+                            <div>
+                              <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <span>गाड़ी के कार्य (Allotted Jobs)</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                                  {completedCount}/{assignedTasks.length} Done
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-slate-500">
+                                वाहन: <strong className="text-slate-800 dark:text-slate-200">{card.vehicle.registrationNumber}</strong> • {card.vehicle.make} {card.vehicle.model}
+                              </p>
                             </div>
                           </div>
 
-                          <div className="p-1 sm:p-2.5 rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl overflow-hidden">
-                            {use3DView[card.id] !== false ? (
-                              <Interactive3DVehicleInspectionModel
-                                mode="VIEW"
-                                selectedPanelIds={allottedPanelIds}
-                                inspections={card.tasks.reduce((acc, t) => {
-                                  if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                                    acc[t.panelKey] = {
-                                      panelId: t.panelKey,
-                                      nameEn: t.panelNameEn || t.title,
-                                      nameHi: t.title,
-                                      category: 'EXTERIOR_BODY',
-                                      selected: true,
-                                      paintScope: t.paintScope || 'FULL_OUTER'
-                                    };
-                                  }
-                                  return acc;
-                                }, {} as Record<string, any>)}
-                              />
-                            ) : (
-                              <InteractiveVehicleInspectionChart
-                                mode="VIEW"
-                                selectedPanelIds={allottedPanelIds}
-                                inspections={card.tasks.reduce((acc, t) => {
-                                  if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                                    acc[t.panelKey] = {
-                                      panelId: t.panelKey,
-                                      nameEn: t.panelNameEn || t.title,
-                                      nameHi: t.title,
-                                      category: 'EXTERIOR_BODY',
-                                      selected: true,
-                                      paintScope: t.paintScope || 'FULL_OUTER',
-                                      painterName: t.assignedToName,
-                                      denterName: t.pairedDenterName,
-                                      customPrice: t.customerPrice,
-                                      customPainterPayout: t.painterPayout,
-                                      customDenterPayout: t.denterPayout
-                                    };
-                                  }
-                                  return acc;
-                                }, {} as Record<string, any>)}
-                                compact={true}
-                                currentRole={currentRole}
-                                vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
-                              />
-                            )}
+                          {/* Filter Tabs (All / Pending / In Progress / Completed) */}
+                          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl self-start sm:self-auto text-xs">
+                            {(['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'] as const).map(f => {
+                              const active = (taskStatusFilter[card.id] || 'ALL') === f;
+                              const label = f === 'ALL' ? `सभी (${assignedTasks.length})` :
+                                            f === 'PENDING' ? `⏳ बाकी (${assignedTasks.filter(t => t.status === 'PENDING').length})` :
+                                            f === 'IN_PROGRESS' ? `⚡ चालू (${assignedTasks.filter(t => t.status === 'IN_PROGRESS').length})` :
+                                            `✅ पूरा (${assignedTasks.filter(t => t.status === 'COMPLETED').length})`;
+                              return (
+                                <button
+                                  key={f}
+                                  type="button"
+                                  onClick={() => setTaskStatusFilter(prev => ({ ...prev, [card.id]: f }))}
+                                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                                    active 
+                                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs' 
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                      )}
 
-                      {/* 2. TASK / JOB LIST FOR THIS VEHICLE */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-extrabold text-xs uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-1.5">
-                            <Wrench className="w-3.5 h-3.5 text-amber-500" />
-                            <span>Job List ({assignedTasks.length} Task{assignedTasks.length === 1 ? '' : 's'})</span>
-                          </h4>
+                        {/* List of Tasks */}
+                        {(() => {
+                          const currentFilter = taskStatusFilter[card.id] || 'ALL';
+                          const filteredTasks = assignedTasks.filter(t => {
+                            if (currentFilter === 'ALL') return true;
+                            return t.status === currentFilter;
+                          });
 
+                          if (filteredTasks.length === 0) {
+                            return (
+                              <div className="p-6 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                                इस फ़िल्टर में कोई कार्य नहीं है ({currentFilter}).
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-3">
+                              {filteredTasks.map(task => (
+                                <TechnicianTaskCard
+                                  key={`${card.id}-${task.id}`}
+                                  card={card}
+                                  task={task}
+                                  employees={getEmployees()}
+                                  vendors={getVendors()}
+                                  currentRole={currentRole}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* 2. COLLAPSIBLE 3D AR VEHICLE PANEL MAP (Available on-demand without taking over screen) */}
+                      {showARMap && (
+                        <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
                           <button
                             type="button"
-                            onClick={() => onOpenJobCard(card.id)}
-                            className="text-blue-600 dark:text-blue-400 hover:underline font-bold text-xs flex items-center gap-1"
+                            onClick={() => setShowARMapForCard(prev => ({ ...prev, [card.id]: !prev[card.id] }))}
+                            className="w-full p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 flex items-center justify-between text-xs font-black transition-all cursor-pointer"
                           >
-                            View Full Card Details <ChevronRight className="w-3.5 h-3.5" />
+                            <span className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>🚗 3D AR बॉडी पैनल्स एवं डेंट/पेंट डायग्राम (3D Inspection Map)</span>
+                              <span className="text-[10px] text-slate-400">({allottedPanelIds.length} Panels)</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                              <span>{showARMapForCard[card.id] ? 'छुपाएं (Hide)' : 'खोलें (View 3D)'}</span>
+                              <ChevronDown className={`w-4 h-4 transition-transform ${showARMapForCard[card.id] ? 'rotate-180' : ''}`} />
+                            </span>
                           </button>
-                        </div>
 
-                        <div className="space-y-4">
-                          {assignedTasks.map(task => (
-                            <TechnicianTaskCard
-                              key={`${card.id}-${task.id}`}
-                              card={card}
-                              task={task}
-                              employees={getEmployees()}
-                              vendors={getVendors()}
-                              currentRole={currentRole}
-                            />
-                          ))}
+                          {showARMapForCard[card.id] && (
+                            <div className="space-y-3 animate-in fade-in duration-200">
+                              <div className="flex items-center justify-end gap-2 px-1">
+                                <div className="flex items-center bg-slate-250 dark:bg-slate-900 rounded-xl p-1 border border-slate-300 dark:border-slate-800 shadow-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: true }))}
+                                    className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                      use3DView[card.id] !== false
+                                        ? 'bg-amber-500 text-slate-950 font-black shadow'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    🌟 Interactive 3D Model
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setUse3DView(prev => ({ ...prev, [card.id]: false }))}
+                                    className={`px-3 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                      use3DView[card.id] === false
+                                        ? 'bg-amber-500 text-slate-950 font-black shadow'
+                                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    📊 2D Diagram
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="p-1 sm:p-2.5 rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl overflow-hidden">
+                                {use3DView[card.id] !== false ? (
+                                  <Interactive3DVehicleInspectionModel
+                                    mode="VIEW"
+                                    selectedPanelIds={allottedPanelIds}
+                                    inspections={card.tasks.reduce((acc, t) => {
+                                      if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
+                                        acc[t.panelKey] = {
+                                          panelId: t.panelKey,
+                                          nameEn: t.panelNameEn || t.title,
+                                          nameHi: t.title,
+                                          category: 'EXTERIOR_BODY',
+                                          selected: true,
+                                          paintScope: t.paintScope || 'FULL_OUTER'
+                                        };
+                                      }
+                                      return acc;
+                                    }, {} as Record<string, any>)}
+                                  />
+                                ) : (
+                                  <InteractiveVehicleInspectionChart
+                                    mode="VIEW"
+                                    selectedPanelIds={allottedPanelIds}
+                                    inspections={card.tasks.reduce((acc, t) => {
+                                      if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
+                                        acc[t.panelKey] = {
+                                          panelId: t.panelKey,
+                                          nameEn: t.panelNameEn || t.title,
+                                          nameHi: t.title,
+                                          category: 'EXTERIOR_BODY',
+                                          selected: true,
+                                          paintScope: t.paintScope || 'FULL_OUTER',
+                                          painterName: t.assignedToName,
+                                          denterName: t.pairedDenterName,
+                                          customPrice: t.customerPrice,
+                                          customPainterPayout: t.painterPayout,
+                                          customDenterPayout: t.denterPayout
+                                        };
+                                      }
+                                      return acc;
+                                    }, {} as Record<string, any>)}
+                                    compact={true}
+                                    currentRole={currentRole}
+                                    vehicleMakeModel={`${card.vehicle.make} ${card.vehicle.model}`}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      )}
 
                     </div>
                   )}

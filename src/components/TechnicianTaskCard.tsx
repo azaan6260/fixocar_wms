@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { JobCard, JobTask, Employee, Vendor, UserRole, TaskStatus } from '../types';
 import { 
   updateTaskStatus, 
   addRequisitionToTask, 
   addConcernToTask,
-  updateJobCardTask,
   dispatchToastNotification,
   getAuthUser
 } from '../lib/storage';
@@ -18,8 +17,6 @@ import {
 } from '../lib/technicianVoiceHelper';
 import { 
   Wrench, 
-  Hammer, 
-  Paintbrush, 
   CheckCircle2, 
   Play, 
   Pause, 
@@ -28,16 +25,17 @@ import {
   PackagePlus, 
   AlertTriangle, 
   Camera, 
-  Sparkles, 
-  Clock, 
-  Check, 
-  X, 
-  UserCheck, 
   Plus, 
   Minus, 
-  Image as ImageIcon,
+  Check, 
+  X, 
+  RotateCcw,
+  SlidersHorizontal,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FileText,
+  Clock,
+  Car
 } from 'lucide-react';
 
 export interface TechnicianTaskCardProps {
@@ -80,11 +78,29 @@ export function TechnicianTaskCard({
   onStatusUpdated
 }: TechnicianTaskCardProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showPartReqModal, setShowPartReqModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showAddWorkModal, setShowAddWorkModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false);
+      }
+    }
+    if (showActionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showActionsMenu]);
 
   // Quick Part Requisition State
   const [selectedPartName, setSelectedPartName] = useState(QUICK_COMMON_PARTS[0].name);
@@ -122,7 +138,7 @@ export function TechnicianTaskCard({
     });
   };
 
-  // Status updates with big buttons
+  // Status updates
   const handleSetStatus = (newStatus: TaskStatus) => {
     updateTaskStatus(card.id, task.id, newStatus);
     
@@ -193,283 +209,335 @@ export function TechnicianTaskCard({
     ? (task.denterPayout || 0)
     : (task.contractorPayout || task.painterPayout || task.denterPayout || 0);
 
+  const proofCount = task.proofMedia ? task.proofMedia.length : 0;
+  const partsAndReqsCount = (task.partsList?.length || 0) + (task.requisitions?.length || 0);
+  const activeConcernsCount = task.concerns ? task.concerns.filter(c => c.status !== 'RESOLVED').length : 0;
+
   return (
-    <div className={`rounded-3xl border-2 transition-all overflow-hidden ${
+    <div className={`rounded-2xl border-2 transition-all relative ${
       isCompleted 
         ? 'bg-emerald-500/5 dark:bg-emerald-950/20 border-emerald-500/40 shadow-xs' 
         : isInProgress
-        ? 'bg-amber-500/10 dark:bg-amber-950/30 border-amber-500 ring-2 ring-amber-500/30 shadow-lg shadow-amber-500/5'
-        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm'
+        ? 'bg-amber-500/10 dark:bg-amber-950/30 border-amber-500 ring-2 ring-amber-500/30 shadow-md'
+        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
     }`}>
       
-      {/* CARD MAIN HEADER WITH LARGE TOUCH TARGETS */}
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-4 space-y-3.5">
         
-        {/* Row 1: Category Badge + Audio Speaker + Assigned Mechanic */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 border shadow-xs ${catConfig.bg} ${catConfig.text}`}>
-              <span className="text-base">{catConfig.emoji}</span>
-              <span>{catConfig.label}</span>
+        {/* ROW 1: CRYSTAL CLEAR VEHICLE IDENTIFIER & STATUS BADGE */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/80 dark:border-slate-800">
+          
+          {/* Unmistakable Car Context Badge */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-slate-950 text-amber-400 border border-slate-700 flex items-center gap-1.5 shadow-xs">
+              <Car className="w-3.5 h-3.5 text-amber-400" />
+              <span>{card.vehicle.registrationNumber}</span>
             </span>
-
-            {task.isAdditionalWork && (
-              <span className="bg-orange-500 text-slate-950 text-[11px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider">
-                ⚡ नया काम (Add-on)
-              </span>
-            )}
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              {card.vehicle.make} {card.vehicle.model}
+            </span>
+            <span className="text-[11px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+              #{card.id}
+            </span>
           </div>
 
+          {/* Current Status Pill */}
           <div className="flex items-center gap-2">
-            {/* 🔊 Big Audio Button (Listen in Hindi) */}
+            {isCompleted && (
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs font-black flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <span>काम पूरा (Completed)</span>
+              </span>
+            )}
+            {isInProgress && (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-700 dark:text-amber-300 text-xs font-black flex items-center gap-1.5 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span>काम चालू (In Progress)</span>
+              </span>
+            )}
+            {isPending && (
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-bold flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span>शुरू बाकी (Pending)</span>
+              </span>
+            )}
+
+            {/* Quick Audio Assist Button */}
             <button
               type="button"
               onClick={handleToggleSpeech}
-              className={`px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-xs ${
+              className={`p-1.5 rounded-lg border transition-all ${
                 isPlayingAudio 
-                  ? 'bg-rose-500 text-white animate-pulse' 
-                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 border border-amber-500/30 active:scale-95'
+                  ? 'bg-rose-500 text-white animate-pulse border-rose-600' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
               }`}
               title="Click to hear task read out loud in Hindi"
             >
               {isPlayingAudio ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <span>{isPlayingAudio ? 'आवाज बंद करें' : '🔊 सुनें (Listen)'}</span>
             </button>
-
-            {/* Assigned person badge */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {task.assignedToName && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-700 dark:text-purple-300 text-[11px] font-black">
-                  <span className="text-xs">🎨</span>
-                  <span>Painter: {task.assignedToName}</span>
-                </div>
-              )}
-              {task.pairedDenterName && (
-                <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-[11px] font-black">
-                  <span className="text-xs">🔨</span>
-                  <span>Denter: {task.pairedDenterName}</span>
-                </div>
-              )}
-              {!task.assignedToName && !task.pairedDenterName && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold border border-slate-200 dark:border-slate-700">
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Unassigned</span>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Row 2: Big Bold Task Title with Phonetic Subtitle */}
-        <div className="space-y-1">
-          <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-            {task.title}
-          </h3>
-
-          {/* Linked Body Panel, Paint Scope & Sanctioned Payout Badges */}
-          {((task.panelNameEn || task.paintScope) || currentSanctionedPayout > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              {task.panelNameEn && (
-                <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-extrabold text-xs flex items-center gap-1">
-                  🚘 {task.panelNameEn} {task.panelKey && <span className="opacity-60 text-[10px]">[{task.panelKey}]</span>}
-                </span>
-              )}
-              {task.paintScope && (
-                <span className="px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 font-extrabold text-xs flex items-center gap-1">
-                  {task.paintScope === 'PARTIAL_TOUCHUP' ? '🎨 Partial Paint / Touch-Up' :
-                   task.paintScope === 'INSIDE_JAMB' ? '🚪 Inside Paint (Door Jamb)' :
-                   task.paintScope === 'FULL_OUTER_AND_INSIDE' ? '🌟 Full Outer + Inside Paint' : '✨ Full Outer Paint'}
-                </span>
-              )}
-              {currentSanctionedPayout > 0 && (
-                <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-xs flex items-center gap-1">
-                  💰 स्वीकृत भुगतान (Sanctioned Payout): ₹{currentSanctionedPayout.toLocaleString('en-IN')}
-                </span>
+        {/* ROW 2: WHAT IS THE JOB FOR (CLEAR, PROMINENT TITLE & METADATA) */}
+        <div className="space-y-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-950 dark:text-white tracking-tight leading-snug">
+                {task.title}
+              </h3>
+              {vernacular.hindiTitle !== task.title && (
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                  <span>{vernacular.icon}</span>
+                  <span>{vernacular.hindiTitle}</span>
+                </p>
               )}
             </div>
-          )}
 
-          {vernacular.hindiTitle !== task.title && (
-            <p className="text-xs sm:text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-              <span>{vernacular.icon}</span>
-              <span>{vernacular.hindiTitle}</span>
+            {/* Category Badge */}
+            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 flex items-center gap-1 border shadow-xs ${catConfig.bg} ${catConfig.text}`}>
+              <span>{catConfig.emoji}</span>
+              <span>{catConfig.label}</span>
+            </span>
+          </div>
+
+          {/* Sub-tags: Body Panel, Paint Scope, Payout, Add-on */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {task.isAdditionalWork && (
+              <span className="bg-orange-500 text-slate-950 text-[10.5px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                ⚡ नया काम (Add-on)
+              </span>
+            )}
+            {task.panelNameEn && (
+              <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-[11px]">
+                🚘 {task.panelNameEn}
+              </span>
+            )}
+            {task.paintScope && (
+              <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold text-[11px]">
+                {task.paintScope === 'PARTIAL_TOUCHUP' ? '🎨 Touch-Up' :
+                 task.paintScope === 'INSIDE_JAMB' ? '🚪 Inside Jamb' : '✨ Full Paint'}
+              </span>
+            )}
+            {currentSanctionedPayout > 0 && (
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-black text-[11px]">
+                💰 Payout: ₹{currentSanctionedPayout.toLocaleString('en-IN')}
+              </span>
+            )}
+            {proofCount > 0 && (
+              <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-700 dark:text-blue-300 font-bold text-[11px] flex items-center gap-1">
+                <Camera className="w-3 h-3" /> {proofCount} Photo{proofCount > 1 ? 's' : ''}
+              </span>
+            )}
+            {activeConcernsCount > 0 && (
+              <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-600 dark:text-rose-400 font-black text-[11px] flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> {activeConcernsCount} Issue
+              </span>
+            )}
+          </div>
+
+          {/* Notes if any */}
+          {task.notes && (
+            <p className="text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 p-2 rounded-lg italic border-l-2 border-amber-500">
+              "{task.notes}"
             </p>
           )}
         </div>
 
-        {/* Row 3: GIANT PRIMARY STATUS ACTION BUTTON */}
-        <div className="pt-2">
+        {/* ROW 3: CLEAN PRIMARY ACTION (START / COMPLETE) + "MORE ACTIONS" BUTTON */}
+        <div className="pt-1 flex items-center gap-2">
+          
+          {/* PRIMARY BUTTON 1: START (When Pending) */}
           {isPending && (
             <button
               type="button"
               onClick={() => handleSetStatus('IN_PROGRESS')}
-              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all"
+              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <Play className="w-6 h-6 fill-slate-950" />
-              <span>▶ काम शुरू करें (START WORK)</span>
+              <Play className="w-5 h-5 fill-slate-950" />
+              <span>काम शुरू करें (START WORK)</span>
             </button>
           )}
 
+          {/* PRIMARY BUTTON 2: COMPLETE (When In Progress) */}
           {isInProgress && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleSetStatus('COMPLETED')}
-                className="sm:col-span-2 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-all"
-              >
-                <CheckCircle2 className="w-6 h-6 stroke-[3]" />
-                <span>✅ काम पूरा हो गया (MARK DONE)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSetStatus('PENDING')}
-                className="py-3 px-4 rounded-2xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
-              >
-                <Pause className="w-4 h-4" />
-                <span>रोकें (Pause)</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleSetStatus('COMPLETED')}
+              className="grow py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-500 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+              <span>काम पूरा हो गया (COMPLETE)</span>
+            </button>
           )}
 
+          {/* PRIMARY DISPLAY 3: COMPLETED BANNER */}
           {isCompleted && (
-            <div className="p-3.5 rounded-2xl bg-emerald-500/15 border-2 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
-                  <Check className="w-5 h-5 stroke-[3]" />
-                </div>
-                <div>
-                  <span className="font-black text-sm sm:text-base block">काम पूरा हो चुका है (Completed)</span>
-                  <span className="text-[11px] opacity-80 block">Verified & Logged on Job Card</span>
-                </div>
-              </div>
-
+            <div className="grow py-2.5 px-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs sm:text-sm flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Check className="w-4 h-4 stroke-[3] text-emerald-500" />
+                <span>काम पूरा हो चुका है (Completed)</span>
+              </span>
               <button
                 type="button"
                 onClick={() => handleSetStatus('IN_PROGRESS')}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-amber-500 flex items-center gap-1 underline cursor-pointer"
               >
-                दोबारा खोलें (Reopen)
+                <RotateCcw className="w-3 h-3" /> Reopen
               </button>
             </div>
           )}
-        </div>
 
-        {/* Row 4: 1-Tap Workshop Assistant Buttons (Need Parts / Take Photo / Report Problem / Request Extra Work) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-          
-          {/* Button 1: Request Parts */}
-          <button
-            type="button"
-            onClick={() => setShowPartReqModal(true)}
-            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
-          >
-            <PackagePlus className="w-4 h-4 text-amber-500" />
-            <span>📦 सामान चाहिए</span>
-          </button>
-
-          {/* Button 2: Photo Proof */}
-          <button
-            type="button"
-            onClick={() => setShowPhotoModal(true)}
-            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-blue-500/10 dark:hover:bg-blue-500/20 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
-          >
-            <Camera className="w-4 h-4 text-blue-500" />
-            <span>📸 फोटो प्रमाण {task.proofMedia && task.proofMedia.length > 0 ? `(${task.proofMedia.length})` : ''}</span>
-          </button>
-
-          {/* Button 3: Raise Issue */}
-          <button
-            type="button"
-            onClick={() => setShowIssueModal(true)}
-            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
-          >
-            <AlertTriangle className="w-4 h-4 text-rose-500" />
-            <span>⚠️ समस्या / मदद</span>
-          </button>
-
-          {/* Button 4: Request Additional Work */}
-          <button
-            type="button"
-            onClick={() => setShowAddWorkModal(true)}
-            className="p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
-            title="Request additional work/job for manager approval"
-          >
-            <Plus className="w-4 h-4 text-amber-500" />
-            <span>➕ नया काम (Extra Work)</span>
-          </button>
-        </div>
-
-        {/* Task-Specific Proof Media Thumbnail Strip */}
-        {task.proofMedia && task.proofMedia.length > 0 && (
-          <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-blue-500" />
-                <span>इस कार्य के फोटो/वीडियो प्रमाण ({task.proofMedia.length}):</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowPhotoModal(true)}
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                + और फोटो लें
-              </button>
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {task.proofMedia.map((m) => (
-                <div 
-                  key={m.id} 
-                  onClick={() => setShowPhotoModal(true)}
-                  className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-blue-500/40 bg-slate-950 cursor-pointer group shadow-xs"
-                  title={`${m.title} - Click to open`}
-                >
-                  {m.mediaType === 'video' ? (
-                    <video src={m.url} className="w-full h-full object-cover" />
-                  ) : (
-                    <img 
-                      src={m.url} 
-                      alt={m.title} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
-                      referrerPolicy="no-referrer" 
-                    />
-                  )}
-                  <span className="absolute bottom-1 right-1 px-1 rounded bg-slate-950/85 text-[9px] text-white font-bold">
-                    {m.mediaType === 'video' ? '▶' : '📷'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Existing Parts / Requisitions / Issues Counter */}
-        {((task.partsList && task.partsList.length > 0) || (task.requisitions && task.requisitions.length > 0) || (task.concerns && task.concerns.length > 0)) && (
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          {/* SINGLE "MORE ACTIONS" BUTTON (CLUBS ALL OTHER ACTIONS INTO A CLEAN POPUP) */}
+          <div className="relative shrink-0" ref={actionsMenuRef}>
             <button
               type="button"
-              onClick={() => setShowDetails(prev => !prev)}
-              className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 hover:text-amber-500"
+              onClick={() => setShowActionsMenu(prev => !prev)}
+              className={`py-3 px-3.5 rounded-xl text-xs font-black flex items-center gap-1.5 border transition-all cursor-pointer ${
+                showActionsMenu
+                  ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+              }`}
+              title="Open more actions (Request parts, photo proof, report problem, extra work)"
             >
-              <span>आवंटित पार्ट्स एवं रिक्वेस्ट ({((task.partsList?.length || 0) + (task.requisitions?.length || 0))})</span>
-              {showDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">Actions</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showActionsMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {task.concerns && task.concerns.filter(c => c.status !== 'RESOLVED').length > 0 && (
-              <span className="text-rose-500 font-bold flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                {task.concerns.filter(c => c.status !== 'RESOLVED').length} खुली समस्या (Issue)
-              </span>
+            {/* POPUP ACTION MENU */}
+            {showActionsMenu && (
+              <div className="absolute right-0 bottom-full mb-2 sm:bottom-auto sm:top-full sm:mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-2xl p-2 z-40 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-black uppercase text-slate-400">
+                  Task Actions (अन्य कार्य)
+                </div>
+
+                {/* Action 1: Request Parts */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowPartReqModal(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-amber-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                >
+                  <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                    <PackagePlus className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="block font-black">📦 सामान मांगें (Request Parts)</span>
+                    <span className="text-[10px] text-slate-400">ऑयल, फ़िल्टर, ब्रेक पैड, आदि</span>
+                  </div>
+                </button>
+
+                {/* Action 2: Photo / Video Proof */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowPhotoModal(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-blue-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                >
+                  <span className="p-1.5 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                    <Camera className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="block font-black">📸 फोटो / वीडियो प्रमाण (Proof)</span>
+                    <span className="text-[10px] text-slate-400">
+                      {proofCount > 0 ? `${proofCount} फोटो अपलोड हैं` : 'काम के पहले/बाद का फोटो'}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Action 3: Report Issue / Delay */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowIssueModal(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-rose-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                >
+                  <span className="p-1.5 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                    <AlertTriangle className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="block font-black">⚠️ समस्या बताएं (Report Problem)</span>
+                    <span className="text-[10px] text-slate-400">सामान नहीं है, लिफ्ट जाम है, आदि</span>
+                  </div>
+                </button>
+
+                {/* Action 4: Request Additional Work */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowAddWorkModal(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl hover:bg-orange-500/10 text-left text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2.5 transition-colors"
+                >
+                  <span className="p-1.5 rounded-lg bg-orange-500/20 text-orange-600 dark:text-orange-400">
+                    <Plus className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="block font-black">➕ नया काम जोड़ें (Extra Work)</span>
+                    <span className="text-[10px] text-slate-400">मैनेजर की स्वीकृति के लिए भेजें</span>
+                  </div>
+                </button>
+
+                {/* Action 5: Pause Work (if in progress) */}
+                {isInProgress && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowActionsMenu(false);
+                      handleSetStatus('PENDING');
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors"
+                  >
+                    <span className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                      <Pause className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <span className="block font-black">⏸️ काम रोकें (Pause Work)</span>
+                      <span className="text-[10px] text-slate-400">अस्थायी रूप से काम रोकें</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* Action 6: View Details & Requisitions */}
+                {partsAndReqsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowActionsMenu(false);
+                      setShowDetails(prev => !prev);
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2.5 transition-colors border-t border-slate-100 dark:border-slate-800 mt-1"
+                  >
+                    <span className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                      <FileText className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <span className="block font-black">📋 पार्ट्स लिस्ट ({partsAndReqsCount})</span>
+                      <span className="text-[10px] text-slate-400">{showDetails ? 'छुपाएं' : 'देखें'}</span>
+                    </div>
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
+
+        </div>
 
         {/* Expandable Details for Parts & Requisitions */}
-        {showDetails && (
-          <div className="space-y-2 pt-2 text-xs border-t border-slate-100 dark:border-slate-800">
+        {showDetails && partsAndReqsCount > 0 && (
+          <div className="space-y-2 pt-2 text-xs border-t border-slate-200/80 dark:border-slate-800 animate-in fade-in duration-150">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              आवंटित पार्ट्स एवं रिक्वेस्ट ({partsAndReqsCount}):
+            </span>
             {task.partsList && task.partsList.map((p, idx) => (
-              <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+              <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between border border-slate-200 dark:border-slate-700">
                 <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {p.quantity}x {p.name}
                 </span>
@@ -480,7 +548,7 @@ export function TechnicianTaskCard({
             ))}
 
             {task.requisitions && task.requisitions.map((r, idx) => (
-              <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+              <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between border border-slate-200 dark:border-slate-700">
                 <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {r.quantity}x {r.title}
                 </span>
@@ -510,12 +578,14 @@ export function TechnicianTaskCard({
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 dark:text-white text-base">सामान मांगें (Request Part)</h4>
-                  <p className="text-xs text-slate-400">दुकान/स्टोर से सामान मंगाने के लिए चुनें</p>
+                  <p className="text-xs text-slate-400">
+                    गाड़ी: <strong className="text-amber-500">{card.vehicle.registrationNumber}</strong> ({task.title})
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPartReqModal(false)}
-                className="p-2 text-slate-400 hover:text-white"
+                className="p-2 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -536,7 +606,7 @@ export function TechnicianTaskCard({
                       setCustomPartName('');
                       setPartQty(p.defaultQty);
                     }}
-                    className={`p-2 rounded-xl text-left text-xs font-bold border transition-all flex items-center gap-2 ${
+                    className={`p-2 rounded-xl text-left text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer ${
                       selectedPartName === p.name && !customPartName
                         ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -570,7 +640,7 @@ export function TechnicianTaskCard({
                 <button
                   type="button"
                   onClick={() => setPartQty(prev => Math.max(1, prev - 1))}
-                  className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-black text-base flex items-center justify-center"
+                  className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-black text-base flex items-center justify-center cursor-pointer"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -580,7 +650,7 @@ export function TechnicianTaskCard({
                 <button
                   type="button"
                   onClick={() => setPartQty(prev => prev + 1)}
-                  className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-black text-base flex items-center justify-center"
+                  className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-black text-base flex items-center justify-center cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -592,7 +662,7 @@ export function TechnicianTaskCard({
               <button
                 type="button"
                 onClick={() => setShowPartReqModal(false)}
-                className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
+                className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
               >
                 रद्द करें (Cancel)
               </button>
@@ -600,7 +670,7 @@ export function TechnicianTaskCard({
                 type="button"
                 onClick={handleSubmitPartRequest}
                 disabled={isSubmittingReq}
-                className="w-2/3 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+                className="w-2/3 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
               >
                 <Check className="w-4 h-4 stroke-[3]" />
                 <span>स्टोर को ऑर्डर भेजें</span>
@@ -623,12 +693,14 @@ export function TechnicianTaskCard({
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 dark:text-white text-base">समस्या बताएं (Raise Problem)</h4>
-                  <p className="text-xs text-slate-400">काम में रुकावट आने पर मैनेजर को अलर्ट भेजें</p>
+                  <p className="text-xs text-slate-400">
+                    गाड़ी: <strong className="text-rose-400">{card.vehicle.registrationNumber}</strong>
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowIssueModal(false)}
-                className="p-2 text-slate-400 hover:text-white"
+                className="p-2 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -648,7 +720,7 @@ export function TechnicianTaskCard({
                       setSelectedIssueText(issue.text);
                       setCustomIssueText('');
                     }}
-                    className={`w-full p-2.5 rounded-xl text-left text-xs font-bold border transition-all flex items-center gap-2.5 ${
+                    className={`w-full p-2.5 rounded-xl text-left text-xs font-bold border transition-all flex items-center gap-2.5 cursor-pointer ${
                       selectedIssueText === issue.text && !customIssueText
                         ? 'bg-rose-500/20 border-rose-500 text-rose-600 dark:text-rose-400 ring-1 ring-rose-500'
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -680,14 +752,14 @@ export function TechnicianTaskCard({
               <button
                 type="button"
                 onClick={() => setShowIssueModal(false)}
-                className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs"
+                className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
               >
                 रद्द करें
               </button>
               <button
                 type="button"
                 onClick={handleSubmitIssue}
-                className="w-2/3 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20"
+                className="w-2/3 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/20 cursor-pointer"
               >
                 <AlertTriangle className="w-4 h-4" />
                 <span>मैनेजर को सूचित करें</span>
