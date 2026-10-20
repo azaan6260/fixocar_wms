@@ -559,6 +559,11 @@ export function CreateJobCardModal({
             assignedType: t.assignedType || 'EMPLOYEE',
             estimatedCost: Number(t.estimatedCost) || 0,
             customerPrice: Number(t.customerPrice ?? 0),
+            retailPrice: Number((t as any).retailPrice ?? t.customerPrice ?? 0),
+            cars24Price: Number((t as any).cars24Price ?? t.customerPrice ?? 0),
+            partPrice: Number((t as any).partPrice ?? 0),
+            labourPrice: Number((t as any).labourPrice ?? ((t.customerPrice ?? 0) - ((t as any).partPrice ?? 0))),
+            isTaxInclusive: true,
             status: 'PENDING',
             requiresCustomerApproval: t.requiresCustomerApproval,
             isCustomerApproved: t.requiresCustomerApproval ? null : true,
@@ -1526,6 +1531,7 @@ export function CreateJobCardModal({
         onClose={() => setIsCustomJobModalOpen(false)}
         employees={employees}
         vendors={vendors}
+        isCars24={isCars24}
         onAddJob={(newCustomJob) => {
           setTasks(prev => [...prev, newCustomJob]);
         }}

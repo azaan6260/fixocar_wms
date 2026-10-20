@@ -264,6 +264,7 @@ export type JobCardStatus =
   | 'IN_PROGRESS'
   | 'ESTIMATE_PENDING'
   | 'QC_PENDING'
+  | 'PDI_QC'
   | 'READY_FOR_DELIVERY'
   | 'OUT_FOR_DELIVERY'
   | 'RFC' // Ready for Collection / Checkout (RFC)
@@ -335,6 +336,16 @@ export interface TaskRequisition {
   inventoryItemId?: string;
   hsnCode?: string;
   gstRate?: number;
+  partPrice?: number;
+  labourPrice?: number;
+  customerPrice?: number;
+  cars24Price?: number;
+  isContractBasis?: boolean;
+  contractorPayout?: number;
+  category?: TaskCategory;
+  assignedToId?: string;
+  assignedToName?: string;
+  isTaxInclusive?: boolean;
 }
 
 export interface TaskConcern {
@@ -389,12 +400,25 @@ export interface JobTask {
   denterPayout?: number;
   pairedDenterId?: string;
   pairedDenterName?: string;
+  assignedEmployeeId?: string;
+  assignedEmployeeName?: string;
+  assignedPainterId?: string;
+  assignedPainterName?: string;
+  assignedDenterId?: string;
+  assignedDenterName?: string;
+  vendorName?: string;
   standardJobId?: string;
   panelKey?: string; // e.g. 'door_rhs_rear', 'hood_bonnet', 'bumper_front'
   panelNameEn?: string; // e.g. 'Door RHS Rear'
   paintScope?: PaintScope; // 'FULL_OUTER' | 'PARTIAL_TOUCHUP' | 'INSIDE_JAMB' | 'FULL_OUTER_AND_INSIDE'
   hsnCode?: string;
   gstRate?: number;
+  // Detailed Rate Breakdown (Inclusive of Taxes)
+  partPrice?: number;
+  labourPrice?: number;
+  retailPrice?: number;
+  cars24Price?: number;
+  isTaxInclusive?: boolean;
   // Outsourced Job fields
   isOutsourced?: boolean;
   outsourcedVendorId?: string;
@@ -554,6 +578,14 @@ export interface StandardJob {
   hsnSacCode?: string;
   requiresCustomerApproval?: boolean;
   description?: string;
+  // Part & Labour Rate Breakdown (Inclusive of Taxes)
+  partPrice?: number;
+  labourPrice?: number;
+  retailPartPrice?: number;
+  retailLabourPrice?: number;
+  cars24PartPrice?: number;
+  cars24LabourPrice?: number;
+  isTaxInclusive?: boolean;
 }
 
 export interface StandardServicePackage {

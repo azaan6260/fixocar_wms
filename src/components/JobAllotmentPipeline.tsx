@@ -37,6 +37,11 @@ export interface AllocatedTaskItem {
   assignedType: 'EMPLOYEE' | 'VENDOR';
   estimatedCost: number;
   customerPrice: number;
+  retailPrice?: number;
+  cars24Price?: number;
+  partPrice?: number;
+  labourPrice?: number;
+  isTaxInclusive?: boolean;
   requiresCustomerApproval: boolean;
   isContractBasis?: boolean;
   contractorPayout?: number;
@@ -68,8 +73,8 @@ export function JobAllotmentPipeline({
   onTasksChange,
 }: JobAllotmentPipelineProps) {
   const [activeSection, setActiveSection] = useState<
-    'PAINTING_DENTING' | 'DENTING' | 'MECHANICAL' | 'WASHING' | 'ACCESSORIES' | 'LATHE_WORK' | 'ALIGNMENT' | 'TYRE_WORK'
-  >('PAINTING_DENTING');
+    'STANDARD_13' | 'PAINTING_DENTING' | 'DENTING' | 'MECHANICAL' | 'WASHING' | 'ACCESSORIES' | 'LATHE_WORK' | 'ALIGNMENT' | 'TYRE_WORK'
+  >('STANDARD_13');
 
   const standardJobs = getStandardJobs();
 
@@ -360,7 +365,24 @@ export function JobAllotmentPipeline({
     return acc;
   }, {} as Record<string, PanelInspectionItem>), [selectedTasks]);
 
+  const CORE_13_JOB_IDS = [
+    'std-gen-1',
+    'std-gen-2',
+    'std-gen-3',
+    'std-gen-4',
+    'std-gen-5',
+    'std-gen-6',
+    'std-gen-7',
+    'std-gen-8',
+    'std-gen-9',
+    'std-gen-10',
+    'std-gen-11',
+    'std-gen-12',
+    'std-gen-13',
+  ];
+
   const sections = [
+    { id: 'STANDARD_13', label: '⚡ Core Standard Jobs (13 Services)', icon: Sparkles, color: 'text-amber-500', count: selectedTasks.filter(t => CORE_13_JOB_IDS.includes(t.standardJobId || '')).length },
     { id: 'PAINTING_DENTING', label: 'Painting & Denting', icon: Paintbrush, color: 'text-purple-600 dark:text-purple-400', count: selectedTasks.filter(t => t.category === 'PAINT').length },
     { id: 'DENTING', label: 'Exclusive Denting', icon: Hammer, color: 'text-orange-600 dark:text-orange-400', count: selectedTasks.filter(t => t.category === 'DENTING').length },
     { id: 'MECHANICAL', label: 'Mechanical', icon: Wrench, color: 'text-blue-600 dark:text-blue-400', count: selectedTasks.filter(t => t.category === 'MECHANICAL').length },
@@ -392,6 +414,8 @@ export function JobAllotmentPipeline({
   // Helper to construct a task object from standard job (NO staff allotted yet)
   const createUnallocatedTask = (stdJob: StandardJob): AllocatedTaskItem => {
     const price = isCars24 ? stdJob.cars24Price : stdJob.retailPrice;
+    const pRate = stdJob.partPrice ?? 0;
+    const lRate = stdJob.labourPrice ?? Math.max(0, price - pRate);
 
     const painterPayout = isCars24
       ? (stdJob.cars24PainterPayout ?? stdJob.painterPayout ?? 800)
@@ -432,6 +456,11 @@ export function JobAllotmentPipeline({
         assignedType: 'EMPLOYEE',
         estimatedCost: contractorPayout,
         customerPrice: price,
+        retailPrice: stdJob.retailPrice,
+        cars24Price: stdJob.cars24Price,
+        partPrice: pRate,
+        labourPrice: lRate,
+        isTaxInclusive: true,
         requiresCustomerApproval: false,
         isContractBasis: true,
         contractorPayout: contractorPayout,
@@ -473,6 +502,11 @@ export function JobAllotmentPipeline({
         assignedType: assignedVen || stdJob.category === 'SUBLET_VENDOR' || stdJob.category === 'LATHE_WORK' ? 'VENDOR' : 'EMPLOYEE',
         estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(price * 0.5),
         customerPrice: price,
+        retailPrice: stdJob.retailPrice,
+        cars24Price: stdJob.cars24Price,
+        partPrice: pRate,
+        labourPrice: lRate,
+        isTaxInclusive: true,
         requiresCustomerApproval: false,
         isContractBasis: stdJob.isContractBasis,
         contractorPayout: stdJob.isContractBasis ? contractorPayout : Math.round(price * 0.5),
@@ -490,6 +524,21 @@ export function JobAllotmentPipeline({
     if (isJobSelected(stdJob.id)) return;
     const newTask = createUnallocatedTask(stdJob);
     onTasksChange([...selectedTasks, newTask]);
+  };
+
+  // Toggle single job directly (one-click add/remove)
+  const handleToggleSingleJob = (stdJob: StandardJob) => {
+    const matchedPanel = matchTaskToPanelDef(stdJob);
+    const existing = selectedTasks.find(t => 
+      t.standardJobId === stdJob.id || 
+      (matchedPanel && (t.panelKey === matchedPanel.id || matchTaskToPanelDef(t)?.id === matchedPanel.id))
+    );
+    if (existing) {
+      onTasksChange(selectedTasks.filter(t => t.id !== existing.id));
+    } else {
+      const newTask = createUnallocatedTask(stdJob);
+      onTasksChange([...selectedTasks, newTask]);
+    }
   };
 
   // Batch add all staged jobs
@@ -511,6 +560,7 @@ export function JobAllotmentPipeline({
   };
 
   // Filter standard jobs by category
+  const standard13Jobs = standardJobs.filter(j => CORE_13_JOB_IDS.includes(j.id));
   const paintPanels = standardJobs.filter(j => j.category === 'PAINT');
   const dentingJobs = standardJobs.filter(j => j.category === 'DENTING');
   const mechanicalJobs = standardJobs.filter(j => j.category === 'MECHANICAL');
@@ -520,7 +570,7 @@ export function JobAllotmentPipeline({
   const alignmentJobs = standardJobs.filter(j => j.category === 'ALIGNMENT_BALANCING');
   const tyreJobs = standardJobs.filter(j => j.category === 'TYRE_WORK');
 
-  // Generic render function for standard job cards in selection lists (ONLY Name & Price)
+  // Generic render function for standard job cards in selection lists with complete rate breakdown
   const renderJobSelectionGrid = (jobsList: StandardJob[], sectionCategoryName: string) => {
     return (
       <div className="space-y-4">
@@ -538,61 +588,124 @@ export function JobAllotmentPipeline({
             const isPartialAllowed = matchedPanel ? isPartialPaintAllowedForPanel(matchedPanel.id) : true;
             const currentScope: PaintScope = addedTask?.paintScope || 'FULL_OUTER';
 
-            const price = (alreadyAdded && addedTask && addedTask.customerPrice !== undefined)
+            const activePrice = (alreadyAdded && addedTask && addedTask.customerPrice !== undefined)
               ? addedTask.customerPrice
               : (isCars24 ? job.cars24Price : job.retailPrice);
+
+            const activePartPrice = addedTask?.partPrice ?? job.partPrice ?? 0;
+            const activeLabourPrice = addedTask?.labourPrice ?? job.labourPrice ?? Math.max(0, activePrice - activePartPrice);
+            const activeContractorPayout = addedTask?.contractorPayout ?? (isCars24 ? (job.cars24ContractorPayout ?? job.contractorPayout ?? 0) : (job.retailContractorPayout ?? job.contractorPayout ?? 0));
 
             return (
               <div
                 key={job.id}
-                onClick={() => {
-                  if (!alreadyAdded) toggleStagedJob(job.id);
-                }}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                onClick={() => handleToggleSingleJob(job)}
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 relative group ${
                   alreadyAdded
-                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
+                    ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-sm ring-1 ring-emerald-500/30'
                     : isStaged
                     ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/30 shadow-sm'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-800'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-700 hover:shadow-xs'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    {/* Checkbox */}
-                    {!alreadyAdded ? (
-                      <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                        isStaged ? 'bg-amber-500 border-amber-500 text-slate-950' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'
-                      }`}>
-                        {isStaged && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    )}
+                {/* Header: Checkbox + Job Title & Category Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className={`mt-0.5 w-4.5 h-4.5 rounded-lg border flex items-center justify-center shrink-0 transition-all ${
+                      alreadyAdded
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : isStaged
+                        ? 'bg-amber-500 border-amber-500 text-slate-950'
+                        : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 group-hover:border-amber-400'
+                    }`}>
+                      {(alreadyAdded || isStaged) && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
 
-                    <div>
-                      <h4 className="font-extrabold text-xs text-slate-900 dark:text-slate-100 leading-snug">
-                        {job.title}
-                      </h4>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="font-extrabold text-xs text-slate-900 dark:text-slate-100 leading-snug">
+                          {job.title}
+                        </h4>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {job.category}
+                        </span>
+                      </div>
                       {job.description && (
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{job.description}</p>
+                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{job.description}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <span className="font-black text-xs text-slate-900 dark:text-white">
-                      ₹{price.toLocaleString()}
+                    <span className="font-black text-sm text-slate-900 dark:text-white font-mono">
+                      ₹{activePrice.toLocaleString('en-IN')}
                     </span>
-                    <div className="text-[9.5px] text-slate-400 font-medium">
-                      {isCars24 ? 'Cars24 Rate' : 'Retail Rate'}
+                    <div className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                      Incl. 18% Tax
                     </div>
                   </div>
                 </div>
 
+                {/* Rates Breakdown Box (Customer, Cars24, Part, Labour, Contract Payout) */}
+                <div
+                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-1 text-[10px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                    <span>Customer Rate: <strong className="text-slate-900 dark:text-white">₹{job.retailPrice}</strong></span>
+                    <span>Cars24 Rate: <strong className="text-orange-600 dark:text-orange-400">₹{job.cars24Price}</strong></span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 pt-0.5 border-t border-dashed border-slate-200 dark:border-slate-700">
+                    <span>Part: <strong className="text-blue-600 dark:text-blue-400">₹{activePartPrice}</strong></span>
+                    <span>Labour: <strong className="text-indigo-600 dark:text-indigo-400">₹{activeLabourPrice}</strong></span>
+                    <span>Total: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">₹{activePrice}</strong></span>
+                  </div>
+
+                  {(job.isContractBasis || activeContractorPayout > 0 || job.category === 'PAINT') && (
+                    <div className="flex items-center justify-between text-amber-700 dark:text-amber-300 pt-0.5 text-[9.5px] font-bold">
+                      <span>⚡ Contract Job:</span>
+                      <span>Contract Payout: ₹{activeContractorPayout}</span>
+                    </div>
+                  )}
+
+                  {/* If already added, provide inline staff selector right here */}
+                  {alreadyAdded && addedTask && (
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-1.5">
+                      <span className="font-bold text-[9px] uppercase text-purple-600 dark:text-purple-400 shrink-0">
+                        Assigned To:
+                      </span>
+                      <select
+                        value={addedTask.assignedToId || ''}
+                        onChange={(e) => {
+                          const targetId = e.target.value;
+                          const emp = employees.find(item => item.id === targetId);
+                          const ven = vendors.find(item => item.id === targetId);
+                          onTasksChange(selectedTasks.map(t => t.id === addedTask.id ? {
+                            ...t,
+                            assignedToId: targetId || undefined,
+                            assignedToName: emp?.name || ven?.name || undefined,
+                            assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                          } : t));
+                        }}
+                        className="flex-1 px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-[10px]"
+                      >
+                        <option value="">-- Allot Staff / Vendor --</option>
+                        {employees.map(e => (
+                          <option key={e.id} value={e.id}>👷 {e.name} ({e.specializedTeam || e.role})</option>
+                        ))}
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>🏭 {v.name} (Sublet)</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
                 {/* Inline Paint Scope Chips for Painting Category */}
                 {job.category === 'PAINT' && alreadyAdded && addedTask && (
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Select Paint Scope:</div>
+                  <div className="pt-1 border-t border-slate-200/60 dark:border-slate-800/60 space-y-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[9.5px] font-bold text-slate-500 dark:text-slate-400">Paint Scope:</div>
                     <div className="flex flex-wrap gap-1">
                       {[
                         { id: 'FULL_OUTER', label: 'Full Paint', icon: '✨' },
@@ -609,8 +722,6 @@ export function JobAllotmentPipeline({
                             title={s.disabled ? 'Partial paint not allowed for fenders & running boards' : s.label}
                             onClick={() => {
                               if (s.disabled) return;
-                              
-                              // Calculate new rates for the chosen scope
                               const newScope = s.id as PaintScope;
                               const freshJobs = getStandardJobs();
                               const rates = getPanelEnvironmentRates(matchedPanel || job.id, freshJobs, isCars24, newScope);
@@ -660,23 +771,20 @@ export function JobAllotmentPipeline({
                   </div>
                 )}
 
+                {/* Bottom Toggle Action */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
                   {alreadyAdded ? (
                     <div className="w-full flex items-center justify-between">
-                      <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-[11px]">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Added to Job Card
+                      <span className="font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-[11px]">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Added (Click to remove)
                       </span>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const matchedPanel = matchTaskToPanelDef(job);
-                          onTasksChange(selectedTasks.filter(t => 
-                            t.standardJobId !== job.id && 
-                            (!matchedPanel || (t.panelKey !== matchedPanel.id && matchTaskToPanelDef(t)?.id !== matchedPanel.id))
-                          ));
+                          handleToggleSingleJob(job);
                         }}
-                        className="text-rose-600 dark:text-rose-400 font-bold hover:underline text-[11px]"
+                        className="px-2 py-0.5 rounded text-rose-600 dark:text-rose-400 font-bold hover:bg-rose-500/10 text-[11px]"
                       >
                         Remove
                       </button>
@@ -684,7 +792,7 @@ export function JobAllotmentPipeline({
                   ) : (
                     <div className="w-full flex items-center justify-between">
                       <span className="text-[10px] text-slate-400 font-medium">
-                        {isStaged ? '✓ Selected' : 'Click to select'}
+                        Click card to toggle
                       </span>
                       <button
                         type="button"
@@ -692,9 +800,9 @@ export function JobAllotmentPipeline({
                           e.stopPropagation();
                           handleAddSingleJob(job);
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 font-bold text-[11px] text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] transition-colors flex items-center gap-1 shadow-xs"
                       >
-                        <Plus className="w-3 h-3" /> Add Now
+                        <Plus className="w-3 h-3 stroke-[3]" /> Add to Card
                       </button>
                     </div>
                   )}
@@ -708,11 +816,11 @@ export function JobAllotmentPipeline({
         <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg mt-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-black text-xs text-amber-400 uppercase tracking-wider">{sectionCategoryName} Cart</span>
-              <span className="text-xs text-slate-400">({stagedJobIds.length} selected)</span>
+              <span className="font-black text-xs text-amber-400 uppercase tracking-wider">{sectionCategoryName} Pipeline</span>
+              <span className="text-xs text-slate-400">({selectedTasks.length} total on job card)</span>
             </div>
             <p className="text-[11px] text-slate-300">
-              Select jobs above and click the button to add to the job card. Staff allotment is done after adding.
+              Click any card above to instantly add or remove it from the job card with standard rates and staff allotment.
             </p>
           </div>
 
@@ -720,21 +828,13 @@ export function JobAllotmentPipeline({
             {stagedJobIds.length > 0 && (
               <button
                 type="button"
-                onClick={() => setStagedJobIds([])}
-                className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-white"
+                onClick={handleAddStagedJobs}
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all shadow-md flex items-center justify-center gap-2"
               >
-                Clear
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Add {stagedJobIds.length} Selected Jobs</span>
               </button>
             )}
-            <button
-              type="button"
-              disabled={stagedJobIds.length === 0}
-              onClick={handleAddStagedJobs}
-              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all disabled:opacity-30 disabled:hover:bg-amber-500 shadow-md flex items-center justify-center gap-2"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Add {stagedJobIds.length > 0 ? `${stagedJobIds.length} Selected Job${stagedJobIds.length === 1 ? '' : 's'}` : 'Selected Jobs'} to Job Card</span>
-            </button>
           </div>
         </div>
       </div>
@@ -956,6 +1056,9 @@ export function JobAllotmentPipeline({
         })}
       </div>
 
+      {/* SECTION 0: 13 CORE GENERALIZED STANDARD JOBS */}
+      {activeSection === 'STANDARD_13' && renderJobSelectionGrid(standard13Jobs, 'Core Standard Services')}
+
       {/* SECTION 1: PAINTING & DENTING */}
       {activeSection === 'PAINTING_DENTING' && (
         <div className="space-y-4">
@@ -1042,204 +1145,255 @@ export function JobAllotmentPipeline({
                 <span>Allotted Jobs, Staff & Rate Editor ({selectedTasks.length} {selectedTasks.length === 1 ? 'Task' : 'Tasks'})</span>
               </h4>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Review or edit customer billing price (₹), painter/denter/contractor rates (₹), and assigned technician for any job below.
+                Edit Customer/Cars24 bill rate, Part rate, Labour rate, Contract Payout & assigned staff for any job below. All rates are inclusive of taxes.
               </p>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono shrink-0">
               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
-                Total Bill: ₹{selectedTasks.reduce((sum, t) => sum + (Number(t.customerPrice) || 0), 0).toLocaleString('en-IN')}
+                Total Bill (Incl. Tax): ₹{selectedTasks.reduce((sum, t) => sum + (Number(t.customerPrice) || 0), 0).toLocaleString('en-IN')}
               </span>
             </div>
           </div>
 
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {selectedTasks.map((task, idx) => (
-              <div
-                key={task.id || idx}
-                className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs"
-              >
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-black text-[10px] uppercase">
-                      {task.category}
-                    </span>
-                    <input
-                      type="text"
-                      value={task.title}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        onTasksChange(selectedTasks.map((t, i) => i === idx ? { ...t, title: val } : t));
-                      }}
-                      className="flex-1 min-w-[180px] font-bold text-white bg-transparent border-b border-slate-800 focus:border-amber-400 focus:outline-none text-xs"
-                    />
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {selectedTasks.map((task, idx) => {
+              const taskPart = task.partPrice ?? 0;
+              const taskLabour = task.labourPrice ?? Math.max(0, (task.customerPrice ?? 0) - taskPart);
+
+              return (
+                <div
+                  key={task.id || idx}
+                  className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-black text-[10px] uppercase">
+                        {task.category}
+                      </span>
+                      <input
+                        type="text"
+                        value={task.title}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onTasksChange(selectedTasks.map((t, i) => i === idx ? { ...t, title: val } : t));
+                        }}
+                        className="flex-1 min-w-[180px] font-bold text-white bg-transparent border-b border-slate-800 focus:border-amber-400 focus:outline-none text-xs"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Inline Staff Assignment & Rate Inputs */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {task.category === 'PAINT' ? (
-                    <>
-                      {/* Painter Select (updates all paint panels together) */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-purple-400 uppercase">Painter (All Panels)</span>
-                        <select
-                          value={task.assignedToId || selectedPainterId || ''}
-                          onChange={(e) => {
-                            const pId = e.target.value;
-                            setSelectedPainterId(pId);
-                            const emp = employees.find(item => item.id === pId);
-                            onTasksChange(selectedTasks.map(t => t.category === 'PAINT' ? {
-                              ...t,
-                              assignedToId: pId || undefined,
-                              assignedToName: emp?.name || undefined,
-                              assignedType: 'EMPLOYEE'
-                            } : t));
-                          }}
-                          className="px-2 py-1 rounded-lg bg-slate-900 border border-purple-500/40 text-white font-bold text-[11px]"
-                        >
-                          <option value="">-- Painter --</option>
-                          {employees.map(e => (
-                            <option key={e.id} value={e.id}>{e.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Denter Select (updates all paint panels together) */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-orange-400 uppercase">Denter (All Panels)</span>
-                        <select
-                          value={task.pairedDenterId || selectedDenterId || ''}
-                          onChange={(e) => {
-                            const dId = e.target.value;
-                            setSelectedDenterId(dId);
-                            const emp = employees.find(item => item.id === dId);
-                            onTasksChange(selectedTasks.map(t => t.category === 'PAINT' ? {
-                              ...t,
-                              pairedDenterId: dId || undefined,
-                              pairedDenterName: emp?.name || undefined,
-                            } : t));
-                          }}
-                          className="px-2 py-1 rounded-lg bg-slate-900 border border-orange-500/40 text-white font-bold text-[11px]"
-                        >
-                          <option value="">-- Denter --</option>
-                          {employees.map(e => (
-                            <option key={e.id} value={e.id}>{e.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Painter Payout */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-purple-300 uppercase">Painter ₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={task.painterPayout ?? 800}
-                          onChange={(e) => {
-                            const pVal = Number(e.target.value) || 0;
-                            onTasksChange(selectedTasks.map((t, i) => i === idx ? {
-                              ...t,
-                              painterPayout: pVal,
-                              contractorPayout: pVal + (t.denterPayout || 0),
-                              estimatedCost: pVal + (t.denterPayout || 0)
-                            } : t));
-                          }}
-                          className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-purple-500/40 text-purple-300 font-mono font-bold text-[11px]"
-                        />
-                      </div>
-
-                      {/* Denter Payout */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-orange-300 uppercase">Denter ₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={task.denterPayout ?? 150}
-                          onChange={(e) => {
-                            const dVal = Number(e.target.value) || 0;
-                            onTasksChange(selectedTasks.map((t, i) => i === idx ? {
-                              ...t,
-                              denterPayout: dVal,
-                              contractorPayout: (t.painterPayout || 0) + dVal,
-                              estimatedCost: (t.painterPayout || 0) + dVal
-                            } : t));
-                          }}
-                          className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-orange-500/40 text-orange-300 font-mono font-bold text-[11px]"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Department Staff / Vendor Select */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-blue-400 uppercase">Assigned Staff / Dept</span>
-                        <select
-                          value={task.assignedToId || ''}
-                          onChange={(e) => {
-                            const targetId = e.target.value;
-                            const emp = employees.find(item => item.id === targetId);
-                            const ven = vendors.find(item => item.id === targetId);
-                            onTasksChange(selectedTasks.map((t, i) => i === idx ? {
-                              ...t,
-                              assignedToId: targetId || undefined,
-                              assignedToName: emp?.name || ven?.name || undefined,
-                              assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
-                            } : t));
-                          }}
-                          className="px-2 py-1 rounded-lg bg-slate-900 border border-blue-500/40 text-white font-bold text-[11px]"
-                        >
-                          <option value="">-- Assign Staff / Vendor --</option>
-                          <optgroup label="Workshop Staff">
+                  {/* Inline Staff Assignment & Rate Inputs */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {task.category === 'PAINT' ? (
+                      <>
+                        {/* Painter Select (updates all paint panels together) */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-purple-400 uppercase">Painter (All Panels)</span>
+                          <select
+                            value={task.assignedToId || selectedPainterId || ''}
+                            onChange={(e) => {
+                              const pId = e.target.value;
+                              setSelectedPainterId(pId);
+                              const emp = employees.find(item => item.id === pId);
+                              onTasksChange(selectedTasks.map(t => t.category === 'PAINT' ? {
+                                ...t,
+                                assignedToId: pId || undefined,
+                                assignedToName: emp?.name || undefined,
+                                assignedType: 'EMPLOYEE'
+                              } : t));
+                            }}
+                            className="px-2 py-1 rounded-lg bg-slate-900 border border-purple-500/40 text-white font-bold text-[11px]"
+                          >
+                            <option value="">-- Painter --</option>
                             {employees.map(e => (
-                              <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam || e.role})</option>
+                              <option key={e.id} value={e.id}>{e.name}</option>
                             ))}
-                          </optgroup>
-                          <optgroup label="Sublet Vendors">
-                            {vendors.map(v => (
-                              <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                          </select>
+                        </div>
+
+                        {/* Denter Select (updates all paint panels together) */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-orange-400 uppercase">Denter (All Panels)</span>
+                          <select
+                            value={task.pairedDenterId || selectedDenterId || ''}
+                            onChange={(e) => {
+                              const dId = e.target.value;
+                              setSelectedDenterId(dId);
+                              const emp = employees.find(item => item.id === dId);
+                              onTasksChange(selectedTasks.map(t => t.category === 'PAINT' ? {
+                                ...t,
+                                pairedDenterId: dId || undefined,
+                                pairedDenterName: emp?.name || undefined,
+                              } : t));
+                            }}
+                            className="px-2 py-1 rounded-lg bg-slate-900 border border-orange-500/40 text-white font-bold text-[11px]"
+                          >
+                            <option value="">-- Denter --</option>
+                            {employees.map(e => (
+                              <option key={e.id} value={e.id}>{e.name}</option>
                             ))}
-                          </optgroup>
-                        </select>
-                      </div>
+                          </select>
+                        </div>
 
-                      {/* Labor / Contractor Payout Cost */}
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-amber-300 uppercase">Labor/Cost ₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={task.contractorPayout ?? task.estimatedCost ?? 0}
-                          onChange={(e) => {
-                            const cVal = Number(e.target.value) || 0;
-                            onTasksChange(selectedTasks.map((t, i) => i === idx ? {
-                              ...t,
-                              estimatedCost: cVal,
-                              contractorPayout: cVal
-                            } : t));
-                          }}
-                          className="w-18 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300 font-mono font-bold text-[11px]"
-                        />
-                      </div>
-                    </>
-                  )}
+                        {/* Painter Payout */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-purple-300 uppercase">Painter ₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={task.painterPayout ?? 800}
+                            onChange={(e) => {
+                              const pVal = Number(e.target.value) || 0;
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                painterPayout: pVal,
+                                contractorPayout: pVal + (t.denterPayout || 0),
+                                estimatedCost: pVal + (t.denterPayout || 0)
+                              } : t));
+                            }}
+                            className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-purple-500/40 text-purple-300 font-mono font-bold text-[11px]"
+                          />
+                        </div>
 
-                  {/* Customer Bill Price */}
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-emerald-400 uppercase">Customer Bill ₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={task.customerPrice ?? 0}
-                      onChange={(e) => {
-                        const priceVal = Number(e.target.value) || 0;
-                        onTasksChange(selectedTasks.map((t, i) => i === idx ? {
-                          ...t,
-                          customerPrice: priceVal
-                        } : t));
-                      }}
-                      className="w-20 px-1.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/40 text-emerald-400 font-mono font-extrabold text-[11px]"
-                    />
-                  </div>
+                        {/* Denter Payout */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-orange-300 uppercase">Denter ₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={task.denterPayout ?? 150}
+                            onChange={(e) => {
+                              const dVal = Number(e.target.value) || 0;
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                denterPayout: dVal,
+                                contractorPayout: (t.painterPayout || 0) + dVal,
+                                estimatedCost: (t.painterPayout || 0) + dVal
+                              } : t));
+                            }}
+                            className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-orange-500/40 text-orange-300 font-mono font-bold text-[11px]"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Department Staff / Vendor Select */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-blue-400 uppercase">Assigned Staff / Dept</span>
+                          <select
+                            value={task.assignedToId || ''}
+                            onChange={(e) => {
+                              const targetId = e.target.value;
+                              const emp = employees.find(item => item.id === targetId);
+                              const ven = vendors.find(item => item.id === targetId);
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                assignedToId: targetId || undefined,
+                                assignedToName: emp?.name || ven?.name || undefined,
+                                assignedType: ven ? 'VENDOR' : 'EMPLOYEE'
+                              } : t));
+                            }}
+                            className="px-2 py-1 rounded-lg bg-slate-900 border border-blue-500/40 text-white font-bold text-[11px]"
+                          >
+                            <option value="">-- Assign Staff / Vendor --</option>
+                            <optgroup label="Workshop Staff">
+                              {employees.map(e => (
+                                <option key={e.id} value={e.id}>{e.name} ({e.specializedTeam || e.role})</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Sublet Vendors">
+                              {vendors.map(v => (
+                                <option key={v.id} value={v.id}>{v.name} ({v.category})</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+
+                        {/* Part Rate */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-blue-400 uppercase">Part ₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={taskPart}
+                            onChange={(e) => {
+                              const pVal = Number(e.target.value) || 0;
+                              const newTotal = pVal + taskLabour;
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                partPrice: pVal,
+                                customerPrice: newTotal
+                              } : t));
+                            }}
+                            className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-blue-500/40 text-blue-300 font-mono font-bold text-[11px]"
+                            title="Part Rate (Incl. Tax)"
+                          />
+                        </div>
+
+                        {/* Labour Rate */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-indigo-400 uppercase">Labour ₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={taskLabour}
+                            onChange={(e) => {
+                              const lVal = Number(e.target.value) || 0;
+                              const newTotal = taskPart + lVal;
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                labourPrice: lVal,
+                                customerPrice: newTotal
+                              } : t));
+                            }}
+                            className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-indigo-500/40 text-indigo-300 font-mono font-bold text-[11px]"
+                            title="Labour Rate (Incl. Tax)"
+                          />
+                        </div>
+
+                        {/* Labor / Contractor Payout Cost */}
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-amber-300 uppercase">Contract ₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={task.contractorPayout ?? task.estimatedCost ?? 0}
+                            onChange={(e) => {
+                              const cVal = Number(e.target.value) || 0;
+                              onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                                ...t,
+                                estimatedCost: cVal,
+                                contractorPayout: cVal,
+                                isContractBasis: cVal > 0
+                              } : t));
+                            }}
+                            className="w-16 px-1.5 py-1 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300 font-mono font-bold text-[11px]"
+                            title="Contractor Payout (if piece-rate/contract)"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Customer Bill Price (Total Rate) */}
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold text-emerald-400 uppercase">Total Bill ₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={task.customerPrice ?? 0}
+                        onChange={(e) => {
+                          const priceVal = Number(e.target.value) || 0;
+                          const currentP = task.partPrice ?? 0;
+                          onTasksChange(selectedTasks.map((t, i) => i === idx ? {
+                            ...t,
+                            customerPrice: priceVal,
+                            labourPrice: Math.max(0, priceVal - currentP)
+                          } : t));
+                        }}
+                        className="w-20 px-1.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/40 text-emerald-400 font-mono font-extrabold text-[11px]"
+                        title="Customer Bill Price (Inclusive of Taxes)"
+                      />
+                    </div>
 
                   {/* Remove Button */}
                   <button
@@ -1254,7 +1408,8 @@ export function JobAllotmentPipeline({
                   </button>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}

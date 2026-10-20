@@ -306,105 +306,6 @@ export function VehicleStatusPipelineView({
   return (
     <div className="space-y-5">
       
-      {/* Gate Checked-In Vehicles Awaiting Job Card Banner */}
-      {pendingGateCheckIns.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-amber-500/10 dark:from-amber-500/20 dark:to-amber-500/10 rounded-3xl border border-amber-500/30 p-4 sm:p-5 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold shrink-0">
-                <Car className="w-5 h-5 animate-pulse" />
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-200/60 dark:bg-amber-900/50 px-2.5 py-0.5 rounded-full">
-                    Awaiting Job Card ({pendingGateCheckIns.length})
-                  </span>
-                  <span className="text-xs text-amber-700 dark:text-amber-300 font-bold">
-                    Physically Checked In at Gate
-                  </span>
-                </div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5">
-                  Vehicles Received — Ready for Inspection & Job Card Creation
-                </h3>
-              </div>
-            </div>
-            
-            {isManagementRole && (
-              <button
-                type="button"
-                onClick={onOpenNewJobCardModal}
-                className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>+ Create Job Card</span>
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-            {pendingGateCheckIns.slice(0, 3).map((item) => (
-              <div 
-                key={item.id}
-                className="bg-white dark:bg-slate-800/90 rounded-2xl p-3.5 border border-amber-200 dark:border-amber-900/50 shadow-xs hover:border-amber-400 transition-all space-y-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-black text-xs text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-600">
-                    {item.registrationNumber}
-                  </span>
-                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-800">
-                    {item.status === 'IDLE_AWAITING_PI' ? 'Cars24 PI Pending' : 'Gate Checked In'}
-                  </span>
-                </div>
-
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {item.make} {item.model}
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-700/50">
-                  <span className="truncate">{item.customerName}</span>
-                  <span className="font-mono text-[10px]">{item.checkedInAt}</span>
-                </div>
-
-                {isManagementRole && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onOpenNewJobCardWithPrefill) {
-                        onOpenNewJobCardWithPrefill({
-                          regNo: item.registrationNumber,
-                          make: item.make,
-                          model: item.model,
-                          variant: item.variant,
-                          fuelType: item.fuelType as FuelType,
-                          color: item.color,
-                          customerName: item.customerName,
-                          customerPhone: item.customerPhone,
-                          isCars24: item.isCars24,
-                          cars24RefNo: item.cars24RefNo,
-                          checkInRecordId: item.id,
-                          cityId: item.cityId,
-                          cityName: item.cityName,
-                          workshopId: item.workshopId,
-                          workshopName: item.workshopName,
-                          workOrderNo: item.workOrderNo,
-                          workOrderNotes: item.workOrderNotes,
-                        });
-                      } else {
-                        onOpenNewJobCardModal();
-                      }
-                    }}
-                    className="w-full mt-1.5 py-1.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-extrabold text-[11px] flex items-center justify-center gap-1 border border-amber-300/50 dark:border-amber-800/50 active:scale-95 transition-all cursor-pointer"
-                  >
-                    <span>⚡ Create Job Card for {item.registrationNumber}</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Top Header Banner */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -756,14 +657,19 @@ export function VehicleStatusPipelineView({
 
                               {/* Quick 1-Click Next Stage Button */}
                               {(() => {
-                                const nextMap: Partial<Record<JobCardStatus, { status: JobCardStatus; label: string }>> = {
-                                  CHECKED_IN: { status: 'ALLOTTED', label: 'Allot' },
-                                  INSPECTED: { status: 'ALLOTTED', label: 'Allot' },
+                                const nextMap: Record<string, { status: JobCardStatus; label: string }> = {
+                                  CREATED: { status: 'JOB_ALLOCATED', label: 'Allot' },
+                                  CHECKED_IN: { status: 'JOB_ALLOCATED', label: 'Allot' },
+                                  INSPECTED: { status: 'JOB_ALLOCATED', label: 'Allot' },
+                                  INSPECTION: { status: 'JOB_ALLOCATED', label: 'Allot' },
                                   AWAITING_APPROVAL: { status: 'IN_PROGRESS', label: 'Start WIP' },
+                                  ESTIMATE_PENDING: { status: 'IN_PROGRESS', label: 'Start WIP' },
+                                  JOB_ALLOCATED: { status: 'IN_PROGRESS', label: 'Start WIP' },
                                   ALLOTTED: { status: 'IN_PROGRESS', label: 'Start WIP' },
-                                  IN_PROGRESS: { status: 'PDI_QC', label: 'To QC' },
+                                  IN_PROGRESS: { status: 'QC_PENDING', label: 'To QC' },
                                   WAITING_PARTS: { status: 'IN_PROGRESS', label: 'Resume' },
                                   SUBLET_WORK: { status: 'IN_PROGRESS', label: 'Resume' },
+                                  QC_PENDING: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
                                   PDI_QC: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
                                   READY_FOR_DELIVERY: { status: 'DELIVERED', label: 'Deliver' },
                                 };

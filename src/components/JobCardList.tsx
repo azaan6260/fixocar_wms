@@ -71,6 +71,7 @@ const STATUS_BADGES: Record<JobCardStatus, { label: string; bg: string; text: st
   IN_PROGRESS: { label: 'In Repair', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
   ESTIMATE_PENDING: { label: 'Approval Required', bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
   QC_PENDING: { label: 'Floor QC Audit', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
+  PDI_QC: { label: 'PDI & QC Audit', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
   READY_FOR_DELIVERY: { label: 'Ready for Dispatch', bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
   OUT_FOR_DELIVERY: { label: 'Out for Delivery', bg: 'bg-cyan-500/10', text: 'text-cyan-700 dark:text-cyan-300', border: 'border-cyan-200 dark:border-cyan-800' },
   RFC: { label: 'Ready for Checkout', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
@@ -837,7 +838,6 @@ export function JobCardList({
             {mainSection === 'ACTIVE' ? (
               [
                 { id: 'ALL', label: `All Active (${activeCards.length})` },
-                { id: 'AWAITING_JC', label: `Gate Checked-In (${filteredPendingCheckIns.length})` },
                 { id: 'APPROVAL', label: `Needs Approval (${activeCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
                 { id: 'QC', label: `QC Audit (${activeCards.filter(c => c.status === 'QC_PENDING').length})` },
                 { id: 'DELIVERY', label: `Ready/Delivery (${activeCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
@@ -850,7 +850,7 @@ export function JobCardList({
                   onClick={() => setActiveSubFilter(f.id)}
                   className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
                     activeSubFilter === f.id
-                      ? f.id === 'AWAITING_JC' ? 'bg-amber-500 text-slate-950 shadow-xs' : f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
+                      ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
@@ -884,132 +884,8 @@ export function JobCardList({
 
       </div>
 
-      {/* Gate Pass Checked-In Vehicles Section (Awaiting Job Card Creation) */}
-      {mainSection === 'ACTIVE' && (activeSubFilter === 'ALL' || activeSubFilter === 'AWAITING_JC') && filteredPendingCheckIns.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-blue-500/10 dark:from-amber-950/40 dark:to-blue-950/30 rounded-3xl p-5 border-2 border-amber-500/30 shadow-md space-y-4 animate-in fade-in duration-200">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-sm animate-pulse">
-                <LogIn className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>🚗 Gate Checked-In Vehicles (Awaiting Job Card)</span>
-                  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-0.5 rounded-full">
-                    {filteredPendingCheckIns.length} In Workshop
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  These vehicles passed gate check-in and are inside the workshop waiting for Job Card creation.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredPendingCheckIns.map((checkIn, idx) => {
-              const isLatest = idx === 0;
-              return (
-              <div
-                key={checkIn.id}
-                className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-xs flex flex-col justify-between gap-3 group ${
-                  isLatest
-                    ? 'border-2 border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30 shadow-md shadow-amber-500/10'
-                    : 'border-amber-400/40 dark:border-amber-500/30 hover:border-amber-500'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  {checkIn.checkInPhotoWithDriverUrl ? (
-                    <img
-                      src={checkIn.checkInPhotoWithDriverUrl}
-                      alt={checkIn.registrationNumber}
-                      className="w-16 h-16 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
-                      <Car className="w-8 h-8 text-amber-500" />
-                    </div>
-                  )}
-
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1 flex-wrap">
-                      <div className="flex items-center gap-1">
-                        {isLatest && (
-                          <span className="bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded uppercase tracking-wide animate-pulse">
-                            ✨ LATEST
-                          </span>
-                        )}
-                        <span className="font-mono font-black text-xs bg-slate-900 text-amber-400 px-2 py-0.5 rounded-lg border border-slate-700">
-                          {checkIn.registrationNumber}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 font-mono">{checkIn.id}</span>
-                    </div>
-                    <h4 className="font-extrabold text-xs text-slate-900 dark:text-slate-100 truncate">
-                      {checkIn.make} {checkIn.model} {checkIn.variant ? `(${checkIn.variant})` : ''}
-                    </h4>
-                    <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 truncate">
-                      👤 {checkIn.customerName} {checkIn.customerPhone !== 'N/A' ? `(${checkIn.customerPhone})` : ''}
-                    </p>
-                    <p className="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
-                      <Clock className="w-3 h-3 text-amber-500" /> Gate In: {checkIn.checkedInAt}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenNewJobCardModal({
-                      checkInRecordId: checkIn.id,
-                      regNo: checkIn.registrationNumber,
-                      registrationNumber: checkIn.registrationNumber,
-                      make: checkIn.make,
-                      model: checkIn.model,
-                      variant: checkIn.variant,
-                      fuelType: checkIn.fuelType,
-                      color: checkIn.color,
-                      year: checkIn.year,
-                      mileage: checkIn.mileage,
-                      fuelLevel: checkIn.fuelLevel,
-                      customerName: checkIn.customerName,
-                      customerPhone: checkIn.customerPhone,
-                      isCars24: !!checkIn.isCars24,
-                      cars24RefNo: checkIn.cars24RefNo,
-                      workOrderNo: checkIn.workOrderNo,
-                      workOrderNotes: checkIn.workOrderNotes,
-                      cityId: checkIn.cityId,
-                      cityName: checkIn.cityName,
-                      workshopId: checkIn.workshopId,
-                      workshopName: checkIn.workshopName,
-                    });
-                  }}
-                  className="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-xs transition-all active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>➕ Open Job Card for {checkIn.registrationNumber}</span>
-                </button>
-              </div>
-            );
-          })}
-          </div>
-        </div>
-      )}
-
       {/* Cards Responsive Grid */}
-      {activeSubFilter === 'AWAITING_JC' ? (
-        filteredPendingCheckIns.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500">
-            <LogIn className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-amber-500 mb-3 stroke-[1.5]" />
-            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
-              No Pending Gate Checked-In Vehicles
-            </h3>
-            <p className="text-xs mt-1">
-              All vehicles inside the workshop currently have Job Cards created. New gate check-ins will automatically appear here.
-            </p>
-          </div>
-        )
-      ) : sortedCards.length === 0 ? (
+      {sortedCards.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500 space-y-3">
           <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 stroke-[1.5]" />
           <div>

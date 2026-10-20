@@ -326,14 +326,12 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     e.preventDefault();
     if (!regNo.trim()) return;
 
-    if (isGateCheckInBlocked) {
-      dispatchToastNotification(
-        'Duplicate Gate Entry Blocked',
-        `Vehicle ${regNo.toUpperCase().trim()} is already in the workshop (${existingActiveCard ? `Active Job Card ${existingActiveCard.id}` : `Gate Pass ${existingActiveGatePass?.id}`}). New check-in is not allowed before checking out.`,
-        'warning'
-      );
-      return;
-    }
+      dispatchToastNotification({
+        title: 'Duplicate Gate Entry Blocked',
+        message: `Vehicle ${regNo.toUpperCase().trim()} is already in the workshop (${existingActiveCard ? `Active Job Card ${existingActiveCard.id}` : `Gate Pass ${existingActiveGatePass?.id}`}). New check-in is not allowed before checking out.`,
+        type: 'WARNING',
+        vehicleReg: regNo.toUpperCase().trim()
+      });
 
     const stampedTime = new Date().toLocaleString('en-US', {
       dateStyle: 'medium',
@@ -544,7 +542,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         </div>
 
         {/* Live Workshop Physical Count KPI Metrics */}
-        <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-slate-800/80 border border-slate-700/60 p-4 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
               <span>Physically In Workshop</span>
@@ -552,15 +550,6 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
             </div>
             <p className="text-2xl font-black text-white mt-1">{inWorkshopCount}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Vehicles currently on site</p>
-          </div>
-
-          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
-            <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
-              <span>Idle - Awaiting PI / Estimate</span>
-              <Clock className="w-4 h-4 text-amber-400" />
-            </div>
-            <p className="text-2xl font-black text-amber-400 mt-1">{idleAwaitingPiCount}</p>
-            <p className="text-[11px] text-amber-300/80 mt-0.5">Waiting Cars24 WSM approval</p>
           </div>
 
           <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-2xl">
@@ -597,19 +586,6 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
               }`}
             >
               In Workshop ({inWorkshopCount})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('IDLE_PI')}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 flex items-center gap-1.5 ${
-                activeFilter === 'IDLE_PI'
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20'
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" />
-              Awaiting Job Card / PI ({idleAwaitingPiCount})
             </button>
 
             <button
@@ -733,9 +709,9 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                       </div>
 
                       {/* Status Badge */}
-                      {item.status === 'IDLE_AWAITING_PI' && (
-                        <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md animate-pulse">
-                          <Clock className="w-3 h-3" /> Idle - Waiting PI
+                      {(item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD' || item.status === 'CHECKED_IN') && (
+                        <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md">
+                          <LogIn className="w-3 h-3" /> Checked In
                         </span>
                       )}
                       {item.status === 'JOB_CARD_CREATED' && (

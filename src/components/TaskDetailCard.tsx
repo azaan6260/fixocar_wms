@@ -592,33 +592,75 @@ export function TaskDetailCard({
                 </label>
               </>
             ) : (
-              <label className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
-                <span>Payout/Rate ₹</span>
-                <input
-                  type="number"
-                  value={task.contractorPayout ?? task.estimatedCost ?? 0}
-                  onChange={(e) => {
-                    const cost = Number(e.target.value) || 0;
-                    updateJobCardTask(card.id, task.id, {
-                      contractorPayout: cost,
-                      estimatedCost: cost,
-                      denterPayout: task.category === 'DENTING' ? cost : task.denterPayout
-                    });
-                  }}
-                  className="w-20 px-1.5 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
-                />
-              </label>
+              <>
+                <label className="flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400" title="Part Rate (Incl. Tax)">
+                  <span>Part ₹</span>
+                  <input
+                    type="number"
+                    value={task.partPrice ?? 0}
+                    onChange={(e) => {
+                      const p = Number(e.target.value) || 0;
+                      const l = task.labourPrice ?? Math.max(0, (task.customerPrice ?? 0) - (task.partPrice ?? 0));
+                      updateJobCardTask(card.id, task.id, {
+                        partPrice: p,
+                        customerPrice: p + l,
+                        isTaxInclusive: true
+                      });
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400" title="Labour Rate (Incl. Tax)">
+                  <span>Labour ₹</span>
+                  <input
+                    type="number"
+                    value={task.labourPrice ?? Math.max(0, (task.customerPrice ?? 0) - (task.partPrice ?? 0))}
+                    onChange={(e) => {
+                      const l = Number(e.target.value) || 0;
+                      const p = task.partPrice ?? 0;
+                      updateJobCardTask(card.id, task.id, {
+                        labourPrice: l,
+                        customerPrice: p + l,
+                        isTaxInclusive: true
+                      });
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded-lg border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400" title="Contractor / Piece-rate Payout">
+                  <span>Contract ₹</span>
+                  <input
+                    type="number"
+                    value={task.contractorPayout ?? task.estimatedCost ?? 0}
+                    onChange={(e) => {
+                      const cost = Number(e.target.value) || 0;
+                      updateJobCardTask(card.id, task.id, {
+                        contractorPayout: cost,
+                        estimatedCost: cost,
+                        isContractBasis: cost > 0,
+                        denterPayout: task.category === 'DENTING' ? cost : task.denterPayout
+                      });
+                    }}
+                    className="w-18 px-1.5 py-0.5 rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 font-mono font-bold text-xs"
+                  />
+                </label>
+              </>
             )}
 
-            <label className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-              <span>Customer Bill ₹</span>
+            <label className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400" title="Customer Bill Price (Inclusive of Taxes)">
+              <span>Bill Total ₹</span>
               <input
                 type="number"
                 value={task.customerPrice ?? 0}
                 onChange={(e) => {
                   const price = Number(e.target.value) || 0;
+                  const currentP = task.partPrice ?? 0;
                   updateJobCardTask(card.id, task.id, {
-                    customerPrice: price
+                    customerPrice: price,
+                    labourPrice: Math.max(0, price - currentP),
+                    isTaxInclusive: true
                   });
                 }}
                 className="w-20 px-1.5 py-0.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-mono font-bold text-xs"

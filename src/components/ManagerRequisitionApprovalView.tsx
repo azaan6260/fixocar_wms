@@ -441,6 +441,21 @@ export function ManagerRequisitionApprovalView({
                           </div>
                         </div>
 
+                        {(req.partPrice !== undefined || req.labourPrice !== undefined) && (
+                          <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10.5px] space-y-0.5">
+                            <div className="flex justify-between text-slate-600 dark:text-slate-300 font-semibold">
+                              <span>Part Rate: <strong className="text-blue-600 dark:text-blue-400">₹{req.partPrice || 0}</strong></span>
+                              <span>Labour Rate: <strong className="text-indigo-600 dark:text-indigo-400">₹{req.labourPrice || 0}</strong></span>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-emerald-600 dark:text-emerald-400 font-bold border-t border-dashed border-slate-200 dark:border-slate-700 pt-0.5">
+                              <span>All Rates Incl. 18% Tax</span>
+                              {req.contractorPayout !== undefined && (
+                                <span className="text-amber-600 dark:text-amber-400">Payout: ₹{req.contractorPayout}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <div>
                           <input
                             type="text"

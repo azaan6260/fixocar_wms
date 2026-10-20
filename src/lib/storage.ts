@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment, PaymentMode, ContractorPaymentRecord, VendorPaymentRecord, ContractorAccountSummary, VendorAccountSummary, ContractorPayoutRecord } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment, PaymentMode, ContractorPaymentRecord, VendorPaymentRecord, ContractorAccountSummary, VendorAccountSummary, ContractorPayoutRecord, TaskCategory } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
@@ -163,6 +163,11 @@ export function serializeTaskMetaToNotes(task: JobTask): string {
   if (task.panelNameEn) meta.pName = task.panelNameEn;
   if (task.paintScope) meta.pScope = task.paintScope;
   if (task.standardJobId) meta.sjId = task.standardJobId;
+  if (task.partPrice !== undefined) meta.ptP = task.partPrice;
+  if (task.labourPrice !== undefined) meta.lbP = task.labourPrice;
+  if (task.retailPrice !== undefined) meta.rtP = task.retailPrice;
+  if (task.cars24Price !== undefined) meta.c24P = task.cars24Price;
+  if (task.isTaxInclusive !== undefined) meta.txInc = task.isTaxInclusive;
   if (Object.keys(meta).length === 0) return baseNotes;
   return `${baseNotes} <!--META:${JSON.stringify(meta)}-->`.trim();
 }
@@ -327,6 +332,11 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       panelNameEn: t.panelNameEn || meta.pName,
       paintScope: t.paintScope || meta.pScope,
       standardJobId: t.standardJobId || meta.sjId,
+      partPrice: t.partPrice ?? meta.ptP,
+      labourPrice: t.labourPrice ?? meta.lbP,
+      retailPrice: t.retailPrice ?? meta.rtP,
+      cars24Price: t.cars24Price ?? meta.c24P,
+      isTaxInclusive: t.isTaxInclusive ?? meta.txInc ?? true,
     };
   });
 
@@ -1584,6 +1594,16 @@ export function addRequisitionToTask(
     suggestedPrice?: number;
     partNumber?: string;
     inventoryItemId?: string;
+    partPrice?: number;
+    labourPrice?: number;
+    customerPrice?: number;
+    cars24Price?: number;
+    isContractBasis?: boolean;
+    contractorPayout?: number;
+    category?: TaskCategory;
+    assignedToId?: string;
+    assignedToName?: string;
+    isTaxInclusive?: boolean;
   }
 ) {
   const newReq: TaskRequisition = {
@@ -1648,19 +1668,31 @@ export function respondToRequisition(
       return t;
     });
 
-    // If approved and is ADDITIONAL_WORK, also create a sub-task
-    if (approved && reqItemToConvert && (reqItemToConvert as TaskRequisition).itemType === 'ADDITIONAL_WORK' && approvedPrice > 0) {
+    // If approved and is ADDITIONAL_WORK, also create a sub-task with full tax-inclusive rate breakdown
+    if (approved && reqItemToConvert && (reqItemToConvert as TaskRequisition).itemType === 'ADDITIONAL_WORK') {
       const req = reqItemToConvert as TaskRequisition;
+      const finalPrice = approvedPrice > 0 ? approvedPrice : (req.customerPrice ?? req.suggestedPrice ?? 0);
+      const partVal = req.partPrice ?? 0;
+      const labourVal = req.labourPrice !== undefined ? req.labourPrice : Math.max(0, finalPrice - partVal);
+      const contractPay = req.contractorPayout !== undefined ? req.contractorPayout : Math.round(finalPrice * 0.4);
+      const cleanTitle = req.title.replace(/^\[.*?\]\s*/, '');
       const additionalTask: JobTask = {
         id: `TSK-${Date.now().toString().slice(-6)}`,
         jobCardId,
-        title: `[Add-on] ${req.title}`,
-        category: 'MECHANICAL',
-        assignedToId: req.requestedByEmployeeId,
-        assignedToName: req.requestedByEmployeeName,
+        title: `[Add-on] ${cleanTitle}`,
+        category: req.category || 'MECHANICAL',
+        assignedToId: req.assignedToId || req.requestedByEmployeeId,
+        assignedToName: req.assignedToName || req.requestedByEmployeeName,
         assignedType: 'EMPLOYEE',
-        estimatedCost: approvedPrice * 0.7,
-        customerPrice: approvedPrice,
+        estimatedCost: req.isContractBasis ? contractPay : Math.round(finalPrice * 0.5),
+        customerPrice: finalPrice,
+        partPrice: partVal,
+        labourPrice: labourVal,
+        retailPrice: req.customerPrice ?? finalPrice,
+        cars24Price: req.cars24Price ?? finalPrice,
+        isTaxInclusive: true,
+        isContractBasis: Boolean(req.isContractBasis),
+        contractorPayout: req.isContractBasis ? contractPay : 0,
         status: 'IN_PROGRESS',
         requiresCustomerApproval: false,
         isCustomerApproved: true,
@@ -3096,17 +3128,32 @@ export function getStandardJobs(): StandardJob[] {
   try {
     const parsed = JSON.parse(data);
     if (Array.isArray(parsed)) {
-      const existingIds = new Set(parsed.map((j: StandardJob) => j.id));
-      const existingPanelKeys = new Set(parsed.map((j: StandardJob) => j.panelKey).filter(Boolean));
+      let changed = false;
+      const defaultMap = new Map(INITIAL_STANDARD_JOBS.map(j => [j.id, j]));
+      const upgraded = parsed.map((j: StandardJob) => {
+        const def = defaultMap.get(j.id);
+        if (def && (j.partPrice === undefined || j.labourPrice === undefined || j.isTaxInclusive === undefined)) {
+          changed = true;
+          return {
+            ...j,
+            partPrice: j.partPrice ?? def.partPrice ?? 0,
+            labourPrice: j.labourPrice ?? def.labourPrice ?? j.retailPrice ?? 0,
+            isTaxInclusive: j.isTaxInclusive ?? def.isTaxInclusive ?? true,
+          };
+        }
+        return j;
+      });
+      const existingIds = new Set(upgraded.map((j: StandardJob) => j.id));
+      const existingPanelKeys = new Set(upgraded.map((j: StandardJob) => j.panelKey).filter(Boolean));
       const missingDefaults = INITIAL_STANDARD_JOBS.filter(
         j => !deletedIds.has(j.id) && !existingIds.has(j.id) && (!j.panelKey || !existingPanelKeys.has(j.panelKey))
       );
-      if (missingDefaults.length > 0) {
-        const merged = [...parsed, ...missingDefaults];
+      if (missingDefaults.length > 0 || changed) {
+        const merged = [...upgraded, ...missingDefaults];
         localStorage.setItem(STORAGE_KEYS.STANDARD_JOBS, JSON.stringify(merged));
         return merged;
       }
-      return parsed;
+      return upgraded;
     }
     return INITIAL_STANDARD_JOBS;
   } catch {
@@ -3422,6 +3469,11 @@ export function addStandardJobToJobCard(
     if (dEmp) pairedDenterName = dEmp.name;
   }
 
+  const defaultPartPrice = isCars24 ? (stdJob.cars24PartPrice ?? stdJob.partPrice ?? 0) : (stdJob.retailPartPrice ?? stdJob.partPrice ?? 0);
+  const defaultLabourPrice = isCars24
+    ? (stdJob.cars24LabourPrice ?? stdJob.labourPrice ?? Math.max(0, customerPrice - defaultPartPrice))
+    : (stdJob.retailLabourPrice ?? stdJob.labourPrice ?? Math.max(0, customerPrice - defaultPartPrice));
+
   const newTask: JobTask = {
     id: taskOverrides?.id || `task-std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     jobCardId,
@@ -3435,16 +3487,21 @@ export function addStandardJobToJobCard(
     assignedType,
     pairedDenterId: customDenterId || taskOverrides?.pairedDenterId,
     pairedDenterName,
-    estimatedCost: stdJob.isContractBasis ? contractorPayout : Math.round(customerPrice * 0.5),
+    estimatedCost: (taskOverrides?.isContractBasis ?? stdJob.isContractBasis) ? contractorPayout : Math.round(customerPrice * 0.5),
     customerPrice,
+    partPrice: taskOverrides?.partPrice !== undefined ? taskOverrides.partPrice : defaultPartPrice,
+    labourPrice: taskOverrides?.labourPrice !== undefined ? taskOverrides.labourPrice : defaultLabourPrice,
+    retailPrice: taskOverrides?.retailPrice !== undefined ? taskOverrides.retailPrice : stdJob.retailPrice,
+    cars24Price: taskOverrides?.cars24Price !== undefined ? taskOverrides.cars24Price : stdJob.cars24Price,
+    isTaxInclusive: true,
     status: 'PENDING',
     requiresCustomerApproval: false,
-    isContractBasis: stdJob.isContractBasis,
-    contractorPayout: stdJob.isContractBasis ? contractorPayout : 0,
+    isContractBasis: taskOverrides?.isContractBasis !== undefined ? taskOverrides.isContractBasis : stdJob.isContractBasis,
+    contractorPayout: (taskOverrides?.isContractBasis ?? stdJob.isContractBasis) ? contractorPayout : 0,
     painterPayout: painterPayout,
     denterPayout: denterPayout,
     standardJobId: stdJob.id,
-    notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied. ${stdJob.description || ''}`
+    notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied (Inclusive of GST). ${stdJob.description || ''}`
   };
   createdTasks.push(newTask);
 
