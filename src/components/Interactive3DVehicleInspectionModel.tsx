@@ -20,6 +20,34 @@ import { getVehiclePanels } from '../lib/storage';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { formatPaintTaskTitle, isPartialPaintAllowedForPanel, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 
+// Module-level reusable math objects to eliminate GC allocations during interaction and render loops
+const _tmpDir = new THREE.Vector3();
+const _tmpRight = new THREE.Vector3();
+const _tmpUp = new THREE.Vector3();
+
+// Texture cache for partial paint highlight textures (avoids recreating 128x128 2D canvas per frame)
+const halfColorTextureCache = new Map<string, THREE.CanvasTexture>();
+function getCachedHalfColorTexture(colorStr: string): THREE.CanvasTexture {
+  let tex = halfColorTextureCache.get(colorStr);
+  if (!tex) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = colorStr;
+      ctx.fillRect(0, 0, 64, 128);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(64, 0, 64, 128);
+    }
+    tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    halfColorTextureCache.set(colorStr, tex);
+  }
+  return tex;
+}
+
 export interface Interactive3DVehicleInspectionModelProps {
   mode?: 'VIEW' | 'INTERACTIVE_SELECT' | 'INSPECTION_RECORD';
   isCars24?: boolean;
@@ -107,6 +135,18 @@ export function Interactive3DVehicleInspectionModel({
     hoodBonnet?: THREE.Group;
     bootTrunk?: THREE.Group;
   }>({});
+
+  // Render-on-demand and animation interpolation refs for zero-thermal operation
+  const requestRenderRef = useRef<(frames?: number) => void>(() => {});
+  const targetCamPosRef = useRef(new THREE.Vector3(4.8, 2.2, 5.8));
+  const targetFocusPosRef = useRef(new THREE.Vector3(0, 0.4, 0));
+  const targetHingeAnglesRef = useRef({
+    doorLhs: 0,
+    doorRhs: 0,
+    bonnet: 0,
+    boot: 0
+  });
+  const selectableMeshesRef = useRef<THREE.Mesh[]>([]);
 
   const effectivePanels = useMemo(() => {
     const stored = getVehiclePanels();
@@ -200,6 +240,7 @@ export function Interactive3DVehicleInspectionModel({
     }
 
     setPanelToDeselect(null);
+    requestRenderRef.current(20);
   };
 
   // Toggle panel selection directly on 1-click (select or deselect)
@@ -217,6 +258,7 @@ export function Interactive3DVehicleInspectionModel({
 
     // In pure VIEW mode without interactive handlers, only focus the panel for inspection details/voice
     if (mode === 'VIEW' && !onInspectionChange && !onPanelToggle) {
+      requestRenderRef.current(20);
       return;
     }
 
@@ -256,6 +298,7 @@ export function Interactive3DVehicleInspectionModel({
     if (onPanelToggle) {
       onPanelToggle(panelId, panelObj.standardJobId, newSelected ? targetScope : undefined);
     }
+    requestRenderRef.current(25);
   };
 
   // Refs to ensure Three.js WebGL event listeners always invoke latest handlers without stale closures
@@ -292,13 +335,20 @@ export function Interactive3DVehicleInspectionModel({
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
     camera.position.set(4.8, 2.2, 5.8);
-    camera.lookAt(0, 0.3, 0);
+    camera.lookAt(0, 0.4, 0);
     cameraRef.current = camera;
+    targetCamPosRef.current.set(4.8, 2.2, 5.8);
+    targetFocusPosRef.current.set(0, 0.4, 0);
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // 3. Renderer with Eco-Thermal Optimization (Render-on-Demand + Default Power)
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true, 
+      powerPreference: 'default' // Prevents dedicated GPU from overheating
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Cap pixel ratio to 1.35 to avoid massive fragment rendering cost on 2x/3x/4x mobile screens
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -314,8 +364,14 @@ export function Interactive3DVehicleInspectionModel({
     const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
     mainLight.position.set(8, 12, 8);
     mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.mapSize.width = 1024; // 1024x1024 saves 4x fillrate and memory over 2048
+    mainLight.shadow.mapSize.height = 1024;
+    mainLight.shadow.camera.near = 1;
+    mainLight.shadow.camera.far = 30;
+    mainLight.shadow.camera.left = -6;
+    mainLight.shadow.camera.right = 6;
+    mainLight.shadow.camera.top = 6;
+    mainLight.shadow.camera.bottom = -6;
     mainLight.shadow.bias = -0.0005;
     scene.add(mainLight);
 
@@ -818,6 +874,15 @@ export function Interactive3DVehicleInspectionModel({
       bootTrunk: bootPivot
     };
 
+    // Pre-populate list of raycastable panel meshes for high performance hover/click without traversing
+    const allSelectableMeshes: THREE.Mesh[] = [];
+    carGroup.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh && child.userData && child.userData.panelId) {
+        allSelectableMeshes.push(child as THREE.Mesh);
+      }
+    });
+    selectableMeshesRef.current = allSelectableMeshes;
+
     // 7. Raycasting & Mouse/Touch Interaction Setup
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -826,6 +891,7 @@ export function Interactive3DVehicleInspectionModel({
     let isMouseDown = false;
     let isPanning = false;
     let previousMousePosition = { x: 0, y: 0 };
+    let lastHoverRaycastTime = 0;
 
     // Pinch & mobile zoom/pan trackers
     let previousTouchDistance = 0;
@@ -835,6 +901,7 @@ export function Interactive3DVehicleInspectionModel({
     let lastTouchTime = 0;
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      requestRender(45);
       if ('touches' in e) {
         lastTouchTime = Date.now();
       } else if (Date.now() - lastTouchTime < 500) {
@@ -902,32 +969,35 @@ export function Interactive3DVehicleInspectionModel({
         if (previousTouchDistance > 0) {
           const pinchDelta = currentTouchDistance - previousTouchDistance;
           const zoomSpeed = 0.008;
-          const dir = new THREE.Vector3().subVectors(camera.position, targetFocus).normalize();
+          _tmpDir.subVectors(camera.position, targetFocus).normalize();
           const dist = camera.position.distanceTo(targetFocus);
           const newDist = Math.max(1.8, Math.min(14.0, dist - pinchDelta * zoomSpeed));
-          camera.position.copy(dir.multiplyScalar(newDist).add(targetFocus));
+          camera.position.copy(_tmpDir.multiplyScalar(newDist).add(targetFocus));
+          targetCamPosRef.current.copy(camera.position);
+          requestRender(20);
         }
         previousTouchDistance = currentTouchDistance;
 
         // B. TWO FINGER PAN (Translation)
-        const currentMidpoint = {
-          x: (touch1.clientX + touch2.clientX) / 2,
-          y: (touch1.clientY + touch2.clientY) / 2
-        };
+        const currentMidpointX = (touch1.clientX + touch2.clientX) / 2;
+        const currentMidpointY = (touch1.clientY + touch2.clientY) / 2;
         if (previousTouchMidpoint.x > 0 && previousTouchMidpoint.y > 0) {
-          const mdx = currentMidpoint.x - previousTouchMidpoint.x;
-          const mdy = currentMidpoint.y - previousTouchMidpoint.y;
+          const mdx = currentMidpointX - previousTouchMidpoint.x;
+          const mdy = currentMidpointY - previousTouchMidpoint.y;
 
           const panSpeed = 0.005;
-          const rightVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).normalize();
-          const upVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1).normalize();
+          _tmpRight.setFromMatrixColumn(camera.matrix, 0).normalize();
+          _tmpUp.setFromMatrixColumn(camera.matrix, 1).normalize();
 
-          targetFocus.addScaledVector(rightVector, -mdx * panSpeed);
-          targetFocus.addScaledVector(upVector, mdy * panSpeed);
-          camera.position.addScaledVector(rightVector, -mdx * panSpeed);
-          camera.position.addScaledVector(upVector, mdy * panSpeed);
+          targetFocus.addScaledVector(_tmpRight, -mdx * panSpeed);
+          targetFocus.addScaledVector(_tmpUp, mdy * panSpeed);
+          targetFocusPosRef.current.copy(targetFocus);
+          camera.position.addScaledVector(_tmpRight, -mdx * panSpeed);
+          camera.position.addScaledVector(_tmpUp, mdy * panSpeed);
+          targetCamPosRef.current.copy(camera.position);
+          requestRender(20);
         }
-        previousTouchMidpoint = currentMidpoint;
+        previousTouchMidpoint = { x: currentMidpointX, y: currentMidpointY };
 
       } else if (isMouseDown) {
         // Mouse drag rotation or mouse panning
@@ -937,13 +1007,15 @@ export function Interactive3DVehicleInspectionModel({
         if (isPanning) {
           // Pan camera focus target
           const panSpeed = 0.006;
-          const rightVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).normalize();
-          const upVector = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1).normalize();
+          _tmpRight.setFromMatrixColumn(camera.matrix, 0).normalize();
+          _tmpUp.setFromMatrixColumn(camera.matrix, 1).normalize();
 
-          targetFocus.addScaledVector(rightVector, -deltaX * panSpeed);
-          targetFocus.addScaledVector(upVector, deltaY * panSpeed);
-          camera.position.addScaledVector(rightVector, -deltaX * panSpeed);
-          camera.position.addScaledVector(upVector, deltaY * panSpeed);
+          targetFocus.addScaledVector(_tmpRight, -deltaX * panSpeed);
+          targetFocus.addScaledVector(_tmpUp, deltaY * panSpeed);
+          targetFocusPosRef.current.copy(targetFocus);
+          camera.position.addScaledVector(_tmpRight, -deltaX * panSpeed);
+          camera.position.addScaledVector(_tmpUp, deltaY * panSpeed);
+          targetCamPosRef.current.copy(camera.position);
         } else {
           // Standard rotation
           carGroup.rotation.y += deltaX * 0.008;
@@ -951,32 +1023,43 @@ export function Interactive3DVehicleInspectionModel({
         }
 
         previousMousePosition = { x: clientX, y: clientY };
+        requestRender(20);
       } else {
-        // Raycast for hover
-        raycaster.setFromCamera(mouse, camera);
-        const selectableObjects: THREE.Object3D[] = [];
-        carGroup.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh && child.userData && child.userData.panelId) {
-            if (child.visible) {
-              selectableObjects.push(child);
+        // Throttled Hover Raycast (at most once every 50ms)
+        const now = Date.now();
+        if (now - lastHoverRaycastTime > 50) {
+          lastHoverRaycastTime = now;
+          raycaster.setFromCamera(mouse, camera);
+          const selectable = selectableMeshesRef.current.filter(m => m.visible);
+          const intersects = raycaster.intersectObjects(selectable, false);
+          if (intersects.length > 0) {
+            let hit = intersects[0].object;
+            if (
+              dickyOpenRef.current &&
+              hit.userData?.panelId === 'windshield_rear' &&
+              intersects[1]?.object?.userData?.panelId === 'boot_floor'
+            ) {
+              hit = intersects[1].object;
             }
+            if (hit.userData && hit.userData.panelId) {
+              const pId = hit.userData.panelId;
+              setHoveredPanelId(prev => {
+                if (prev !== pId) {
+                  requestRender(15);
+                  return pId;
+                }
+                return prev;
+              });
+            }
+          } else {
+            setHoveredPanelId(prev => {
+              if (prev !== null) {
+                requestRender(15);
+                return null;
+              }
+              return prev;
+            });
           }
-        });
-        const intersects = raycaster.intersectObjects(selectableObjects, true);
-        if (intersects.length > 0) {
-          let hit = intersects[0].object;
-          if (
-            dickyOpenRef.current &&
-            hit.userData?.panelId === 'windshield_rear' &&
-            intersects[1]?.object?.userData?.panelId === 'boot_floor'
-          ) {
-            hit = intersects[1].object;
-          }
-          if (hit.userData && hit.userData.panelId) {
-            setHoveredPanelId(hit.userData.panelId);
-          }
-        } else {
-          setHoveredPanelId(null);
         }
       }
     };
@@ -987,15 +1070,8 @@ export function Interactive3DVehicleInspectionModel({
       mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const selectableObjects: THREE.Object3D[] = [];
-      carGroup.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh && child.userData && child.userData.panelId) {
-          if (child.visible) {
-            selectableObjects.push(child);
-          }
-        }
-      });
-      const intersects = raycaster.intersectObjects(selectableObjects, true);
+      const selectable = selectableMeshesRef.current.filter(m => m.visible);
+      const intersects = raycaster.intersectObjects(selectable, false);
       if (intersects.length > 0) {
         let hit = intersects[0].object;
         if (
@@ -1007,11 +1083,13 @@ export function Interactive3DVehicleInspectionModel({
         }
         if (hit.userData && hit.userData.panelId) {
           handlePanelClickRef.current(hit.userData.panelId);
+          requestRender(30);
         }
       }
     };
 
     const handlePointerUp = (e: MouseEvent | TouchEvent) => {
+      requestRender(30);
       if ('changedTouches' in e) {
         lastTouchTime = Date.now();
       } else if (Date.now() - lastTouchTime < 500) {
@@ -1042,7 +1120,6 @@ export function Interactive3DVehicleInspectionModel({
     };
 
     const handleCanvasClick = (e: MouseEvent) => {
-      // Handled via processClickOrTap in pointerUp/touchend to avoid duplicate triggers
       if (e.button === 2 || e.shiftKey) return;
     };
 
@@ -1050,10 +1127,12 @@ export function Interactive3DVehicleInspectionModel({
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const zoomSpeed = 0.005;
-      const dir = new THREE.Vector3().subVectors(camera.position, targetFocus).normalize();
+      _tmpDir.subVectors(camera.position, targetFocus).normalize();
       const dist = camera.position.distanceTo(targetFocus);
       const newDist = Math.max(2.0, Math.min(12.0, dist + e.deltaY * zoomSpeed));
-      camera.position.copy(dir.multiplyScalar(newDist).add(targetFocus));
+      camera.position.copy(_tmpDir.multiplyScalar(newDist).add(targetFocus));
+      targetCamPosRef.current.copy(camera.position);
+      requestRender(25);
     };
 
     // Prevent default right-click menu within WebGL container
@@ -1073,26 +1152,138 @@ export function Interactive3DVehicleInspectionModel({
     domElem.addEventListener('touchmove', handlePointerMove);
     window.addEventListener('touchend', handlePointerUp);
 
-    // 8. Animation Loop
-    let animationFrameId: number;
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+    // 8. On-Demand Render Loop with Eco-Thermal Optimization (Zero CPU/GPU heating)
+    let animationFrameId: number = 0;
+    let renderFramesRemaining = 120; // Initial gentle ~2s intro showcase, then rests
+    let isLoopActive = false;
+    let isIntersecting = true;
+    let isDocVisible = !document.hidden;
 
-      // Idle subtle spin if not interacting
-      if (!isMouseDown && !isPanning) {
-        carGroup.rotation.y += 0.0015;
+    const requestRender = (frames = 30) => {
+      renderFramesRemaining = Math.max(renderFramesRemaining, frames);
+      if (!isLoopActive && isIntersecting && isDocVisible) {
+        isLoopActive = true;
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    requestRenderRef.current = requestRender;
+
+    const animate = () => {
+      // Abort if tab is hidden or element is offscreen to preserve zero CPU/GPU cycles
+      if (!isIntersecting || !isDocVisible) {
+        isLoopActive = false;
+        return;
       }
 
-      // Smoothly focus camera onto current focus target
-      camera.lookAt(targetFocus);
+      // Smooth camera interpolation towards target position & focus
+      let isCamMoving = false;
+      const camDist = camera.position.distanceTo(targetCamPosRef.current);
+      if (camDist > 0.01) {
+        isCamMoving = true;
+        camera.position.lerp(targetCamPosRef.current, 0.14);
+      } else {
+        camera.position.copy(targetCamPosRef.current);
+      }
 
+      const focusDist = targetFocus.distanceTo(targetFocusPosRef.current);
+      if (focusDist > 0.005) {
+        isCamMoving = true;
+        targetFocus.lerp(targetFocusPosRef.current, 0.14);
+      } else {
+        targetFocus.copy(targetFocusPosRef.current);
+      }
+
+      // Smooth door / bonnet / boot opening hinge transitions
+      let isHingesMoving = false;
+      const h = hingedGroupsRef.current;
+      if (h) {
+        const t = targetHingeAnglesRef.current;
+        const lerpAngle = (curr: number, tgt: number) => {
+          const diff = tgt - curr;
+          if (Math.abs(diff) > 0.003) {
+            isHingesMoving = true;
+            return curr + diff * 0.18;
+          }
+          return tgt;
+        };
+        if (h.doorLhsFront) h.doorLhsFront.rotation.y = lerpAngle(h.doorLhsFront.rotation.y, t.doorLhs);
+        if (h.doorRhsFront) h.doorRhsFront.rotation.y = lerpAngle(h.doorRhsFront.rotation.y, t.doorRhs);
+        if (h.doorLhsRear) h.doorLhsRear.rotation.y = lerpAngle(h.doorLhsRear.rotation.y, t.doorLhs);
+        if (h.doorRhsRear) h.doorRhsRear.rotation.y = lerpAngle(h.doorRhsRear.rotation.y, t.doorRhs);
+        if (h.hoodBonnet) h.hoodBonnet.rotation.x = lerpAngle(h.hoodBonnet.rotation.x, t.bonnet);
+        if (h.bootTrunk) h.bootTrunk.rotation.x = lerpAngle(h.bootTrunk.rotation.x, t.boot);
+      }
+
+      // Gentle intro spin only during initial presentation frames
+      if (renderFramesRemaining > 40 && !isMouseDown && !isPanning) {
+        carGroup.rotation.y += 0.0012;
+      }
+
+      camera.lookAt(targetFocus);
       renderer.render(scene, camera);
+
+      if (renderFramesRemaining > 0) {
+        renderFramesRemaining--;
+      }
+
+      // Check whether next frame is needed
+      const hasPendingMotion = isMouseDown || isPanning || isCamMoving || isHingesMoving || renderFramesRemaining > 0;
+      if (hasPendingMotion) {
+        animationFrameId = requestAnimationFrame(animate);
+      } else {
+        isLoopActive = false; // Gracefully pauses rendering until next user action
+      }
     };
-    animate();
+
+    // Start initial intro frame
+    isLoopActive = true;
+    animationFrameId = requestAnimationFrame(animate);
+
+    // Responsive Canvas Resize Observer
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width;
+          const h = compact ? 360 : 480;
+          if (w > 0 && camera && renderer) {
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            requestRender(5);
+          }
+        }
+      });
+      resizeObserver.observe(container);
+    }
+
+    // Visibility & Intersection Observers
+    let intersectionObserver: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== 'undefined' && container) {
+      intersectionObserver = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        isIntersecting = entry.isIntersecting;
+        if (isIntersecting) {
+          requestRender(30);
+        }
+      }, { threshold: 0.05 });
+      intersectionObserver.observe(container);
+    }
+
+    const handleVisibilityChange = () => {
+      isDocVisible = !document.hidden;
+      if (isDocVisible) {
+        requestRender(30);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Clean up
     return () => {
       cancelAnimationFrame(animationFrameId);
+      if (resizeObserver) resizeObserver.disconnect();
+      if (intersectionObserver) intersectionObserver.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       domElem.removeEventListener('mousedown', handlePointerDown);
       domElem.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('mouseup', handlePointerUp);
@@ -1108,23 +1299,19 @@ export function Interactive3DVehicleInspectionModel({
 
   // Update Door/Bonnet/Boot Open Hinges Animation
   useEffect(() => {
-    const h = hingedGroupsRef.current;
-    if (!h) return;
-
     // Smooth target angles
     const doorAngleLHS = doorsOpen ? Math.PI / 3 : 0;
     const doorAngleRHS = doorsOpen ? -Math.PI / 3 : 0;
     const bonnetAngle = bonnetOpen ? -Math.PI / 3.5 : 0;
     const bootAngle = dickyOpen ? Math.PI / 3.2 : 0;
 
-    // Since LHS and RHS coordinates are mirrored for standard viewport intuition, LHS door is on +x and RHS is on -x.
-    // Thus we swap the rotation angles to open outward.
-    if (h.doorLhsFront) h.doorLhsFront.rotation.y = doorAngleRHS;
-    if (h.doorRhsFront) h.doorRhsFront.rotation.y = doorAngleLHS;
-    if (h.doorLhsRear) h.doorLhsRear.rotation.y = doorAngleRHS;
-    if (h.doorRhsRear) h.doorRhsRear.rotation.y = doorAngleLHS;
-    if (h.hoodBonnet) h.hoodBonnet.rotation.x = bonnetAngle;
-    if (h.bootTrunk) h.bootTrunk.rotation.x = bootAngle;
+    targetHingeAnglesRef.current = {
+      doorLhs: doorAngleRHS,
+      doorRhs: doorAngleLHS,
+      bonnet: bonnetAngle,
+      boot: bootAngle
+    };
+    requestRenderRef.current(45);
   }, [doorsOpen, bonnetOpen, dickyOpen]);
 
   // Track panel switches to reactivate floating pill
@@ -1137,6 +1324,7 @@ export function Interactive3DVehicleInspectionModel({
     } else {
       previousPanelIdRef.current = null;
     }
+    requestRenderRef.current(20);
   }, [activePanelId]);
 
   // Automatically clear selected 3D panel floating pill after 3.5 seconds to keep screen clean
@@ -1151,39 +1339,37 @@ export function Interactive3DVehicleInspectionModel({
 
   // Update Camera Preset Views
   useEffect(() => {
-    const cam = cameraRef.current;
-    if (!cam) return;
-
     switch (cameraPreset) {
       case 'ISO':
-        cam.position.set(4.5, 2.5, 5.5);
-        cam.lookAt(0, 0, 0);
+        targetCamPosRef.current.set(4.5, 2.5, 5.5);
+        targetFocusPosRef.current.set(0, 0.4, 0);
         break;
       case 'FRONT':
-        cam.position.set(0, 1.2, 5.5);
-        cam.lookAt(0, 0.5, 1.2);
+        targetCamPosRef.current.set(0, 1.2, 5.5);
+        targetFocusPosRef.current.set(0, 0.5, 1.2);
         break;
       case 'REAR':
-        cam.position.set(0, 1.2, -5.5);
-        cam.lookAt(0, 0.5, -1.2);
+        targetCamPosRef.current.set(0, 1.2, -5.5);
+        targetFocusPosRef.current.set(0, 0.5, -1.2);
         break;
       case 'LHS':
-        cam.position.set(-5.5, 1.2, 0);
-        cam.lookAt(0, 0.6, 0);
+        targetCamPosRef.current.set(-5.5, 1.2, 0);
+        targetFocusPosRef.current.set(0, 0.6, 0);
         break;
       case 'RHS':
-        cam.position.set(5.5, 1.2, 0);
-        cam.lookAt(0, 0.6, 0);
+        targetCamPosRef.current.set(5.5, 1.2, 0);
+        targetFocusPosRef.current.set(0, 0.6, 0);
         break;
       case 'TOP':
-        cam.position.set(0, 7.5, 0.01);
-        cam.lookAt(0, 0, 0);
+        targetCamPosRef.current.set(0, 7.5, 0.01);
+        targetFocusPosRef.current.set(0, 0.4, 0);
         break;
       case 'UNDERBODY':
-        cam.position.set(0, -4.5, 0.1);
-        cam.lookAt(0, 0, 0);
+        targetCamPosRef.current.set(0, -4.5, 0.1);
+        targetFocusPosRef.current.set(0, 0.4, 0);
         break;
     }
+    requestRenderRef.current(50);
   }, [cameraPreset]);
 
   // Update Component Isolation & Mesh Visibility in real-time
@@ -1253,9 +1439,10 @@ export function Interactive3DVehicleInspectionModel({
       setCameraPreset('FRONT');
     } else if (isolatedComponent === 'Dicky') {
       setCameraPreset('REAR');
-    } else if (isolatedComponent === 'Doors') {
+    } else    if (isolatedComponent === 'Doors') {
       setCameraPreset('ISO');
     }
+    requestRenderRef.current(30);
   }, [isolatedComponent, dickyOpen, bonnetOpen, cameraPreset, effectiveInspections, selectedPanelIds]);
 
   // Handle AR Camera Feed Stream allocation and release
@@ -1304,32 +1491,13 @@ export function Interactive3DVehicleInspectionModel({
       scene.background = new THREE.Color(0xe2e8f0);
       scene.fog = new THREE.FogExp2(0xe2e8f0, 0.02);
     }
+    requestRenderRef.current(20);
   }, [isArMode]);
 
   // Update Material Colors based on Selected Inspections & Paint Scope
   useEffect(() => {
     const carGroup = carGroupRef.current;
     if (!carGroup) return;
-
-    // Helper to generate half-colored high-contrast texture on the fly for partial paint scope
-    const makeHalfColorTexture = (colorStr: string) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Fill left half with high-contrast highlight color
-        ctx.fillStyle = colorStr;
-        ctx.fillRect(0, 0, 64, 128);
-        // Fill right half with default pearl white background
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(64, 0, 64, 128);
-      }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      return texture;
-    };
 
     carGroup.traverse((child) => {
       if (!(child as THREE.Mesh).isMesh) return;
@@ -1346,13 +1514,8 @@ export function Interactive3DVehicleInspectionModel({
       const mat = mesh.material as THREE.MeshStandardMaterial;
       if (!mat) return;
 
-      // Clean up previous map if any to prevent memory leaks
-      if (mat.map) {
-        mat.map.dispose();
-        mat.map = null;
-      }
-
       if (!isSelected) {
+        if (mat.map) mat.map = null;
         if (isHovered) {
           // Hovered unselected panel: Subtle cyan glow highlight
           mat.color.setHex(0xe2e8f0);
@@ -1369,28 +1532,27 @@ export function Interactive3DVehicleInspectionModel({
         switch (scope) {
           case 'PARTIAL_TOUCHUP':
             if (isInnerJamb) {
-              // Inner jamb is completely uncolored (default pearl white) for partial outer touchup
+              if (mat.map) mat.map = null;
               mat.color.setHex(0xf8fafc);
               mat.emissive.setHex(0x000000);
               mat.emissiveIntensity = 0;
             } else {
-              // "On selecting partial paint half panel should show colour"
-              const tex = makeHalfColorTexture('#06b6d4');
+              // Cached half-color texture prevents garbage collector thrashing
+              const tex = getCachedHalfColorTexture('#06b6d4');
               mat.map = tex;
-              mat.color.setHex(0xffffff); // White modulation so the canvas texture colors display perfectly
+              mat.color.setHex(0xffffff);
               mat.emissive.setHex(0x082f49);
               mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             }
             break;
 
           case 'INSIDE_JAMB':
+            if (mat.map) mat.map = null;
             if (isInnerJamb) {
-              // "in selecting inside only the inside panel should show colour not outside panel"
-              mat.color.setHex(0x10b981); // Beautiful Emerald Green representing inside jamb
+              mat.color.setHex(0x10b981);
               mat.emissive.setHex(0x064e3b);
               mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
             } else {
-              // Outer panel is completely uncolored (default pearl white) for inside jamb only paint
               mat.color.setHex(0xf8fafc);
               mat.emissive.setHex(0x000000);
               mat.emissiveIntensity = 0;
@@ -1398,8 +1560,7 @@ export function Interactive3DVehicleInspectionModel({
             break;
 
           case 'FULL_OUTER_AND_INSIDE':
-            // "On selecting inside plus outside panel both outside and inside should show colour"
-            // High contrast glowing gold for both outside and inside jamb
+            if (mat.map) mat.map = null;
             mat.color.setHex(0xeab308);
             mat.emissive.setHex(0x713f12);
             mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
@@ -1407,13 +1568,12 @@ export function Interactive3DVehicleInspectionModel({
 
           case 'FULL_OUTER':
           default:
+            if (mat.map) mat.map = null;
             if (isInnerJamb) {
-              // Inner jamb is completely uncolored for full outer-only paint
               mat.color.setHex(0xf8fafc);
               mat.emissive.setHex(0x000000);
               mat.emissiveIntensity = 0;
             } else {
-              // Outer panel: High-Gloss Amber/Gold
               mat.color.setHex(0xf59e0b);
               mat.emissive.setHex(0x78350f);
               mat.emissiveIntensity = isHovered ? 0.8 : 0.4;
@@ -1423,6 +1583,7 @@ export function Interactive3DVehicleInspectionModel({
       }
       mat.needsUpdate = true;
     });
+    requestRenderRef.current(15);
   }, [effectiveInspections, selectedPanelIds, hoveredPanelId]);
 
   return (
@@ -1432,10 +1593,13 @@ export function Interactive3DVehicleInspectionModel({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" title="Eco-Thermal Optimized: Zero Idle CPU/GPU Load" />
             <h3 className="font-extrabold text-sm sm:text-base text-white">
               🚘 3D Vehicle Interactive Inspector (दरवाजा खोलकर अंदर पेंट देखें)
             </h3>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-[10px] font-bold text-emerald-400">
+              ❄️ Cool & Eco-Optimized
+            </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             3D गाड़ी को घुमाएं, दरवाजे/बोनट खोलें और अंदर (Inside Paint), बाहर (Outer Paint) या partial पेंट समझें।

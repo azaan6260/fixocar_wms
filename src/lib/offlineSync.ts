@@ -20,6 +20,7 @@ export function addToOfflineQueue(type: 'jobCardUpdate' | 'all') {
   };
   queue.push(newItem);
   localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  window.dispatchEvent(new CustomEvent('fixocar_offline_queue_changed'));
   
   dispatchToastNotification({
     title: 'Offline Update Cached ⚡',
@@ -41,6 +42,7 @@ export function getOfflineQueue(): PendingUpdate[] {
 export function clearOfflineQueue() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(SYNC_QUEUE_KEY);
+  window.dispatchEvent(new CustomEvent('fixocar_offline_queue_changed'));
 }
 
 export async function processOfflineQueue() {

@@ -21,17 +21,28 @@ export const OfflineIndicator: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial and periodic update for pending queue size
+    // Event-driven queue count update
     const updateQueueCount = () => {
       setPendingCount(getOfflineQueue().length);
     };
 
     updateQueueCount();
-    const interval = setInterval(updateQueueCount, 3000);
+
+    window.addEventListener('fixocar_offline_queue_changed', updateQueueCount);
+    window.addEventListener('storage', updateQueueCount);
+
+    // Infrequent check (45s) only if offline or pending items exist
+    const interval = setInterval(() => {
+      if (!navigator.onLine || getOfflineQueue().length > 0) {
+        updateQueueCount();
+      }
+    }, 45000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('fixocar_offline_queue_changed', updateQueueCount);
+      window.removeEventListener('storage', updateQueueCount);
       clearInterval(interval);
     };
   }, []);
