@@ -248,7 +248,7 @@ export function TechnicianTaskCard({
                 onClick={handleToggleSpeech}
                 className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                   isPlayingAudio 
-                    ? 'bg-rose-500 text-white animate-pulse border-rose-600' 
+                    ? 'bg-rose-500 text-white border-rose-600 shadow-sm' 
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:text-amber-500'
                 }`}
                 title="Click to hear task read out loud in Hindi"

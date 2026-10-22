@@ -50,7 +50,7 @@ export const OfflineIndicator: React.FC = () => {
   if (isOnline && pendingCount === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-2 max-w-sm rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-100 shadow-2xl animate-bounce-subtle">
+    <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-2 max-w-sm rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-100 shadow-2xl">
       {!isOnline ? (
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">

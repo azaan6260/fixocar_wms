@@ -529,7 +529,7 @@ export default function App() {
     if (!document.hidden) {
       startSyncTimer();
     }
-    window.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handleStoreUpdateEvent = () => {
       setJobCards(getJobCards());
@@ -548,7 +548,7 @@ export default function App() {
 
     return () => {
       clearInterval(syncInterval);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('open-supabase-modal', handleOpenSupabaseModal);
       window.removeEventListener('fixocar-store-updated', handleStoreUpdateEvent);
       window.removeEventListener('storage', handleStoreUpdateEvent);

@@ -1293,7 +1293,31 @@ export function Interactive3DVehicleInspectionModel({
       domElem.removeEventListener('touchstart', handlePointerDown);
       domElem.removeEventListener('touchmove', handlePointerMove);
       window.removeEventListener('touchend', handlePointerUp);
+
+      // Deep dispose all geometries, materials, and textures across the 3D scene to free mobile VRAM
+      scene.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) {
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((mat) => {
+                if ((mat as any).map) (mat as any).map.dispose();
+                mat.dispose();
+              });
+            } else {
+              if ((mesh.material as any).map) (mesh.material as any).map.dispose();
+              mesh.material.dispose();
+            }
+          }
+        }
+      });
+
       renderer.dispose();
+      if (renderer.forceContextLoss) {
+        renderer.forceContextLoss();
+      }
+      container.innerHTML = '';
     };
   }, [compact]);
 
@@ -1748,7 +1772,7 @@ export function Interactive3DVehicleInspectionModel({
           <div className="space-y-3">
             <div className="pb-2 border-b border-slate-800">
               <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                 <span>3D AR Control Panel</span>
               </h4>
               <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
@@ -1762,7 +1786,7 @@ export function Interactive3DVehicleInspectionModel({
                 <div>
                   <div className="text-[11px] font-black text-white flex items-center gap-1">
                     <span>🎥 AR Preview Mode</span>
-                    <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[8px] font-bold tracking-wider animate-pulse">LIVE</span>
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[8px] font-bold tracking-wider">LIVE</span>
                   </div>
                   <p className="text-[9.5px] text-slate-300 font-medium leading-normal mt-0.5">
                     असली गाड़ी पर 3D कार ओवरले करें। (Overlay 3D car on real car.)
@@ -1781,7 +1805,7 @@ export function Interactive3DVehicleInspectionModel({
               </div>
 
               {isArMode && (
-                <div className="text-[9px] text-emerald-400 font-extrabold flex items-center gap-1 mt-1 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 animate-pulse">
+                <div className="text-[9px] text-emerald-400 font-extrabold flex items-center gap-1 mt-1 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>🔴 Back Camera Active (Environment Mode)</span>
                 </div>
@@ -2014,7 +2038,7 @@ export function Interactive3DVehicleInspectionModel({
                 onClick={() => speakPanelInfo(activePanelObj)}
                 className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
                   isSpeaking
-                    ? 'bg-rose-500 text-white border-rose-400 animate-pulse'
+                    ? 'bg-rose-500 text-white border-rose-400 shadow-sm'
                     : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-slate-950'
                 }`}
               >

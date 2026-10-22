@@ -594,7 +594,7 @@ export function DashboardOverview({
         <div className="bg-amber-500/10 border-2 border-amber-500/40 dark:border-amber-500/30 p-5 rounded-3xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
               <h2 className="text-sm font-black text-amber-950 dark:text-amber-200 uppercase tracking-wider flex items-center gap-2">
                 ⚡ Manager Action Desk: Pending Part Requisitions & Floor Concerns
               </h2>
@@ -905,7 +905,7 @@ export function DashboardOverview({
                           </td>
                           <td className="px-4 py-3.5">
                             <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
-                              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                              <span className="w-2 h-2 rounded-full bg-blue-600" />
                               {card.status.replace(/_/g, ' ')}
                             </span>
                           </td>
@@ -1034,7 +1034,7 @@ export function DashboardOverview({
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                 Pending Approvals
               </h2>
-              <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">
+              <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-xs">
                 {estimatePending.length} URGENT
               </span>
             </div>
@@ -1107,7 +1107,7 @@ export function DashboardOverview({
                 Latest Logistics Status
               </p>
               <div className="flex items-center gap-2 text-xs font-medium text-indigo-950 dark:text-indigo-200">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span>Driver assigned • GPS tracking live</span>
               </div>
             </div>

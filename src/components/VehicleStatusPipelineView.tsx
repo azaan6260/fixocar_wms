@@ -502,7 +502,7 @@ export function VehicleStatusPipelineView({
                                   {card.id}
                                 </span>
                                 {card.isUrgent && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 animate-pulse">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
                                     <Flame className="w-2.5 h-2.5" />
                                     Urgent
                                   </span>

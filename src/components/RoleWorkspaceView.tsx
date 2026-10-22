@@ -570,7 +570,7 @@ export function RoleWorkspaceView({
                             className="w-full p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 flex items-center justify-between text-xs font-black transition-all cursor-pointer"
                           >
                             <span className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                               <span>🚗 3D AR बॉडी पैनल्स एवं डेंट/पेंट डायग्राम (3D Inspection Map)</span>
                               <span className="text-[10px] text-slate-400">({allottedPanelIds.length} Panels)</span>
                             </span>
