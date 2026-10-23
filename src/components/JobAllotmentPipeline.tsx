@@ -336,7 +336,21 @@ export function JobAllotmentPipeline({
       return inspection && inspection.selected;
     });
 
-    onTasksChange(finalTasks);
+    // 3. Deduplicate finalTasks so that at most one PAINT task exists per panelKey
+    const seenPaintPanels = new Set<string>();
+    const deduplicatedTasks = finalTasks.filter(t => {
+      if (t.category !== 'PAINT') return true;
+      const matchedDef = matchTaskToPanelDef(t);
+      const key = (t.panelKey || matchedDef?.id || '').toLowerCase();
+      if (!key) return true;
+      if (seenPaintPanels.has(key)) {
+        return false;
+      }
+      seenPaintPanels.add(key);
+      return true;
+    });
+
+    onTasksChange(deduplicatedTasks);
   };
 
   const chartSelectedPanelIds = useMemo(() => Array.from(new Set(selectedTasks.filter(t => t.category === 'PAINT').map(t => {

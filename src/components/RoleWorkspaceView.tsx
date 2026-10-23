@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { UserRole, JobCard } from '../types';
 import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary, getVehicleCheckIns } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
@@ -32,7 +32,7 @@ interface RoleWorkspaceViewProps {
   onOpenCustomerApprovalPortal: (id: string) => void;
 }
 
-export function RoleWorkspaceView({
+export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
   currentRole,
   jobCards,
   onOpenJobCard,
@@ -57,13 +57,15 @@ export function RoleWorkspaceView({
     setOnlyMyTasks(!isActualAdminOrManager);
   }, [currentRole, isActualAdminOrManager]);
 
-  const activeTradeEmployees = getEmployees().filter(e => {
-    if (currentRole === 'PAINTER') return e.role === 'PAINTER' || e.specializedTeam === 'Paint';
-    if (currentRole === 'DENTER') return e.role === 'DENTER' || e.specializedTeam === 'Denting';
-    if (currentRole === 'MECHANIC') return e.role === 'MECHANIC' || e.specializedTeam === 'Mechanical';
-    if (currentRole === 'DELIVERY_BOY') return e.role === 'DELIVERY_BOY';
-    return false;
-  });
+  const activeTradeEmployees = useMemo(() => {
+    return getEmployees().filter(e => {
+      if (currentRole === 'PAINTER') return e.role === 'PAINTER' || e.specializedTeam === 'Paint';
+      if (currentRole === 'DENTER') return e.role === 'DENTER' || e.specializedTeam === 'Denting';
+      if (currentRole === 'MECHANIC') return e.role === 'MECHANIC' || e.specializedTeam === 'Mechanical';
+      if (currentRole === 'DELIVERY_BOY') return e.role === 'DELIVERY_BOY';
+      return false;
+    });
+  }, [currentRole]);
   
   // Account summary for logged-in contractor / vendor / technician
   const userAccountName = authUser?.name || authUser?.employeeId || authUser?.vendorId || '';
@@ -84,7 +86,7 @@ export function RoleWorkspaceView({
   const { t } = useI18n();
 
   // Group allotted tasks by vehicle / job card
-  const getVehiclesWithTasks = () => {
+  const vehicleGroups = useMemo(() => {
     const result: {
       card: JobCard;
       assignedTasks: JobCard['tasks'];
@@ -215,39 +217,34 @@ export function RoleWorkspaceView({
     });
 
     return result;
-  };
-
-  const vehicleGroups = getVehiclesWithTasks();
+  }, [jobCards, currentRole, isAdminOrManager, authUser, selectedEmployeeId, onlyMyTasks]);
 
   // Keep track of which vehicle cards are expanded
   const [expandedCardIds, setExpandedCardIds] = useState<string[]>(() => {
     return vehicleGroups.length > 0 ? [vehicleGroups[0].card.id] : [];
   });
 
-  const toggleExpandCard = (cardId: string) => {
+  const toggleExpandCard = useCallback((cardId: string) => {
     setExpandedCardIds(prev => 
       prev.includes(cardId) ? prev.filter(id => id !== cardId) : [...prev, cardId]
     );
-  };
+  }, []);
 
   const [showARMapForCard, setShowARMapForCard] = useState<Record<string, boolean>>({});
   const [taskStatusFilter, setTaskStatusFilter] = useState<Record<string, 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>>({});
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [requestWorkCard, setRequestWorkCard] = useState<JobCard | null>(null);
 
-  const handleScannedPlate = (regNum: string) => {
+  const handleScannedPlate = useCallback((regNum: string) => {
     const activeCard = jobCards.find(
       j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === regNum && 
            j.status !== 'CLOSED' && j.status !== 'DELIVERED'
     );
 
     if (activeCard) {
-      alert(`Found active job card for ${regNum}. Opening it...`);
       onOpenJobCard(activeCard.id);
-    } else {
-      alert(`No active job card found for ${regNum}.`);
     }
-  };
+  }, [jobCards, onOpenJobCard]);
 
   const getVehiclePhoto = (c: JobCard): string | null => {
     if (c.vehicle?.photoUrl) return c.vehicle.photoUrl;
@@ -698,4 +695,4 @@ export function RoleWorkspaceView({
       )}
     </div>
   );
-}
+});

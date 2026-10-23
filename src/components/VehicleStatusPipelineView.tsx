@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { JobCard, JobCardStatus, UserRole, VehicleCheckIn, FuelType } from '../types';
 import { updateJobCard, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { 
@@ -186,7 +186,243 @@ const ALL_STATUS_OPTIONS: { value: JobCardStatus; label: string }[] = [
   { value: 'CLOSED', label: '11. Closed' },
 ];
 
-export function VehicleStatusPipelineView({
+const NEXT_STAGE_MAP: Record<string, { status: JobCardStatus; label: string }> = {
+  CREATED: { status: 'JOB_ALLOCATED', label: 'Allot' },
+  CHECKED_IN: { status: 'JOB_ALLOCATED', label: 'Allot' },
+  INSPECTED: { status: 'JOB_ALLOCATED', label: 'Allot' },
+  INSPECTION: { status: 'JOB_ALLOCATED', label: 'Allot' },
+  AWAITING_APPROVAL: { status: 'IN_PROGRESS', label: 'Start WIP' },
+  ESTIMATE_PENDING: { status: 'IN_PROGRESS', label: 'Start WIP' },
+  JOB_ALLOCATED: { status: 'IN_PROGRESS', label: 'Start WIP' },
+  ALLOTTED: { status: 'IN_PROGRESS', label: 'Start WIP' },
+  IN_PROGRESS: { status: 'QC_PENDING', label: 'To QC' },
+  WAITING_PARTS: { status: 'IN_PROGRESS', label: 'Resume' },
+  SUBLET_WORK: { status: 'IN_PROGRESS', label: 'Resume' },
+  QC_PENDING: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
+  PDI_QC: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
+  READY_FOR_DELIVERY: { status: 'DELIVERED', label: 'Deliver' },
+};
+
+interface PipelineCardItemProps {
+  card: JobCard;
+  isMenuOpen: boolean;
+  onToggleStatusMenu: (cardId: string) => void;
+  onUpdateStatus: (cardId: string, newStatus: JobCardStatus) => void;
+  onOpenRequisitionModal: (card: JobCard) => void;
+  onSelectJobCard: (cardId: string) => void;
+}
+
+const PipelineCardItem = React.memo(function PipelineCardItem({
+  card,
+  isMenuOpen,
+  onToggleStatusMenu,
+  onUpdateStatus,
+  onOpenRequisitionModal,
+  onSelectJobCard,
+}: PipelineCardItemProps) {
+  const completedCount = card.tasks.filter((t) => t.status === 'COMPLETED').length;
+  const progress = card.tasks.length ? Math.round((completedCount / card.tasks.length) * 100) : 0;
+  const totalBill = card.tasks.reduce((acc, t) => acc + (t.customerPrice || 0), 0);
+  const hasSublet = card.tasks.some((t) => t.category === 'SUBLET_VENDOR');
+  const nextAction = NEXT_STAGE_MAP[card.status];
+
+  // Assigned Technicians strip
+  const techSet = new Set<string>();
+  card.tasks.forEach((t) => {
+    if (t.assignedPainterName) techSet.add(`🎨 ${t.assignedPainterName}`);
+    if (t.assignedDenterName) techSet.add(`🔨 ${t.assignedDenterName}`);
+    if (
+      t.assignedEmployeeName &&
+      t.assignedEmployeeName !== t.assignedPainterName &&
+      t.assignedEmployeeName !== t.assignedDenterName
+    ) {
+      techSet.add(`🔧 ${t.assignedEmployeeName}`);
+    }
+  });
+  const techs = Array.from(techSet);
+  const unassigned = card.tasks.filter(
+    (t) => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId
+  ).length;
+
+  return (
+    <div
+      key={card.id}
+      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all shadow-xs p-3.5 space-y-3 relative group"
+    >
+      {/* Card Reg Number & JC ID */}
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+              {card.id}
+            </span>
+            {card.isUrgent && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
+                <Flame className="w-2.5 h-2.5" />
+                Urgent
+              </span>
+            )}
+            {card.isCars24 && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-orange-600 text-white">
+                Cars24
+              </span>
+            )}
+          </div>
+          <h4 className="font-black text-base text-slate-900 dark:text-slate-100 tracking-tight font-mono mt-1">
+            {card.vehicle.registrationNumber}
+          </h4>
+          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            {card.vehicle.make} {card.vehicle.model}
+          </p>
+        </div>
+
+        {/* Status Change Trigger Button */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => onToggleStatusMenu(card.id)}
+            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            title="Change Status"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Status Dropdown Menu */}
+          {isMenuOpen && (
+            <div className="absolute right-0 top-8 z-50 w-52 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-1.5 space-y-1 animate-in fade-in duration-100 text-xs">
+              <div className="px-2 py-1 text-[10px] font-black uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
+                Move Vehicle To Stage:
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-0.5">
+                {ALL_STATUS_OPTIONS.map((opt) => {
+                  const isCurrent = card.status === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => onUpdateStatus(card.id, opt.value)}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors cursor-pointer ${
+                        isCurrent
+                          ? 'bg-blue-600 text-white font-bold'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {isCurrent && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Customer Row */}
+      <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
+        <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1">
+          <User className="w-3 h-3 text-slate-400 shrink-0" />
+          <span className="truncate">{card.customer.name}</span>
+        </span>
+        <a
+          href={`tel:${card.customer.phone}`}
+          className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 shrink-0 ml-1"
+        >
+          <Phone className="w-3 h-3" />
+          <span>{card.customer.phone}</span>
+        </a>
+      </div>
+
+      {/* Progress Bar */}
+      <div>
+        <div className="flex items-center justify-between text-[11px] mb-1 font-semibold">
+          <span className="text-slate-500">Tasks Done</span>
+          <span className="font-mono text-blue-600 dark:text-blue-400 font-extrabold">
+            {completedCount}/{card.tasks.length} ({progress}%)
+          </span>
+        </div>
+        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div
+            className="bg-blue-600 h-full transition-all duration-300 rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Assigned Technicians Strip */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {techs.slice(0, 2).map((label, i) => (
+          <span
+            key={i}
+            className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold truncate max-w-[130px]"
+          >
+            {label}
+          </span>
+        ))}
+        {techs.length > 2 && (
+          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold">
+            +{techs.length - 2}
+          </span>
+        )}
+        {unassigned > 0 && card.status !== 'DELIVERED' && card.status !== 'CLOSED' && (
+          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold">
+            {unassigned} Unallotted
+          </span>
+        )}
+        {hasSublet && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+            <Building2 className="w-2.5 h-2.5" />
+            Sublet
+          </span>
+        )}
+      </div>
+
+      {/* Card Footer Actions & Bill */}
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[9px] text-slate-400 uppercase font-bold">Est. Bill</p>
+          <p className="text-xs font-black font-mono text-slate-900 dark:text-slate-100">
+            ₹{totalBill.toLocaleString('en-IN')}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenRequisitionModal(card)}
+            className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-700 dark:text-amber-300 hover:text-slate-950 transition-colors cursor-pointer"
+            title="Parts Requisition"
+          >
+            <PackageCheck className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Quick 1-Click Next Stage Button */}
+          {nextAction && (
+            <button
+              type="button"
+              onClick={() => onUpdateStatus(card.id, nextAction.status)}
+              className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-600 text-blue-600 dark:text-blue-400 hover:text-white border border-blue-200 dark:border-blue-800/60 text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer"
+              title={`Advance to ${nextAction.status.replace(/_/g, ' ')}`}
+            >
+              {nextAction.label} →
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onSelectJobCard(card.id)}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-0.5 shadow-xs active:scale-95 cursor-pointer"
+          >
+            <span>Open</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipelineView({
   jobCards,
   currentRole,
   onSelectJobCard,
@@ -294,14 +530,26 @@ export function VehicleStatusPipelineView({
     return jobCards.filter(c => c.status !== 'DELIVERED' && c.status !== 'CLOSED').length;
   }, [jobCards]);
 
-  const handleUpdateStatus = (cardId: string, newStatus: JobCardStatus) => {
+  const handleUpdateStatus = useCallback((cardId: string, newStatus: JobCardStatus) => {
     updateJobCard(cardId, (prev) => ({
       ...prev,
       status: newStatus,
       checkedOutAt: newStatus === 'DELIVERED' || newStatus === 'CLOSED' ? (prev.checkedOutAt || new Date().toISOString()) : prev.checkedOutAt
     }));
     setStatusMenuCardId(null);
-  };
+  }, []);
+
+  const handleToggleStatusMenu = useCallback((cardId: string) => {
+    setStatusMenuCardId((prev) => (prev === cardId ? null : cardId));
+  }, []);
+
+  const handleOpenRequisitionModal = useCallback((card: JobCard) => {
+    setRequisitionCard(card);
+  }, []);
+
+  const handleSelectJobCard = useCallback((cardId: string) => {
+    onSelectJobCard(cardId);
+  }, [onSelectJobCard]);
 
   return (
     <div className="space-y-5">
@@ -482,225 +730,17 @@ export function VehicleStatusPipelineView({
                       <p className="text-[10px]">in {col.shortLabel} status</p>
                     </div>
                   ) : (
-                    col.cards.map((card) => {
-                      const completedCount = card.tasks.filter(t => t.status === 'COMPLETED').length;
-                      const progress = card.tasks.length ? Math.round((completedCount / card.tasks.length) * 100) : 0;
-                      const totalBill = card.tasks.reduce((acc, t) => acc + (t.customerPrice || 0), 0);
-                      const hasSublet = card.tasks.some(t => t.category === 'SUBLET_VENDOR');
-                      const isMenuOpen = statusMenuCardId === card.id;
-
-                      return (
-                        <div
-                          key={card.id}
-                          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all shadow-xs p-3.5 space-y-3 relative group"
-                        >
-                          {/* Card Reg Number & JC ID */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                  {card.id}
-                                </span>
-                                {card.isUrgent && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
-                                    <Flame className="w-2.5 h-2.5" />
-                                    Urgent
-                                  </span>
-                                )}
-                                {card.isCars24 && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-orange-600 text-white">
-                                    Cars24
-                                  </span>
-                                )}
-                              </div>
-                              <h4 className="font-black text-base text-slate-900 dark:text-slate-100 tracking-tight font-mono mt-1">
-                                {card.vehicle.registrationNumber}
-                              </h4>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                {card.vehicle.make} {card.vehicle.model}
-                              </p>
-                            </div>
-
-                            {/* Status Change Trigger Button */}
-                            <div className="relative shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setStatusMenuCardId(isMenuOpen ? null : card.id)}
-                                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-slate-300 text-xs font-bold flex items-center gap-1 transition-colors"
-                                title="Change Status"
-                              >
-                                <ArrowRightLeft className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Status Dropdown Menu */}
-                              {isMenuOpen && (
-                                <div className="absolute right-0 top-8 z-50 w-52 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-1.5 space-y-1 animate-in fade-in duration-100 text-xs">
-                                  <div className="px-2 py-1 text-[10px] font-black uppercase text-slate-400 border-b border-slate-100 dark:border-slate-700">
-                                    Move Vehicle To Stage:
-                                  </div>
-                                  <div className="max-h-56 overflow-y-auto space-y-0.5">
-                                    {ALL_STATUS_OPTIONS.map((opt) => {
-                                      const isCurrent = card.status === opt.value;
-                                      return (
-                                        <button
-                                          key={opt.value}
-                                          type="button"
-                                          onClick={() => handleUpdateStatus(card.id, opt.value)}
-                                          className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors ${
-                                            isCurrent
-                                              ? 'bg-blue-600 text-white font-bold'
-                                              : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
-                                          }`}
-                                        >
-                                          <span className="truncate">{opt.label}</span>
-                                          {isCurrent && <Check className="w-3.5 h-3.5" />}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Customer Row */}
-                          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
-                            <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1">
-                              <User className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{card.customer.name}</span>
-                            </span>
-                            <a
-                              href={`tel:${card.customer.phone}`}
-                              className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 shrink-0 ml-1"
-                            >
-                              <Phone className="w-3 h-3" />
-                              <span>{card.customer.phone}</span>
-                            </a>
-                          </div>
-
-                          {/* Progress Bar */}
-                          <div>
-                            <div className="flex items-center justify-between text-[11px] mb-1 font-semibold">
-                              <span className="text-slate-500">Tasks Done</span>
-                              <span className="font-mono text-blue-600 dark:text-blue-400 font-extrabold">
-                                {completedCount}/{card.tasks.length} ({progress}%)
-                              </span>
-                            </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                              <div
-                                className="bg-blue-600 h-full transition-all duration-300 rounded-full"
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Assigned Technicians Strip */}
-                          {(() => {
-                            const techSet = new Set<string>();
-                            card.tasks.forEach(t => {
-                              if (t.assignedPainterName) techSet.add(`🎨 ${t.assignedPainterName}`);
-                              if (t.assignedDenterName) techSet.add(`🔨 ${t.assignedDenterName}`);
-                              if (t.assignedEmployeeName && t.assignedEmployeeName !== t.assignedPainterName && t.assignedEmployeeName !== t.assignedDenterName) {
-                                techSet.add(`🔧 ${t.assignedEmployeeName}`);
-                              }
-                            });
-                            const techs = Array.from(techSet);
-                            const unassigned = card.tasks.filter(t => !t.assignedEmployeeId && !t.assignedPainterId && !t.assignedDenterId).length;
-                            return (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {techs.slice(0, 2).map((label, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold truncate max-w-[130px]"
-                                  >
-                                    {label}
-                                  </span>
-                                ))}
-                                {techs.length > 2 && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold">
-                                    +{techs.length - 2}
-                                  </span>
-                                )}
-                                {unassigned > 0 && card.status !== 'DELIVERED' && card.status !== 'CLOSED' && (
-                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-                                    {unassigned} Unallotted
-                                  </span>
-                                )}
-                                {hasSublet && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                                    <Building2 className="w-2.5 h-2.5" />
-                                    Sublet
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-
-                          {/* Card Footer Actions & Bill */}
-                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                            <div>
-                              <p className="text-[9px] text-slate-400 uppercase font-bold">Est. Bill</p>
-                              <p className="text-xs font-black font-mono text-slate-900 dark:text-slate-100">
-                                ₹{totalBill.toLocaleString('en-IN')}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setRequisitionCard(card)}
-                                className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-700 dark:text-amber-300 hover:text-slate-950 transition-colors"
-                                title="Parts Requisition"
-                              >
-                                <PackageCheck className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Quick 1-Click Next Stage Button */}
-                              {(() => {
-                                const nextMap: Record<string, { status: JobCardStatus; label: string }> = {
-                                  CREATED: { status: 'JOB_ALLOCATED', label: 'Allot' },
-                                  CHECKED_IN: { status: 'JOB_ALLOCATED', label: 'Allot' },
-                                  INSPECTED: { status: 'JOB_ALLOCATED', label: 'Allot' },
-                                  INSPECTION: { status: 'JOB_ALLOCATED', label: 'Allot' },
-                                  AWAITING_APPROVAL: { status: 'IN_PROGRESS', label: 'Start WIP' },
-                                  ESTIMATE_PENDING: { status: 'IN_PROGRESS', label: 'Start WIP' },
-                                  JOB_ALLOCATED: { status: 'IN_PROGRESS', label: 'Start WIP' },
-                                  ALLOTTED: { status: 'IN_PROGRESS', label: 'Start WIP' },
-                                  IN_PROGRESS: { status: 'QC_PENDING', label: 'To QC' },
-                                  WAITING_PARTS: { status: 'IN_PROGRESS', label: 'Resume' },
-                                  SUBLET_WORK: { status: 'IN_PROGRESS', label: 'Resume' },
-                                  QC_PENDING: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
-                                  PDI_QC: { status: 'READY_FOR_DELIVERY', label: 'Mark Ready' },
-                                  READY_FOR_DELIVERY: { status: 'DELIVERED', label: 'Deliver' },
-                                };
-                                const nextAction = nextMap[card.status];
-                                if (!nextAction) return null;
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateStatus(card.id, nextAction.status)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-600 text-blue-600 dark:text-blue-400 hover:text-white border border-blue-200 dark:border-blue-800/60 text-[11px] font-extrabold transition-all active:scale-95"
-                                    title={`Advance to ${nextAction.status.replace(/_/g, ' ')}`}
-                                  >
-                                    {nextAction.label} →
-                                  </button>
-                                );
-                              })()}
-
-                              <button
-                                type="button"
-                                onClick={() => onSelectJobCard(card.id)}
-                                className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-black hover:bg-slate-800 dark:hover:bg-slate-200 transition-all flex items-center gap-0.5 shadow-xs active:scale-95"
-                              >
-                                <span>Open</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                        </div>
-                      );
-                    })
+                    col.cards.map((card) => (
+                      <PipelineCardItem
+                        key={card.id}
+                        card={card}
+                        isMenuOpen={statusMenuCardId === card.id}
+                        onToggleStatusMenu={handleToggleStatusMenu}
+                        onUpdateStatus={handleUpdateStatus}
+                        onOpenRequisitionModal={handleOpenRequisitionModal}
+                        onSelectJobCard={handleSelectJobCard}
+                      />
+                    ))
                   )}
                 </div>
 
@@ -722,4 +762,4 @@ export function VehicleStatusPipelineView({
 
     </div>
   );
-}
+});

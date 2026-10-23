@@ -243,8 +243,20 @@ export function Interactive3DVehicleInspectionModel({
     requestRenderRef.current(20);
   };
 
+  const lastClickRef = useRef<{ panelId: string; time: number }>({ panelId: '', time: 0 });
+
   // Toggle panel selection directly on 1-click (select or deselect)
   const handlePanelClick = (panelId: string, scope?: PaintScope) => {
+    const now = Date.now();
+    if (
+      !scope &&
+      lastClickRef.current.panelId === panelId &&
+      now - lastClickRef.current.time < 300
+    ) {
+      return; // Ignore duplicate bounce tap on same panel
+    }
+    lastClickRef.current = { panelId, time: now };
+
     if ((panelId === 'boot_floor' || panelId === 'boot_trunk') && !dickyOpen) {
       setDickyOpen(true);
     }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask, UserRole, StandardJob } from '../types';
 import { 
   updateJobCard, 
+  getJobCards,
   updateTaskStatus, 
   respondToCustomerApproval, 
   createDeliveryRecord, 
@@ -15,6 +16,7 @@ import {
   reassignAllPaintTasksForJobCard,
   deleteJobCard,
   deleteJobCardTask,
+  deleteJobCardPanelTasks,
   isCars24JobCard,
   getJobCardHistoryRecords,
   formatJobCardStatus,
@@ -1578,17 +1580,23 @@ export function JobCardDetailView({
                               const panelDef = allKnownPanels.find(p => p.id === panelId);
                               if (!panelDef) return;
 
-                              const existingTask = card.tasks.find(t =>
+                              // Query fresh card from storage to prevent stale closure duplicates
+                              const freshCard = getJobCards().find(c => c.id === card.id) || card;
+                              const matchingTasks = (freshCard.tasks || []).filter(t =>
                                 t.category === 'PAINT' && (
-                                  t.panelKey === panelId ||
+                                  (t.panelKey && t.panelKey.toLowerCase() === panelId.toLowerCase()) ||
                                   matchTaskToPanelDef(t)?.id === panelId
                                 )
                               );
 
                               if (!inspection.selected) {
-                                if (existingTask) {
-                                  deleteJobCardTask(card.id, existingTask.id);
+                                // If deselected, remove ALL matching panel tasks so zero duplicates or ghost tasks remain
+                                if (matchingTasks.length > 0) {
+                                  matchingTasks.forEach(t => {
+                                    deleteJobCardTask(card.id, t.id);
+                                  });
                                 }
+                                deleteJobCardPanelTasks(card.id, panelId);
                                 return;
                               }
 
@@ -1600,8 +1608,9 @@ export function JobCardDetailView({
                               const totalContractorPayout = painterPayout + denterPayout;
                               const dynamicTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
 
-                              if (existingTask) {
-                                updateJobCardTask(card.id, existingTask.id, {
+                              if (matchingTasks.length > 0) {
+                                const [primaryTask, ...duplicateTasks] = matchingTasks;
+                                updateJobCardTask(card.id, primaryTask.id, {
                                   title: dynamicTitle,
                                   paintScope: scope,
                                   customerPrice: price,
@@ -1611,6 +1620,10 @@ export function JobCardDetailView({
                                   estimatedCost: totalContractorPayout,
                                   panelKey: panelId,
                                   panelNameEn: panelDef.nameEn
+                                });
+                                // Clean up any lingering duplicate tasks for this panel
+                                duplicateTasks.forEach(dup => {
+                                  deleteJobCardTask(card.id, dup.id);
                                 });
                               } else {
                                 addStandardJobToJobCard(
@@ -1699,9 +1712,7 @@ export function JobCardDetailView({
                           </button>
                           <button
                             onClick={() => {
-                              if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
-                                deleteJobCardTask(card.id, task.id);
-                              }
+                              deleteJobCardTask(card.id, task.id);
                             }}
                             className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
                             title="Remove task from job card"

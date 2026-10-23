@@ -71,6 +71,7 @@ export function TaskDetailCard({
   const currentUser = getAuthUser();
   const [showProofModal, setShowProofModal] = useState(false);
   const [showARMap, setShowARMap] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Re-allot state
   const [isReallotting, setIsReallotting] = useState(false);
@@ -183,13 +184,12 @@ export function TaskDetailCard({
   };
 
   const handleDeleteTaskSubmit = () => {
-    if (window.confirm(`Are you sure you want to remove "${task.title}" from this job card?`)) {
-      if (onRemoveTask) {
-        onRemoveTask(task.id);
-      } else {
-        deleteJobCardTask(card.id, task.id);
-      }
+    if (onRemoveTask) {
+      onRemoveTask(task.id);
+    } else {
+      deleteJobCardTask(card.id, task.id);
     }
+    setConfirmDelete(false);
   };
   const handleReallotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,15 +395,36 @@ export function TaskDetailCard({
                   {isEditingTask ? 'Cancel Edit' : 'Edit & Allot Task'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleDeleteTaskSubmit}
-                  className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-900/50 flex items-center gap-1 transition-colors"
-                  title="Delete job from job card"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Delete Job</span>
-                </button>
+                {confirmDelete ? (
+                  <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                    <button
+                      type="button"
+                      onClick={handleDeleteTaskSubmit}
+                      className="text-[11px] font-black text-white bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm cursor-pointer"
+                      title="Confirm deletion"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Delete</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-1.5 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-900/50 flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Delete job from job card"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Delete Job</span>
+                  </button>
+                )}
               </>
             )}
 

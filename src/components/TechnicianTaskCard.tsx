@@ -65,7 +65,7 @@ const QUICK_ISSUES = [
   { text: 'Need Manager Approval (मैनेजर से बात करनी है)', icon: '👔' }
 ];
 
-export function TechnicianTaskCard({
+export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
   card,
   task,
   employees,
@@ -756,4 +756,4 @@ export function TechnicianTaskCard({
 
     </div>
   );
-}
+});

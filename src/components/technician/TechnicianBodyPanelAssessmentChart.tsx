@@ -832,9 +832,7 @@ export function TechnicianBodyPanelAssessmentChart({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (window.confirm(`Remove "${t.title}" from this panel?`)) {
-                                      deleteJobCardTask(card.id, t.id);
-                                    }
+                                    deleteJobCardTask(card.id, t.id);
                                   }}
                                   className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
                                   title="Remove job"
@@ -920,9 +918,7 @@ export function TechnicianBodyPanelAssessmentChart({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (window.confirm(`Remove "${t.title}" from this panel?`)) {
-                                      deleteJobCardTask(card.id, t.id);
-                                    }
+                                    deleteJobCardTask(card.id, t.id);
                                   }}
                                   className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-0.5"
                                   title="Remove job"

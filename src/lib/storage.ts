@@ -1216,9 +1216,36 @@ export function updateJobCardTask(jobCardId: string, taskId: string, updates: Pa
 
 export function deleteJobCardTask(jobCardId: string, taskId: string) {
   updateJobCard(jobCardId, (card) => {
+    const targetTask = (card.tasks || []).find(t => t.id === taskId);
+    const targetPanelKey = targetTask?.category === 'PAINT' ? targetTask.panelKey : undefined;
+
     return {
       ...card,
-      tasks: card.tasks.filter(task => task.id !== taskId)
+      tasks: (card.tasks || []).filter(task => {
+        if (task.id === taskId) return false;
+        // Clean up any lingering duplicate paint tasks for the same panel
+        if (targetPanelKey && task.category === 'PAINT' && task.panelKey && task.panelKey.toLowerCase() === targetPanelKey.toLowerCase()) {
+          return false;
+        }
+        return true;
+      })
+    };
+  });
+}
+
+export function deleteJobCardPanelTasks(jobCardId: string, panelKey: string) {
+  if (!panelKey) return;
+  const pKeyLower = panelKey.toLowerCase();
+  updateJobCard(jobCardId, (card) => {
+    return {
+      ...card,
+      tasks: (card.tasks || []).filter(task => {
+        if (task.category !== 'PAINT') return true;
+        if (task.panelKey && task.panelKey.toLowerCase() === pKeyLower) {
+          return false;
+        }
+        return true;
+      })
     };
   });
 }
@@ -3503,6 +3530,58 @@ export function addStandardJobToJobCard(
     standardJobId: stdJob.id,
     notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied (Inclusive of GST). ${stdJob.description || ''}`
   };
+  // Deduplication check: If this task is a panel or paint job, verify if a task already exists for this panel on the job card
+  const effectivePanelKey = newTask.panelKey;
+  const existingTaskIndex = (card.tasks || []).findIndex(t => {
+    if (effectivePanelKey && t.panelKey) {
+      return t.panelKey.toLowerCase() === effectivePanelKey.toLowerCase();
+    }
+    if (newTask.category === 'PAINT' && t.category === 'PAINT' && stdJob.id && t.standardJobId === stdJob.id) {
+      return true;
+    }
+    return false;
+  });
+
+  if (existingTaskIndex !== -1) {
+    // A task for this panel already exists on this job card!
+    // Update the existing task's rates, scope, and titles rather than creating a duplicate task.
+    const existing = card.tasks[existingTaskIndex];
+    const mergedTask: JobTask = {
+      ...existing,
+      title: newTask.title,
+      paintScope: newTask.paintScope || existing.paintScope,
+      customerPrice: newTask.customerPrice,
+      partPrice: newTask.partPrice,
+      labourPrice: newTask.labourPrice,
+      retailPrice: newTask.retailPrice,
+      cars24Price: newTask.cars24Price,
+      contractorPayout: newTask.contractorPayout,
+      painterPayout: newTask.painterPayout,
+      denterPayout: newTask.denterPayout,
+      estimatedCost: newTask.estimatedCost,
+      assignedToId: customAssignedId || existing.assignedToId,
+      assignedToName: assignedName || existing.assignedToName,
+      pairedDenterId: customDenterId || existing.pairedDenterId,
+      pairedDenterName: pairedDenterName || existing.pairedDenterName,
+      panelKey: effectivePanelKey || existing.panelKey,
+      panelNameEn: newTask.panelNameEn || existing.panelNameEn
+    };
+
+    // Filter out ANY OTHER duplicate tasks that might have previously existed for this panel
+    const filteredTasks = (card.tasks || []).filter((t, idx) => {
+      if (idx === existingTaskIndex) return false;
+      if (effectivePanelKey && t.panelKey && t.panelKey.toLowerCase() === effectivePanelKey.toLowerCase()) {
+        return false;
+      }
+      return true;
+    });
+
+    card.tasks = [...filteredTasks, mergedTask];
+    cards[cardIndex] = card;
+    saveJobCards(cards);
+    return [mergedTask];
+  }
+
   createdTasks.push(newTask);
 
   card.tasks = [...(card.tasks || []), ...createdTasks];
