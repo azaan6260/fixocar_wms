@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useReducer, useEffect, useMemo, useCallback } from 'react';
 import { JobCard, Employee, Vendor, TaskCategory, SpecializedTeam, JobTask, UserRole, StandardJob } from '../types';
+import { 
+  jobCardPanelReducer, 
+  initJobCardPanelState,
+  getPaintScopeCategory 
+} from '../reducers/jobCardPanelReducer';
 import { 
   updateJobCard, 
   getJobCards,
@@ -118,7 +123,7 @@ interface JobCardDetailViewProps {
 }
 
 export function JobCardDetailView({
-  card,
+  card: propCard,
   currentRole = 'FLOOR_MANAGER',
   onClose,
   employees,
@@ -127,6 +132,14 @@ export function JobCardDetailView({
   onOpenQCModal,
   onOpenQRModal,
 }: JobCardDetailViewProps) {
+  // Centralized immutable panel & task management state via useReducer
+  const [panelState, dispatch] = useReducer(jobCardPanelReducer, propCard, initJobCardPanelState);
+  const card = panelState.card;
+
+  // Synchronize state if parent passes an externally refreshed card object
+  useEffect(() => {
+    dispatch({ type: 'SYNC_CARD', payload: propCard });
+  }, [propCard]);
   const currentUser = getAuthUser();
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'SERVICE_ADVISOR', 'FLOOR_MANAGER'].includes(currentRole);
   const isCars24 = isCars24JobCard(card);
@@ -268,14 +281,7 @@ export function JobCardDetailView({
     triggerSuccessHaptic();
   };
 
-  // Custom task form state
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskCategory, setNewTaskCategory] = useState<TaskCategory>('MECHANICAL');
-  const [newTaskCost, setNewTaskCost] = useState(40);
-  const [newTaskPrice, setNewTaskPrice] = useState(85);
-  const [newTaskAssignedId, setNewTaskAssignedId] = useState(employees[0]?.id || '');
-  const [newTaskPairedDenterId, setNewTaskPairedDenterId] = useState('');
-  const [newTaskRequiresApproval, setNewTaskRequiresApproval] = useState(true);
+  // Panel & custom task operations are centralized in jobCardPanelReducer
 
   // Gate Check-out fields
   const [gateDriverName, setGateDriverName] = useState(card.checkInDriverName || 'Cars24 Fleet Driver');
@@ -413,79 +419,6 @@ export function JobCardDetailView({
     setIsPlayingHeaderAudio(true);
     speakTechnicianPrompt(speech, () => {
       setIsPlayingHeaderAudio(false);
-    });
-  };
-
-  // Create Task
-  const handleCreateNewTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-
-    const assignedEmp = employees.find(e => e.id === newTaskAssignedId);
-    const assignedVen = vendors.find(v => v.id === newTaskAssignedId);
-    const pairedDenterEmp = employees.find(e => e.id === newTaskPairedDenterId);
-
-    const newTask: JobTask = {
-      id: `task-add-${Date.now()}`,
-      jobCardId: card.id,
-      title: newTaskTitle,
-      category: newTaskCategory,
-      assignedToId: newTaskAssignedId,
-      assignedToName: assignedEmp?.name || assignedVen?.name || 'Staff',
-      assignedType: assignedVen ? 'VENDOR' : 'EMPLOYEE',
-      estimatedCost: Number(newTaskCost),
-      customerPrice: Number(newTaskPrice),
-      status: newTaskRequiresApproval ? 'PENDING' : 'IN_PROGRESS',
-      requiresCustomerApproval: newTaskRequiresApproval,
-      isCustomerApproved: newTaskRequiresApproval ? null : true,
-      isAdditionalWork: true,
-      approvalStatus: newTaskRequiresApproval ? 'PENDING' : 'APPROVED',
-      pairedDenterId: newTaskCategory === 'PAINT' ? (newTaskPairedDenterId || undefined) : undefined,
-      pairedDenterName: newTaskCategory === 'PAINT' ? (pairedDenterEmp?.name || undefined) : undefined,
-      denterPayout: newTaskCategory === 'PAINT' ? 150 : undefined,
-      painterPayout: newTaskCategory === 'PAINT' ? Number(newTaskCost) || 800 : undefined
-    };
-
-    const additionalTasks: JobTask[] = [newTask];
-
-    // If Paint task and paired denter is set, also create pre-denting task if not already existing
-    if (newTaskCategory === 'PAINT' && newTaskPairedDenterId) {
-      const predentTask: JobTask = {
-        id: `task-predent-add-${Date.now()}`,
-        jobCardId: card.id,
-        title: `Pre-Denting: ${newTaskTitle} (डेंटिंग व पैनल तैयारी)`,
-        category: 'DENTING',
-        assignedToId: newTaskPairedDenterId,
-        assignedToName: pairedDenterEmp?.name,
-        assignedType: 'EMPLOYEE',
-        estimatedCost: 150,
-        customerPrice: 0,
-        status: 'PENDING',
-        requiresCustomerApproval: false,
-        isCustomerApproved: true,
-        isContractBasis: true,
-        contractorPayout: 150,
-        denterPayout: 150
-      };
-      additionalTasks.push(predentTask);
-    }
-
-    updateJobCard(card.id, (prev) => ({
-      ...prev,
-      tasks: [...prev.tasks, ...additionalTasks],
-      status: newTaskRequiresApproval ? 'ESTIMATE_PENDING' : prev.status
-    }));
-
-    setNewTaskTitle('');
-    setNewTaskPairedDenterId('');
-    setShowAddTask(false);
-
-    dispatchToastNotification({
-      type: 'JOB_CARD_CREATED',
-      title: 'Task Added',
-      message: `Added "${newTaskTitle}" to ${card.vehicle.registrationNumber}.`,
-      vehicleReg: card.vehicle.registrationNumber,
-      jobCardId: card.id
     });
   };
 
@@ -1473,7 +1406,10 @@ export function JobCardDetailView({
                       vehicleReg={card.vehicle.registrationNumber}
                       isCars24={isCars24}
                       onApplyBatchAllotment={(pId, pName, dId, dName) => {
-                        reassignAllPaintTasksForJobCard(card.id, pId, pName, dId, dName);
+                        dispatch({
+                          type: 'BATCH_REASSIGN_PAINT',
+                          payload: { painterId: pId, painterName: pName, denterId: dId, denterName: dName }
+                        });
                         dispatchToastNotification({
                           type: 'STATUS_CHANGE',
                           title: 'Paint Panels Reassigned',
@@ -1541,109 +1477,12 @@ export function JobCardDetailView({
                         <InteractiveVehicleInspectionChart
                           mode={isManagerOrHigher ? 'INTERACTIVE_SELECT' : 'VIEW'}
                           isCars24={isCars24}
-                          selectedPanelIds={
-                            Array.from(new Set(
-                              card.tasks
-                                .filter(t => t.category === 'PAINT')
-                                .map(t => matchTaskToPanelDef(t)?.id || t.panelKey || '')
-                                .filter(Boolean)
-                            ))
-                          }
-                          inspections={card.tasks.reduce((acc, t) => {
-                            if (t.category === 'PAINT') {
-                              const matchedDef = matchTaskToPanelDef(t);
-                              const panelId = matchedDef?.id || t.panelKey;
-                              if (panelId) {
-                                acc[panelId] = {
-                                  panelId,
-                                  nameEn: t.panelNameEn || matchedDef?.nameEn || t.title,
-                                  nameHi: matchedDef?.nameHi || t.title,
-                                  category: 'EXTERIOR_BODY',
-                                  selected: true,
-                                  paintScope: t.paintScope || 'FULL_OUTER',
-                                  painterName: t.assignedToName,
-                                  denterName: t.pairedDenterName,
-                                  customPrice: t.customerPrice,
-                                  customPainterPayout: t.painterPayout,
-                                  customDenterPayout: t.denterPayout
-                                };
-                              }
-                            }
-                            return acc;
-                          }, {} as Record<string, any>)}
+                          selectedPanelIds={panelState.selectedPanelIds}
+                          inspections={panelState.inspections}
                           onInspectionChange={isManagerOrHigher ? (updatedInspections) => {
-                            const allKnownPanels = [...VEHICLE_PANELS, ...getVehiclePanels()];
-                            const freshJobs = getStandardJobs();
-
-                            Object.keys(updatedInspections).forEach(panelId => {
-                              const inspection = updatedInspections[panelId];
-                              const panelDef = allKnownPanels.find(p => p.id === panelId);
-                              if (!panelDef) return;
-
-                              // Query fresh card from storage to prevent stale closure duplicates
-                              const freshCard = getJobCards().find(c => c.id === card.id) || card;
-                              const matchingTasks = (freshCard.tasks || []).filter(t =>
-                                t.category === 'PAINT' && (
-                                  (t.panelKey && t.panelKey.toLowerCase() === panelId.toLowerCase()) ||
-                                  matchTaskToPanelDef(t)?.id === panelId
-                                )
-                              );
-
-                              if (!inspection.selected) {
-                                // If deselected, remove ALL matching panel tasks so zero duplicates or ghost tasks remain
-                                if (matchingTasks.length > 0) {
-                                  matchingTasks.forEach(t => {
-                                    deleteJobCardTask(card.id, t.id);
-                                  });
-                                }
-                                deleteJobCardPanelTasks(card.id, panelId);
-                                return;
-                              }
-
-                              const scope = inspection.paintScope || 'FULL_OUTER';
-                              const rates = getPanelEnvironmentRates(panelDef, freshJobs, isCars24, scope);
-                              const price = inspection.customPrice !== undefined ? inspection.customPrice : rates.price;
-                              const painterPayout = inspection.customPainterPayout !== undefined ? inspection.customPainterPayout : rates.painterPayout;
-                              const denterPayout = inspection.customDenterPayout !== undefined ? inspection.customDenterPayout : rates.denterPayout;
-                              const totalContractorPayout = painterPayout + denterPayout;
-                              const dynamicTitle = formatPaintTaskTitle(panelDef.nameEn, scope);
-
-                              if (matchingTasks.length > 0) {
-                                const [primaryTask, ...duplicateTasks] = matchingTasks;
-                                updateJobCardTask(card.id, primaryTask.id, {
-                                  title: dynamicTitle,
-                                  paintScope: scope,
-                                  customerPrice: price,
-                                  painterPayout,
-                                  denterPayout,
-                                  contractorPayout: totalContractorPayout,
-                                  estimatedCost: totalContractorPayout,
-                                  panelKey: panelId,
-                                  panelNameEn: panelDef.nameEn
-                                });
-                                // Clean up any lingering duplicate tasks for this panel
-                                duplicateTasks.forEach(dup => {
-                                  deleteJobCardTask(card.id, dup.id);
-                                });
-                              } else {
-                                addStandardJobToJobCard(
-                                  card.id,
-                                  panelDef.standardJobId || panelId,
-                                  undefined,
-                                  undefined,
-                                  {
-                                    title: dynamicTitle,
-                                    category: 'PAINT',
-                                    panelKey: panelId,
-                                    panelNameEn: panelDef.nameEn,
-                                    paintScope: scope,
-                                    customerPrice: price,
-                                    painterPayout,
-                                    denterPayout,
-                                    contractorPayout: totalContractorPayout
-                                  }
-                                );
-                              }
+                            dispatch({
+                              type: 'BATCH_SYNC_INSPECTIONS',
+                              payload: { updatedInspections, isCars24 }
                             });
                           } : undefined}
                           compact={true}
@@ -1663,9 +1502,11 @@ export function JobCardDetailView({
                         employees={employees}
                         vendors={vendors}
                         currentRole={currentRole}
-                        onTaskStatusChange={(taskId, status) => updateTaskStatus(card.id, taskId, status)}
+                        onTaskStatusChange={(taskId, status) => {
+                          dispatch({ type: 'UPDATE_TASK_STATUS', payload: { taskId, status } });
+                        }}
                         onRemoveTask={(taskId) => {
-                          deleteJobCardTask(card.id, taskId);
+                          dispatch({ type: 'DELETE_TASK', payload: { taskId } });
                         }}
                       />
                     ))}
@@ -1699,20 +1540,20 @@ export function JobCardDetailView({
                         </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => respondToCustomerApproval(card.id, task.id, true)}
+                            onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: true } })}
                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
                           >
                             Approve
                           </button>
                           <button
-                            onClick={() => respondToCustomerApproval(card.id, task.id, false, 'Declined')}
+                            onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: false, declineReason: 'Declined' } })}
                             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
                           >
                             Decline
                           </button>
                           <button
                             onClick={() => {
-                              deleteJobCardTask(card.id, task.id);
+                              dispatch({ type: 'DELETE_TASK', payload: { taskId: task.id } });
                             }}
                             className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
                             title="Remove task from job card"
@@ -2121,11 +1962,13 @@ export function JobCardDetailView({
             additionalTasks.push(predentTask);
           }
 
-          updateJobCard(card.id, (prev) => ({
-            ...prev,
-            tasks: [...prev.tasks, ...additionalTasks],
-            status: newCustomJob.requiresCustomerApproval ? 'ESTIMATE_PENDING' : prev.status
-          }));
+          dispatch({
+            type: 'ADD_CUSTOM_TASKS',
+            payload: {
+              tasks: additionalTasks,
+              requiresCustomerApproval: newCustomJob.requiresCustomerApproval
+            }
+          });
 
           dispatchToastNotification({
             type: 'INFO',
@@ -2139,7 +1982,15 @@ export function JobCardDetailView({
       <StandardJobsCatalogModal
         card={{ ...card, isCars24 }}
         isOpen={isStandardCatalogOpen}
-        onClose={() => setIsStandardCatalogOpen(false)}
+        onClose={() => {
+          setIsStandardCatalogOpen(false);
+          const fresh = getJobCards().find(c => c.id === card.id);
+          if (fresh) dispatch({ type: 'SYNC_CARD', payload: fresh });
+        }}
+        onJobAdded={() => {
+          const fresh = getJobCards().find(c => c.id === card.id);
+          if (fresh) dispatch({ type: 'SYNC_CARD', payload: fresh });
+        }}
       />
 
       {/* Gate Departure Check-Out Modal */}

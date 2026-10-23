@@ -1223,9 +1223,13 @@ export function deleteJobCardTask(jobCardId: string, taskId: string) {
       ...card,
       tasks: (card.tasks || []).filter(task => {
         if (task.id === taskId) return false;
-        // Clean up any lingering duplicate paint tasks for the same panel
+        // Clean up any lingering duplicate paint tasks for the same panel AND same scope type (outer vs inside)
         if (targetPanelKey && task.category === 'PAINT' && task.panelKey && task.panelKey.toLowerCase() === targetPanelKey.toLowerCase()) {
-          return false;
+          const targetIsInside = targetTask?.paintScope === 'INSIDE_JAMB';
+          const taskIsInside = task.paintScope === 'INSIDE_JAMB';
+          if (targetIsInside === taskIsInside) {
+            return false;
+          }
         }
         return true;
       })
@@ -3530,11 +3534,22 @@ export function addStandardJobToJobCard(
     standardJobId: stdJob.id,
     notes: `${card.isCars24 ? '⚡ Cars24 Fleet Contract Rate' : '🛒 Retail Customer Rate'} applied (Inclusive of GST). ${stdJob.description || ''}`
   };
-  // Deduplication check: If this task is a panel or paint job, verify if a task already exists for this panel on the job card
+  // Deduplication check: If this task is a panel or paint job, verify if a task with the matching scope type already exists
   const effectivePanelKey = newTask.panelKey;
+  const newIsInside = newTask.paintScope === 'INSIDE_JAMB';
+  const newIsBoth = newTask.paintScope === 'FULL_OUTER_AND_INSIDE';
+
   const existingTaskIndex = (card.tasks || []).findIndex(t => {
-    if (effectivePanelKey && t.panelKey) {
-      return t.panelKey.toLowerCase() === effectivePanelKey.toLowerCase();
+    if (t.category !== 'PAINT' || newTask.category !== 'PAINT') return false;
+    if (effectivePanelKey && t.panelKey && t.panelKey.toLowerCase() === effectivePanelKey.toLowerCase()) {
+      const existingIsInside = t.paintScope === 'INSIDE_JAMB';
+      const existingIsBoth = t.paintScope === 'FULL_OUTER_AND_INSIDE';
+      // Match if updating same scope category, or if either task is combined BOTH
+      if (newIsBoth || existingIsBoth || (newIsInside === existingIsInside)) {
+        return true;
+      }
+      // Single panel can have both outer and inside paint!
+      return false;
     }
     if (newTask.category === 'PAINT' && t.category === 'PAINT' && stdJob.id && t.standardJobId === stdJob.id) {
       return true;
@@ -3543,7 +3558,7 @@ export function addStandardJobToJobCard(
   });
 
   if (existingTaskIndex !== -1) {
-    // A task for this panel already exists on this job card!
+    // A task for this panel scope already exists on this job card!
     // Update the existing task's rates, scope, and titles rather than creating a duplicate task.
     const existing = card.tasks[existingTaskIndex];
     const mergedTask: JobTask = {
@@ -3567,11 +3582,14 @@ export function addStandardJobToJobCard(
       panelNameEn: newTask.panelNameEn || existing.panelNameEn
     };
 
-    // Filter out ANY OTHER duplicate tasks that might have previously existed for this panel
+    // Filter out ANY OTHER duplicate tasks that might have previously existed for this panel and scope
     const filteredTasks = (card.tasks || []).filter((t, idx) => {
       if (idx === existingTaskIndex) return false;
       if (effectivePanelKey && t.panelKey && t.panelKey.toLowerCase() === effectivePanelKey.toLowerCase()) {
-        return false;
+        const existingIsInside = t.paintScope === 'INSIDE_JAMB';
+        if (newIsBoth || (newIsInside === existingIsInside)) {
+          return false;
+        }
       }
       return true;
     });
