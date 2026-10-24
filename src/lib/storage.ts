@@ -2665,8 +2665,9 @@ export function validateLocalStorageIntegrity(): StorageIntegrityResult {
         if (!Array.isArray(parsed)) {
           issues.push(`Table '${table.tableName}' schema is corrupted (expected Array, got ${typeof parsed})`);
           needsReset = true;
-        } else if (parsed.length === 0 && table.seedData.length > 0 && table.key !== STORAGE_KEYS.STANDARD_JOBS) {
-          issues.push(`Critical table '${table.tableName}' is empty (0 records)`);
+        } else if (parsed.length === 0 && table.seedData.length > 0 && 
+                   [STORAGE_KEYS.EMPLOYEES, STORAGE_KEYS.CITIES, STORAGE_KEYS.WORKSHOPS, STORAGE_KEYS.CAR_MODELS].includes(table.key)) {
+          issues.push(`Critical foundational table '${table.tableName}' is empty (0 records)`);
           needsReset = true;
         }
       } catch (err) {
@@ -2678,21 +2679,21 @@ export function validateLocalStorageIntegrity(): StorageIntegrityResult {
 
   if (needsReset) {
     console.warn('[STORAGE_INTEGRITY] ⚠️ Local storage integrity check failed. Issues detected:', issues);
-    console.log('[STORAGE_INTEGRITY] 🔄 Triggering full schema repair, re-seeding default collections, and requesting central re-download...');
+    console.log('[STORAGE_INTEGRITY] 🔄 Triggering targeted schema repair without wiping user data...');
 
     for (const table of criticalTableSchema) {
       try {
         const rawVal = localStorage.getItem(table.key);
-        let isValidNonEmptyArray = false;
+        let isValidArray = false;
         if (rawVal !== null) {
           try {
             const parsed = JSON.parse(rawVal);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              isValidNonEmptyArray = true;
+            if (Array.isArray(parsed)) {
+              isValidArray = true;
             }
           } catch {}
         }
-        if (!isValidNonEmptyArray) {
+        if (!isValidArray) {
           localStorage.setItem(table.key, JSON.stringify(table.seedData));
           repairedTables.push(table.tableName);
         }
@@ -4002,17 +4003,39 @@ export function deleteCustomerVehicle(id: string): void {
 // ----------------------------------------------------
 // VEHICLE GATE CHECK-IN & WORKSHOP PRESENCE STORAGE
 // ----------------------------------------------------
+// VEHICLE GATE CHECK-IN & WORKSHOP PRESENCE STORAGE
+// ----------------------------------------------------
 export function sanitizeGateCheckInId(rawId: string): string {
-  if (!rawId) return rawId;
-  if (/e\+|NaN/i.test(String(rawId))) {
-    return 'GATE-2026-120';
+  if (!rawId) return '';
+  const str = String(rawId).trim();
+  if (/e\+|NaN/i.test(str)) {
+    return 'GATE-2026-101';
   }
-  const cleaned = String(rawId).replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
-  const match = cleaned.match(/^GATE-2026-(\d+)$/i);
-  if (match && match[1].length > 6) {
-    return `GATE-2026-${match[1].slice(-3)}`;
+  // Standard format: GATE-2026-101, GATE-2026-102
+  const stdMatch = str.match(/^GATE-2026-(\d+)$/i);
+  if (stdMatch) {
+    const num = parseInt(stdMatch[1], 10);
+    if (!isNaN(num) && num > 0 && num < 100000) {
+      return `GATE-2026-${num}`;
+    }
   }
-  return cleaned;
+  // If formatted as GATE-XXXX
+  const legacyMatch = str.match(/^GATE-(\d+)$/i);
+  if (legacyMatch) {
+    const num = parseInt(legacyMatch[1], 10);
+    if (!isNaN(num) && num > 0 && num < 100000) {
+      return `GATE-2026-${num}`;
+    }
+  }
+  const cleaned = str.replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
+  const digits = cleaned.replace(/\D/g, '');
+  if (digits) {
+    const tailNum = parseInt(digits.slice(-4), 10);
+    if (!isNaN(tailNum) && tailNum >= 100 && tailNum < 10000) {
+      return `GATE-2026-${tailNum}`;
+    }
+  }
+  return str.startsWith('GATE-') ? str : `GATE-2026-${str}`;
 }
 
 export function getVehicleCheckIns(): VehicleCheckIn[] {
@@ -4029,18 +4052,32 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
     localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(list));
   }
 
-  // Normalize IDs and deduplicate active check-ins per registration number so at most 1 non-checked-out gate pass exists per vehicle
+  // Calculate highest numeric suffix among existing check-ins to prevent collisions
+  let highestGateNum = 105;
+  for (const rawItem of list) {
+    if (!rawItem) continue;
+    const parts = String(rawItem.id || '').split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum) && lastNum < 100000 && lastNum > highestGateNum) {
+      highestGateNum = lastNum;
+    }
+  }
+
+  // Normalize IDs and deduplicate active check-ins per registration number
   const seenIds = new Set<string>();
   const activeByReg = new Map<string, VehicleCheckIn>();
   const checkedOutList: VehicleCheckIn[] = [];
 
   for (const rawItem of list) {
     if (!rawItem) continue;
+    let cleanId = sanitizeGateCheckInId(rawItem.id);
+    if (!cleanId || seenIds.has(cleanId)) {
+      cleanId = `GATE-2026-${++highestGateNum}`;
+    }
     const item: VehicleCheckIn = {
       ...rawItem,
-      id: sanitizeGateCheckInId(rawItem.id)
+      id: cleanId
     };
-    if (seenIds.has(item.id)) continue;
     seenIds.add(item.id);
 
     if (item.status === 'CHECKED_OUT') {
@@ -4051,18 +4088,17 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
         checkedOutList.push(item);
         continue;
       }
-      // If linked job card is already DELIVERED or CLOSED and no other active job card exists for this regNo, heal to CHECKED_OUT
+      // ONLY heal to CHECKED_OUT if this check-in's explicitly linked jobCardId was completed (DELIVERED/CLOSED)
+      // AND this check-in itself was already in 'JOB_CARD_CREATED' status
       const allCards = getAllJobCards();
       const linkedCard = item.jobCardId ? allCards.find(jc => jc.id === item.jobCardId) : undefined;
-      const activeCard = allCards.find(
-        jc => normalizeRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
-      );
-      if (linkedCard && (linkedCard.status === 'DELIVERED' || linkedCard.status === 'CLOSED') && !activeCard) {
+      if (linkedCard && (linkedCard.status === 'DELIVERED' || linkedCard.status === 'CLOSED') && item.status === 'JOB_CARD_CREATED') {
         item.status = 'CHECKED_OUT';
         item.checkedOutAt = item.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
         checkedOutList.push(item);
         continue;
       }
+
       const existingActive = activeByReg.get(normReg);
       if (!existingActive) {
         activeByReg.set(normReg, item);
@@ -4116,7 +4152,6 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
     localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(normalized));
   } catch (err) {
     console.warn('LocalStorage quota limit reached in saveVehicleCheckIns. Sanitizing large image data:', err);
-    // Fallback: replace any huge base64 strings with a compressed sample vehicle photo URL across ALL records
     const sanitized = normalized.map(c => ({
       ...c,
       checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000)
@@ -4142,6 +4177,11 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
         const isoOut = parsedOut && !isNaN(parsedOut.getTime())
           ? parsedOut.toISOString()
           : (ci.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
+        const parsedIn = ci.checkedInAt ? new Date(ci.checkedInAt) : null;
+        const isoIn = parsedIn && !isNaN(parsedIn.getTime())
+          ? parsedIn.toISOString()
+          : new Date().toISOString();
+
         client.from('vehicle_check_ins').upsert({
           id: ci.id,
           registration_number: ci.registrationNumber,
@@ -4156,6 +4196,8 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
           cars24_ref_no: ci.cars24RefNo || null,
           customer_name: ci.customerName || 'Customer',
           customer_phone: ci.customerPhone || '',
+          workshop_id: ci.workshopId || null,
+          check_in_time: isoIn,
           check_in_driver_name: ci.checkInDriverName || 'Driver',
           check_in_driver_phone: ci.checkInDriverPhone || '',
           driver_photo_url: ci.checkInPhotoWithDriverUrl || null,
@@ -4189,7 +4231,7 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
 
   const checkIns = getVehicleCheckIns();
   
-  // Calculate max numeric suffix from existing checkIns (using only the trailing number after the last hyphen)
+  // Calculate max numeric suffix from existing checkIns
   let maxNum = 105;
   checkIns.forEach(c => {
     const cleanId = sanitizeGateCheckInId(c.id);
@@ -4214,7 +4256,7 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
   checkIns.unshift(fullRecord);
   saveVehicleCheckIns(checkIns);
 
-  // Also sync to Supabase vehicle_check_ins in background if connected
+  // Sync to Supabase vehicle_check_ins in background if connected
   const client = getSupabaseClient();
   if (client) {
     client.from('vehicle_check_ins').upsert({
@@ -4231,6 +4273,8 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
       cars24_ref_no: fullRecord.cars24RefNo || null,
       customer_name: fullRecord.customerName || 'Customer',
       customer_phone: fullRecord.customerPhone || '',
+      workshop_id: fullRecord.workshopId || null,
+      check_in_time: new Date().toISOString(),
       check_in_driver_name: fullRecord.checkInDriverName || 'Driver',
       check_in_driver_phone: fullRecord.checkInDriverPhone || '',
       driver_photo_url: fullRecord.checkInPhotoWithDriverUrl || null,
@@ -4307,6 +4351,11 @@ export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn)
   // Sync updated check-in status to Supabase in background
   const client = getSupabaseClient();
   if (client) {
+    const parsedOut = updatedRecord.checkedOutAt ? new Date(updatedRecord.checkedOutAt) : null;
+    const isoOut = parsedOut && !isNaN(parsedOut.getTime())
+      ? parsedOut.toISOString()
+      : (updatedRecord.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
+
     client.from('vehicle_check_ins').upsert({
       id: updatedRecord.id,
       registration_number: updatedRecord.registrationNumber,
@@ -4321,13 +4370,14 @@ export function updateVehicleCheckIn(id: string, updater: (prev: VehicleCheckIn)
       cars24_ref_no: updatedRecord.cars24RefNo || null,
       customer_name: updatedRecord.customerName || 'Customer',
       customer_phone: updatedRecord.customerPhone || '',
+      workshop_id: updatedRecord.workshopId || null,
       check_in_driver_name: updatedRecord.checkInDriverName || 'Driver',
       check_in_driver_phone: updatedRecord.checkInDriverPhone || '',
       driver_photo_url: updatedRecord.checkInPhotoWithDriverUrl || null,
       check_in_notes: updatedRecord.checkInNotes || null,
       status: updatedRecord.status,
       job_card_id: updatedRecord.jobCardId || null,
-      check_out_time: updatedRecord.checkedOutAt || null,
+      check_out_time: isoOut,
       check_out_driver_name: updatedRecord.checkOutDriverName || null,
       check_out_driver_phone: updatedRecord.checkOutDriverPhone || null,
       check_out_driver_photo_url: updatedRecord.checkOutPhotoWithDriverUrl || null

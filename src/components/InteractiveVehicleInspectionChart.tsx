@@ -867,75 +867,87 @@ export function InteractiveVehicleInspectionChart({
                   </div>
 
                   {/* Inline Paint Scope Chips */}
-                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] font-bold text-slate-400 mr-1">Paint Scope:</span>
-                    {[
-                      { id: 'FULL_OUTER', label: 'Full Paint', icon: '✨' },
-                      { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint', icon: '🎨', disabled: !isPartialAllowed },
-                      { id: 'INSIDE_JAMB', label: 'Inside Paint', icon: '🚪' },
-                      { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside', icon: '🌟' }
-                    ].map(s => {
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 mr-1">पेंट स्कोप:</span>
+                    {(() => {
                       const isInsideOnlyPanel = activePanelObj.id.startsWith('pillar_') || activePanelObj.id === 'boot_floor';
-                      const isInsideOnlyDisabled = isInsideOnlyPanel && s.id !== 'INSIDE_JAMB';
-                      const isDisabled = s.disabled || isInsideOnlyDisabled;
-                      const active = currentScope === s.id;
+                      const outerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER');
+                      const innerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'INSIDE_JAMB');
+                      const partialRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'PARTIAL_TOUCHUP');
+                      const outerInnerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER_AND_INSIDE');
 
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={() => {
-                            if (isDisabled) return;
-                            
-                            // Auto-open Bonnet or Dicky if choosing inside paint scope
-                            const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
-                            if (isInsideScope) {
-                              if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
-                                setBonnetOpen(true);
+                      const scopes = [
+                        { id: 'FULL_OUTER' as PaintScope, label: 'Full Outer', icon: '✨', rates: outerRates, disabled: isInsideOnlyPanel },
+                        { id: 'INSIDE_JAMB' as PaintScope, label: 'Inner Only', icon: '🚪', rates: innerRates, disabled: false },
+                        { id: 'PARTIAL_TOUCHUP' as PaintScope, label: 'Partial', icon: '🎨', rates: partialRates, disabled: isInsideOnlyPanel || !isPartialAllowed },
+                        { id: 'FULL_OUTER_AND_INSIDE' as PaintScope, label: 'Outer+Inner', icon: '🌟', rates: outerInnerRates, disabled: isInsideOnlyPanel }
+                      ];
+
+                      return scopes.map(s => {
+                        const isDisabled = s.disabled;
+                        const active = currentScope === s.id;
+
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              if (isDisabled) return;
+                              
+                              // Auto-open Bonnet or Dicky if choosing inside paint scope
+                              const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                              if (isInsideScope) {
+                                if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
+                                  setBonnetOpen(true);
+                                }
+                                if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
+                                  setDickyOpen(true);
+                                }
                               }
-                              if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
-                                setDickyOpen(true);
-                              }
-                            }
 
-                            const updatedObj = {
-                              ...(effectiveInspections[activePanelObj.id] || { panelId: activePanelObj.id, nameEn: activePanelObj.nameEn, nameHi: activePanelObj.nameHi, category: 'EXTERIOR_BODY', selected: true }),
-                              selected: true,
-                              paintScope: s.id as PaintScope,
-                              customPrice: undefined,
-                              customPainterPayout: undefined,
-                              customDenterPayout: undefined
-                            };
-
-                            setLocalInspections(prev => ({
-                              ...prev,
-                              [activePanelObj.id]: updatedObj
-                            }));
-
-                            if (onInspectionChange) {
-                              const updated = {
-                                ...effectiveInspections,
-                                [activePanelObj.id]: updatedObj
+                              const updatedObj = {
+                                ...(effectiveInspections[activePanelObj.id] || { panelId: activePanelObj.id, nameEn: activePanelObj.nameEn, nameHi: activePanelObj.nameHi, category: 'EXTERIOR_BODY', selected: true }),
+                                selected: true,
+                                paintScope: s.id as PaintScope,
+                                customPrice: s.rates.price > 0 ? s.rates.price : undefined,
+                                customPainterPayout: s.rates.painterPayout > 0 ? s.rates.painterPayout : undefined,
+                                customDenterPayout: s.rates.denterPayout > 0 ? s.rates.denterPayout : undefined
                               };
-                              onInspectionChange(updated);
-                            } else if (onPanelToggle) {
-                              onPanelToggle(activePanelObj.id, activePanelObj.standardJobId, s.id as PaintScope);
-                            }
-                          }}
-                          className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 ${
-                            isDisabled
-                              ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'
-                              : active
-                              ? 'bg-amber-400 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
-                              : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-400/60'
-                          }`}
-                        >
-                          <span>{s.icon}</span>
-                          <span>{s.label}</span>
-                        </button>
-                      );
-                    })}
+
+                              setLocalInspections(prev => ({
+                                ...prev,
+                                [activePanelObj.id]: updatedObj
+                              }));
+
+                              if (onInspectionChange) {
+                                const updated = {
+                                  ...effectiveInspections,
+                                  [activePanelObj.id]: updatedObj
+                                };
+                                onInspectionChange(updated);
+                              } else if (onPanelToggle) {
+                                const targetJobId = s.rates.standardJob?.id || activePanelObj.standardJobId;
+                                onPanelToggle(activePanelObj.id, targetJobId, s.id as PaintScope);
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1.5 cursor-pointer ${
+                              isDisabled
+                                ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'
+                                : active
+                                ? 'bg-amber-400 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
+                                : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-400/60'
+                            }`}
+                          >
+                            <span>{s.icon}</span>
+                            <span>{s.label}</span>
+                            <span className={`font-mono text-[9px] px-1 py-0.2 rounded font-extrabold ${active ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-amber-300'}`}>
+                              ₹{s.rates.price.toLocaleString('en-IN')}
+                            </span>
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               );

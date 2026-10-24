@@ -1660,6 +1660,11 @@ export async function pushLocalDataToSupabase(): Promise<{
     const isoOut = parsedOut && !isNaN(parsedOut.getTime())
       ? parsedOut.toISOString()
       : (ci.status === 'CHECKED_OUT' ? new Date().toISOString() : null);
+    const parsedIn = ci.checkedInAt ? new Date(ci.checkedInAt) : null;
+    const isoIn = parsedIn && !isNaN(parsedIn.getTime())
+      ? parsedIn.toISOString()
+      : new Date().toISOString();
+
     const { error } = await client.from('vehicle_check_ins').upsert({
       id: ci.id,
       registration_number: ci.registrationNumber,
@@ -1674,6 +1679,8 @@ export async function pushLocalDataToSupabase(): Promise<{
       cars24_ref_no: ci.cars24RefNo,
       customer_name: ci.customerName,
       customer_phone: ci.customerPhone,
+      workshop_id: ci.workshopId || null,
+      check_in_time: isoIn,
       check_in_driver_name: ci.checkInDriverName,
       check_in_driver_phone: ci.checkInDriverPhone,
       driver_photo_url: ci.checkInPhotoWithDriverUrl,

@@ -231,7 +231,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
   // Workshop counts
   const inWorkshopCount = checkIns.filter(c => c.status !== 'CHECKED_OUT').length;
-  const idleAwaitingPiCount = checkIns.filter(c => c.status === 'IDLE_AWAITING_PI' || c.status === 'AWAITING_JOB_CARD').length;
+  const idleAwaitingPiCount = checkIns.filter(c => c.status === 'IDLE_AWAITING_PI' || c.status === 'AWAITING_JOB_CARD' || c.status === 'CHECKED_IN' || c.status === 'PDI_IN_PROGRESS').length;
   const activeRepairCount = checkIns.filter(c => c.status === 'JOB_CARD_CREATED').length;
   const readyDispatchCount = checkIns.filter(c => c.status === 'READY_PENDING_DISPATCH').length;
   const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
@@ -474,7 +474,7 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     if (!matchesSearch) return false;
 
     if (activeFilter === 'IN_WORKSHOP') return item.status !== 'CHECKED_OUT';
-    if (activeFilter === 'IDLE_PI') return item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD';
+    if (activeFilter === 'IDLE_PI') return item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD' || item.status === 'CHECKED_IN' || item.status === 'PDI_IN_PROGRESS';
     if (activeFilter === 'ACTIVE_REPAIR') return item.status === 'JOB_CARD_CREATED';
     if (activeFilter === 'READY_DISPATCH') return item.status === 'READY_PENDING_DISPATCH';
     if (activeFilter === 'CHECKED_OUT') return item.status === 'CHECKED_OUT';

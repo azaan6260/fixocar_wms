@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { VEHICLE_PANELS, PanelDefinition, PanelInspectionItem } from './InteractiveVehicleInspectionChart';
 import { PaintScope, StandardJob } from '../types';
-import { getVehiclePanels } from '../lib/storage';
+import { getVehiclePanels, getStandardJobs } from '../lib/storage';
 import { speakTechnicianPrompt, stopTechnicianSpeech } from '../lib/technicianVoiceHelper';
 import { formatPaintTaskTitle, isPartialPaintAllowedForPanel, getPanelEnvironmentRates } from '../lib/panelMappingHelper';
 
@@ -79,7 +79,12 @@ export function Interactive3DVehicleInspectionModel({
   const mountRef = useRef<HTMLDivElement>(null);
 
   // States
-  const [activePanelId, setActivePanelId] = useState<string | null>(null);
+  const [activePanelId, setActivePanelId] = useState<string | null>(() => {
+    if (selectedPanelIds && selectedPanelIds.length > 0) {
+      return selectedPanelIds[0];
+    }
+    return 'hood_bonnet';
+  });
   const [hoveredPanelId, setHoveredPanelId] = useState<string | null>(null);
   const [isPillDismissed, setIsPillDismissed] = useState(false);
   const previousPanelIdRef = useRef<string | null>(null);
@@ -148,6 +153,12 @@ export function Interactive3DVehicleInspectionModel({
   });
   const selectableMeshesRef = useRef<THREE.Mesh[]>([]);
 
+  const effectiveStandardJobs = useMemo(() => {
+    return (availableStandardJobs && availableStandardJobs.length > 0)
+      ? availableStandardJobs
+      : getStandardJobs();
+  }, [availableStandardJobs]);
+
   const effectivePanels = useMemo(() => {
     const stored = getVehiclePanels();
     const map = new Map<string, PanelDefinition>();
@@ -191,10 +202,18 @@ export function Interactive3DVehicleInspectionModel({
     return selectedPanelIds.includes(panelId);
   };
 
-  // Active panel definition
+  // Active panel definition (guarantees an active panel is selected)
   const activePanelObj = useMemo(() => {
-    return effectivePanels.find(p => p.id === activePanelId) || null;
-  }, [activePanelId, effectivePanels]);
+    if (activePanelId) {
+      const found = effectivePanels.find(p => p.id === activePanelId);
+      if (found) return found;
+    }
+    if (selectedPanelIds.length > 0) {
+      const found = effectivePanels.find(p => p.id === selectedPanelIds[0]);
+      if (found) return found;
+    }
+    return effectivePanels.find(p => p.id === 'hood_bonnet') || effectivePanels[0] || null;
+  }, [activePanelId, effectivePanels, selectedPanelIds]);
 
   const activeInspection = activePanelObj ? effectiveInspections[activePanelObj.id] : undefined;
   const currentScope: PaintScope = activeInspection?.paintScope || 'FULL_OUTER';
@@ -282,6 +301,8 @@ export function Interactive3DVehicleInspectionModel({
     const isInsideOnly = panelId.startsWith('pillar_') || panelId === 'boot_floor';
     const targetScope = scope || existing?.paintScope || (isInsideOnly ? 'INSIDE_JAMB' : 'FULL_OUTER');
 
+    const rates = getPanelEnvironmentRates(panelId, effectiveStandardJobs, isCars24, targetScope);
+
     const updatedObj = {
       panelId,
       nameEn: panelObj.nameEn,
@@ -289,9 +310,9 @@ export function Interactive3DVehicleInspectionModel({
       category: 'EXTERIOR_BODY' as const,
       selected: newSelected,
       paintScope: targetScope,
-      customPrice: undefined,
-      customPainterPayout: undefined,
-      customDenterPayout: undefined
+      customPrice: rates.price > 0 ? rates.price : undefined,
+      customPainterPayout: rates.painterPayout > 0 ? rates.painterPayout : undefined,
+      customDenterPayout: rates.denterPayout > 0 ? rates.denterPayout : undefined
     };
 
     setLocalInspections(prev => ({
@@ -308,7 +329,8 @@ export function Interactive3DVehicleInspectionModel({
     }
 
     if (onPanelToggle) {
-      onPanelToggle(panelId, panelObj.standardJobId, newSelected ? targetScope : undefined);
+      const targetJobId = rates.standardJob?.id || panelObj.standardJobId;
+      onPanelToggle(panelId, targetJobId, newSelected ? targetScope : undefined);
     }
     requestRenderRef.current(25);
   };
@@ -1363,15 +1385,19 @@ export function Interactive3DVehicleInspectionModel({
     requestRenderRef.current(20);
   }, [activePanelId]);
 
-  // Automatically clear selected 3D panel floating pill after 3.5 seconds to keep screen clean
+  // Automatically clear selected 3D panel floating pill after timeout (disabled in AR mode so controls remain accessible)
   useEffect(() => {
     if (activePanelId && !isPillDismissed) {
+      if (isArMode) {
+        // Keep active panel and scope selector visible in AR mode so user can comfortably inspect and choose scope
+        return;
+      }
       const timer = setTimeout(() => {
         setIsPillDismissed(true);
-      }, 3500);
+      }, 7000);
       return () => clearTimeout(timer);
     }
-  }, [activePanelId, isPillDismissed]);
+  }, [activePanelId, isPillDismissed, isArMode]);
 
   // Update Camera Preset Views
   useEffect(() => {
@@ -1735,46 +1761,186 @@ export function Interactive3DVehicleInspectionModel({
 
           <div ref={mountRef} className="relative w-full h-[380px] sm:h-[460px] cursor-grab active:cursor-grabbing z-10" />
 
-          {/* Hovered / Active Panel Floating Pill */}
+          {/* Hovered / Active Panel Floating Overlay with Direct Scope Selection (Partial, Outer, Inner, Outer + Inner) */}
           {activePanelObj && !isPillDismissed && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/40 shadow-xl flex items-center justify-between gap-3 z-20 animate-in fade-in zoom-in-95 duration-200">
-              <div>
-                <div className="text-[9px] text-amber-400 font-black uppercase tracking-wider">
-                  {isPanelActive(activePanelObj.id) ? '✓ चयनित पैनल (Selected Panel)' : 'पैनल जानकारी (Panel Info)'}
+            <div className="absolute bottom-2 sm:bottom-4 left-2 right-2 sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:min-w-[460px] max-w-xl bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-amber-500/40 shadow-2xl space-y-2.5 z-20 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                    isPanelActive(activePanelObj.id)
+                      ? currentScope === 'PARTIAL_TOUCHUP'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                        : currentScope === 'INSIDE_JAMB'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : currentScope === 'FULL_OUTER_AND_INSIDE'
+                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    {isPanelActive(activePanelObj.id) ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                        <span>✓ {currentScope === 'PARTIAL_TOUCHUP' ? 'Partial Touchup (आधा)' : currentScope === 'INSIDE_JAMB' ? 'Inside Paint (अंदर)' : currentScope === 'FULL_OUTER_AND_INSIDE' ? 'Outer + Inside (दोनों)' : 'Full Outer (बाहर)'}</span>
+                      </>
+                    ) : (
+                      <span>+ चुनें और पेंट स्कोप सेट करें</span>
+                    )}
+                  </span>
+                  {isArMode && (
+                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-extrabold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                      <span>🎥</span> AR View
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs font-extrabold text-white">{activePanelObj.nameHi}</div>
-                <div className="text-[10px] font-mono text-slate-300 font-semibold">
-                  {activePanelObj.nameEn}
+
+                <div className="flex items-center gap-1.5">
+                  {(onInspectionChange || onPanelToggle) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePanelClick(activePanelObj.id);
+                      }}
+                      className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${
+                        isPanelActive(activePanelObj.id)
+                          ? 'bg-rose-600/80 hover:bg-rose-600 text-white border border-rose-500/50'
+                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold'
+                      }`}
+                    >
+                      {isPanelActive(activePanelObj.id) ? '✕ हटाएं (Deselect)' : '+ जोड़ें (Select)'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsPillDismissed(true);
+                      setActivePanelId(null);
+                    }}
+                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                    title="Dismiss"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
-              {(onInspectionChange || onPanelToggle) && (
+
+              {/* Panel Titles */}
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs sm:text-sm font-black text-white">{activePanelObj.nameHi}</span>
+                  <span className="text-[11px] font-mono text-slate-300 font-semibold">{activePanelObj.nameEn}</span>
+                </div>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePanelClick(activePanelObj.id);
-                  }}
-                  className={`px-2.5 py-1 rounded-xl text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${
-                    isPanelActive(activePanelObj.id)
-                      ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                  }`}
+                  onClick={() => speakPanelInfo(activePanelObj)}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 shrink-0"
                 >
-                  {isPanelActive(activePanelObj.id) ? '✕ हटाएं (Deselect)' : '+ जोड़ें (Select)'}
+                  <Volume2 className="w-3 h-3" />
+                  <span>सुनिए</span>
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsPillDismissed(true);
-                  setActivePanelId(null);
-                }}
-                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                title="Dismiss"
-              >
-                ✕
-              </button>
+              </div>
+
+              {/* Quick Paint Scope Selector: Full Outer, Inner, Partial, Outer + Inner */}
+              <div className="grid grid-cols-4 gap-1.5 pt-1.5 border-t border-slate-800">
+                {(() => {
+                  const isInsideOnlyPanel = activePanelObj.id.startsWith('pillar_') || activePanelObj.id === 'boot_floor';
+                  const outerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER');
+                  const innerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'INSIDE_JAMB');
+                  const partialRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'PARTIAL_TOUCHUP');
+                  const outerInnerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER_AND_INSIDE');
+
+                  const scopesConfig = [
+                    {
+                      id: 'FULL_OUTER' as PaintScope,
+                      label: 'Full Outer',
+                      sub: 'बाहर पूरा',
+                      icon: '✨',
+                      price: outerRates.price,
+                      disabled: isInsideOnlyPanel,
+                      activeClass: 'border-amber-400 bg-amber-500 text-slate-950 ring-2 ring-amber-400/50'
+                    },
+                    {
+                      id: 'INSIDE_JAMB' as PaintScope,
+                      label: 'Inner Paint',
+                      sub: 'अंदर पिलर',
+                      icon: '🚪',
+                      price: innerRates.price,
+                      disabled: false,
+                      activeClass: 'border-emerald-400 bg-emerald-500 text-slate-950 ring-2 ring-emerald-400/50'
+                    },
+                    {
+                      id: 'PARTIAL_TOUCHUP' as PaintScope,
+                      label: 'Partial Paint',
+                      sub: 'आधा / टचअप',
+                      icon: '🎨',
+                      price: partialRates.price,
+                      disabled: isInsideOnlyPanel || !isPartialPaintAllowedForPanel(activePanelObj.id),
+                      activeClass: 'border-cyan-400 bg-cyan-500 text-slate-950 ring-2 ring-cyan-400/50'
+                    },
+                    {
+                      id: 'FULL_OUTER_AND_INSIDE' as PaintScope,
+                      label: 'Outer + Inner',
+                      sub: 'दोनों',
+                      icon: '🌟',
+                      price: outerInnerRates.price,
+                      disabled: isInsideOnlyPanel,
+                      activeClass: 'border-purple-400 bg-purple-500 text-white ring-2 ring-purple-400/50'
+                    }
+                  ];
+
+                  return scopesConfig.map(s => {
+                    const isPanelSelected = isPanelActive(activePanelObj.id);
+                    const isSelected = isPanelSelected && currentScope === s.id;
+                    const isDefault = !isPanelSelected && s.id === 'FULL_OUTER';
+
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        disabled={s.disabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                          if (isInsideScope) {
+                            if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
+                              setBonnetOpen(true);
+                            }
+                            if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
+                              setDickyOpen(true);
+                            }
+                          }
+                          handlePanelClick(activePanelObj.id, s.id);
+                        }}
+                        className={`p-1.5 rounded-xl font-black text-[10px] sm:text-xs transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                          s.disabled
+                            ? 'bg-slate-950/40 text-slate-600 border border-slate-800/40 cursor-not-allowed opacity-35'
+                            : isSelected
+                            ? `${s.activeClass} shadow-lg font-black`
+                            : isDefault
+                            ? 'bg-slate-850 text-amber-300 border border-amber-500/50 hover:bg-slate-800'
+                            : 'bg-slate-800/90 text-slate-300 border border-slate-700/80 hover:bg-slate-750 hover:border-slate-500 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs">{s.icon}</span>
+                          <span className="truncate">{s.label}</span>
+                        </div>
+                        <span className={`text-[10px] font-mono font-black mt-0.5 ${
+                          isSelected
+                            ? s.id === 'FULL_OUTER_AND_INSIDE' ? 'text-white' : 'text-slate-950'
+                            : 'text-amber-400'
+                        }`}>
+                          ₹{s.price.toLocaleString('en-IN')}
+                        </span>
+                        <span className={`text-[8.5px] font-medium leading-none ${isSelected ? 'opacity-90 font-bold' : isDefault ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
+                          {isSelected ? '✓ ACTIVE' : isDefault ? 'Default' : s.sub}
+                        </span>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           )}
         </div>
@@ -2061,45 +2227,126 @@ export function Interactive3DVehicleInspectionModel({
           </div>
 
           {/* Scope Selector Buttons */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-            {[
-              { id: 'FULL_OUTER', label: 'Full Paint (बाहर पूरा)', icon: '✨', disabled: false, tooltip: 'Full Paint' },
-              { id: 'PARTIAL_TOUCHUP', label: 'Partial Paint (आधा/टचअप)', icon: '🎨', disabled: !isPartialPaintAllowedForPanel(activePanelObj.id), tooltip: 'Partial Paint' },
-              { id: 'INSIDE_JAMB', label: 'Inside Paint (अंदर पिलर)', icon: '🚪', disabled: false, tooltip: 'Inside Paint' },
-              { id: 'FULL_OUTER_AND_INSIDE', label: 'Outer + Inside (दोनों)', icon: '🌟', disabled: false, tooltip: 'Outer + Inside Paint' }
-            ].map(s => {
-              const active = currentScope === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  disabled={s.disabled}
-                  title={s.tooltip}
-                  onClick={() => {
-                    const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
-                    if (isInsideScope) {
-                      if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
-                        setBonnetOpen(true);
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            {(() => {
+              const isInsideOnlyPanel = activePanelObj.id.startsWith('pillar_') || activePanelObj.id === 'boot_floor';
+              const outerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER');
+              const innerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'INSIDE_JAMB');
+              const partialRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'PARTIAL_TOUCHUP');
+              const outerInnerRates = getPanelEnvironmentRates(activePanelObj.id, effectiveStandardJobs, isCars24, 'FULL_OUTER_AND_INSIDE');
+
+              const scopeButtons = [
+                {
+                  id: 'FULL_OUTER' as PaintScope,
+                  label: 'Full Outer Paint',
+                  labelHi: 'बाहर पूरा पेंट',
+                  icon: '✨',
+                  rates: outerRates,
+                  disabled: isInsideOnlyPanel,
+                  tooltip: 'Full Outer Paint (Predefined Standard Job Rate)',
+                  activeColor: 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-xl'
+                },
+                {
+                  id: 'INSIDE_JAMB' as PaintScope,
+                  label: 'Inner Paint Only',
+                  labelHi: 'अंदर पिलर / जैम',
+                  icon: '🚪',
+                  rates: innerRates,
+                  disabled: false,
+                  tooltip: 'Inner Paint Only (Predefined Standard Job Rate)',
+                  activeColor: 'bg-emerald-400 text-slate-950 ring-2 ring-emerald-300 shadow-xl'
+                },
+                {
+                  id: 'PARTIAL_TOUCHUP' as PaintScope,
+                  label: 'Partial Paint',
+                  labelHi: 'आधा / टचअप पेंट',
+                  icon: '🎨',
+                  rates: partialRates,
+                  disabled: isInsideOnlyPanel || !isPartialPaintAllowedForPanel(activePanelObj.id),
+                  tooltip: 'Partial Touchup (Predefined Standard Job Rate)',
+                  activeColor: 'bg-cyan-400 text-slate-950 ring-2 ring-cyan-300 shadow-xl'
+                },
+                {
+                  id: 'FULL_OUTER_AND_INSIDE' as PaintScope,
+                  label: 'Outer Plus Inner Paint',
+                  labelHi: 'बाहर + अंदर दोनों',
+                  icon: '🌟',
+                  rates: outerInnerRates,
+                  disabled: isInsideOnlyPanel,
+                  tooltip: 'Full Outer + Inside Jamb (Predefined Standard Job Rate)',
+                  activeColor: 'bg-purple-500 text-white ring-2 ring-purple-300 shadow-xl'
+                }
+              ];
+
+              return scopeButtons.map(s => {
+                const isSelected = isPanelActive(activePanelObj.id) && currentScope === s.id;
+                const isDefault = !isPanelActive(activePanelObj.id) && s.id === 'FULL_OUTER';
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={s.disabled}
+                    title={s.tooltip}
+                    onClick={() => {
+                      const isInsideScope = s.id === 'INSIDE_JAMB' || s.id === 'FULL_OUTER_AND_INSIDE';
+                      if (isInsideScope) {
+                        if (activePanelObj.id === 'hood_bonnet' && !bonnetOpen) {
+                          setBonnetOpen(true);
+                        }
+                        if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
+                          setDickyOpen(true);
+                        }
                       }
-                      if (activePanelObj.id === 'boot_trunk' && !dickyOpen) {
-                        setDickyOpen(true);
-                      }
-                    }
-                    handlePanelClick(activePanelObj.id, s.id as PaintScope);
-                  }}
-                  className={`p-2.5 rounded-xl font-extrabold text-xs transition-all flex flex-col items-center justify-center gap-1 text-center ${
-                    s.disabled
-                      ? 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40'
-                      : active
-                      ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-lg'
-                      : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-amber-400/60'
-                  }`}
-                >
-                  <span className="text-base">{s.icon}</span>
-                  <span>{s.label}</span>
-                </button>
-              );
-            })}
+                      handlePanelClick(activePanelObj.id, s.id as PaintScope);
+                    }}
+                    className={`p-3 rounded-2xl font-extrabold text-xs transition-all flex flex-col items-center justify-between gap-1.5 text-center relative cursor-pointer ${
+                      s.disabled
+                        ? 'bg-slate-900/40 text-slate-600 border border-slate-800/60 cursor-not-allowed opacity-40'
+                        : isSelected
+                        ? `${s.activeColor} transform scale-[1.02]`
+                        : isDefault
+                        ? 'bg-slate-900 text-slate-200 border-2 border-amber-500/70 hover:border-amber-400 shadow-md'
+                        : 'bg-slate-900/90 text-slate-300 border border-slate-700/80 hover:border-amber-400/60 hover:bg-slate-800'
+                    }`}
+                  >
+                    {isDefault && (
+                      <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 shadow">
+                        Default
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-white text-slate-950 shadow">
+                        ✓ Selected
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">{s.icon}</span>
+                      <span className="font-bold text-xs">{s.label}</span>
+                    </div>
+
+                    <div className="text-[10px] opacity-80 font-medium">
+                      {s.labelHi}
+                    </div>
+
+                    {/* Predefined Standard Job Price */}
+                    <div className={`mt-1 px-2.5 py-1 rounded-xl font-mono font-black text-sm w-full flex items-center justify-center gap-1 ${
+                      isSelected
+                        ? s.id === 'FULL_OUTER_AND_INSIDE' ? 'bg-purple-600/50 text-white' : 'bg-slate-950/20 text-slate-950'
+                        : 'bg-slate-950/70 text-amber-400 border border-slate-800'
+                    }`}>
+                      <span>₹{s.rates.price.toLocaleString('en-IN')}</span>
+                      {isCars24 && <span className="text-[9px] opacity-75 font-sans font-bold">C24</span>}
+                    </div>
+
+                    <div className={`text-[9px] tracking-tight ${isSelected ? 'opacity-85' : 'text-slate-400'}`}>
+                      ₹{s.rates.painterPayout}P + ₹{s.rates.denterPayout}D
+                    </div>
+                  </button>
+                );
+              });
+            })()}
           </div>
         </div>
       )}

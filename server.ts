@@ -239,15 +239,33 @@ function normalizeServerRegNo(reg?: string | null): string {
 
 function sanitizeServerGateId(rawId?: string | null): string {
   if (!rawId) return '';
-  if (/e\+|NaN/i.test(String(rawId))) {
-    return 'GATE-2026-120';
+  const str = String(rawId).trim();
+  if (/e\+|NaN/i.test(str)) {
+    return 'GATE-2026-101';
   }
-  const cleaned = String(rawId).replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
-  const match = cleaned.match(/^GATE-2026-(\d+)$/i);
-  if (match && match[1].length > 6) {
-    return `GATE-2026-${match[1].slice(-3)}`;
+  const stdMatch = str.match(/^GATE-2026-(\d+)$/i);
+  if (stdMatch) {
+    const num = parseInt(stdMatch[1], 10);
+    if (!isNaN(num) && num > 0 && num < 100000) {
+      return `GATE-2026-${num}`;
+    }
   }
-  return cleaned;
+  const legacyMatch = str.match(/^GATE-(\d+)$/i);
+  if (legacyMatch) {
+    const num = parseInt(legacyMatch[1], 10);
+    if (!isNaN(num) && num > 0 && num < 100000) {
+      return `GATE-2026-${num}`;
+    }
+  }
+  const cleaned = str.replace(/^GATE-2026-(?:2026)+/i, 'GATE-2026-');
+  const digits = cleaned.replace(/\D/g, '');
+  if (digits) {
+    const tailNum = parseInt(digits.slice(-4), 10);
+    if (!isNaN(tailNum) && tailNum >= 100 && tailNum < 10000) {
+      return `GATE-2026-${tailNum}`;
+    }
+  }
+  return str.startsWith('GATE-') ? str : `GATE-2026-${str}`;
 }
 
 function healServerStore(store: CentralStoreData): CentralStoreData {
@@ -432,17 +450,30 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
 
   // 2. Heal & deduplicate vehicleCheckIns
   const rawCheckIns = Array.isArray(store.vehicleCheckIns) ? store.vehicleCheckIns : [];
+  let highestGateNum = 105;
+  for (const rawCi of rawCheckIns) {
+    if (!rawCi) continue;
+    const parts = String(rawCi.id || '').split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum) && lastNum < 100000 && lastNum > highestGateNum) {
+      highestGateNum = lastNum;
+    }
+  }
+
   const seenGateIds = new Set<string>();
   const activeGateByReg = new Map<string, any>();
   const checkedOutGates: any[] = [];
 
   for (const rawCi of rawCheckIns) {
     if (!rawCi) continue;
+    let cleanId = sanitizeServerGateId(rawCi.id);
+    if (!cleanId || seenGateIds.has(cleanId)) {
+      cleanId = `GATE-2026-${++highestGateNum}`;
+    }
     const ci = {
       ...rawCi,
-      id: sanitizeServerGateId(rawCi.id || `GATE-2026-${Date.now()}`)
+      id: cleanId
     };
-    if (seenGateIds.has(ci.id)) continue;
     seenGateIds.add(ci.id);
 
     if (ci.status === 'CHECKED_OUT') {
@@ -453,12 +484,13 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
         checkedOutGates.push(ci);
         continue;
       }
-      // Check if explicitly linked job card is already DELIVERED or CLOSED
+      // ONLY heal to CHECKED_OUT if this check-in's explicitly linked jobCardId was completed (DELIVERED/CLOSED)
+      // AND this check-in itself was already in 'JOB_CARD_CREATED' status
       const linkedJc = ci.jobCardId ? store.jobCards.find((jc: any) => jc.id === ci.jobCardId) : undefined;
       const matchingActiveJc = store.jobCards.find(
         (jc: any) => normalizeServerRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
       );
-      if (linkedJc && (linkedJc.status === 'DELIVERED' || linkedJc.status === 'CLOSED') && !matchingActiveJc) {
+      if (linkedJc && (linkedJc.status === 'DELIVERED' || linkedJc.status === 'CLOSED') && ci.status === 'JOB_CARD_CREATED' && !matchingActiveJc) {
         ci.status = 'CHECKED_OUT';
         ci.checkedOutAt = ci.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
         checkedOutGates.push(ci);
@@ -2501,6 +2533,10 @@ Return valid JSON ONLY.`;
               cars24RefNo: v.cars24_ref_no,
               customerName: v.customer_name || 'Customer',
               customerPhone: v.customer_phone || '',
+              workshopId: v.workshop_id || null,
+              workshopName: v.workshop_name || null,
+              cityId: v.city_id || null,
+              cityName: v.city_name || null,
               checkedInAt: v.check_in_time || v.created_at || new Date().toISOString(),
               checkedInByName: v.check_in_driver_name || 'Security',
               checkInDriverName: v.check_in_driver_name || 'Driver',
@@ -2790,14 +2826,9 @@ Return valid JSON ONLY.`;
                 await client.from('job_tasks').upsert(taskRows, { onConflict: 'id' });
               }
 
-              // Clean up corrupted vehicle_check_ins IDs in Supabase and upsert healed check-ins
+              // Clean up any corrupted scientific-notation vehicle_check_ins IDs in Supabase and upsert healed check-ins
               const badGateIds = [
-                'GATE-2026-2.026202620262026e+22',
-                'GATE-2026-2026202620262026200',
-                'GATE-2026-202620262026119',
-                'GATE-2026-2026117',
-                'GATE-2026-20262026118',
-                'GATE-2026-116'
+                'GATE-2026-2.026202620262026e+22'
               ];
               await client.from('vehicle_check_ins').delete().in('id', badGateIds);
               const ciRows = (store.vehicleCheckIns || []).map((v: any) => ({
