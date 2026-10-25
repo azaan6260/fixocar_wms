@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { JobCard, JobCardStatus, UserRole, VehicleCheckIn, FuelType } from '../types';
-import { updateJobCard, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
+import { updateJobCard, updateVehicleCheckIn, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
 import { 
   Car, 
   Search, 
@@ -59,20 +59,20 @@ export interface StatusColumnConfig {
 
 const PIPELINE_COLUMNS: StatusColumnConfig[] = [
   {
-    id: 'pi_done',
-    title: 'Pre-Inspection (PI Done)',
-    shortLabel: 'PI Done',
+    id: 'waiting_inspection',
+    title: 'Waiting for Inspection',
+    shortLabel: 'Waiting Inspection',
     icon: ShieldCheck,
     colorTheme: {
-      bg: 'bg-slate-50/50 dark:bg-slate-900/50',
-      border: 'border-cyan-500/30',
-      badgeBg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
-      badgeText: 'text-cyan-700 dark:text-cyan-300',
-      headerBg: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-900 dark:text-cyan-300',
-      accent: 'text-cyan-500',
+      bg: 'bg-amber-50/40 dark:bg-amber-950/20',
+      border: 'border-amber-500/40',
+      badgeBg: 'bg-amber-500/15 dark:bg-amber-500/25',
+      badgeText: 'text-amber-800 dark:text-amber-300',
+      headerBg: 'bg-amber-500/10 border-amber-500/20 text-amber-900 dark:text-amber-200',
+      accent: 'text-amber-500',
     },
     statuses: ['INSPECTION'],
-    description: 'Vehicle received & undergoing pre-inspection diagnostic check.',
+    description: 'Gate checked-in vehicles awaiting preliminary diagnostic inspection.',
   },
   {
     id: 'created',
@@ -135,13 +135,13 @@ const PIPELINE_COLUMNS: StatusColumnConfig[] = [
       headerBg: 'bg-purple-500/10 border-purple-500/20 text-purple-900 dark:text-purple-300',
       accent: 'text-purple-500',
     },
-    statuses: ['QC_PENDING'],
+    statuses: ['QC_PENDING', 'PDI_QC'],
     description: 'Pre-Delivery Inspection (PDI) and floor manager quality audit.',
   },
   {
     id: 'ready_delivery',
-    title: 'Ready for Delivery',
-    shortLabel: 'Ready/Dispatch',
+    title: 'Ready for Delivery / RFC',
+    shortLabel: 'Ready / RFC',
     icon: CheckCircle2,
     colorTheme: {
       bg: 'bg-slate-50/50 dark:bg-slate-900/50',
@@ -173,17 +173,17 @@ const PIPELINE_COLUMNS: StatusColumnConfig[] = [
 ];
 
 const ALL_STATUS_OPTIONS: { value: JobCardStatus; label: string }[] = [
-  { value: 'INSPECTION', label: '1. Pre-Inspection (PI)' },
-  { value: 'CREATED', label: '2. Job Card Created' },
-  { value: 'JOB_ALLOCATED', label: '3. Job Allocated' },
-  { value: 'ESTIMATE_PENDING', label: '4. Estimate Pending' },
-  { value: 'IN_PROGRESS', label: '5. Work In Progress' },
-  { value: 'QC_PENDING', label: '6. PDI / QC Pending' },
-  { value: 'READY_FOR_DELIVERY', label: '7. Ready for Delivery' },
-  { value: 'OUT_FOR_DELIVERY', label: '8. Out for Delivery' },
+  { value: 'INSPECTION', label: '1. Waiting for Inspection (INSPECTION)' },
+  { value: 'CREATED', label: '2. Job Card Created (CREATED)' },
+  { value: 'JOB_ALLOCATED', label: '3. Job Allocated (JOB_ALLOCATED)' },
+  { value: 'ESTIMATE_PENDING', label: '4. Estimate Pending (ESTIMATE_PENDING)' },
+  { value: 'IN_PROGRESS', label: '5. Work In Progress (IN_PROGRESS)' },
+  { value: 'QC_PENDING', label: '6. PDI / QC Pending (QC_PENDING)' },
+  { value: 'READY_FOR_DELIVERY', label: '7. Ready for Delivery (READY_FOR_DELIVERY)' },
+  { value: 'OUT_FOR_DELIVERY', label: '8. Out for Delivery (OUT_FOR_DELIVERY)' },
   { value: 'RFC', label: '9. Ready for Checkout (RFC)' },
-  { value: 'DELIVERED', label: '10. Delivered' },
-  { value: 'CLOSED', label: '11. Closed' },
+  { value: 'DELIVERED', label: '10. Delivered (DELIVERED)' },
+  { value: 'CLOSED', label: '11. Closed (CLOSED)' },
 ];
 
 const NEXT_STAGE_MAP: Record<string, { status: JobCardStatus; label: string }> = {
@@ -255,6 +255,18 @@ const PipelineCardItem = React.memo(function PipelineCardItem({
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
               {card.id}
+            </span>
+            <span className="font-mono text-[9px] font-black uppercase text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+              {card.status === 'INSPECTION' ? '🔍 INSPECTION' :
+               card.status === 'CREATED' ? '📋 CREATED' :
+               card.status === 'JOB_ALLOCATED' ? '👤 ALLOTTED' :
+               card.status === 'ESTIMATE_PENDING' ? '⏳ ESTIMATE PENDING' :
+               card.status === 'IN_PROGRESS' ? '🔧 IN_PROGRESS' :
+               card.status === 'QC_PENDING' ? '🛡️ QC_PENDING' :
+               card.status === 'RFC' ? '✅ RFC' :
+               card.status === 'READY_FOR_DELIVERY' ? '🚚 READY_FOR_DELIVERY' :
+               card.status === 'OUT_FOR_DELIVERY' ? '🏎️ OUT_FOR_DELIVERY' :
+               card.status}
             </span>
             {card.isUrgent && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
@@ -527,8 +539,21 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
   }, [filteredCards]);
 
   const totalActiveVehicles = useMemo(() => {
-    return jobCards.filter(c => c.status !== 'DELIVERED' && c.status !== 'CLOSED').length;
-  }, [jobCards]);
+    const activeRegs = new Set<string>();
+    jobCards.forEach(c => {
+      if (c.status !== 'DELIVERED' && c.status !== 'CLOSED') {
+        const cleanReg = c.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (cleanReg) activeRegs.add(cleanReg);
+      }
+    });
+    checkInsList.forEach(c => {
+      if (c.status !== 'CHECKED_OUT') {
+        const cleanReg = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (cleanReg) activeRegs.add(cleanReg);
+      }
+    });
+    return activeRegs.size;
+  }, [jobCards, checkInsList]);
 
   const handleUpdateStatus = useCallback((cardId: string, newStatus: JobCardStatus) => {
     updateJobCard(cardId, (prev) => ({
@@ -536,8 +561,28 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
       status: newStatus,
       checkedOutAt: newStatus === 'DELIVERED' || newStatus === 'CLOSED' ? (prev.checkedOutAt || new Date().toISOString()) : prev.checkedOutAt
     }));
+
+    const card = jobCards.find(c => c.id === cardId);
+    if (card) {
+      const checkIns = getVehicleCheckIns();
+      const cleanReg = card.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      const matchCheckIn = checkIns.find(
+        ci => (card.checkInRecordId && ci.id === card.checkInRecordId) ||
+              (cleanReg && ci.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg && ci.status !== 'CHECKED_OUT')
+      );
+      if (matchCheckIn) {
+        updateVehicleCheckIn(matchCheckIn.id, prev => ({
+          ...prev,
+          status: (newStatus === 'DELIVERED' || newStatus === 'CLOSED') ? 'DELIVERED' :
+                  newStatus === 'INSPECTION' ? 'PDI_IN_PROGRESS' :
+                  (newStatus === 'RFC' || newStatus === 'READY_FOR_DELIVERY' || newStatus === 'OUT_FOR_DELIVERY') ? 'READY_PENDING_DISPATCH' :
+                  'JOB_CARD_CREATED'
+        }));
+      }
+    }
+
     setStatusMenuCardId(null);
-  }, []);
+  }, [jobCards]);
 
   const handleToggleStatusMenu = useCallback((cardId: string) => {
     setStatusMenuCardId((prev) => (prev === cardId ? null : cardId));
@@ -664,7 +709,7 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
               >
                 <span>{col.shortLabel}</span>
                 <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px] font-mono">
-                  {col.cards.length}
+                  {col.id === 'waiting_inspection' ? col.cards.length + pendingGateCheckIns.length : col.cards.length}
                 </span>
               </button>
             ))}
@@ -707,7 +752,7 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
                   </div>
 
                   <span className={`ml-2 px-2.5 py-0.5 rounded-full text-xs font-black font-mono shrink-0 ${col.colorTheme.badgeBg} ${col.colorTheme.badgeText}`}>
-                    {col.cards.length}
+                    {col.id === 'waiting_inspection' ? col.cards.length + pendingGateCheckIns.length : col.cards.length}
                   </span>
                 </div>
 
@@ -723,7 +768,79 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
 
                 {/* Column Scrollable Cards Container */}
                 <div className="p-3 overflow-y-auto space-y-3 grow min-h-[220px]">
-                  {col.cards.length === 0 ? (
+                  {col.id === 'waiting_inspection' && pendingGateCheckIns.length > 0 && (
+                    <div className="space-y-2 mb-3 pb-3 border-b border-amber-200 dark:border-amber-800/40">
+                      <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 px-1">
+                        <span>Gate Checked-In ({pendingGateCheckIns.length})</span>
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">Awaiting JC</span>
+                      </div>
+                      {pendingGateCheckIns.map((ci) => (
+                        <div key={ci.id} className="bg-amber-100/60 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50 rounded-2xl p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-1">
+                            <div>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-[9px] font-black font-mono bg-amber-200/80 dark:bg-amber-800 px-1.5 py-0.5 rounded text-amber-900 dark:text-amber-100 uppercase">
+                                  Check-In #{(ci as any).gatePassNumber || (ci as any).gatePassNo || ci.id.slice(-6)}
+                                </span>
+                                <span className="font-mono text-[9px] font-black uppercase text-amber-800 dark:text-amber-300 bg-amber-200/50 dark:bg-amber-950 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-700">
+                                  🔍 INSPECTION
+                                </span>
+                              </div>
+                              <h4 className="font-mono font-black text-base text-slate-900 dark:text-slate-100 mt-1">
+                                {ci.registrationNumber}
+                              </h4>
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                {ci.make} {ci.model}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 text-xs flex items-center justify-between">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 truncate flex items-center gap-1">
+                              <User className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="truncate">{ci.customerName}</span>
+                            </span>
+                            <a
+                              href={`tel:${ci.customerPhone}`}
+                              className="text-[11px] font-mono font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-0.5 shrink-0 ml-1"
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span>{ci.customerPhone}</span>
+                            </a>
+                          </div>
+                          {onOpenNewJobCardWithPrefill ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenNewJobCardWithPrefill({
+                                checkInId: ci.id,
+                                registrationNumber: ci.registrationNumber,
+                                make: ci.make,
+                                model: ci.model,
+                                customerName: ci.customerName,
+                                customerPhone: ci.customerPhone,
+                                kmReading: ci.mileage || (ci as any).kmReading,
+                                fuelLevel: ci.fuelLevel
+                              })}
+                              className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>+ Create Job Card / Start Inspection</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={onOpenNewJobCardModal}
+                              className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>+ Create Job Card / Start Inspection</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {col.cards.length === 0 && (col.id !== 'waiting_inspection' || pendingGateCheckIns.length === 0) ? (
                     <div className="h-40 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center p-4 text-center text-slate-400">
                       <Car className="w-8 h-8 stroke-[1.5] mb-1 opacity-50" />
                       <p className="text-xs font-bold">No vehicles</p>

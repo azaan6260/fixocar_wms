@@ -454,7 +454,7 @@ export const JobCardList = React.memo(function JobCardList({
   const isManagementRole = authUser?.role === 'SUPER_ADMIN' || authUser?.role === 'ADMIN' || authUser?.role === 'SERVICE_ADVISOR' || authUser?.role === 'FLOOR_MANAGER';
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [searchScope, setSearchScope] = useState<'ALL' | 'REG_NO' | 'CUSTOMER' | 'TECHNICIAN'>('ALL');
+  const [searchScope, setSearchScope] = useState<'ALL' | 'REG_NO' | 'CUSTOMER' | 'MAKE_MODEL' | 'TECHNICIAN'>('ALL');
   const [selectedTechnician, setSelectedTechnician] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | JobCardPriorityLevel>('ALL');
   const [dateRangeField, setDateRangeField] = useState<'ANY' | 'CREATED' | 'TARGET'>('ANY');
@@ -545,6 +545,14 @@ export const JobCardList = React.memo(function JobCardList({
         return (
           c.customerName.toLowerCase().includes(searchLower) ||
           c.customerPhone.toLowerCase().includes(searchLower)
+        );
+      }
+      if (searchScope === 'MAKE_MODEL') {
+        const mm = `${c.make} ${c.model}`.toLowerCase();
+        return (
+          c.make.toLowerCase().includes(searchLower) ||
+          c.model.toLowerCase().includes(searchLower) ||
+          mm.includes(searchLower)
         );
       }
       if (searchScope === 'TECHNICIAN') {
@@ -679,22 +687,49 @@ export const JobCardList = React.memo(function JobCardList({
       // Check vehicle registration match (both raw and normalized alphanumeric without spaces/hyphens)
       const regLower = card.vehicle.registrationNumber.toLowerCase();
       const regAlnum = regLower.replace(/[^a-z0-9]/g, '');
+      const vehicleMake = card.vehicle.make.toLowerCase();
+      const vehicleModel = card.vehicle.model.toLowerCase();
+      const vehicleMakeModel = `${card.vehicle.make} ${card.vehicle.model}`.toLowerCase();
+      const vehicleFullTitle = `${card.vehicle.make} ${card.vehicle.model} ${card.vehicle.variant || ''}`.toLowerCase();
+      const customerName = card.customer.name.toLowerCase();
+      const customerPhone = card.customer.phone.toLowerCase();
+
       const matchesRegistration =
         regLower.includes(searchLower) ||
         (searchAlnum.length > 0 && regAlnum.includes(searchAlnum)) ||
-        card.vehicle.make.toLowerCase().includes(searchLower) ||
-        card.vehicle.model.toLowerCase().includes(searchLower) ||
-        Boolean(card.vehicle.variant && card.vehicle.variant.toLowerCase().includes(searchLower)) ||
-        Boolean(card.vehicle.vin && card.vehicle.vin.toLowerCase().includes(searchLower)) ||
         card.id.toLowerCase().includes(searchLower) ||
         Boolean(card.cars24RefNo && card.cars24RefNo.toLowerCase().includes(searchLower)) ||
         Boolean(card.workOrderNo && card.workOrderNo.toLowerCase().includes(searchLower));
 
       // Check customer match
       const matchesCustomer =
-        card.customer.name.toLowerCase().includes(searchLower) ||
-        card.customer.phone.toLowerCase().includes(searchLower) ||
+        customerName.includes(searchLower) ||
+        customerPhone.includes(searchLower) ||
         Boolean(card.customer.email && card.customer.email.toLowerCase().includes(searchLower));
+
+      // Check vehicle make and model match
+      const matchesMakeModel =
+        vehicleMake.includes(searchLower) ||
+        vehicleModel.includes(searchLower) ||
+        vehicleMakeModel.includes(searchLower) ||
+        vehicleFullTitle.includes(searchLower) ||
+        Boolean(card.vehicle.variant && card.vehicle.variant.toLowerCase().includes(searchLower));
+
+      // Multi-token combination match (e.g. "Swift KA01" or "Creta Sharma" or "Rahul Dzire")
+      const tokens = searchLower.split(/\s+/).filter(Boolean);
+      const matchesMultiToken = tokens.length > 1 && tokens.every((token) => {
+        const tokenAlnum = token.replace(/[^a-z0-9]/g, '');
+        return (
+          regLower.includes(token) ||
+          (tokenAlnum.length > 0 && regAlnum.includes(tokenAlnum)) ||
+          vehicleMake.includes(token) ||
+          vehicleModel.includes(token) ||
+          vehicleMakeModel.includes(token) ||
+          customerName.includes(token) ||
+          customerPhone.includes(token) ||
+          card.id.toLowerCase().includes(token)
+        );
+      });
 
       // Check assigned technician match across all task roles (Painter, Denter, Mechanic/Tech, Floor Manager, Sublet Vendor)
       const cardTechnicians = getCardTechnicians(card);
@@ -719,12 +754,16 @@ export const JobCardList = React.memo(function JobCardList({
           matchesSearch = matchesRegistration;
         } else if (searchScope === 'CUSTOMER') {
           matchesSearch = matchesCustomer;
+        } else if (searchScope === 'MAKE_MODEL') {
+          matchesSearch = matchesMakeModel;
         } else if (searchScope === 'TECHNICIAN') {
           matchesSearch = matchesTechnicianSearch;
         } else {
           matchesSearch =
             matchesRegistration ||
             matchesCustomer ||
+            matchesMakeModel ||
+            matchesMultiToken ||
             matchesTechnicianSearch ||
             Boolean(card.cityName && card.cityName.toLowerCase().includes(searchLower)) ||
             Boolean(card.workshopName && card.workshopName.toLowerCase().includes(searchLower));
@@ -917,48 +956,79 @@ export const JobCardList = React.memo(function JobCardList({
           </button>
         </div>
 
-        {/* Clean Global Search Bar (Always visible on page open; Advanced Filters collapsed until toggled) */}
+        {/* Quick Text Search Bar to filter active job cards by Registration Number, Customer Name, or Vehicle Make and Model */}
         <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           
-          {/* Primary Row: Search Input + Advanced Filters Toggle Button */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 min-w-0">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
+          {/* Primary Row: Search Input + Quick Filter Scope Pills + Advanced Filters Toggle */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1 min-w-0 group">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none group-focus-within:text-blue-500 transition-colors" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder={
                   searchScope === 'REG_NO'
-                    ? 'Type Vehicle Reg No (e.g. KA01AB1234, MH-12) or Job Card ID...'
+                    ? 'Search by Vehicle Reg No (e.g. KA01AB1234, MH-12)...'
                     : searchScope === 'CUSTOMER'
-                    ? 'Type Customer Name, Phone Number, or Email...'
+                    ? 'Search by Customer Name (e.g. Rahul, Sharma) or Phone...'
+                    : searchScope === 'MAKE_MODEL'
+                    ? 'Search by Vehicle Make & Model (e.g. Maruti Swift, Creta, City)...'
                     : searchScope === 'TECHNICIAN'
-                    ? 'Type Assigned Painter, Denter, Mechanic, or Floor Manager...'
-                    : 'Search Job Cards by Customer Name, Vehicle Reg No, or Assigned Technician...'
+                    ? 'Search by Assigned Painter, Denter, Mechanic...'
+                    : 'Quick search active cards by Reg No, Customer Name, or Vehicle Make & Model...'
                 }
-                aria-label="Global Job Card Search"
-                className="w-full pl-10 pr-20 min-h-[46px] text-xs sm:text-sm rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 font-semibold transition-all shadow-2xs"
+                aria-label="Quick search active job cards by registration number, customer name, or vehicle make and model"
+                className="w-full pl-10 pr-20 min-h-[46px] text-xs sm:text-sm rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-slate-900 font-semibold transition-all shadow-2xs"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-[10px] font-black flex items-center gap-1 transition-colors cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 text-xs font-black flex items-center gap-1 transition-colors cursor-pointer"
                   title="Clear search query"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                   <span>Clear</span>
                 </button>
               )}
             </div>
 
-            {/* Toggle Button for Collapsible Advanced Filters (Hidden on Page Opening) */}
+            {/* Quick Scope Filter Selector Buttons (Reg No, Customer, Make & Model) */}
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto scrollbar-none shrink-0">
+              {[
+                { id: 'ALL', label: 'All', icon: Search },
+                { id: 'REG_NO', label: 'Reg No', icon: Car },
+                { id: 'CUSTOMER', label: 'Customer', icon: User },
+                { id: 'MAKE_MODEL', label: 'Make & Model', icon: Sparkles },
+              ].map((scope) => {
+                const isSelected = searchScope === scope.id;
+                const IconComponent = scope.icon;
+                return (
+                  <button
+                    key={scope.id}
+                    type="button"
+                    onClick={() => setSearchScope(scope.id as any)}
+                    className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-700/50'
+                    }`}
+                    title={`Filter by ${scope.label}`}
+                  >
+                    <IconComponent className="w-3.5 h-3.5" />
+                    <span>{scope.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Toggle Button for Collapsible Advanced Filters */}
             <button
               type="button"
               onClick={() => setShowAdvancedFilters((prev) => !prev)}
               aria-expanded={showAdvancedFilters}
-              className={`min-h-[46px] px-3.5 sm:px-4 rounded-2xl border text-xs font-extrabold flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
+              className={`min-h-[46px] px-3.5 sm:px-4 rounded-2xl border text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer ${
                 showAdvancedFilters || activeAdvancedFilterCount > 0
                   ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
                   : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -966,16 +1036,11 @@ export const JobCardList = React.memo(function JobCardList({
               title="Toggle Advanced Filters (Priority, Date Range, Technician & Sort)"
             >
               <SlidersHorizontal className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">Advanced Filters</span>
+              <span className="hidden sm:inline">Advanced</span>
               {activeAdvancedFilterCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-white text-blue-700 text-[10px] font-black leading-none">
+                <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center">
                   {activeAdvancedFilterCount}
                 </span>
-              )}
-              {showAdvancedFilters ? (
-                <ChevronUp className="w-3.5 h-3.5 shrink-0" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5 shrink-0" />
               )}
             </button>
           </div>
@@ -1120,6 +1185,7 @@ export const JobCardList = React.memo(function JobCardList({
                     { id: 'ALL', label: 'All Fields' },
                     { id: 'REG_NO', label: '🚗 Reg No' },
                     { id: 'CUSTOMER', label: '👤 Customer' },
+                    { id: 'MAKE_MODEL', label: '🚘 Make & Model' },
                     { id: 'TECHNICIAN', label: '👨‍🔧 Technician' },
                   ].map((scope) => (
                     <button
@@ -1193,7 +1259,7 @@ export const JobCardList = React.memo(function JobCardList({
                 </span>
                 {searchTerm.trim() && (
                   <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 font-mono font-bold text-[11px] text-blue-700 dark:text-blue-300">
-                    Query: "{searchTerm.trim()}" ({searchScope === 'ALL' ? 'Customer, Reg No & Technician' : searchScope.replace('_', ' ')})
+                    Query: "{searchTerm.trim()}" ({searchScope === 'ALL' ? 'Reg No, Customer, Make & Model' : searchScope === 'MAKE_MODEL' ? 'Make & Model' : searchScope === 'REG_NO' ? 'Registration No' : searchScope === 'CUSTOMER' ? 'Customer Name' : 'Technician'})
                   </span>
                 )}
                 {priorityFilter !== 'ALL' && (

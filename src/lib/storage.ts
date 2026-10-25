@@ -4096,6 +4096,15 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
   const activeByReg = new Map<string, VehicleCheckIn>();
   const checkedOutList: VehicleCheckIn[] = [];
 
+  const allCards = getAllJobCards();
+  const activeCardsByReg = new Map<string, JobCard>();
+  for (const card of allCards) {
+    if (card.status !== 'DELIVERED' && card.status !== 'CLOSED') {
+      const norm = normalizeRegNo(card.vehicle?.registrationNumber);
+      if (norm) activeCardsByReg.set(norm, card);
+    }
+  }
+
   for (const rawItem of list) {
     if (!rawItem) continue;
     let cleanId = sanitizeGateCheckInId(rawItem.id);
@@ -4108,17 +4117,31 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
     };
     seenIds.add(item.id);
 
+    const normReg = normalizeRegNo(item.registrationNumber);
+    const activeCardForVehicle = normReg ? activeCardsByReg.get(normReg) : undefined;
+
+    // If this vehicle currently has an active job card in the workshop, it is physically in the workshop!
+    if (activeCardForVehicle) {
+      item.status = 'JOB_CARD_CREATED';
+      item.jobCardId = activeCardForVehicle.id;
+      item.checkedOutAt = undefined;
+      item.make = item.make || activeCardForVehicle.vehicle?.make;
+      item.model = item.model || activeCardForVehicle.vehicle?.model;
+      item.customerName = item.customerName || activeCardForVehicle.customer?.name;
+      item.customerPhone = item.customerPhone || activeCardForVehicle.customer?.phone;
+      activeByReg.set(normReg!, item);
+      continue;
+    }
+
     if (item.status === 'CHECKED_OUT') {
       checkedOutList.push(item);
     } else {
-      const normReg = normalizeRegNo(item.registrationNumber);
       if (!normReg) {
         checkedOutList.push(item);
         continue;
       }
       // ONLY heal to CHECKED_OUT if this check-in's explicitly linked jobCardId was completed (DELIVERED/CLOSED)
       // AND this check-in itself was already in 'JOB_CARD_CREATED' status
-      const allCards = getAllJobCards();
       const linkedCard = item.jobCardId ? allCards.find(jc => jc.id === item.jobCardId) : undefined;
       if (linkedCard && (linkedCard.status === 'DELIVERED' || linkedCard.status === 'CLOSED') && item.status === 'JOB_CARD_CREATED') {
         item.status = 'CHECKED_OUT';
@@ -4153,6 +4176,40 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
           });
         }
       }
+    }
+  }
+
+  // Ensure every vehicle with an active job card has an active in-workshop check-in entry
+  for (const [normReg, jc] of activeCardsByReg.entries()) {
+    if (!activeByReg.has(normReg)) {
+      activeByReg.set(normReg, {
+        id: `GATE-2026-${++highestGateNum}`,
+        registrationNumber: jc.vehicle.registrationNumber,
+        make: jc.vehicle.make,
+        model: jc.vehicle.model,
+        variant: jc.vehicle.variant,
+        fuelType: jc.vehicle.fuelType,
+        color: jc.vehicle.color,
+        mileage: jc.vehicle.mileage,
+        isCars24: jc.isCars24,
+        cars24RefNo: jc.cars24RefNo,
+        customerName: jc.customer.name,
+        customerPhone: jc.customer.phone,
+        customerEmail: jc.customer.email,
+        cityId: jc.cityId,
+        cityName: jc.cityName,
+        workshopId: jc.workshopId,
+        workshopName: jc.workshopName,
+        checkedInByName: 'System / Active Job Card',
+        checkInDriverName: jc.checkInDriverName || 'Customer / Driver',
+        checkInDriverPhone: jc.checkInDriverPhone || jc.customer.phone,
+        checkInNotes: `Vehicle currently in workshop under Job Card ${jc.id}.`,
+        status: 'JOB_CARD_CREATED',
+        jobCardId: jc.id,
+        workOrderNo: jc.workOrderNo,
+        workOrderNotes: jc.workOrderNotes,
+        checkedInAt: jc.createdAt || new Date().toISOString(),
+      });
     }
   }
 
