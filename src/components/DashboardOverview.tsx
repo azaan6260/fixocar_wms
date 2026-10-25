@@ -75,11 +75,59 @@ export function DashboardOverview({
     return () => unsubscribe();
   }, []);
 
-  const pendingCheckIns = checkIns.filter(c => {
+  // Strict Status Enum Validation Sets & Predicates
+  const VALID_CHECK_IN_STATUSES = new Set<string>([
+    'IDLE_AWAITING_PI',
+    'AWAITING_JOB_CARD',
+    'IN_WORKSHOP',
+    'READY_PENDING_DISPATCH',
+    'CHECKED_OUT'
+  ]);
+
+  const VALID_JOB_CARD_STATUSES = new Set<string>([
+    'GATE_ENTRY_ONLY',
+    'IDLE_AWAITING_PI',
+    'JOB_CARD_CREATED',
+    'ESTIMATE_PENDING',
+    'ESTIMATE_APPROVED',
+    'WORK_IN_PROGRESS',
+    'QUALITY_CHECK',
+    'QC_PENDING',
+    'READY_FOR_DELIVERY',
+    'RFC',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
+    'CLOSED',
+    'CANCELLED',
+    'CREATED',
+    'INSPECTION',
+    'JOB_ALLOCATED'
+  ]);
+
+  const isValidJobCardStatus = (status?: string): boolean => Boolean(status && VALID_JOB_CARD_STATUSES.has(status));
+  const isValidCheckInStatus = (status?: string): boolean => Boolean(status && VALID_CHECK_IN_STATUSES.has(status));
+
+  const isJobCardActiveInWorkshop = (card: JobCard): boolean => {
+    if (!isValidJobCardStatus(card.status)) return false;
+    const s = card.status as string;
+    return s !== 'DELIVERED' && s !== 'CLOSED' && s !== 'CANCELLED';
+  };
+
+  const isCheckInActiveInWorkshop = (c: VehicleCheckIn): boolean => {
+    if (!isValidCheckInStatus(c.status)) return false;
     if (c.status === 'CHECKED_OUT') return false;
+    if (c.jobCardId) {
+      const linked = jobCards.find(jc => jc.id === c.jobCardId);
+      if (linked && !isJobCardActiveInWorkshop(linked)) return false;
+    }
+    return true;
+  };
+
+  const pendingCheckIns = checkIns.filter(c => {
+    if (!isCheckInActiveInWorkshop(c)) return false;
     const cleanReg = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const hasActiveJobCard = jobCards.some(jc => {
-      if (jc.status === 'DELIVERED' || jc.status === 'CLOSED') return false;
+      if (!isJobCardActiveInWorkshop(jc)) return false;
       if (jc.checkInRecordId && jc.checkInRecordId === c.id) return true;
       const jcReg = jc.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
       return jcReg === cleanReg;
@@ -97,7 +145,7 @@ export function DashboardOverview({
     const cleanScanned = regNum.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const activeCard = jobCards.find(
       j => j.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanScanned && 
-           j.status !== 'CLOSED' && j.status !== 'DELIVERED'
+           isJobCardActiveInWorkshop(j)
     );
 
     if (activeCard) {
@@ -150,7 +198,7 @@ export function DashboardOverview({
   };
 
   // Metrics (Active Job Cards + Checked-In Vehicles Waiting for Inspection)
-  const activeCars = jobCards.filter(j => j.status !== 'DELIVERED' && j.status !== 'CLOSED');
+  const activeCars = jobCards.filter(j => isJobCardActiveInWorkshop(j));
   const retailCars = activeCars.filter(j => !j.isCars24);
   const cars24Cars = activeCars.filter(j => j.isCars24);
   const pendingRetailCheckIns = pendingCheckIns.filter(c => !c.isCars24);
@@ -167,28 +215,26 @@ export function DashboardOverview({
       // Calculate active job cards for this employee (where they have an assigned task)
       const empActiveCards = new Set<string>();
       jobCards.forEach(card => {
-        if (card.status !== 'CLOSED' && card.status !== 'DELIVERED') {
+        if (isJobCardActiveInWorkshop(card)) {
           const hasTask = card.tasks.some(t => t.assignedToId === emp.id);
           if (hasTask) empActiveCards.add(card.id);
         }
       });
       
-      // Mock average turnaround time based on their base salary or randomly for visualization
-      // In a real app, this would be computed by (task.completedAt - card.createdAt)
       const avgTatHours = emp.name.length * 1.5 + (empActiveCards.size * 0.5);
 
       return {
-        name: emp.name.split(' ')[0], // First name for chart
+        name: emp.name.split(' ')[0],
         activeJobs: empActiveCards.size,
         avgTat: parseFloat(avgTatHours.toFixed(1))
       };
     })
     .sort((a, b) => b.activeJobs - a.activeJobs);
 
-  const inProgress = jobCards.filter(j => j.status === 'IN_PROGRESS');
-  const estimatePending = jobCards.filter(j => j.status === 'ESTIMATE_PENDING');
-  const qcPending = jobCards.filter(j => j.status === 'QC_PENDING');
-  const outForDelivery = jobCards.filter(j => j.status === 'OUT_FOR_DELIVERY');
+  const inProgress = jobCards.filter(j => isJobCardActiveInWorkshop(j) && j.status === 'IN_PROGRESS');
+  const estimatePending = jobCards.filter(j => isJobCardActiveInWorkshop(j) && j.status === 'ESTIMATE_PENDING');
+  const qcPending = jobCards.filter(j => isJobCardActiveInWorkshop(j) && j.status === 'QC_PENDING');
+  const outForDelivery = jobCards.filter(j => isJobCardActiveInWorkshop(j) && j.status === 'OUT_FOR_DELIVERY');
 
   // Vehicle Type filter state for Live Job Cards table
   const [vehicleFilter, setVehicleFilter] = useState<'ALL' | 'RETAIL' | 'CARS24'>('ALL');
@@ -333,7 +379,7 @@ export function DashboardOverview({
             {
               step: '2. Opened / Allotted',
               sub: 'Inspection & Staff',
-              count: jobCards.filter(j => j.status === 'INSPECTION' || j.status === 'CREATED' || j.status === 'JOB_ALLOCATED').length,
+              count: jobCards.filter(j => isJobCardActiveInWorkshop(j) && (j.status === 'INSPECTION' || j.status === 'CREATED' || j.status === 'JOB_ALLOCATED')).length,
               tab: 'status-pipeline',
               accent: 'border-cyan-500/30 bg-cyan-500/5 text-cyan-600 dark:text-cyan-400',
             },
@@ -361,14 +407,14 @@ export function DashboardOverview({
             {
               step: '6. Ready (RFC)',
               sub: 'Ready for Handover',
-              count: jobCards.filter(j => j.status === 'READY_FOR_DELIVERY' || j.status === 'OUT_FOR_DELIVERY' || j.status === 'RFC').length,
+              count: jobCards.filter(j => isJobCardActiveInWorkshop(j) && (j.status === 'READY_FOR_DELIVERY' || j.status === 'OUT_FOR_DELIVERY' || j.status === 'RFC')).length,
               tab: 'rfc_quick',
               accent: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400',
             },
             {
               step: '7. Delivered',
               sub: 'Dispatched & Closed',
-              count: jobCards.filter(j => j.status === 'DELIVERED' || j.status === 'CLOSED').length,
+              count: jobCards.filter(j => isValidJobCardStatus(j.status) && (j.status === 'DELIVERED' || j.status === 'CLOSED' || (j.status as string) === 'CANCELLED')).length,
               tab: 'job-cards-history',
               accent: 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300',
             },

@@ -229,38 +229,95 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     setCheckIns(getVehicleCheckIns());
   };
 
+  // Strict Status Enum Validation Sets & Predicates
+  const VALID_CHECK_IN_STATUSES = new Set<CheckInStatus>([
+    'CHECKED_IN',
+    'PDI_IN_PROGRESS',
+    'IDLE_AWAITING_PI',
+    'AWAITING_JOB_CARD',
+    'JOB_CARD_CREATED',
+    'INVOICED',
+    'READY_PENDING_DISPATCH',
+    'DELIVERED',
+    'CHECKED_OUT'
+  ]);
+
+  const VALID_JOB_CARD_STATUSES = new Set<string>([
+    'GATE_ENTRY_ONLY',
+    'IDLE_AWAITING_PI',
+    'JOB_CARD_CREATED',
+    'ESTIMATE_PENDING',
+    'ESTIMATE_APPROVED',
+    'WORK_IN_PROGRESS',
+    'QUALITY_CHECK',
+    'QC_PENDING',
+    'PDI_QC',
+    'READY_FOR_DELIVERY',
+    'RFC',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
+    'CLOSED',
+    'CANCELLED',
+    'CREATED',
+    'INSPECTION',
+    'JOB_ALLOCATED',
+    'IN_PROGRESS'
+  ]);
+
+  const isValidCheckInStatus = (status?: string): status is CheckInStatus => Boolean(status && VALID_CHECK_IN_STATUSES.has(status as CheckInStatus));
+  const isValidJobCardStatus = (status?: string): boolean => Boolean(status && VALID_JOB_CARD_STATUSES.has(status));
+
+  const isJobCardPhysicallyPresent = (card: JobCard): boolean => {
+    if (!isValidJobCardStatus(card.status)) return false;
+    const statusStr = card.status as string;
+    return statusStr !== 'DELIVERED' && statusStr !== 'CLOSED' && statusStr !== 'CANCELLED';
+  };
+
+  const isCheckInPhysicallyPresent = (checkIn: VehicleCheckIn): boolean => {
+    if (!isValidCheckInStatus(checkIn.status)) return false;
+    if (checkIn.status === 'CHECKED_OUT') return false;
+
+    // If explicit jobCardId exists, check linked job card state
+    if (checkIn.jobCardId) {
+      const card = jobCardsList.find(jc => jc.id === checkIn.jobCardId);
+      if (card && !isJobCardPhysicallyPresent(card)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   // Helper to resolve active job card for a check-in item
   const getActiveCardForItem = (item: VehicleCheckIn): JobCard | undefined => {
-    if (item.status === 'CHECKED_OUT') return undefined;
+    if (!isCheckInPhysicallyPresent(item)) return undefined;
     const norm = normalizeRegNo(item.registrationNumber);
     return jobCardsList.find(
       jc =>
-        jc.status !== 'DELIVERED' &&
-        jc.status !== 'CLOSED' &&
+        isJobCardPhysicallyPresent(jc) &&
         ((item.jobCardId && jc.id === item.jobCardId) ||
           (jc.checkInRecordId && jc.checkInRecordId === item.id) ||
           (norm && normalizeRegNo(jc.vehicle?.registrationNumber) === norm))
     );
   };
 
-  // Workshop counts
-  const inWorkshopCount = checkIns.filter(c => c.status !== 'CHECKED_OUT').length;
+  // Workshop counts with strict status enum validation
+  const inWorkshopCount = checkIns.filter(c => isCheckInPhysicallyPresent(c)).length;
   const idleAwaitingPiCount = checkIns.filter(c => {
-    if (c.status === 'CHECKED_OUT') return false;
+    if (!isCheckInPhysicallyPresent(c)) return false;
     const card = getActiveCardForItem(c);
-    return !card || card.status === 'INSPECTION';
+    return !card || card.status === 'INSPECTION' || card.status === 'CREATED' || (card.status as string) === 'IDLE_AWAITING_PI';
   }).length;
   const activeRepairCount = checkIns.filter(c => {
-    if (c.status === 'CHECKED_OUT') return false;
+    if (!isCheckInPhysicallyPresent(c)) return false;
     const card = getActiveCardForItem(c);
-    return Boolean(card);
+    return Boolean(card) && card?.status !== 'INSPECTION' && card?.status !== 'CREATED';
   }).length;
   const readyDispatchCount = checkIns.filter(c => {
-    if (c.status === 'CHECKED_OUT') return false;
+    if (!isCheckInPhysicallyPresent(c)) return false;
     const card = getActiveCardForItem(c);
     return c.status === 'READY_PENDING_DISPATCH' || (card && (card.status === 'RFC' || card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY'));
   }).length;
-  const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
+  const checkedOutCount = checkIns.filter(c => !isCheckInPhysicallyPresent(c)).length;
 
   // Auth & Workshop Assignment Rules
   const isSuperAdmin = authUser?.role === 'SUPER_ADMIN';
@@ -487,6 +544,10 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
   };
 
   const filteredItems = checkIns.filter(item => {
+    // 1. Validate status enum
+    if (!isValidCheckInStatus(item.status)) return false;
+
+    // 2. Search match filter
     const searchLower = searchTerm.toLowerCase().trim();
     const cleanSearch = searchLower.replace(/[^a-z0-9]/g, '');
     const cleanReg = item.registrationNumber.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -502,17 +563,20 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
     if (!matchesSearch) return false;
 
+    // 3. Strict physical presence and status segregation
+    const isPresent = isCheckInPhysicallyPresent(item);
     const activeCard = getActiveCardForItem(item);
-    if (activeFilter === 'IN_WORKSHOP') return item.status !== 'CHECKED_OUT';
-    if (activeFilter === 'IDLE_PI') return item.status !== 'CHECKED_OUT' && (!activeCard || activeCard.status === 'INSPECTION');
-    if (activeFilter === 'ACTIVE_REPAIR') return item.status !== 'CHECKED_OUT' && Boolean(activeCard);
+
+    if (activeFilter === 'IN_WORKSHOP') return isPresent;
+    if (activeFilter === 'IDLE_PI') return isPresent && (!activeCard || activeCard.status === 'INSPECTION' || activeCard.status === 'CREATED' || (activeCard.status as string) === 'IDLE_AWAITING_PI');
+    if (activeFilter === 'ACTIVE_REPAIR') return isPresent && Boolean(activeCard) && activeCard?.status !== 'INSPECTION' && activeCard?.status !== 'CREATED';
     if (activeFilter === 'READY_DISPATCH') {
-      return item.status !== 'CHECKED_OUT' && (
+      return isPresent && (
         item.status === 'READY_PENDING_DISPATCH' ||
         Boolean(activeCard && (activeCard.status === 'RFC' || activeCard.status === 'READY_FOR_DELIVERY' || activeCard.status === 'OUT_FOR_DELIVERY'))
       );
     }
-    if (activeFilter === 'CHECKED_OUT') return item.status === 'CHECKED_OUT';
+    if (activeFilter === 'CHECKED_OUT') return !isPresent;
 
     return true;
   });
