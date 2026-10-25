@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore, isJobCardCheckedOutOrRfc } from '../lib/storage';
+import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore, isJobCardCheckedOutOrRfc, getVehiclePhotoForRegNo } from '../lib/storage';
 import { VehicleCheckIn } from '../types';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -167,22 +167,25 @@ const JobCardListItem = React.memo(function JobCardListItem({
 
         {/* Vehicle Information Row with Check-In Photo */}
         <div className="flex items-start gap-3">
-          {card.checkInPhotoWithDriverUrl ? (
-            <img
-              src={card.checkInPhotoWithDriverUrl}
-              alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-900 shadow-2xs"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 font-bold border ${
-              isDeliveredOrClosed 
-                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40' 
-                : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40'
-            }`}>
-              <Car className="w-6 h-6" />
-            </div>
-          )}
+          {(() => {
+            const cardPhoto = getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInPhotoWithDriverUrl);
+            return cardPhoto ? (
+              <img
+                src={cardPhoto}
+                alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-900 shadow-2xs"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 font-bold border ${
+                isDeliveredOrClosed 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40' 
+                  : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40'
+              }`}>
+                <Car className="w-6 h-6" />
+              </div>
+            );
+          })()}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">

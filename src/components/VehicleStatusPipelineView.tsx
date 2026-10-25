@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { JobCard, JobCardStatus, UserRole, VehicleCheckIn, FuelType } from '../types';
-import { updateJobCard, updateVehicleCheckIn, getJobCards, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
+import { updateJobCard, updateVehicleCheckIn, getJobCards, getVehicleCheckIns, subscribeToStore, getVehiclePhotoForRegNo } from '../lib/storage';
 import { 
   Car, 
   Search, 
@@ -252,18 +252,21 @@ const PipelineCardItem = React.memo(function PipelineCardItem({
       {/* Card Photo, Reg Number, Vehicle Name & JC ID */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
-          {card.checkInPhotoWithDriverUrl ? (
-            <img
-              src={card.checkInPhotoWithDriverUrl}
-              alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
-              className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-900 shadow-2xs"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
-              <Car className="w-6 h-6" />
-            </div>
-          )}
+          {(() => {
+            const cardPhoto = getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInPhotoWithDriverUrl);
+            return cardPhoto ? (
+              <img
+                src={cardPhoto}
+                alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
+                className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-900 shadow-2xs"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
+                <Car className="w-6 h-6" />
+              </div>
+            );
+          })()}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1 flex-wrap">
               <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">

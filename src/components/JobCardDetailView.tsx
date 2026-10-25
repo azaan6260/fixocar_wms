@@ -524,7 +524,7 @@ export function JobCardDetailView({
           {/* Left: Check-In Photo + Indian Registration Number Plate Badge + Car Make Model */}
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {(() => {
-              const headerCheckInPhotoUrl = card.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInRecordId);
+              const headerCheckInPhotoUrl = getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInPhotoWithDriverUrl);
               return headerCheckInPhotoUrl ? (
                 <button
                   type="button"

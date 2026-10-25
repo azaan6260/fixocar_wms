@@ -864,7 +864,7 @@ export function DashboardOverview({
                               .filter((n): n is string => Boolean(n && n !== 'Unassigned'))
                           )
                         );
-                        const vehiclePhotoUrl = card.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInRecordId);
+                        const vehiclePhotoUrl = getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInPhotoWithDriverUrl);
 
                         return (
                           <tr
@@ -957,7 +957,7 @@ export function DashboardOverview({
                       })}
 
                       {filteredPendingCheckIns.map((checkIn) => {
-                        const checkInPhotoUrl = checkIn.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(checkIn.registrationNumber, checkIn.id);
+                        const checkInPhotoUrl = getVehiclePhotoForRegNo(checkIn.registrationNumber, checkIn.checkInPhotoWithDriverUrl);
                         return (
                           <tr
                             key={`checkin-${checkIn.id}`}

@@ -155,34 +155,35 @@ let memoryJobCardsCache: JobCard[] | null = null;
 
 export function registerVehiclePhotoInMemory(regNo?: string | null, photoUrl?: string | null) {
   const norm = normalizeRegNo(regNo);
-  if (!norm || !photoUrl || typeof photoUrl !== 'string') return;
+  if (!norm || !photoUrl || typeof photoUrl !== 'string' || !photoUrl.startsWith('data:image/')) return;
   const existing = memoryVehiclePhotoByReg.get(norm);
-  const isNewReal = photoUrl.startsWith('data:image/');
-  const isExReal = existing?.startsWith('data:image/');
-  if (!existing || (isNewReal && !isExReal) || (isNewReal && isExReal && photoUrl.length > existing.length)) {
+  if (!existing || photoUrl.length > existing.length) {
     memoryVehiclePhotoByReg.set(norm, photoUrl);
   }
 }
 
 export function getVehiclePhotoForRegNo(regNo?: string | null, fallbackPhotoUrl?: string | null): string | undefined {
   const norm = normalizeRegNo(regNo);
-  if (fallbackPhotoUrl && fallbackPhotoUrl.startsWith('data:image/')) {
+  if (!norm) {
+    return (fallbackPhotoUrl && typeof fallbackPhotoUrl === 'string' && fallbackPhotoUrl.startsWith('data:image/')) ? fallbackPhotoUrl : undefined;
+  }
+  if (fallbackPhotoUrl && typeof fallbackPhotoUrl === 'string' && fallbackPhotoUrl.startsWith('data:image/')) {
     registerVehiclePhotoInMemory(norm, fallbackPhotoUrl);
     return fallbackPhotoUrl;
   }
-  if (norm && memoryVehiclePhotoByReg.has(norm)) {
+  if (memoryVehiclePhotoByReg.has(norm)) {
     return memoryVehiclePhotoByReg.get(norm);
   }
-  if (norm && memoryVehicleCheckInsCache) {
+  if (memoryVehicleCheckInsCache) {
     const matched = memoryVehicleCheckInsCache.find(
-      c => normalizeRegNo(c.registrationNumber) === norm && c.checkInPhotoWithDriverUrl
+      c => normalizeRegNo(c.registrationNumber) === norm && c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.startsWith('data:image/')
     );
     if (matched?.checkInPhotoWithDriverUrl) {
       registerVehiclePhotoInMemory(norm, matched.checkInPhotoWithDriverUrl);
       return matched.checkInPhotoWithDriverUrl;
     }
   }
-  return fallbackPhotoUrl || undefined;
+  return (fallbackPhotoUrl && typeof fallbackPhotoUrl === 'string' && fallbackPhotoUrl.startsWith('data:image/')) ? fallbackPhotoUrl : undefined;
 }
 
 export interface UnifiedVehicleStatusInfo {
@@ -609,9 +610,12 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
   if (card.checkInPhotoWithDriverUrl) {
     registerVehiclePhotoInMemory(normCardReg, card.checkInPhotoWithDriverUrl);
   }
+
+  // Strictly require registration number match to prevent cross-vehicle photo & record corruption
   const matchedCheckIn = memoryVehicleCheckInsCache?.find(
-    ci => (card.checkInRecordId && ci.id === card.checkInRecordId) || (normCardReg && normalizeRegNo(ci.registrationNumber) === normCardReg)
+    ci => normCardReg && normalizeRegNo(ci.registrationNumber) === normCardReg
   );
+
   const resolvedCheckInPhoto = getVehiclePhotoForRegNo(
     normCardReg,
     card.checkInPhotoWithDriverUrl || matchedCheckIn?.checkInPhotoWithDriverUrl
@@ -623,7 +627,7 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
     workshopName,
     cityId,
     cityName,
-    checkInRecordId: card.checkInRecordId || matchedCheckIn?.id,
+    checkInRecordId: matchedCheckIn?.id || card.checkInRecordId,
     checkedInAt: card.checkedInAt || matchedCheckIn?.checkedInAt,
     checkInDriverName: card.checkInDriverName || matchedCheckIn?.checkInDriverName,
     checkInDriverPhone: card.checkInDriverPhone || matchedCheckIn?.checkInDriverPhone,
@@ -4383,10 +4387,14 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
         checkedOutList.push(item);
         continue;
       }
-      // ONLY heal to CHECKED_OUT if this check-in's explicitly linked jobCardId was completed (DELIVERED/CLOSED)
-      // AND this check-in itself was already in 'JOB_CARD_CREATED' status
-      const linkedCard = item.jobCardId ? allCards.find(jc => jc.id === item.jobCardId) : undefined;
-      if (linkedCard && (linkedCard.status === 'DELIVERED' || linkedCard.status === 'CLOSED') && item.status === 'JOB_CARD_CREATED') {
+
+      // Check if this vehicle has any job card in the system
+      const regJobCards = allCards.filter(jc => normalizeRegNo(jc.vehicle?.registrationNumber) === normReg);
+      const hasActiveCardForReg = regJobCards.some(jc => jc.status !== 'DELIVERED' && jc.status !== 'CLOSED');
+      const hasDeliveredCardForReg = regJobCards.some(jc => jc.status === 'DELIVERED' || jc.status === 'CLOSED');
+
+      // If vehicle was delivered/closed and has no active job card, mark as CHECKED_OUT
+      if (!hasActiveCardForReg && hasDeliveredCardForReg) {
         item.status = 'CHECKED_OUT';
         item.checkedOutAt = item.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
         checkedOutList.push(item);

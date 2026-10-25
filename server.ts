@@ -484,13 +484,19 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
         checkedOutGates.push(ci);
         continue;
       }
-      // ONLY heal to CHECKED_OUT if this check-in's explicitly linked jobCardId was completed (DELIVERED/CLOSED)
-      // AND this check-in itself was already in 'JOB_CARD_CREATED' status
-      const linkedJc = ci.jobCardId ? store.jobCards.find((jc: any) => jc.id === ci.jobCardId) : undefined;
-      const matchingActiveJc = store.jobCards.find(
-        (jc: any) => normalizeServerRegNo(jc.vehicle?.registrationNumber) === normReg && jc.status !== 'DELIVERED' && jc.status !== 'CLOSED'
-      );
-      if (linkedJc && (linkedJc.status === 'DELIVERED' || linkedJc.status === 'CLOSED') && ci.status === 'JOB_CARD_CREATED' && !matchingActiveJc) {
+      // Unlink mismatched jobCardId if registration numbers do not match
+      if (ci.jobCardId) {
+        const linkedJc = store.jobCards.find((jc: any) => jc.id === ci.jobCardId);
+        if (linkedJc && normalizeServerRegNo(linkedJc.vehicle?.registrationNumber) !== normReg) {
+          ci.jobCardId = undefined;
+        }
+      }
+
+      const regJobCards = store.jobCards.filter((jc: any) => normalizeServerRegNo(jc.vehicle?.registrationNumber) === normReg);
+      const matchingActiveJc = regJobCards.find((jc: any) => jc.status !== 'DELIVERED' && jc.status !== 'CLOSED');
+      const hasDeliveredCard = regJobCards.some((jc: any) => jc.status === 'DELIVERED' || jc.status === 'CLOSED');
+
+      if (!matchingActiveJc && hasDeliveredCard) {
         ci.status = 'CHECKED_OUT';
         ci.checkedOutAt = ci.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
         checkedOutGates.push(ci);
