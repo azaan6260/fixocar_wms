@@ -26,7 +26,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { VehicleCheckIn, CheckInStatus, FuelType, City, Workshop, JobCard } from '../types';
-import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, getAllJobCards, getActiveCheckInForRegNo, getActiveJobCardForRegNo, getDefaultWorkshopForCreation, normalizeRegNo, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification } from '../lib/storage';
+import { getVehicleCheckIns, createVehicleCheckIn, updateVehicleCheckIn, deleteVehicleCheckIn, updateJobCard, getJobCards, getAllJobCards, getActiveCheckInForRegNo, getActiveJobCardForRegNo, getDefaultWorkshopForCreation, normalizeRegNo, subscribeToStore, getAuthUser, getCities, getWorkshops, dispatchToastNotification, getUnifiedVehicleStatusInfo } from '../lib/storage';
 import { compressImageFile } from '../lib/imageCompressor';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
 import { CarModelSelector } from './CarModelSelector';
@@ -229,11 +229,37 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     setCheckIns(getVehicleCheckIns());
   };
 
+  // Helper to resolve active job card for a check-in item
+  const getActiveCardForItem = (item: VehicleCheckIn): JobCard | undefined => {
+    if (item.status === 'CHECKED_OUT') return undefined;
+    const norm = normalizeRegNo(item.registrationNumber);
+    return jobCardsList.find(
+      jc =>
+        jc.status !== 'DELIVERED' &&
+        jc.status !== 'CLOSED' &&
+        ((item.jobCardId && jc.id === item.jobCardId) ||
+          (jc.checkInRecordId && jc.checkInRecordId === item.id) ||
+          (norm && normalizeRegNo(jc.vehicle?.registrationNumber) === norm))
+    );
+  };
+
   // Workshop counts
   const inWorkshopCount = checkIns.filter(c => c.status !== 'CHECKED_OUT').length;
-  const idleAwaitingPiCount = checkIns.filter(c => c.status === 'IDLE_AWAITING_PI' || c.status === 'AWAITING_JOB_CARD' || c.status === 'CHECKED_IN' || c.status === 'PDI_IN_PROGRESS').length;
-  const activeRepairCount = checkIns.filter(c => c.status === 'JOB_CARD_CREATED').length;
-  const readyDispatchCount = checkIns.filter(c => c.status === 'READY_PENDING_DISPATCH').length;
+  const idleAwaitingPiCount = checkIns.filter(c => {
+    if (c.status === 'CHECKED_OUT') return false;
+    const card = getActiveCardForItem(c);
+    return !card || card.status === 'INSPECTION';
+  }).length;
+  const activeRepairCount = checkIns.filter(c => {
+    if (c.status === 'CHECKED_OUT') return false;
+    const card = getActiveCardForItem(c);
+    return Boolean(card);
+  }).length;
+  const readyDispatchCount = checkIns.filter(c => {
+    if (c.status === 'CHECKED_OUT') return false;
+    const card = getActiveCardForItem(c);
+    return c.status === 'READY_PENDING_DISPATCH' || (card && (card.status === 'RFC' || card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY'));
+  }).length;
   const checkedOutCount = checkIns.filter(c => c.status === 'CHECKED_OUT').length;
 
   // Auth & Workshop Assignment Rules
@@ -326,12 +352,15 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
     e.preventDefault();
     if (!regNo.trim()) return;
 
+    if (isGateCheckInBlocked) {
       dispatchToastNotification({
         title: 'Duplicate Gate Entry Blocked',
         message: `Vehicle ${regNo.toUpperCase().trim()} is already in the workshop (${existingActiveCard ? `Active Job Card ${existingActiveCard.id}` : `Gate Pass ${existingActiveGatePass?.id}`}). New check-in is not allowed before checking out.`,
         type: 'WARNING',
         vehicleReg: regNo.toUpperCase().trim()
       });
+      return;
+    }
 
     const stampedTime = new Date().toLocaleString('en-US', {
       dateStyle: 'medium',
@@ -473,10 +502,16 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
     if (!matchesSearch) return false;
 
+    const activeCard = getActiveCardForItem(item);
     if (activeFilter === 'IN_WORKSHOP') return item.status !== 'CHECKED_OUT';
-    if (activeFilter === 'IDLE_PI') return item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD' || item.status === 'CHECKED_IN' || item.status === 'PDI_IN_PROGRESS';
-    if (activeFilter === 'ACTIVE_REPAIR') return item.status === 'JOB_CARD_CREATED';
-    if (activeFilter === 'READY_DISPATCH') return item.status === 'READY_PENDING_DISPATCH';
+    if (activeFilter === 'IDLE_PI') return item.status !== 'CHECKED_OUT' && (!activeCard || activeCard.status === 'INSPECTION');
+    if (activeFilter === 'ACTIVE_REPAIR') return item.status !== 'CHECKED_OUT' && Boolean(activeCard);
+    if (activeFilter === 'READY_DISPATCH') {
+      return item.status !== 'CHECKED_OUT' && (
+        item.status === 'READY_PENDING_DISPATCH' ||
+        Boolean(activeCard && (activeCard.status === 'RFC' || activeCard.status === 'READY_FOR_DELIVERY' || activeCard.status === 'OUT_FOR_DELIVERY'))
+      );
+    }
     if (activeFilter === 'CHECKED_OUT') return item.status === 'CHECKED_OUT';
 
     return true;
@@ -542,14 +577,23 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         </div>
 
         {/* Live Workshop Physical Count KPI Metrics */}
-        <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-slate-800/80 border border-slate-700/60 p-4 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 text-xs font-bold">
               <span>Physically In Workshop</span>
               <Car className="w-4 h-4 text-blue-400" />
             </div>
             <p className="text-2xl font-black text-white mt-1">{inWorkshopCount}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Vehicles currently on site</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">All vehicles currently on site</p>
+          </div>
+
+          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
+            <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
+              <span>Waiting for Inspection</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <p className="text-2xl font-black text-amber-400 mt-1">{idleAwaitingPiCount}</p>
+            <p className="text-[11px] text-amber-300/80 mt-0.5">Checked-in, awaiting JC / PI</p>
           </div>
 
           <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-2xl">
@@ -563,11 +607,11 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
 
           <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl">
             <div className="flex items-center justify-between text-emerald-300 text-xs font-bold">
-              <span>Ready - Pending Driver Exit</span>
+              <span>Ready - Pending Exit</span>
               <LogOut className="w-4 h-4 text-emerald-400" />
             </div>
             <p className="text-2xl font-black text-emerald-400 mt-1">{readyDispatchCount}</p>
-            <p className="text-[11px] text-emerald-300/80 mt-0.5">Invoice done, awaiting driver</p>
+            <p className="text-[11px] text-emerald-300/80 mt-0.5">RFC / Ready for driver</p>
           </div>
         </div>
       </div>
@@ -579,19 +623,31 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
             <button
               type="button"
               onClick={() => setActiveFilter('IN_WORKSHOP')}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer ${
                 activeFilter === 'IN_WORKSHOP'
                   ? 'bg-slate-900 text-white dark:bg-blue-600 dark:text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
               }`}
             >
-              In Workshop ({inWorkshopCount})
+              All In Workshop ({inWorkshopCount})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveFilter('IDLE_PI')}
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer ${
+                activeFilter === 'IDLE_PI'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-100'
+              }`}
+            >
+              Waiting for Inspection ({idleAwaitingPiCount})
             </button>
 
             <button
               type="button"
               onClick={() => setActiveFilter('ACTIVE_REPAIR')}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer ${
                 activeFilter === 'ACTIVE_REPAIR'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
@@ -603,19 +659,19 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
             <button
               type="button"
               onClick={() => setActiveFilter('READY_DISPATCH')}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer ${
                 activeFilter === 'READY_DISPATCH'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
               }`}
             >
-              Ready - Awaiting Driver ({readyDispatchCount})
+              Ready / RFC ({readyDispatchCount})
             </button>
 
             <button
               type="button"
               onClick={() => setActiveFilter('CHECKED_OUT')}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 ${
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer ${
                 activeFilter === 'CHECKED_OUT'
                   ? 'bg-slate-700 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
@@ -651,15 +707,17 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {sortedItems.map((item, idx) => {
             const isLatest = idx === 0;
+            const matchedActiveCard = getActiveCardForItem(item);
+            const unifiedStatus = getUnifiedVehicleStatusInfo(item, matchedActiveCard);
             return (
             <div 
               key={item.id}
               className={`bg-white dark:bg-slate-900 rounded-3xl border transition-all shadow-xs hover:shadow-md overflow-hidden flex flex-col justify-between ${
                 isLatest
                   ? 'border-2 border-amber-500 dark:border-amber-400 ring-4 ring-amber-500/20 shadow-lg shadow-amber-500/10'
-                  : item.status === 'IDLE_AWAITING_PI'
+                  : unifiedStatus.code === 'WAITING_FOR_INSPECTION'
                   ? 'border-amber-400 dark:border-amber-500/60 ring-2 ring-amber-500/20'
-                  : item.status === 'READY_PENDING_DISPATCH'
+                  : unifiedStatus.code === 'RFC' || unifiedStatus.code === 'READY_FOR_DELIVERY'
                   ? 'border-emerald-400 dark:border-emerald-500/60 ring-1 ring-emerald-500/20'
                   : item.status === 'CHECKED_OUT'
                   ? 'border-slate-200 dark:border-slate-800 opacity-80'
@@ -668,11 +726,11 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
             >
               <div>
                 {/* Image Header with Photo of Car & Driver */}
-                <div className="relative h-44 bg-slate-950 overflow-hidden group">
+                <div className="relative h-48 bg-slate-950 overflow-hidden group">
                   {item.checkInPhotoWithDriverUrl ? (
                     <img 
                       src={item.checkInPhotoWithDriverUrl} 
-                      alt={`Car with driver ${item.checkInDriverName}`}
+                      alt={`${item.make} ${item.model} (${item.registrationNumber})`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       referrerPolicy="no-referrer"
                     />
@@ -708,27 +766,11 @@ export function GatePassCheckInView({ initialFilter, onOpenCreateJobCardWithPref
                         )}
                       </div>
 
-                      {/* Status Badge */}
-                      {(item.status === 'IDLE_AWAITING_PI' || item.status === 'AWAITING_JOB_CARD' || item.status === 'CHECKED_IN') && (
-                        <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md">
-                          <LogIn className="w-3 h-3" /> Checked In
-                        </span>
-                      )}
-                      {item.status === 'JOB_CARD_CREATED' && (
-                        <span className="bg-blue-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                          <Gauge className="w-3 h-3" /> Active Job Card
-                        </span>
-                      )}
-                      {item.status === 'READY_PENDING_DISPATCH' && (
-                        <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md">
-                          <CheckCircle2 className="w-3 h-3" /> Ready For Driver
-                        </span>
-                      )}
-                      {item.status === 'CHECKED_OUT' && (
-                        <span className="bg-slate-700 text-slate-200 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                          <LogOut className="w-3 h-3" /> Checked Out
-                        </span>
-                      )}
+                      {/* Unified Status Badge */}
+                      <span className={`${unifiedStatus.badgeBg} text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        {unifiedStatus.label}
+                      </span>
                     </div>
 
                     <div className="space-y-1">

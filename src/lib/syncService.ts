@@ -152,6 +152,20 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
       }
     }
 
+    const remoteHasRealInPhoto = Boolean(remoteCard.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+    const localHasRealInPhoto = Boolean(localCard.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+    const bestCheckInPhoto = remoteHasRealInPhoto
+      ? (localHasRealInPhoto && localCard.checkInPhotoWithDriverUrl!.length > remoteCard.checkInPhotoWithDriverUrl!.length
+          ? localCard.checkInPhotoWithDriverUrl
+          : remoteCard.checkInPhotoWithDriverUrl)
+      : (localHasRealInPhoto ? localCard.checkInPhotoWithDriverUrl : (remoteCard.checkInPhotoWithDriverUrl || localCard.checkInPhotoWithDriverUrl));
+
+    const remoteHasRealOutPhoto = Boolean(remoteCard.checkOutPhotoWithDriverUrl?.startsWith('data:image/'));
+    const localHasRealOutPhoto = Boolean(localCard.checkOutPhotoWithDriverUrl?.startsWith('data:image/'));
+    const bestCheckOutPhoto = remoteHasRealOutPhoto
+      ? remoteCard.checkOutPhotoWithDriverUrl
+      : (localHasRealOutPhoto ? localCard.checkOutPhotoWithDriverUrl : (remoteCard.checkOutPhotoWithDriverUrl || localCard.checkOutPhotoWithDriverUrl));
+
     mergedList.push(healJobCardRecord({
       ...remoteCard,
       ...localCard,
@@ -169,6 +183,12 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
       cityName: (localCard.workshopId && localCard.workshopId !== 'ws-mumbai-central')
         ? localCard.cityName
         : (remoteCard.workshopId && remoteCard.workshopId !== 'ws-mumbai-central' ? remoteCard.cityName : (localCard.cityName || remoteCard.cityName)),
+      checkInRecordId: remoteCard.checkInRecordId || localCard.checkInRecordId,
+      checkedInAt: remoteCard.checkedInAt || localCard.checkedInAt,
+      checkInDriverName: remoteCard.checkInDriverName || localCard.checkInDriverName,
+      checkInDriverPhone: remoteCard.checkInDriverPhone || localCard.checkInDriverPhone,
+      checkInPhotoWithDriverUrl: bestCheckInPhoto,
+      checkOutPhotoWithDriverUrl: bestCheckOutPhoto,
       status: finalCardStatus,
       tasks: mergedTasks,
       estimatedCompletionDate: remoteCard.estimatedCompletionDate || localCard.estimatedCompletionDate,
@@ -596,18 +616,26 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         for (const sci of serverCheckIns) {
           if (sci && sci.id) {
             const cleanId = sanitizeGateCheckInId(sci.id);
+            if (cleanId === 'GATE-2026-106' || cleanId === 'GATE-2026-109') continue;
             checkInMap.set(cleanId, { ...sci, id: cleanId });
           }
         }
         for (const loc of currentLocalCheckIns) {
           if (!loc || !loc.id) continue;
           const cleanId = sanitizeGateCheckInId(loc.id);
+          if (cleanId === 'GATE-2026-106' || cleanId === 'GATE-2026-109') continue;
           const existing = checkInMap.get(cleanId);
           if (!existing) {
             checkInMap.set(cleanId, { ...loc, id: cleanId });
           } else {
+            const exRealPhoto = Boolean(existing.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+            const locRealPhoto = Boolean(loc.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+            const bestPhoto = exRealPhoto
+              ? existing.checkInPhotoWithDriverUrl
+              : (locRealPhoto ? loc.checkInPhotoWithDriverUrl : (existing.checkInPhotoWithDriverUrl || loc.checkInPhotoWithDriverUrl));
+
             const finalStatus: VehicleCheckIn['status'] =
-              (existing.status === 'CHECKED_OUT' || loc.status === 'CHECKED_OUT')
+              (existing.status === 'CHECKED_OUT' && loc.status === 'CHECKED_OUT')
                 ? 'CHECKED_OUT'
                 : (existing.status === 'JOB_CARD_CREATED' || loc.status === 'JOB_CARD_CREATED'
                     ? 'JOB_CARD_CREATED'
@@ -617,8 +645,9 @@ export async function syncFromSupabase(): Promise<SyncResult> {
               ...existing,
               id: cleanId,
               status: finalStatus,
+              checkInPhotoWithDriverUrl: bestPhoto,
               jobCardId: existing.jobCardId || loc.jobCardId,
-              checkedOutAt: existing.checkedOutAt || loc.checkedOutAt,
+              checkedOutAt: finalStatus === 'CHECKED_OUT' ? (existing.checkedOutAt || loc.checkedOutAt) : undefined,
               checkOutDriverName: existing.checkOutDriverName || loc.checkOutDriverName,
               checkOutDriverPhone: existing.checkOutDriverPhone || loc.checkOutDriverPhone,
               checkOutPhotoWithDriverUrl: existing.checkOutPhotoWithDriverUrl || loc.checkOutPhotoWithDriverUrl
@@ -628,6 +657,7 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         const mergedCheckIns = Array.from(checkInMap.values());
         if (mergedCheckIns.length > 0) {
           saveVehicleCheckIns(mergedCheckIns, true);
+          saveJobCards(getAllJobCards(), true);
         }
       }
     }
@@ -1059,55 +1089,65 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         if (loc && loc.id) localCheckInMap.set(sanitizeGateCheckInId(loc.id), loc);
       }
 
-      const supaCheckIns: VehicleCheckIn[] = vehicleCheckIns.map((v: any) => {
-        const cleanId = sanitizeGateCheckInId(v.id);
-        const existingLoc = localCheckInMap.get(cleanId);
-        return {
-          ...(existingLoc || {}),
-          id: cleanId,
-          registrationNumber: v.registration_number || existingLoc?.registrationNumber || 'UNKNOWN',
-          make: v.make || existingLoc?.make || 'Vehicle',
-          model: v.model || existingLoc?.model || '',
-          variant: v.variant ?? existingLoc?.variant,
-          fuelType: v.fuel_type || existingLoc?.fuelType || 'Petrol',
-          color: v.color || existingLoc?.color || 'White',
-          fuelLevel: v.fuel_level ?? existingLoc?.fuelLevel ?? 50,
-          mileage: v.mileage ?? existingLoc?.mileage ?? 10000,
-          isCars24: v.is_cars24 ?? existingLoc?.isCars24 ?? false,
-          cars24RefNo: v.cars24_ref_no || existingLoc?.cars24RefNo,
-          customerName: v.customer_name || existingLoc?.customerName || 'Customer',
-          customerPhone: v.customer_phone || existingLoc?.customerPhone || '',
-          cityId: v.city_id || existingLoc?.cityId,
-          cityName: v.city_name || existingLoc?.cityName,
-          workshopId: v.workshop_id || existingLoc?.workshopId,
-          workshopName: v.workshop_name || existingLoc?.workshopName,
-          checkedInAt: v.check_in_time || v.created_at || existingLoc?.checkedInAt || new Date().toISOString(),
-          checkedInByName: v.check_in_driver_name || existingLoc?.checkedInByName || 'Security',
-          checkInDriverName: v.check_in_driver_name || existingLoc?.checkInDriverName || 'Driver',
-          checkInDriverPhone: v.check_in_driver_phone || existingLoc?.checkInDriverPhone || '',
-          checkInPhotoWithDriverUrl: v.driver_photo_url || existingLoc?.checkInPhotoWithDriverUrl,
-          checkInNotes: v.check_in_notes || existingLoc?.checkInNotes,
-          status: (existingLoc?.status === 'CHECKED_OUT' || v.status === 'CHECKED_OUT')
-            ? 'CHECKED_OUT'
-            : (existingLoc?.status === 'JOB_CARD_CREATED' || v.status === 'JOB_CARD_CREATED'
-                ? 'JOB_CARD_CREATED'
-                : (v.status || existingLoc?.status || 'CHECKED_IN')),
-          jobCardId: existingLoc?.jobCardId || v.job_card_id,
-          checkedOutAt: v.check_out_time || existingLoc?.checkedOutAt,
-          checkOutDriverName: v.check_out_driver_name || existingLoc?.checkOutDriverName,
-          checkOutDriverPhone: v.check_out_driver_phone || existingLoc?.checkOutDriverPhone,
-          checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url || existingLoc?.checkOutPhotoWithDriverUrl
-        };
-      });
+      const supaCheckIns: VehicleCheckIn[] = vehicleCheckIns
+        .filter((v: any) => v && v.id !== 'GATE-2026-106' && v.id !== 'GATE-2026-109')
+        .map((v: any) => {
+          const cleanId = sanitizeGateCheckInId(v.id);
+          const existingLoc = localCheckInMap.get(cleanId);
+          const vRealPhoto = typeof v.driver_photo_url === 'string' && v.driver_photo_url.startsWith('data:image/');
+          const locRealPhoto = Boolean(existingLoc?.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+          const bestPhoto = vRealPhoto
+            ? v.driver_photo_url
+            : (locRealPhoto ? existingLoc!.checkInPhotoWithDriverUrl : (v.driver_photo_url || existingLoc?.checkInPhotoWithDriverUrl));
+
+          return {
+            ...(existingLoc || {}),
+            id: cleanId,
+            registrationNumber: v.registration_number || existingLoc?.registrationNumber || 'UNKNOWN',
+            make: v.make || existingLoc?.make || 'Vehicle',
+            model: v.model || existingLoc?.model || '',
+            variant: v.variant ?? existingLoc?.variant,
+            fuelType: v.fuel_type || existingLoc?.fuelType || 'Petrol',
+            color: v.color || existingLoc?.color || 'White',
+            fuelLevel: v.fuel_level ?? existingLoc?.fuelLevel ?? 50,
+            mileage: v.mileage ?? existingLoc?.mileage ?? 10000,
+            isCars24: v.is_cars24 ?? existingLoc?.isCars24 ?? false,
+            cars24RefNo: v.cars24_ref_no || existingLoc?.cars24RefNo,
+            customerName: v.customer_name || existingLoc?.customerName || 'Customer',
+            customerPhone: v.customer_phone || existingLoc?.customerPhone || '',
+            cityId: v.city_id || existingLoc?.cityId || 'city-indore',
+            cityName: v.city_name || existingLoc?.cityName || 'Indore',
+            workshopId: v.workshop_id || existingLoc?.workshopId || 'ws-1787487534626',
+            workshopName: v.workshop_name || existingLoc?.workshopName || 'FixoCar Main',
+            checkedInAt: v.check_in_time || v.created_at || existingLoc?.checkedInAt || new Date().toISOString(),
+            checkedInByName: v.check_in_driver_name || existingLoc?.checkedInByName || 'Security',
+            checkInDriverName: v.check_in_driver_name || existingLoc?.checkInDriverName || 'Driver',
+            checkInDriverPhone: v.check_in_driver_phone || existingLoc?.checkInDriverPhone || '',
+            checkInPhotoWithDriverUrl: bestPhoto,
+            checkInNotes: v.check_in_notes || existingLoc?.checkInNotes,
+            status: (v.status === 'CHECKED_OUT' && existingLoc?.status === 'CHECKED_OUT')
+              ? 'CHECKED_OUT'
+              : (existingLoc?.status === 'JOB_CARD_CREATED' || v.status === 'JOB_CARD_CREATED'
+                  ? 'JOB_CARD_CREATED'
+                  : (v.status || existingLoc?.status || 'CHECKED_IN')),
+            jobCardId: existingLoc?.jobCardId || v.job_card_id,
+            checkedOutAt: v.check_out_time || existingLoc?.checkedOutAt,
+            checkOutDriverName: v.check_out_driver_name || existingLoc?.checkOutDriverName,
+            checkOutDriverPhone: v.check_out_driver_phone || existingLoc?.checkOutDriverPhone,
+            checkOutPhotoWithDriverUrl: v.check_out_driver_photo_url || existingLoc?.checkOutPhotoWithDriverUrl
+          };
+        });
 
       const mergedCheckIns = [...supaCheckIns];
       for (const loc of currentCheckIns) {
         const cleanId = sanitizeGateCheckInId(loc.id);
+        if (cleanId === 'GATE-2026-106' || cleanId === 'GATE-2026-109') continue;
         if (!mergedCheckIns.some(m => m.id === cleanId)) {
           mergedCheckIns.push({ ...loc, id: cleanId });
         }
       }
       saveVehicleCheckIns(mergedCheckIns, true);
+      saveJobCards(getAllJobCards(), true);
     }
 
     // 7. CAR MODELS & VARIANTS (Chunked Fetch)

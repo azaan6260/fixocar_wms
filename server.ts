@@ -509,12 +509,27 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
       if (!exGate) {
         activeGateByReg.set(normReg, ci);
       } else {
+        const exHasRealPhoto = typeof exGate.checkInPhotoWithDriverUrl === 'string' && exGate.checkInPhotoWithDriverUrl.startsWith('data:image/');
+        const ciHasRealPhoto = typeof ci.checkInPhotoWithDriverUrl === 'string' && ci.checkInPhotoWithDriverUrl.startsWith('data:image/');
+        const bestPhoto = ciHasRealPhoto
+          ? (exHasRealPhoto && exGate.checkInPhotoWithDriverUrl.length > ci.checkInPhotoWithDriverUrl.length ? exGate.checkInPhotoWithDriverUrl : ci.checkInPhotoWithDriverUrl)
+          : (exHasRealPhoto ? exGate.checkInPhotoWithDriverUrl : (ci.checkInPhotoWithDriverUrl || exGate.checkInPhotoWithDriverUrl));
+
         if (ci.jobCardId && !exGate.jobCardId) {
-          activeGateByReg.set(normReg, { ...exGate, ...ci });
+          activeGateByReg.set(normReg, {
+            ...exGate,
+            ...ci,
+            checkInPhotoWithDriverUrl: bestPhoto,
+            workshopId: ci.workshopId || exGate.workshopId,
+            workshopName: ci.workshopName || exGate.workshopName,
+            cityId: ci.cityId || exGate.cityId,
+            cityName: ci.cityName || exGate.cityName,
+          });
         } else {
           activeGateByReg.set(normReg, {
             ...ci,
             ...exGate,
+            checkInPhotoWithDriverUrl: bestPhoto,
             jobCardId: exGate.jobCardId || ci.jobCardId,
             workshopId: exGate.workshopId || ci.workshopId,
             workshopName: exGate.workshopName || ci.workshopName,
@@ -526,6 +541,42 @@ function healServerStore(store: CentralStoreData): CentralStoreData {
     }
   }
   store.vehicleCheckIns = [...Array.from(activeGateByReg.values()), ...checkedOutGates];
+
+  // 3. Cross-link check-in photos and metadata onto JobCards so every JobCard has its check-in photo
+  const checkInsByReg = new Map<string, any>();
+  const checkInsById = new Map<string, any>();
+  for (const ci of store.vehicleCheckIns) {
+    if (!ci) continue;
+    checkInsById.set(ci.id, ci);
+    const norm = normalizeServerRegNo(ci.registrationNumber);
+    if (norm) {
+      const prev = checkInsByReg.get(norm);
+      const prevReal = prev && typeof prev.checkInPhotoWithDriverUrl === 'string' && prev.checkInPhotoWithDriverUrl.startsWith('data:image/');
+      const curReal = typeof ci.checkInPhotoWithDriverUrl === 'string' && ci.checkInPhotoWithDriverUrl.startsWith('data:image/');
+      if (!prev || (curReal && !prevReal) || (ci.status !== 'CHECKED_OUT' && prev.status === 'CHECKED_OUT')) {
+        checkInsByReg.set(norm, ci);
+      }
+    }
+  }
+
+  store.jobCards = store.jobCards.map((jc: any) => {
+    if (!jc) return jc;
+    const norm = normalizeServerRegNo(jc.vehicle?.registrationNumber);
+    const matchedCi = (jc.checkInRecordId && checkInsById.get(jc.checkInRecordId)) || (norm ? checkInsByReg.get(norm) : undefined);
+    if (!matchedCi) return jc;
+    const jcHasRealPhoto = typeof jc.checkInPhotoWithDriverUrl === 'string' && jc.checkInPhotoWithDriverUrl.startsWith('data:image/');
+    const ciHasRealPhoto = typeof matchedCi.checkInPhotoWithDriverUrl === 'string' && matchedCi.checkInPhotoWithDriverUrl.startsWith('data:image/');
+    return {
+      ...jc,
+      checkInRecordId: jc.checkInRecordId || matchedCi.id,
+      checkedInAt: jc.checkedInAt || matchedCi.checkedInAt,
+      checkInDriverName: jc.checkInDriverName || matchedCi.checkInDriverName,
+      checkInDriverPhone: jc.checkInDriverPhone || matchedCi.checkInDriverPhone,
+      checkInPhotoWithDriverUrl: (ciHasRealPhoto && !jcHasRealPhoto)
+        ? matchedCi.checkInPhotoWithDriverUrl
+        : (jc.checkInPhotoWithDriverUrl || matchedCi.checkInPhotoWithDriverUrl),
+    };
+  });
 
   return store;
 }
@@ -617,8 +668,27 @@ function mergeArrayItems<T>(existingList: T[], incomingList: T[], getKey: (item:
       k = `auto_key_${++autoCounter}`;
     }
     const cleanKey = k.toLowerCase().trim();
-    const existing = map.get(cleanKey);
-    map.set(cleanKey, existing ? { ...existing, ...item } : item);
+    const existing = map.get(cleanKey) as any;
+    if (existing) {
+      const incAny = item as any;
+      const exHasRealInPhoto = typeof existing.checkInPhotoWithDriverUrl === 'string' && existing.checkInPhotoWithDriverUrl.startsWith('data:image/');
+      const incHasRealInPhoto = typeof incAny.checkInPhotoWithDriverUrl === 'string' && incAny.checkInPhotoWithDriverUrl.startsWith('data:image/');
+      const exHasRealOutPhoto = typeof existing.checkOutPhotoWithDriverUrl === 'string' && existing.checkOutPhotoWithDriverUrl.startsWith('data:image/');
+      const incHasRealOutPhoto = typeof incAny.checkOutPhotoWithDriverUrl === 'string' && incAny.checkOutPhotoWithDriverUrl.startsWith('data:image/');
+      const mergedItem = {
+        ...existing,
+        ...incAny,
+      };
+      if (exHasRealInPhoto && !incHasRealInPhoto) {
+        mergedItem.checkInPhotoWithDriverUrl = existing.checkInPhotoWithDriverUrl;
+      }
+      if (exHasRealOutPhoto && !incHasRealOutPhoto) {
+        mergedItem.checkOutPhotoWithDriverUrl = existing.checkOutPhotoWithDriverUrl;
+      }
+      map.set(cleanKey, mergedItem as T);
+    } else {
+      map.set(cleanKey, item);
+    }
   }
 
   return Array.from(map.values());
@@ -740,6 +810,11 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
     const useIncWs = incCard.workshopId && incCard.workshopId !== 'ws-mumbai-central';
     const useExWs = existing.workshopId && existing.workshopId !== 'ws-mumbai-central';
 
+    const exHasRealInPhoto = typeof existing.checkInPhotoWithDriverUrl === 'string' && existing.checkInPhotoWithDriverUrl.startsWith('data:image/');
+    const incHasRealInPhoto = typeof incCard.checkInPhotoWithDriverUrl === 'string' && incCard.checkInPhotoWithDriverUrl.startsWith('data:image/');
+    const exHasRealOutPhoto = typeof existing.checkOutPhotoWithDriverUrl === 'string' && existing.checkOutPhotoWithDriverUrl.startsWith('data:image/');
+    const incHasRealOutPhoto = typeof incCard.checkOutPhotoWithDriverUrl === 'string' && incCard.checkOutPhotoWithDriverUrl.startsWith('data:image/');
+
     map.set(key, {
       ...existing,
       ...incCard,
@@ -757,6 +832,16 @@ function mergeJobCardRecords(existingCards: any[], incomingCards: any[]): any[] 
       workshopName: useIncWs ? incCard.workshopName : (useExWs ? existing.workshopName : (incCard.workshopName || existing.workshopName)),
       cityId: useIncWs ? incCard.cityId : (useExWs ? existing.cityId : (incCard.cityId || existing.cityId)),
       cityName: useIncWs ? incCard.cityName : (useExWs ? existing.cityName : (incCard.cityName || existing.cityName)),
+      checkInRecordId: incCard.checkInRecordId || existing.checkInRecordId,
+      checkedInAt: incCard.checkedInAt || existing.checkedInAt,
+      checkInDriverName: incCard.checkInDriverName || existing.checkInDriverName,
+      checkInDriverPhone: incCard.checkInDriverPhone || existing.checkInDriverPhone,
+      checkInPhotoWithDriverUrl: (exHasRealInPhoto && !incHasRealInPhoto)
+        ? existing.checkInPhotoWithDriverUrl
+        : (incCard.checkInPhotoWithDriverUrl || existing.checkInPhotoWithDriverUrl),
+      checkOutPhotoWithDriverUrl: (exHasRealOutPhoto && !incHasRealOutPhoto)
+        ? existing.checkOutPhotoWithDriverUrl
+        : (incCard.checkOutPhotoWithDriverUrl || existing.checkOutPhotoWithDriverUrl),
       status: finalStatus,
       tasks: mergedTasks
     });

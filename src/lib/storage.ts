@@ -148,6 +148,187 @@ export function normalizeRegNo(reg?: string | null): string {
   return String(reg).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 }
 
+// In-memory caches to preserve full base64 check-in photos even when browser localStorage hits its 5MB quota
+const memoryVehiclePhotoByReg = new Map<string, string>();
+let memoryVehicleCheckInsCache: VehicleCheckIn[] | null = null;
+let memoryJobCardsCache: JobCard[] | null = null;
+
+export function registerVehiclePhotoInMemory(regNo?: string | null, photoUrl?: string | null) {
+  const norm = normalizeRegNo(regNo);
+  if (!norm || !photoUrl || typeof photoUrl !== 'string') return;
+  const existing = memoryVehiclePhotoByReg.get(norm);
+  const isNewReal = photoUrl.startsWith('data:image/');
+  const isExReal = existing?.startsWith('data:image/');
+  if (!existing || (isNewReal && !isExReal) || (isNewReal && isExReal && photoUrl.length > existing.length)) {
+    memoryVehiclePhotoByReg.set(norm, photoUrl);
+  }
+}
+
+export function getVehiclePhotoForRegNo(regNo?: string | null, fallbackPhotoUrl?: string | null): string | undefined {
+  const norm = normalizeRegNo(regNo);
+  if (fallbackPhotoUrl && fallbackPhotoUrl.startsWith('data:image/')) {
+    registerVehiclePhotoInMemory(norm, fallbackPhotoUrl);
+    return fallbackPhotoUrl;
+  }
+  if (norm && memoryVehiclePhotoByReg.has(norm)) {
+    return memoryVehiclePhotoByReg.get(norm);
+  }
+  if (norm && memoryVehicleCheckInsCache) {
+    const matched = memoryVehicleCheckInsCache.find(
+      c => normalizeRegNo(c.registrationNumber) === norm && c.checkInPhotoWithDriverUrl
+    );
+    if (matched?.checkInPhotoWithDriverUrl) {
+      registerVehiclePhotoInMemory(norm, matched.checkInPhotoWithDriverUrl);
+      return matched.checkInPhotoWithDriverUrl;
+    }
+  }
+  return fallbackPhotoUrl || undefined;
+}
+
+export interface UnifiedVehicleStatusInfo {
+  code: string;
+  label: string;
+  shortLabel: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  dotColor: string;
+}
+
+export function getUnifiedVehicleStatusInfo(
+  checkIn?: VehicleCheckIn | null,
+  activeCard?: JobCard | null
+): UnifiedVehicleStatusInfo {
+  if (checkIn?.status === 'CHECKED_OUT' && !activeCard) {
+    return {
+      code: 'CHECKED_OUT',
+      label: 'Checked Out',
+      shortLabel: 'Checked Out',
+      badgeBg: 'bg-slate-700 text-slate-100',
+      badgeText: 'text-slate-100',
+      badgeBorder: 'border-slate-600',
+      dotColor: 'bg-slate-400',
+    };
+  }
+
+  const cardStatus = activeCard?.status;
+  if (!activeCard || cardStatus === 'INSPECTION') {
+    return {
+      code: 'WAITING_FOR_INSPECTION',
+      label: 'Waiting for Inspection',
+      shortLabel: 'Waiting for Inspection',
+      badgeBg: 'bg-amber-500 text-slate-950',
+      badgeText: 'text-amber-800 dark:text-amber-300',
+      badgeBorder: 'border-amber-400',
+      dotColor: 'bg-amber-500',
+    };
+  }
+
+  switch (cardStatus) {
+    case 'CREATED':
+      return {
+        code: 'CREATED',
+        label: 'Job Card Created',
+        shortLabel: 'JC Created',
+        badgeBg: 'bg-amber-500 text-slate-950',
+        badgeText: 'text-amber-700 dark:text-amber-300',
+        badgeBorder: 'border-amber-400',
+        dotColor: 'bg-amber-500',
+      };
+    case 'ESTIMATE_PENDING':
+      return {
+        code: 'ESTIMATE_PENDING',
+        label: 'Estimate Pending',
+        shortLabel: 'Estimate Pending',
+        badgeBg: 'bg-orange-500 text-white',
+        badgeText: 'text-orange-700 dark:text-orange-300',
+        badgeBorder: 'border-orange-400',
+        dotColor: 'bg-orange-500',
+      };
+    case 'JOB_ALLOCATED':
+      return {
+        code: 'JOB_ALLOCATED',
+        label: 'Job Allocated',
+        shortLabel: 'Job Allocated',
+        badgeBg: 'bg-indigo-600 text-white',
+        badgeText: 'text-indigo-700 dark:text-indigo-300',
+        badgeBorder: 'border-indigo-400',
+        dotColor: 'bg-indigo-500',
+      };
+    case 'IN_PROGRESS':
+      return {
+        code: 'IN_PROGRESS',
+        label: 'Work In Progress',
+        shortLabel: 'Work In Progress',
+        badgeBg: 'bg-blue-600 text-white',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-400',
+        dotColor: 'bg-blue-600',
+      };
+    case 'QC_PENDING':
+      return {
+        code: 'QC_PENDING',
+        label: 'PDI / QC Pending',
+        shortLabel: 'QC Pending',
+        badgeBg: 'bg-purple-600 text-white',
+        badgeText: 'text-purple-700 dark:text-purple-300',
+        badgeBorder: 'border-purple-400',
+        dotColor: 'bg-purple-500',
+      };
+    case 'RFC':
+      return {
+        code: 'RFC',
+        label: 'Ready for Checkout (RFC)',
+        shortLabel: 'Ready (RFC)',
+        badgeBg: 'bg-emerald-500 text-slate-950',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-400',
+        dotColor: 'bg-emerald-500',
+      };
+    case 'READY_FOR_DELIVERY':
+      return {
+        code: 'READY_FOR_DELIVERY',
+        label: 'Ready for Delivery',
+        shortLabel: 'Ready for Delivery',
+        badgeBg: 'bg-emerald-600 text-white',
+        badgeText: 'text-emerald-700 dark:text-emerald-300',
+        badgeBorder: 'border-emerald-400',
+        dotColor: 'bg-emerald-500',
+      };
+    case 'OUT_FOR_DELIVERY':
+      return {
+        code: 'OUT_FOR_DELIVERY',
+        label: 'Out for Delivery',
+        shortLabel: 'Out for Delivery',
+        badgeBg: 'bg-teal-600 text-white',
+        badgeText: 'text-teal-700 dark:text-teal-300',
+        badgeBorder: 'border-teal-400',
+        dotColor: 'bg-teal-500',
+      };
+    case 'DELIVERED':
+    case 'CLOSED':
+      return {
+        code: cardStatus,
+        label: cardStatus === 'DELIVERED' ? 'Delivered' : 'Closed',
+        shortLabel: cardStatus === 'DELIVERED' ? 'Delivered' : 'Closed',
+        badgeBg: 'bg-slate-700 text-slate-100',
+        badgeText: 'text-slate-600 dark:text-slate-300',
+        badgeBorder: 'border-slate-500',
+        dotColor: 'bg-slate-500',
+      };
+    default:
+      return {
+        code: String(cardStatus || 'IN_WORKSHOP'),
+        label: String(cardStatus || 'In Workshop').replace(/_/g, ' '),
+        shortLabel: String(cardStatus || 'In Workshop').replace(/_/g, ' '),
+        badgeBg: 'bg-blue-600 text-white',
+        badgeText: 'text-blue-700 dark:text-blue-300',
+        badgeBorder: 'border-blue-400',
+        dotColor: 'bg-blue-500',
+      };
+  }
+}
+
 const TASK_META_REGEX = /\s*<!--META:(\{.*?\})-->\s*$/;
 
 export function serializeTaskMetaToNotes(task: JobTask): string {
@@ -424,29 +605,52 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
     }
   }
 
+  const normCardReg = normalizeRegNo(card.vehicle?.registrationNumber);
+  if (card.checkInPhotoWithDriverUrl) {
+    registerVehiclePhotoInMemory(normCardReg, card.checkInPhotoWithDriverUrl);
+  }
+  const matchedCheckIn = memoryVehicleCheckInsCache?.find(
+    ci => (card.checkInRecordId && ci.id === card.checkInRecordId) || (normCardReg && normalizeRegNo(ci.registrationNumber) === normCardReg)
+  );
+  const resolvedCheckInPhoto = getVehiclePhotoForRegNo(
+    normCardReg,
+    card.checkInPhotoWithDriverUrl || matchedCheckIn?.checkInPhotoWithDriverUrl
+  );
+
   return {
     ...card,
     workshopId,
     workshopName,
     cityId,
     cityName,
+    checkInRecordId: card.checkInRecordId || matchedCheckIn?.id,
+    checkedInAt: card.checkedInAt || matchedCheckIn?.checkedInAt,
+    checkInDriverName: card.checkInDriverName || matchedCheckIn?.checkInDriverName,
+    checkInDriverPhone: card.checkInDriverPhone || matchedCheckIn?.checkInDriverPhone,
+    checkInPhotoWithDriverUrl: resolvedCheckInPhoto,
     tasks: healedTasks,
     isCars24: isCars24JobCard(card)
   };
 }
 
 export function getAllJobCards(): JobCard[] {
-  const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
   let list: JobCard[] = [];
-  if (local !== null) {
-    try {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) list = parsed;
-    } catch {}
-  }
-  if (list.length === 0 && INITIAL_JOB_CARDS.length > 0) {
-    list = [...INITIAL_JOB_CARDS];
-    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
+  if (memoryJobCardsCache && memoryJobCardsCache.length > 0) {
+    list = memoryJobCardsCache;
+  } else {
+    const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
+    if (local !== null) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {}
+    }
+    if (list.length === 0 && INITIAL_JOB_CARDS.length > 0) {
+      list = [...INITIAL_JOB_CARDS];
+      try {
+        localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
+      } catch {}
+    }
   }
   const allEmps = getAllEmployees();
   const allWorkshops = getWorkshops();
@@ -485,10 +689,11 @@ export function getAllJobCards(): JobCard[] {
     }
   }
 
-  if (redundantIds.size > 0) {
-    return healedList.filter(c => !redundantIds.has(c.id));
-  }
-  return healedList;
+  const finalCards = redundantIds.size > 0
+    ? healedList.filter(c => !redundantIds.has(c.id))
+    : healedList;
+  memoryJobCardsCache = finalCards;
+  return finalCards;
 }
 
 export function getJobCards(workshopIdFilter?: string): JobCard[] {
@@ -564,21 +769,18 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
   const allEmps = getAllEmployees();
   const allWorkshops = getWorkshops();
   const healedCards = cards.map(c => healJobCardRecord(c, allEmps, allWorkshops));
+  memoryJobCardsCache = healedCards;
 
+  // Always save a slim copy of jobCards in localStorage (without duplicating 300KB base64 check-in photos) so localStorage never overflows
+  const slimCards = healedCards.map(c => ({
+    ...c,
+    checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000) ? undefined : c.checkInPhotoWithDriverUrl,
+    checkOutPhotoWithDriverUrl: (c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000) ? undefined : c.checkOutPhotoWithDriverUrl,
+  }));
   try {
-    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(healedCards));
-  } catch (err) {
-    console.warn('LocalStorage quota limit reached in saveJobCards. Stripping inline base64 images for local cache:', err);
-    const slimCards = healedCards.map(c => ({
-      ...c,
-      checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000) ? undefined : c.checkInPhotoWithDriverUrl,
-      checkOutPhotoWithDriverUrl: (c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000) ? undefined : c.checkOutPhotoWithDriverUrl,
-    }));
-    try {
-      localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(slimCards));
-    } catch (e2) {
-      console.error('Critical storage save error in saveJobCards:', e2);
-    }
+    localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(slimCards));
+  } catch (e2) {
+    console.error('Critical storage save error in saveJobCards:', e2);
   }
   notifyStoreChange();
   
@@ -4067,17 +4269,23 @@ export function sanitizeGateCheckInId(rawId: string): string {
 }
 
 export function getVehicleCheckIns(): VehicleCheckIn[] {
-  const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
   let list: VehicleCheckIn[] = [];
-  if (local !== null) {
-    try {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) list = parsed;
-    } catch {}
-  }
-  if (list.length === 0 && INITIAL_VEHICLE_CHECKINS.length > 0) {
-    list = [...INITIAL_VEHICLE_CHECKINS];
-    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(list));
+  if (memoryVehicleCheckInsCache && memoryVehicleCheckInsCache.length > 0) {
+    list = memoryVehicleCheckInsCache;
+  } else {
+    const local = localStorage.getItem(STORAGE_KEYS.VEHICLE_CHECKINS);
+    if (local !== null) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {}
+    }
+    if (list.length === 0 && INITIAL_VEHICLE_CHECKINS.length > 0) {
+      list = [...INITIAL_VEHICLE_CHECKINS];
+      try {
+        localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(list));
+      } catch {}
+    }
   }
 
   // Calculate highest numeric suffix among existing check-ins to prevent collisions
@@ -4111,17 +4319,23 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
     if (!cleanId || seenIds.has(cleanId)) {
       cleanId = `GATE-2026-${++highestGateNum}`;
     }
+    const normReg = normalizeRegNo(rawItem.registrationNumber);
+    if (rawItem.checkInPhotoWithDriverUrl) {
+      registerVehiclePhotoInMemory(normReg, rawItem.checkInPhotoWithDriverUrl);
+    }
+    const resolvedPhoto = getVehiclePhotoForRegNo(normReg, rawItem.checkInPhotoWithDriverUrl);
+
     const item: VehicleCheckIn = {
       ...rawItem,
-      id: cleanId
+      id: cleanId,
+      checkInPhotoWithDriverUrl: resolvedPhoto,
     };
     seenIds.add(item.id);
 
-    const normReg = normalizeRegNo(item.registrationNumber);
     const activeCardForVehicle = normReg ? activeCardsByReg.get(normReg) : undefined;
 
     // If this vehicle currently has an active job card in the workshop, it is physically in the workshop!
-    if (activeCardForVehicle) {
+    if (activeCardForVehicle && item.status !== 'CHECKED_OUT') {
       item.status = 'JOB_CARD_CREATED';
       item.jobCardId = activeCardForVehicle.id;
       item.checkedOutAt = undefined;
@@ -4129,7 +4343,36 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
       item.model = item.model || activeCardForVehicle.vehicle?.model;
       item.customerName = item.customerName || activeCardForVehicle.customer?.name;
       item.customerPhone = item.customerPhone || activeCardForVehicle.customer?.phone;
-      activeByReg.set(normReg!, item);
+      item.workshopId = item.workshopId || activeCardForVehicle.workshopId;
+      item.workshopName = item.workshopName || activeCardForVehicle.workshopName;
+      item.cityId = item.cityId || activeCardForVehicle.cityId;
+      item.cityName = item.cityName || activeCardForVehicle.cityName;
+      item.checkInPhotoWithDriverUrl = getVehiclePhotoForRegNo(
+        normReg,
+        item.checkInPhotoWithDriverUrl || activeCardForVehicle.checkInPhotoWithDriverUrl
+      );
+
+      const prevActive = activeByReg.get(normReg!);
+      if (!prevActive) {
+        activeByReg.set(normReg!, item);
+      } else {
+        const prevReal = Boolean(prevActive.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+        const curReal = Boolean(item.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+        const bestPhoto = curReal
+          ? (prevReal && prevActive.checkInPhotoWithDriverUrl!.length > item.checkInPhotoWithDriverUrl!.length
+              ? prevActive.checkInPhotoWithDriverUrl
+              : item.checkInPhotoWithDriverUrl)
+          : (prevReal ? prevActive.checkInPhotoWithDriverUrl : (item.checkInPhotoWithDriverUrl || prevActive.checkInPhotoWithDriverUrl));
+        const keepPrevBase = prevReal && !curReal;
+        activeByReg.set(normReg!, {
+          ...(keepPrevBase ? item : prevActive),
+          ...(keepPrevBase ? prevActive : item),
+          status: 'JOB_CARD_CREATED',
+          jobCardId: activeCardForVehicle.id,
+          checkedOutAt: undefined,
+          checkInPhotoWithDriverUrl: bestPhoto,
+        });
+      }
       continue;
     }
 
@@ -4154,12 +4397,22 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
       if (!existingActive) {
         activeByReg.set(normReg, item);
       } else {
-        // Prefer the check-in that has a linked jobCardId or newer ID
+        const exReal = Boolean(existingActive.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+        const curReal = Boolean(item.checkInPhotoWithDriverUrl?.startsWith('data:image/'));
+        const bestPhoto = curReal
+          ? (exReal && existingActive.checkInPhotoWithDriverUrl!.length > item.checkInPhotoWithDriverUrl!.length
+              ? existingActive.checkInPhotoWithDriverUrl
+              : item.checkInPhotoWithDriverUrl)
+          : (exReal ? existingActive.checkInPhotoWithDriverUrl : (item.checkInPhotoWithDriverUrl || existingActive.checkInPhotoWithDriverUrl));
+
         const existingHasJc = Boolean(existingActive.jobCardId);
         const currentHasJc = Boolean(item.jobCardId);
-        if (currentHasJc && !existingHasJc) {
+        if ((currentHasJc && !existingHasJc) || (curReal && !exReal)) {
           activeByReg.set(normReg, {
+            ...existingActive,
             ...item,
+            checkInPhotoWithDriverUrl: bestPhoto,
+            jobCardId: item.jobCardId || existingActive.jobCardId,
             workshopId: item.workshopId || existingActive.workshopId,
             workshopName: item.workshopName || existingActive.workshopName,
             cityId: item.cityId || existingActive.cityId,
@@ -4167,7 +4420,9 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
           });
         } else {
           activeByReg.set(normReg, {
+            ...item,
             ...existingActive,
+            checkInPhotoWithDriverUrl: bestPhoto,
             jobCardId: existingActive.jobCardId || item.jobCardId,
             workshopId: existingActive.workshopId || item.workshopId,
             workshopName: existingActive.workshopName || item.workshopName,
@@ -4182,8 +4437,9 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
   // Ensure every vehicle with an active job card has an active in-workshop check-in entry
   for (const [normReg, jc] of activeCardsByReg.entries()) {
     if (!activeByReg.has(normReg)) {
+      const recoveredPhoto = getVehiclePhotoForRegNo(normReg, jc.checkInPhotoWithDriverUrl);
       activeByReg.set(normReg, {
-        id: `GATE-2026-${++highestGateNum}`,
+        id: jc.checkInRecordId || `GATE-2026-${++highestGateNum}`,
         registrationNumber: jc.vehicle.registrationNumber,
         make: jc.vehicle.make,
         model: jc.vehicle.model,
@@ -4203,17 +4459,20 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
         checkedInByName: 'System / Active Job Card',
         checkInDriverName: jc.checkInDriverName || 'Customer / Driver',
         checkInDriverPhone: jc.checkInDriverPhone || jc.customer.phone,
+        checkInPhotoWithDriverUrl: recoveredPhoto,
         checkInNotes: `Vehicle currently in workshop under Job Card ${jc.id}.`,
         status: 'JOB_CARD_CREATED',
         jobCardId: jc.id,
         workOrderNo: jc.workOrderNo,
         workOrderNotes: jc.workOrderNotes,
-        checkedInAt: jc.createdAt || new Date().toISOString(),
+        checkedInAt: jc.checkedInAt || jc.createdAt || new Date().toISOString(),
       });
     }
   }
 
-  return [...Array.from(activeByReg.values()), ...checkedOutList];
+  const finalCheckIns = [...Array.from(activeByReg.values()), ...checkedOutList];
+  memoryVehicleCheckInsCache = finalCheckIns;
+  return finalCheckIns;
 }
 
 export function getActiveCheckInForRegNo(registrationNumber: string, excludeCheckInId?: string): VehicleCheckIn | undefined {
@@ -4229,25 +4488,56 @@ export function getActiveCheckInForRegNo(registrationNumber: string, excludeChec
 }
 
 export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false): void {
-  const normalized = checkIns.map(c => ({
-    ...c,
-    id: sanitizeGateCheckInId(c.id)
-  }));
+  const normalized = checkIns.map(c => {
+    const cleanId = sanitizeGateCheckInId(c.id);
+    const normReg = normalizeRegNo(c.registrationNumber);
+    if (c.checkInPhotoWithDriverUrl) {
+      registerVehiclePhotoInMemory(normReg, c.checkInPhotoWithDriverUrl);
+    }
+    const resolvedPhoto = getVehiclePhotoForRegNo(normReg, c.checkInPhotoWithDriverUrl);
+    return {
+      ...c,
+      id: cleanId,
+      checkInPhotoWithDriverUrl: resolvedPhoto,
+    };
+  });
+
+  memoryVehicleCheckInsCache = normalized;
+
+  // Also refresh memoryJobCardsCache so active job cards immediately reflect check-in photos
+  if (memoryJobCardsCache && memoryJobCardsCache.length > 0) {
+    const allEmps = getAllEmployees();
+    const allWorkshops = getWorkshops();
+    memoryJobCardsCache = memoryJobCardsCache.map(jc => healJobCardRecord(jc, allEmps, allWorkshops));
+  }
+
   try {
-    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(normalized));
+    // First attempt: strip base64 photos only on historical CHECKED_OUT records to keep active workshop photos in localStorage
+    const activePhotosPreserved = normalized.map(c => ({
+      ...c,
+      checkInPhotoWithDriverUrl:
+        c.status === 'CHECKED_OUT' && c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000
+          ? undefined
+          : c.checkInPhotoWithDriverUrl,
+      checkOutPhotoWithDriverUrl:
+        c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000
+          ? undefined
+          : c.checkOutPhotoWithDriverUrl,
+    }));
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(activePhotosPreserved));
   } catch (err) {
-    console.warn('LocalStorage quota limit reached in saveVehicleCheckIns. Sanitizing large image data:', err);
-    const sanitized = normalized.map(c => ({
+    console.warn('LocalStorage quota limit reached in saveVehicleCheckIns. Keeping full photos in memory cache:', err);
+    const slimLocal = normalized.map(c => ({
       ...c,
       checkInPhotoWithDriverUrl: (c.checkInPhotoWithDriverUrl && c.checkInPhotoWithDriverUrl.length > 50000)
-        ? 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&auto=format&fit=crop&q=80'
+        ? undefined
         : c.checkInPhotoWithDriverUrl,
       checkOutPhotoWithDriverUrl: (c.checkOutPhotoWithDriverUrl && c.checkOutPhotoWithDriverUrl.length > 50000)
-        ? 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400&auto=format&fit=crop&q=80'
+        ? undefined
         : c.checkOutPhotoWithDriverUrl,
     }));
     try {
-      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(sanitized));
+      localStorage.setItem(STORAGE_KEYS.VEHICLE_CHECKINS, JSON.stringify(slimLocal));
     } catch (e2) {
       console.error('Critical storage save error in saveVehicleCheckIns:', e2);
     }

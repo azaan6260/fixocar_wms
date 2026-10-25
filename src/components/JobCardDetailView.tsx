@@ -27,7 +27,8 @@ import {
   formatJobCardStatus,
   getAuthUser,
   getVehicleCheckIns,
-  saveVehicleCheckIns
+  saveVehicleCheckIns,
+  getVehiclePhotoForRegNo
 } from '../lib/storage';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
@@ -520,8 +521,32 @@ export function JobCardDetailView({
            ========================================================================= */}
         <div className="p-4 sm:p-5 bg-slate-900 text-white border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
           
-          {/* Left: Indian Registration Number Plate Badge + Car Make Model */}
+          {/* Left: Check-In Photo + Indian Registration Number Plate Badge + Car Make Model */}
           <div className="flex items-center gap-3 w-full sm:w-auto">
+            {(() => {
+              const headerCheckInPhotoUrl = card.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInRecordId);
+              return headerCheckInPhotoUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProofTaskId(undefined);
+                    setIsVehiclePhotosModalOpen(true);
+                  }}
+                  title="Gate Check-In Photo (Click to view all vehicle photos)"
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 border-emerald-500/60 bg-slate-800 shrink-0 shadow-md group cursor-pointer"
+                >
+                  <img
+                    src={headerCheckInPhotoUrl}
+                    alt={`${card.vehicle.registrationNumber} check-in`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] font-black text-emerald-400 text-center uppercase tracking-tighter py-0.5">
+                    IN PHOTO
+                  </span>
+                </button>
+              ) : null;
+            })()}
+
             <div className="bg-white text-slate-950 rounded-xl border-2 border-slate-300 px-3 py-1.5 shadow-md flex items-center gap-2 font-mono shrink-0">
               <div className="flex flex-col items-center justify-center border-r border-slate-300 pr-1.5 leading-none">
                 <span className="text-[8px] font-black text-blue-700">IND</span>
@@ -555,6 +580,8 @@ export function JobCardDetailView({
                 <span>🎨 {card.vehicle.color || 'Standard'}</span>
                 <span>•</span>
                 <span className="font-mono text-amber-400">Card: {card.id}</span>
+                <span>•</span>
+                <span className="font-bold text-cyan-400">{formatJobCardStatus(card.status)}</span>
               </div>
             </div>
           </div>

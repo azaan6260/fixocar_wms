@@ -249,43 +249,57 @@ const PipelineCardItem = React.memo(function PipelineCardItem({
       key={card.id}
       className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all shadow-xs p-3.5 space-y-3 relative group"
     >
-      {/* Card Reg Number & JC ID */}
+      {/* Card Photo, Reg Number, Vehicle Name & JC ID */}
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-              {card.id}
-            </span>
-            <span className="font-mono text-[9px] font-black uppercase text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-              {card.status === 'INSPECTION' ? '🔍 INSPECTION' :
-               card.status === 'CREATED' ? '📋 CREATED' :
-               card.status === 'JOB_ALLOCATED' ? '👤 ALLOTTED' :
-               card.status === 'ESTIMATE_PENDING' ? '⏳ ESTIMATE PENDING' :
-               card.status === 'IN_PROGRESS' ? '🔧 IN_PROGRESS' :
-               card.status === 'QC_PENDING' ? '🛡️ QC_PENDING' :
-               card.status === 'RFC' ? '✅ RFC' :
-               card.status === 'READY_FOR_DELIVERY' ? '🚚 READY_FOR_DELIVERY' :
-               card.status === 'OUT_FOR_DELIVERY' ? '🏎️ OUT_FOR_DELIVERY' :
-               card.status}
-            </span>
-            {card.isUrgent && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
-                <Flame className="w-2.5 h-2.5" />
-                Urgent
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+          {card.checkInPhotoWithDriverUrl ? (
+            <img
+              src={card.checkInPhotoWithDriverUrl}
+              alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
+              className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-900 shadow-2xs"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
+              <Car className="w-6 h-6" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="font-mono text-[10px] font-extrabold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                {card.id}
               </span>
-            )}
-            {card.isCars24 && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-orange-600 text-white">
-                Cars24
+              <span className="font-mono text-[9px] font-black uppercase text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                {card.status === 'INSPECTION' ? '🔍 WAITING FOR INSPECTION' :
+                 card.status === 'CREATED' ? '📋 CREATED' :
+                 card.status === 'JOB_ALLOCATED' ? '👤 ALLOTTED' :
+                 card.status === 'ESTIMATE_PENDING' ? '⏳ ESTIMATE PENDING' :
+                 card.status === 'IN_PROGRESS' ? '🔧 IN_PROGRESS' :
+                 card.status === 'QC_PENDING' ? '🛡️ QC_PENDING' :
+                 card.status === 'RFC' ? '✅ RFC' :
+                 card.status === 'READY_FOR_DELIVERY' ? '🚚 READY_FOR_DELIVERY' :
+                 card.status === 'OUT_FOR_DELIVERY' ? '🏎️ OUT_FOR_DELIVERY' :
+                 card.status}
               </span>
-            )}
+              {card.isUrgent && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500 text-white flex items-center gap-0.5 shadow-xs">
+                  <Flame className="w-2.5 h-2.5" />
+                  Urgent
+                </span>
+              )}
+              {card.isCars24 && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-orange-600 text-white">
+                  Cars24
+                </span>
+              )}
+            </div>
+            <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-slate-100 tracking-tight font-mono mt-1 truncate">
+              {card.vehicle.registrationNumber}
+            </h4>
+            <p className="text-xs font-extrabold text-slate-700 dark:text-slate-300 truncate">
+              {card.vehicle.make} {card.vehicle.model}
+            </p>
           </div>
-          <h4 className="font-black text-base text-slate-900 dark:text-slate-100 tracking-tight font-mono mt-1">
-            {card.vehicle.registrationNumber}
-          </h4>
-          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-            {card.vehicle.make} {card.vehicle.model}
-          </p>
         </div>
 
         {/* Status Change Trigger Button */}
@@ -461,17 +475,39 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
   }, []);
 
   const pendingGateCheckIns = useMemo(() => {
-    return checkInsList.filter(c => {
-      if (c.status === 'CHECKED_OUT') return false;
-      const cleanReg = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      const hasJobCard = jobCards.some(jc => {
-        if (jc.status === 'DELIVERED' || jc.status === 'CLOSED') return false;
-        if (jc.checkInRecordId && jc.checkInRecordId === c.id) return true;
-        return jc.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg;
+    const searchLower = searchTerm.toLowerCase().trim();
+    return checkInsList
+      .filter(c => {
+        if (c.status === 'CHECKED_OUT') return false;
+        const cleanReg = c.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        const hasJobCard = jobCards.some(jc => {
+          if (jc.status === 'DELIVERED' || jc.status === 'CLOSED') return false;
+          if (jc.checkInRecordId && jc.checkInRecordId === c.id) return true;
+          return jc.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanReg;
+        });
+        if (hasJobCard) return false;
+
+        if (filterMode === 'RFC' || filterMode === 'URGENT') return false;
+        if (filterMode === 'CARS24' && !c.isCars24) return false;
+
+        if (searchLower) {
+          return (
+            c.registrationNumber.toLowerCase().includes(searchLower) ||
+            c.make.toLowerCase().includes(searchLower) ||
+            c.model.toLowerCase().includes(searchLower) ||
+            c.customerName.toLowerCase().includes(searchLower) ||
+            c.customerPhone.toLowerCase().includes(searchLower) ||
+            c.id.toLowerCase().includes(searchLower)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const numA = parseInt(a.id.replace(/\D/g, '') || '0', 10);
+        const numB = parseInt(b.id.replace(/\D/g, '') || '0', 10);
+        return numB - numA;
       });
-      return !hasJobCard;
-    });
-  }, [checkInsList, jobCards]);
+  }, [checkInsList, jobCards, searchTerm, filterMode]);
 
   useEffect(() => {
     if (initialFilter) {
@@ -769,28 +805,45 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
                 {/* Column Scrollable Cards Container */}
                 <div className="p-3 overflow-y-auto space-y-3 grow min-h-[220px]">
                   {col.id === 'waiting_inspection' && pendingGateCheckIns.length > 0 && (
-                    <div className="space-y-2 mb-3 pb-3 border-b border-amber-200 dark:border-amber-800/40">
+                    <div className="space-y-2.5 mb-3 pb-3 border-b border-amber-200 dark:border-amber-800/40">
                       <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 px-1">
                         <span>Gate Checked-In ({pendingGateCheckIns.length})</span>
-                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">Awaiting JC</span>
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">Waiting for Inspection</span>
                       </div>
                       {pendingGateCheckIns.map((ci) => (
-                        <div key={ci.id} className="bg-amber-100/60 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50 rounded-2xl p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-1">
-                            <div>
+                        <div key={ci.id} className="bg-amber-100/60 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50 rounded-2xl p-3 space-y-2.5 shadow-2xs">
+                          <div className="flex items-start gap-2.5">
+                            {ci.checkInPhotoWithDriverUrl ? (
+                              <img
+                                src={ci.checkInPhotoWithDriverUrl}
+                                alt={`${ci.make} ${ci.model} (${ci.registrationNumber})`}
+                                className="w-16 h-16 rounded-xl object-cover border border-amber-400 dark:border-amber-600 shrink-0 bg-slate-950 shadow-xs"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-xl bg-amber-200/70 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
+                                <Car className="w-6 h-6" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1 flex-wrap">
                                 <span className="text-[9px] font-black font-mono bg-amber-200/80 dark:bg-amber-800 px-1.5 py-0.5 rounded text-amber-900 dark:text-amber-100 uppercase">
-                                  Check-In #{(ci as any).gatePassNumber || (ci as any).gatePassNo || ci.id.slice(-6)}
+                                  {ci.id}
                                 </span>
-                                <span className="font-mono text-[9px] font-black uppercase text-amber-800 dark:text-amber-300 bg-amber-200/50 dark:bg-amber-950 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-700">
-                                  🔍 INSPECTION
+                                <span className="font-mono text-[9px] font-black uppercase text-amber-900 dark:text-amber-200 bg-amber-300/70 dark:bg-amber-950 px-1.5 py-0.5 rounded border border-amber-400 dark:border-amber-700">
+                                  🔍 WAITING FOR INSPECTION
                                 </span>
+                                {ci.isCars24 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-orange-600 text-white">
+                                    Cars24
+                                  </span>
+                                )}
                               </div>
-                              <h4 className="font-mono font-black text-base text-slate-900 dark:text-slate-100 mt-1">
+                              <h4 className="font-mono font-black text-base text-slate-900 dark:text-slate-100 mt-1 truncate">
                                 {ci.registrationNumber}
                               </h4>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                {ci.make} {ci.model}
+                              <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200 truncate">
+                                {ci.make} {ci.model} {ci.variant ? `• ${ci.variant}` : ''}
                               </p>
                             </div>
                           </div>
@@ -811,13 +864,29 @@ export const VehicleStatusPipelineView = React.memo(function VehicleStatusPipeli
                             <button
                               type="button"
                               onClick={() => onOpenNewJobCardWithPrefill({
-                                checkInId: ci.id,
+                                regNo: ci.registrationNumber,
                                 registrationNumber: ci.registrationNumber,
+                                checkInRecordId: ci.id,
+                                checkInId: ci.id,
                                 make: ci.make,
                                 model: ci.model,
+                                variant: ci.variant,
+                                fuelType: ci.fuelType,
+                                color: ci.color,
                                 customerName: ci.customerName,
                                 customerPhone: ci.customerPhone,
-                                kmReading: ci.mileage || (ci as any).kmReading,
+                                isCars24: ci.isCars24,
+                                cars24RefNo: ci.cars24RefNo,
+                                driverName: ci.checkInDriverName,
+                                driverPhone: ci.checkInDriverPhone,
+                                driverPhotoUrl: ci.checkInPhotoWithDriverUrl,
+                                workOrderNo: ci.workOrderNo,
+                                workOrderNotes: ci.workOrderNotes,
+                                cityId: ci.cityId,
+                                cityName: ci.cityName,
+                                workshopId: ci.workshopId,
+                                workshopName: ci.workshopName,
+                                kmReading: ci.mileage,
                                 fuelLevel: ci.fuelLevel
                               })}
                               className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"

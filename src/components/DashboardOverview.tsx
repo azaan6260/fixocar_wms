@@ -28,7 +28,7 @@ import {
   Layers
 } from 'lucide-react';
 import { getStoredSupabaseConfig } from '../lib/supabaseClient';
-import { respondToRequisition, resolveConcern, getEmployees, getVehicleCheckIns, subscribeToStore, dispatchToastNotification } from '../lib/storage';
+import { respondToRequisition, resolveConcern, getEmployees, getVehicleCheckIns, subscribeToStore, dispatchToastNotification, getVehiclePhotoForRegNo, formatJobCardStatus } from '../lib/storage';
 import { 
   ComposedChart, 
   Bar, 
@@ -126,6 +126,10 @@ export function DashboardOverview({
           isCars24: matchedGateIn.isCars24,
           cars24RefNo: matchedGateIn.cars24RefNo,
           checkInRecordId: matchedGateIn.id,
+          checkInPhotoWithDriverUrl: matchedGateIn.checkInPhotoWithDriverUrl,
+          checkedInAt: matchedGateIn.checkedInAt,
+          checkInDriverName: matchedGateIn.checkInDriverName,
+          checkInDriverPhone: matchedGateIn.checkInDriverPhone,
           cityId: matchedGateIn.cityId,
           cityName: matchedGateIn.cityName,
           workshopId: matchedGateIn.workshopId,
@@ -145,11 +149,16 @@ export function DashboardOverview({
     }
   };
 
-  // Metrics
+  // Metrics (Active Job Cards + Checked-In Vehicles Waiting for Inspection)
   const activeCars = jobCards.filter(j => j.status !== 'DELIVERED' && j.status !== 'CLOSED');
   const retailCars = activeCars.filter(j => !j.isCars24);
   const cars24Cars = activeCars.filter(j => j.isCars24);
-  
+  const pendingRetailCheckIns = pendingCheckIns.filter(c => !c.isCars24);
+  const pendingCars24CheckIns = pendingCheckIns.filter(c => c.isCars24);
+  const totalVehiclesInWorkshop = activeCars.length + pendingCheckIns.length;
+  const totalRetailInWorkshop = retailCars.length + pendingRetailCheckIns.length;
+  const totalCars24InWorkshop = cars24Cars.length + pendingCars24CheckIns.length;
+
   // Team Performance Data Calculation
   const employees = getEmployees();
   const teamPerformanceData = employees
@@ -187,6 +196,12 @@ export function DashboardOverview({
   const filteredActiveCars = activeCars.filter(j => {
     if (vehicleFilter === 'RETAIL') return !j.isCars24;
     if (vehicleFilter === 'CARS24') return j.isCars24;
+    return true;
+  });
+
+  const filteredPendingCheckIns = pendingCheckIns.filter(c => {
+    if (vehicleFilter === 'RETAIL') return !c.isCars24;
+    if (vehicleFilter === 'CARS24') return Boolean(c.isCars24);
     return true;
   });
 
@@ -310,7 +325,7 @@ export function DashboardOverview({
           {[
             {
               step: '1. Gate Entry',
-              sub: 'Awaiting Job Card',
+              sub: 'Waiting for Inspection',
               count: pendingCheckIns.length,
               tab: 'gate-pass',
               accent: 'border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400',
@@ -475,8 +490,10 @@ export function DashboardOverview({
             <span className="text-[11px] font-bold uppercase tracking-wider">Total Cars In Workshop</span>
             <Car className="w-4 h-4 text-blue-600" />
           </div>
-          <p className="text-2xl font-black text-slate-900 dark:text-white">{activeCars.length}</p>
-          <span className="text-[10px] text-slate-500 font-semibold">Active in all workshop bays</span>
+          <p className="text-2xl font-black text-slate-900 dark:text-white">{totalVehiclesInWorkshop}</p>
+          <span className="text-[10px] text-slate-500 font-semibold">
+            {activeCars.length} Active Jobs • {pendingCheckIns.length} Waiting Inspection
+          </span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
@@ -484,8 +501,10 @@ export function DashboardOverview({
             <span className="text-[11px] font-bold uppercase tracking-wider">Retail Customer Cars</span>
             <Car className="w-4 h-4 text-blue-500" />
           </div>
-          <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{retailCars.length}</p>
-          <span className="text-[10px] text-slate-500 font-semibold">Regular retail repairs</span>
+          <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{totalRetailInWorkshop}</p>
+          <span className="text-[10px] text-slate-500 font-semibold">
+            {retailCars.length} In Repair • {pendingRetailCheckIns.length} Waiting Inspection
+          </span>
         </div>
 
         <div className="bg-orange-50/60 dark:bg-orange-950/30 p-4 rounded-2xl border border-orange-200 dark:border-orange-900/60 shadow-xs">
@@ -493,8 +512,10 @@ export function DashboardOverview({
             <span className="text-[11px] font-black uppercase tracking-wider">Cars24 Partner Fleet</span>
             <Car className="w-4 h-4 text-orange-600" />
           </div>
-          <p className="text-2xl font-black text-orange-600 dark:text-orange-400">{cars24Cars.length}</p>
-          <span className="text-[10px] text-orange-700 dark:text-orange-300 font-semibold">Cars24 Vendor Jobs</span>
+          <p className="text-2xl font-black text-orange-600 dark:text-orange-400">{totalCars24InWorkshop}</p>
+          <span className="text-[10px] text-orange-700 dark:text-orange-300 font-semibold">
+            {cars24Cars.length} Active Jobs • {pendingCars24CheckIns.length} Waiting Inspection
+          </span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
@@ -787,7 +808,7 @@ export function DashboardOverview({
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                All Cars ({activeCars.length})
+                All Cars ({totalVehiclesInWorkshop})
               </button>
               <button
                 onClick={() => setVehicleFilter('RETAIL')}
@@ -797,7 +818,7 @@ export function DashboardOverview({
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                Retail Cars ({retailCars.length})
+                Retail Cars ({totalRetailInWorkshop})
               </button>
               <button
                 onClick={() => setVehicleFilter('CARS24')}
@@ -807,17 +828,17 @@ export function DashboardOverview({
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                Cars24 Fleet ({cars24Cars.length})
+                Cars24 Fleet ({totalCars24InWorkshop})
               </button>
             </div>
 
-            {/* Job Cards Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
+            {/* Job Cards & Checked-In Vehicles Table */}
+            <div className="overflow-x-auto max-h-[520px] overflow-y-auto rounded-2xl border border-slate-100 dark:border-slate-800">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 sticky top-0 z-10">
                   <tr>
                     <th className="px-4 py-3">ID</th>
-                    <th className="px-4 py-3">Vehicle</th>
+                    <th className="px-4 py-3">Vehicle & Check-In Photo</th>
                     <th className="px-4 py-3">Primary Service</th>
                     <th className="px-4 py-3">Staff Allotted</th>
                     <th className="px-4 py-3">Status</th>
@@ -825,96 +846,213 @@ export function DashboardOverview({
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredActiveCars.length === 0 ? (
+                  {filteredActiveCars.length === 0 && filteredPendingCheckIns.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                         No active vehicles in this category.
                       </td>
                     </tr>
                   ) : (
-                    filteredActiveCars.slice(0, 6).map((card) => {
-                      const primaryTask = card.tasks[0]?.title || 'General Inspection';
-                      const hasPendingApproval = card.status === 'ESTIMATE_PENDING';
-                      const assignedNames = Array.from(
-                        new Set(
-                          card.tasks
-                            .flatMap(t => [t.assignedToName, t.pairedDenterName])
-                            .filter((n): n is string => Boolean(n && n !== 'Unassigned'))
-                        )
-                      );
+                    <>
+                      {filteredActiveCars.map((card) => {
+                        const primaryTask = card.tasks[0]?.title || 'General Inspection';
+                        const hasPendingApproval = card.status === 'ESTIMATE_PENDING';
+                        const assignedNames = Array.from(
+                          new Set(
+                            card.tasks
+                              .flatMap(t => [t.assignedToName, t.pairedDenterName])
+                              .filter((n): n is string => Boolean(n && n !== 'Unassigned'))
+                          )
+                        );
+                        const vehiclePhotoUrl = card.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(card.vehicle.registrationNumber, card.checkInRecordId);
 
-                      return (
-                        <tr
-                          key={card.id}
-                          onClick={() => onSelectJobCard(card.id)}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                        >
-                          <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
-                            <div className="flex items-center gap-1.5">
-                              {card.id}
-                              {card.isCars24 && (
-                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-orange-500 text-white uppercase">
-                                  Cars24
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <p className="font-bold text-slate-900 dark:text-slate-100">
-                              {card.vehicle.make} {card.vehicle.model}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-mono">
-                              {card.vehicle.registrationNumber} • {card.vehicle.color}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <span className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold max-w-[180px] truncate ${
-                              hasPendingApproval
-                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400'
-                            }`}>
-                              {primaryTask}
-                            </span>
-                            {card.tasks.length > 1 && (
-                              <span className="ml-1 text-[10px] font-bold text-slate-400">
-                                +{card.tasks.length - 1}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            {assignedNames.length === 0 ? (
-                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
-                                Unassigned
-                              </span>
-                            ) : (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {assignedNames.slice(0, 2).map((name, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[95px]"
-                                    title={name}
-                                  >
-                                    {name.split(' ')[0]}
+                        return (
+                          <tr
+                            key={card.id}
+                            onClick={() => onSelectJobCard(card.id)}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <div className="flex items-center gap-1.5">
+                                {card.id}
+                                {card.isCars24 && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-orange-500 text-white uppercase">
+                                    Cars24
                                   </span>
-                                ))}
-                                {assignedNames.length > 2 && (
-                                  <span className="text-[10px] font-bold text-slate-400">+{assignedNames.length - 2}</span>
                                 )}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
-                              <span className="w-2 h-2 rounded-full bg-blue-600" />
-                              {card.status.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3.5 text-right font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                            Manage →
-                          </td>
-                        </tr>
-                      );
-                    })
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                {vehiclePhotoUrl ? (
+                                  <div className="w-11 h-11 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-xs">
+                                    <img
+                                      src={vehiclePhotoUrl}
+                                      alt={`${card.vehicle.registrationNumber} check-in`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                                    <Car className="w-5 h-5 text-slate-400" />
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-bold text-slate-900 dark:text-slate-100">
+                                    {card.vehicle.make} {card.vehicle.model}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 font-mono">
+                                    {card.vehicle.registrationNumber} • {card.vehicle.color}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold max-w-[180px] truncate ${
+                                hasPendingApproval
+                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
+                                  : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400'
+                              }`}>
+                                {primaryTask}
+                              </span>
+                              {card.tasks.length > 1 && (
+                                <span className="ml-1 text-[10px] font-bold text-slate-400">
+                                  +{card.tasks.length - 1}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {assignedNames.length === 0 ? (
+                                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                  Unassigned
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {assignedNames.slice(0, 2).map((name, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[95px]"
+                                      title={name}
+                                    >
+                                      {name.split(' ')[0]}
+                                    </span>
+                                  ))}
+                                  {assignedNames.length > 2 && (
+                                    <span className="text-[10px] font-bold text-slate-400">+{assignedNames.length - 2}</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                                {formatJobCardStatus(card.status)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                              Manage →
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {filteredPendingCheckIns.map((checkIn) => {
+                        const checkInPhotoUrl = checkIn.checkInPhotoWithDriverUrl || getVehiclePhotoForRegNo(checkIn.registrationNumber, checkIn.id);
+                        return (
+                          <tr
+                            key={`checkin-${checkIn.id}`}
+                            onClick={() => {
+                              if (isManagementRole) {
+                                onOpenNewJobCard({
+                                  regNo: checkIn.registrationNumber,
+                                  make: checkIn.make,
+                                  model: checkIn.model,
+                                  variant: checkIn.variant,
+                                  fuelType: checkIn.fuelType,
+                                  color: checkIn.color,
+                                  customerName: checkIn.customerName,
+                                  customerPhone: checkIn.customerPhone,
+                                  isCars24: checkIn.isCars24,
+                                  cars24RefNo: checkIn.cars24RefNo,
+                                  checkInRecordId: checkIn.id,
+                                  checkInPhotoWithDriverUrl: checkInPhotoUrl,
+                                  checkedInAt: checkIn.checkedInAt,
+                                  checkInDriverName: checkIn.checkInDriverName,
+                                  checkInDriverPhone: checkIn.checkInDriverPhone,
+                                  cityId: checkIn.cityId,
+                                  cityName: checkIn.cityName,
+                                  workshopId: checkIn.workshopId,
+                                  workshopName: checkIn.workshopName,
+                                  workOrderNo: checkIn.workOrderNo,
+                                  workOrderNotes: checkIn.workOrderNotes,
+                                });
+                              } else {
+                                onNavigateTab('gate-pass');
+                              }
+                            }}
+                            className="bg-amber-50/40 dark:bg-amber-950/15 hover:bg-amber-50/80 dark:hover:bg-amber-950/30 cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{checkIn.id}</span>
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 uppercase">
+                                  GATE IN
+                                </span>
+                                {checkIn.isCars24 && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-orange-500 text-white uppercase">
+                                    Cars24
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                {checkInPhotoUrl ? (
+                                  <div className="w-11 h-11 rounded-xl overflow-hidden border border-amber-500/40 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-xs">
+                                    <img
+                                      src={checkInPhotoUrl}
+                                      alt={`${checkIn.registrationNumber} check-in`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-11 h-11 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-center shrink-0">
+                                    <Car className="w-5 h-5 text-amber-500" />
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-bold text-slate-900 dark:text-slate-100">
+                                    {checkIn.make} {checkIn.model}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 font-mono">
+                                    {checkIn.registrationNumber} • {checkIn.color || 'Standard'}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                                {checkIn.workOrderNotes || 'Gate Check-In • Waiting Inspection'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                Pending Inspection
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 text-[11px]">
+                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                Waiting for Inspection
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-bold text-amber-600 dark:text-amber-400 hover:underline">
+                              + Create Job Card →
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </>
                   )}
                 </tbody>
               </table>
@@ -923,7 +1061,9 @@ export function DashboardOverview({
 
           {/* Card Footer Link */}
           <div className="pt-4 flex items-center justify-between text-xs font-bold text-slate-500 border-t border-slate-100 dark:border-slate-800 mt-4">
-            <span>Showing {Math.min(6, filteredActiveCars.length)} of {filteredActiveCars.length} active job cards</span>
+            <span>
+              Showing all {filteredActiveCars.length + filteredPendingCheckIns.length} vehicles in workshop ({filteredActiveCars.length} Job Cards • {filteredPendingCheckIns.length} Waiting for Inspection)
+            </span>
             <button
               onClick={() => onNavigateTab('job-cards')}
               className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"

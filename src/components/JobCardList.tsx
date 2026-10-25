@@ -65,16 +65,16 @@ interface JobCardListProps {
 }
 
 const STATUS_BADGES: Record<JobCardStatus, { label: string; bg: string; text: string; border: string }> = {
-  CREATED: { label: 'Opened', bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-800' },
-  INSPECTION: { label: 'Diagnosing', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
-  JOB_ALLOCATED: { label: 'Tasks Allotted', bg: 'bg-indigo-500/10', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800' },
-  IN_PROGRESS: { label: 'In Repair', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
-  ESTIMATE_PENDING: { label: 'Approval Required', bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
-  QC_PENDING: { label: 'Floor QC Audit', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
+  CREATED: { label: 'Job Card Created', bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-800' },
+  INSPECTION: { label: 'Waiting for Inspection', bg: 'bg-amber-500/15', text: 'text-amber-800 dark:text-amber-300', border: 'border-amber-300 dark:border-amber-800' },
+  JOB_ALLOCATED: { label: 'Job Allocated', bg: 'bg-indigo-500/10', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800' },
+  IN_PROGRESS: { label: 'Work In Progress', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+  ESTIMATE_PENDING: { label: 'Estimate Pending', bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
+  QC_PENDING: { label: 'PDI / QC Pending', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
   PDI_QC: { label: 'PDI & QC Audit', bg: 'bg-purple-500/10', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800' },
-  READY_FOR_DELIVERY: { label: 'Ready for Dispatch', bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+  READY_FOR_DELIVERY: { label: 'Ready for Delivery', bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
   OUT_FOR_DELIVERY: { label: 'Out for Delivery', bg: 'bg-cyan-500/10', text: 'text-cyan-700 dark:text-cyan-300', border: 'border-cyan-200 dark:border-cyan-800' },
-  RFC: { label: 'Ready for Checkout', bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+  RFC: { label: 'Ready for Checkout (RFC)', bg: 'bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-300 dark:border-emerald-800' },
   DELIVERED: { label: 'Delivered', bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
   CLOSED: { label: 'Closed', bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-800' },
 };
@@ -165,15 +165,24 @@ const JobCardListItem = React.memo(function JobCardListItem({
           </span>
         </div>
 
-        {/* Vehicle Information Row */}
+        {/* Vehicle Information Row with Check-In Photo */}
         <div className="flex items-start gap-3">
-          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 font-bold border ${
-            isDeliveredOrClosed 
-              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40' 
-              : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40'
-          }`}>
-            <Car className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
+          {card.checkInPhotoWithDriverUrl ? (
+            <img
+              src={card.checkInPhotoWithDriverUrl}
+              alt={`${card.vehicle.make} ${card.vehicle.model} (${card.vehicle.registrationNumber})`}
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-900 shadow-2xs"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 font-bold border ${
+              isDeliveredOrClosed 
+                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40' 
+                : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40'
+            }`}>
+              <Car className="w-6 h-6" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h2 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">
@@ -825,6 +834,7 @@ export const JobCardList = React.memo(function JobCardList({
       }
 
       if (mainSection === 'ACTIVE') {
+        if (activeSubFilter === 'WAITING_INSPECTION') return card.status === 'INSPECTION';
         if (activeSubFilter === 'APPROVAL') return card.status === 'ESTIMATE_PENDING' || card.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
         if (activeSubFilter === 'QC') return card.status === 'QC_PENDING';
         if (activeSubFilter === 'DELIVERY') return card.status === 'READY_FOR_DELIVERY' || card.status === 'OUT_FOR_DELIVERY';
@@ -893,7 +903,7 @@ export const JobCardList = React.memo(function JobCardList({
               {mainSection === 'ACTIVE' ? (
                 <>
                   <Car className="w-6 h-6 text-blue-600 shrink-0" />
-                  Active Workshop Job Cards ({activeCards.length})
+                  Active Workshop Vehicles ({activeCards.length + pendingCheckIns.length})
                 </>
               ) : (
                 <>
@@ -904,7 +914,7 @@ export const JobCardList = React.memo(function JobCardList({
             </h1>
             <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
               {mainSection === 'ACTIVE'
-                ? 'Vehicles currently undergoing inspection, diagnosis, repair, QC, or awaiting customer approval and handover.'
+                ? `${activeCards.length} Active Job Cards + ${pendingCheckIns.length} Checked-In Vehicles Waiting for Inspection.`
                 : 'Completed & delivered vehicle job card archives with historical work orders, final billing, and check-out logs.'}
             </p>
           </div>
@@ -912,7 +922,7 @@ export const JobCardList = React.memo(function JobCardList({
           {isManagementRole && (
             <button
               type="button"
-              onClick={onOpenNewJobCardModal}
+              onClick={() => onOpenNewJobCardModal()}
               className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20 active:scale-95 shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
@@ -936,7 +946,7 @@ export const JobCardList = React.memo(function JobCardList({
             }`}
           >
             <Car className="w-4 h-4" />
-            <span>Active Job Cards ({activeCards.length})</span>
+            <span>Active in Workshop ({activeCards.length + pendingCheckIns.length})</span>
           </button>
 
           <button
@@ -1299,20 +1309,21 @@ export const JobCardList = React.memo(function JobCardList({
           <div className="flex items-center gap-1.5 w-full overflow-x-auto pb-1 scrollbar-none">
             {mainSection === 'ACTIVE' ? (
               [
-                { id: 'ALL', label: `All Active (${activeCards.length})` },
+                { id: 'ALL', label: `All Active (${activeCards.length + pendingCheckIns.length})` },
+                { id: 'WAITING_INSPECTION', label: `Waiting for Inspection (${pendingCheckIns.length + activeCards.filter(c => c.status === 'INSPECTION').length})` },
                 { id: 'APPROVAL', label: `Needs Approval (${activeCards.filter(c => c.status === 'ESTIMATE_PENDING' || c.tasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null)).length})` },
                 { id: 'QC', label: `QC Audit (${activeCards.filter(c => c.status === 'QC_PENDING').length})` },
                 { id: 'DELIVERY', label: `Ready/Delivery (${activeCards.filter(c => c.status === 'READY_FOR_DELIVERY' || c.status === 'OUT_FOR_DELIVERY').length})` },
-                { id: 'CARS24', label: `Cars24 (${activeCards.filter(c => c.isCars24).length})` },
+                { id: 'CARS24', label: `Cars24 (${activeCards.filter(c => c.isCars24).length + pendingCheckIns.filter(c => c.isCars24).length})` },
                 { id: 'URGENT', label: `Urgent (${activeCards.filter(c => c.isUrgent).length})` },
               ].map((f) => (
                 <button
                   key={f.id}
                   type="button"
                   onClick={() => setActiveSubFilter(f.id)}
-                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 cursor-pointer ${
                     activeSubFilter === f.id
-                      ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : 'bg-blue-600 text-white shadow-xs'
+                      ? f.id === 'CARS24' ? 'bg-orange-600 text-white shadow-xs' : f.id === 'WAITING_INSPECTION' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-blue-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
@@ -1331,7 +1342,7 @@ export const JobCardList = React.memo(function JobCardList({
                   key={f.id}
                   type="button"
                   onClick={() => setActiveSubFilter(f.id)}
-                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 ${
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center justify-center shrink-0 active:scale-95 cursor-pointer ${
                     activeSubFilter === f.id
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -1347,8 +1358,137 @@ export const JobCardList = React.memo(function JobCardList({
 
       </div>
 
+      {/* Checked-In Vehicles Waiting for Inspection (Gate Check-Ins without Job Card yet) */}
+      {mainSection === 'ACTIVE' &&
+        (activeSubFilter === 'ALL' || activeSubFilter === 'WAITING_INSPECTION' || activeSubFilter === 'CARS24') &&
+        filteredPendingCheckIns.filter(ci => activeSubFilter !== 'CARS24' || ci.isCars24).length > 0 && (
+        <div className="bg-amber-50/70 dark:bg-amber-950/20 rounded-2xl sm:rounded-3xl border border-amber-200 dark:border-amber-800/50 p-4 sm:p-5 space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black uppercase tracking-wider">
+                🔍 Waiting for Inspection
+              </span>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100">
+                Checked-In Vehicles Awaiting Inspection / Job Card ({filteredPendingCheckIns.filter(ci => activeSubFilter !== 'CARS24' || ci.isCars24).length})
+              </h2>
+            </div>
+            <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
+              Physically checked in at gate • Ready to start inspection
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+            {filteredPendingCheckIns
+              .filter(ci => activeSubFilter !== 'CARS24' || ci.isCars24)
+              .map((ci) => (
+                <div
+                  key={ci.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border-2 border-amber-300 dark:border-amber-700/60 p-4 space-y-3 shadow-xs flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[11px] font-black bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                          {ci.id}
+                        </span>
+                        {ci.isCars24 && (
+                          <span className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Cars24
+                          </span>
+                        )}
+                      </div>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-amber-500 text-slate-950 shadow-2xs">
+                        Waiting for Inspection
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      {ci.checkInPhotoWithDriverUrl ? (
+                        <img
+                          src={ci.checkInPhotoWithDriverUrl}
+                          alt={`${ci.make} ${ci.model} (${ci.registrationNumber})`}
+                          className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-amber-300 dark:border-amber-700 bg-slate-950 shadow-xs"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center justify-center shrink-0">
+                          <Car className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight font-mono truncate">
+                            {ci.registrationNumber}
+                          </h3>
+                          <FuelTypeBadge fuelType={ci.fuelType} size="sm" />
+                        </div>
+                        <p className="text-xs font-extrabold text-slate-700 dark:text-slate-300 truncate">
+                          {ci.make} {ci.model} {ci.variant ? `• ${ci.variant}` : ''}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium truncate">
+                          Color: {ci.color || 'White'} • {(ci.mileage || 0).toLocaleString('en-IN')} km
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80 text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 truncate">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{ci.customerName}</span>
+                      </span>
+                      <a
+                        href={`tel:${ci.customerPhone}`}
+                        className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline text-[11px] font-mono font-bold shrink-0 ml-2"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>{ci.customerPhone}</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenNewJobCardModal({
+                        regNo: ci.registrationNumber,
+                        registrationNumber: ci.registrationNumber,
+                        checkInRecordId: ci.id,
+                        checkInId: ci.id,
+                        make: ci.make,
+                        model: ci.model,
+                        variant: ci.variant,
+                        fuelType: ci.fuelType,
+                        color: ci.color,
+                        customerName: ci.customerName,
+                        customerPhone: ci.customerPhone,
+                        isCars24: ci.isCars24,
+                        cars24RefNo: ci.cars24RefNo,
+                        driverName: ci.checkInDriverName,
+                        driverPhone: ci.checkInDriverPhone,
+                        driverPhotoUrl: ci.checkInPhotoWithDriverUrl,
+                        workOrderNo: ci.workOrderNo,
+                        workOrderNotes: ci.workOrderNotes,
+                        cityId: ci.cityId,
+                        cityName: ci.cityName,
+                        workshopId: ci.workshopId,
+                        workshopName: ci.workshopName,
+                        kmReading: ci.mileage,
+                        fuelLevel: ci.fuelLevel,
+                      })
+                    }
+                    className="w-full min-h-[38px] py-2 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>+ Create Job Card / Start Inspection</span>
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Cards Responsive Grid */}
-      {sortedCards.length === 0 ? (
+      {sortedCards.length === 0 && (mainSection !== 'ACTIVE' || filteredPendingCheckIns.length === 0) ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center text-slate-500 space-y-3">
           <Car className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-slate-400 stroke-[1.5]" />
           <div>
@@ -1374,7 +1514,7 @@ export const JobCardList = React.memo(function JobCardList({
             </button>
           )}
         </div>
-      ) : (
+      ) : sortedCards.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {sortedCards.map((card) => (
             <JobCardListItem
@@ -1394,7 +1534,7 @@ export const JobCardList = React.memo(function JobCardList({
             />
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Part Requisition / Consumption Modal */}
       {requisitionModalCard && (
