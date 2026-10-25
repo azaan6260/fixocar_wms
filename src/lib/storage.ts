@@ -317,7 +317,13 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
     const isPaintOrDent = t.category === 'PAINT' || t.category === 'DENTING';
     const estCost = Number(t.estimatedCost ?? 0);
 
-    return {
+    const derivedScope = t.paintScope || meta.pScope || (
+      t.title?.toLowerCase().includes('partial') ? 'PARTIAL_TOUCHUP' :
+      t.title?.toLowerCase().includes('inside') ? 'INSIDE_JAMB' :
+      undefined
+    );
+
+    const healedTask: JobTask = {
       ...t,
       notes: cleanNotes || undefined,
       assignedToId,
@@ -330,7 +336,7 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       isContractBasis: t.isContractBasis ?? meta.cb ?? isPaintOrDent,
       panelKey: t.panelKey || meta.pKey,
       panelNameEn: t.panelNameEn || meta.pName,
-      paintScope: t.paintScope || meta.pScope,
+      paintScope: derivedScope,
       standardJobId: t.standardJobId || meta.sjId,
       partPrice: t.partPrice ?? meta.ptP,
       labourPrice: t.labourPrice ?? meta.lbP,
@@ -338,6 +344,8 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       cars24Price: t.cars24Price ?? meta.c24P,
       isTaxInclusive: t.isTaxInclusive ?? meta.txInc ?? true,
     };
+    healedTask.notes = serializeTaskMetaToNotes(healedTask);
+    return healedTask;
   });
 
   // 2. Propagate vehicle-level batch Painter / Denter across PAINT tasks on the same card if any panel lost its denter during sync
@@ -708,6 +716,26 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
 
 export function getJobCardById(id: string): JobCard | undefined {
   return getAllJobCards().find(card => card.id === id);
+}
+
+export function isJobCardCheckedOutOrRfc(card: JobCard): boolean {
+  if (!card) return false;
+  if (card.status === 'RFC' || card.status === 'DELIVERED' || card.status === 'CLOSED') {
+    return true;
+  }
+  if ((card as any).isVehicleCheckedOut === true || (card as any).checkedOutAt) {
+    return true;
+  }
+  const checkIns = getVehicleCheckIns();
+  const match = checkIns.find(ci => 
+    (card.checkInRecordId && ci.id === card.checkInRecordId) ||
+    (ci.registrationNumber && card.vehicle?.registrationNumber && 
+     ci.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === card.vehicle.registrationNumber.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
+  );
+  if (match && (match.status === 'CHECKED_OUT' || match.checkedOutAt)) {
+    return true;
+  }
+  return false;
 }
 
 export function getActiveJobCardForRegNo(registrationNumber: string, excludeJobCardId?: string): JobCard | undefined {

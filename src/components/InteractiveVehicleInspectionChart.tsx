@@ -523,7 +523,7 @@ export function InteractiveVehicleInspectionChart({
               nameHi: panelObj.nameHi,
               category: 'EXTERIOR_BODY',
               selected: true,
-              paintScope: (id.startsWith('pillar_') || id === 'boot_floor') ? 'INSIDE_JAMB' : 'FULL_OUTER'
+              paintScope: prev[id]?.paintScope || ((id.startsWith('pillar_') || id === 'boot_floor') ? 'INSIDE_JAMB' : 'FULL_OUTER')
             };
           }
         }

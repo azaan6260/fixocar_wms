@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore } from '../lib/storage';
+import { deleteJobCard, getAuthUser, getEmployees, getVehicleCheckIns, subscribeToStore, isJobCardCheckedOutOrRfc } from '../lib/storage';
 import { VehicleCheckIn } from '../types';
 import { PartRequisitionModal } from './PartRequisitionModal';
 import { FuelTypeBadge } from './FuelTypeBadge';
@@ -567,8 +567,8 @@ export const JobCardList = React.memo(function JobCardList({
       return numB - numA;
     });
 
-  const activeCards = jobCards.filter((c) => c.status !== 'DELIVERED' && c.status !== 'CLOSED');
-  const historyCards = jobCards.filter((c) => c.status === 'DELIVERED' || c.status === 'CLOSED');
+  const activeCards = jobCards.filter((c) => !isJobCardCheckedOutOrRfc(c));
+  const historyCards = jobCards.filter((c) => isJobCardCheckedOutOrRfc(c));
   const sectionCards = mainSection === 'ACTIVE' ? activeCards : historyCards;
 
   // Build unique list of all technicians allotted across current section cards + employees directory
@@ -792,6 +792,7 @@ export const JobCardList = React.memo(function JobCardList({
         if (activeSubFilter === 'CARS24') return card.isCars24;
         if (activeSubFilter === 'URGENT') return card.isUrgent;
       } else {
+        if (activeSubFilter === 'RFC') return card.status === 'RFC';
         if (activeSubFilter === 'DELIVERED') return card.status === 'DELIVERED';
         if (activeSubFilter === 'CLOSED') return card.status === 'CLOSED';
         if (activeSubFilter === 'CARS24') return card.isCars24;
@@ -1255,6 +1256,7 @@ export const JobCardList = React.memo(function JobCardList({
             ) : (
               [
                 { id: 'ALL', label: `All History (${historyCards.length})` },
+                { id: 'RFC', label: `RFC / Ready (${historyCards.filter(c => c.status === 'RFC').length})` },
                 { id: 'DELIVERED', label: `Delivered (${historyCards.filter(c => c.status === 'DELIVERED').length})` },
                 { id: 'CLOSED', label: `Closed (${historyCards.filter(c => c.status === 'CLOSED').length})` },
                 { id: 'CARS24', label: `Cars24 (${historyCards.filter(c => c.isCars24).length})` },

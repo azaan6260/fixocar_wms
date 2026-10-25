@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { UserRole, JobCard } from '../types';
-import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary, getVehicleCheckIns } from '../lib/storage';
+import { UserRole, JobCard, PaintScope } from '../types';
+import { getEmployees, getVendors, getAuthUser, getContractorAccountSummary, getVendorAccountSummary, getVehicleCheckIns, isJobCardCheckedOutOrRfc } from '../lib/storage';
 import { RoleBadge } from './RoleBadge';
 import { TechnicianTaskCard } from './TechnicianTaskCard';
 import { InteractiveVehicleInspectionChart } from './InteractiveVehicleInspectionChart';
@@ -22,7 +22,9 @@ import {
   Plus,
   Receipt,
   CreditCard,
-  Car
+  Car,
+  History,
+  CheckCircle2
 } from 'lucide-react';
 
 interface RoleWorkspaceViewProps {
@@ -219,10 +221,28 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
     return result;
   }, [jobCards, currentRole, isAdminOrManager, authUser, selectedEmployeeId, onlyMyTasks]);
 
+  // Separate Active Vehicles vs History of Job Cards (RFC, Checked Out, Delivered, Closed)
+  const activeVehicleGroups = useMemo(() => {
+    return vehicleGroups.filter(vg => !isJobCardCheckedOutOrRfc(vg.card));
+  }, [vehicleGroups]);
+
+  const historyVehicleGroups = useMemo(() => {
+    return vehicleGroups.filter(vg => isJobCardCheckedOutOrRfc(vg.card));
+  }, [vehicleGroups]);
+
+  const [workspaceTab, setWorkspaceTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
+  const displayedGroups = workspaceTab === 'ACTIVE' ? activeVehicleGroups : historyVehicleGroups;
+
   // Keep track of which vehicle cards are expanded
-  const [expandedCardIds, setExpandedCardIds] = useState<string[]>(() => {
-    return vehicleGroups.length > 0 ? [vehicleGroups[0].card.id] : [];
-  });
+  const [expandedCardIds, setExpandedCardIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (displayedGroups.length > 0) {
+      setExpandedCardIds([displayedGroups[0].card.id]);
+    } else {
+      setExpandedCardIds([]);
+    }
+  }, [workspaceTab]);
 
   const toggleExpandCard = useCallback((cardId: string) => {
     setExpandedCardIds(prev => 
@@ -367,22 +387,53 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
 
       {/* Vehicle Cards List */}
       <div className="space-y-4">
+        {/* Workspace Section Tabs: Active Job Cards vs History of Job Cards */}
+        <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => setWorkspaceTab('ACTIVE')}
+            className={`flex-1 min-h-[44px] px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              workspaceTab === 'ACTIVE'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 ring-2 ring-blue-500/20'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <Car className="w-4 h-4" />
+            <span>सक्रिय जॉब कार्ड • Active Job Cards ({activeVehicleGroups.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setWorkspaceTab('HISTORY')}
+            className={`flex-1 min-h-[44px] px-4 py-2 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              workspaceTab === 'HISTORY'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-500/20'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>इतिहास एवं RFC • History & RFC ({historyVehicleGroups.length})</span>
+          </button>
+        </div>
+
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-xs uppercase text-slate-500 tracking-wider">
-            Allotted Vehicles ({vehicleGroups.length})
+            {workspaceTab === 'ACTIVE' ? 'Active Allotted Vehicles' : 'Completed / RFC / Checked-Out History'} ({displayedGroups.length})
           </h3>
           <span className="text-xs text-slate-400">
             Click any vehicle card to view jobs & AR body panel map
           </span>
         </div>
 
-        {vehicleGroups.length === 0 ? (
+        {displayedGroups.length === 0 ? (
           <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-            {t('role.noTasks')}
+            {workspaceTab === 'ACTIVE'
+              ? 'No active vehicle jobs currently assigned. Vehicles marked RFC or Checked-Out are available in the "History & RFC" tab.'
+              : 'No completed, RFC, or checked-out vehicle history found.'}
           </div>
         ) : (
           <div className="space-y-4">
-            {vehicleGroups.map(({ card, assignedTasks, allottedPanelIds, totalSanctionedPayout, completedCount }) => {
+            {displayedGroups.map(({ card, assignedTasks, allottedPanelIds, totalSanctionedPayout, completedCount }) => {
               const isExpanded = expandedCardIds.includes(card.id);
               const isPainterOrDenter = currentRole === 'PAINTER' || currentRole === 'DENTER';
               const showARMap = isPainterOrDenter || allottedPanelIds.length > 0;
@@ -427,6 +478,16 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
                               <span className="text-[11px] font-mono text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded-lg">
                                 {card.id}
                               </span>
+                              {card.status === 'RFC' && (
+                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-emerald-500/25 text-emerald-300 border border-emerald-500/40">
+                                  ✅ RFC / Ready
+                                </span>
+                              )}
+                              {(card.status === 'DELIVERED' || card.status === 'CLOSED') && (
+                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-purple-500/25 text-purple-300 border border-purple-500/40">
+                                  🏁 Delivered / Closed
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
@@ -612,14 +673,32 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
                                     mode="VIEW"
                                     selectedPanelIds={allottedPanelIds}
                                     inspections={card.tasks.reduce((acc, t) => {
-                                      if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                                        acc[t.panelKey] = {
-                                          panelId: t.panelKey,
+                                      const panelKey = t.panelKey || matchTaskToPanelDef(t)?.id;
+                                      if (panelKey && (t.category === 'PAINT' || t.category === 'DENTING' || t.paintScope || t.panelKey)) {
+                                        let pScope: PaintScope | undefined = t.paintScope;
+                                        if (!pScope) {
+                                          const lower = (t.title || '').toLowerCase();
+                                          if (lower.includes('partial') || lower.includes('touch')) pScope = 'PARTIAL_TOUCHUP';
+                                          else if (lower.includes('both') || lower.includes('outer + inner') || lower.includes('inner + outer') || lower.includes('inner plus outer') || lower.includes('outer and inner')) pScope = 'FULL_OUTER_AND_INSIDE';
+                                          else if (lower.includes('inside') || lower.includes('inner') || lower.includes('jamb')) pScope = 'INSIDE_JAMB';
+                                          else pScope = 'FULL_OUTER';
+                                        }
+                                        const existingScope: PaintScope | undefined = acc[panelKey]?.paintScope;
+                                        const finalScope: PaintScope = (pScope === 'PARTIAL_TOUCHUP' || existingScope === 'PARTIAL_TOUCHUP')
+                                          ? 'PARTIAL_TOUCHUP'
+                                          : (pScope === 'FULL_OUTER_AND_INSIDE' || existingScope === 'FULL_OUTER_AND_INSIDE')
+                                          ? 'FULL_OUTER_AND_INSIDE'
+                                          : (pScope === 'INSIDE_JAMB' || existingScope === 'INSIDE_JAMB')
+                                          ? 'INSIDE_JAMB'
+                                          : (pScope || existingScope || 'FULL_OUTER');
+
+                                        acc[panelKey] = {
+                                          panelId: panelKey,
                                           nameEn: t.panelNameEn || t.title,
                                           nameHi: t.title,
                                           category: 'EXTERIOR_BODY',
                                           selected: true,
-                                          paintScope: t.paintScope || 'FULL_OUTER'
+                                          paintScope: finalScope
                                         };
                                       }
                                       return acc;
@@ -630,14 +709,32 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
                                     mode="VIEW"
                                     selectedPanelIds={allottedPanelIds}
                                     inspections={card.tasks.reduce((acc, t) => {
-                                      if (t.panelKey && (t.category === 'PAINT' || t.category === 'DENTING')) {
-                                        acc[t.panelKey] = {
-                                          panelId: t.panelKey,
+                                      const panelKey = t.panelKey || matchTaskToPanelDef(t)?.id;
+                                      if (panelKey && (t.category === 'PAINT' || t.category === 'DENTING' || t.paintScope || t.panelKey)) {
+                                        let pScope: PaintScope | undefined = t.paintScope;
+                                        if (!pScope) {
+                                          const lower = (t.title || '').toLowerCase();
+                                          if (lower.includes('partial') || lower.includes('touch')) pScope = 'PARTIAL_TOUCHUP';
+                                          else if (lower.includes('both') || lower.includes('outer + inner') || lower.includes('inner + outer') || lower.includes('inner plus outer') || lower.includes('outer and inner')) pScope = 'FULL_OUTER_AND_INSIDE';
+                                          else if (lower.includes('inside') || lower.includes('inner') || lower.includes('jamb')) pScope = 'INSIDE_JAMB';
+                                          else pScope = 'FULL_OUTER';
+                                        }
+                                        const existingScope: PaintScope | undefined = acc[panelKey]?.paintScope;
+                                        const finalScope: PaintScope = (pScope === 'PARTIAL_TOUCHUP' || existingScope === 'PARTIAL_TOUCHUP')
+                                          ? 'PARTIAL_TOUCHUP'
+                                          : (pScope === 'FULL_OUTER_AND_INSIDE' || existingScope === 'FULL_OUTER_AND_INSIDE')
+                                          ? 'FULL_OUTER_AND_INSIDE'
+                                          : (pScope === 'INSIDE_JAMB' || existingScope === 'INSIDE_JAMB')
+                                          ? 'INSIDE_JAMB'
+                                          : (pScope || existingScope || 'FULL_OUTER');
+
+                                        acc[panelKey] = {
+                                          panelId: panelKey,
                                           nameEn: t.panelNameEn || t.title,
                                           nameHi: t.title,
                                           category: 'EXTERIOR_BODY',
                                           selected: true,
-                                          paintScope: t.paintScope || 'FULL_OUTER',
+                                          paintScope: finalScope,
                                           painterName: t.assignedToName,
                                           denterName: t.pairedDenterName,
                                           customPrice: t.customerPrice,

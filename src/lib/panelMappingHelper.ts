@@ -14,6 +14,11 @@ export function matchTaskToPanelDef(task: { title: string; panelKey?: string; st
   if (task.panelKey) {
     const found = VEHICLE_PANELS.find(p => p.id === task.panelKey);
     if (found) return found;
+    if (task.panelKey === 'quarter_panel' || task.panelKey.startsWith('quarter')) {
+      return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_lhs') || VEHICLE_PANELS.find(p => p.id === 'quarter_panel_rhs');
+    }
+    if (task.panelKey === 'fender') return VEHICLE_PANELS.find(p => p.id === 'fender_lhs');
+    if (task.panelKey === 'running_board') return VEHICLE_PANELS.find(p => p.id === 'running_board_lhs');
   }
 
   // 2. Standard Job ID match
@@ -62,16 +67,19 @@ export function matchTaskToPanelDef(task: { title: string; panelKey?: string; st
   if (cleanTitle.includes('fender')) {
     if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'fender_lhs');
     if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'fender_rhs');
+    return VEHICLE_PANELS.find(p => p.id === 'fender_lhs');
   }
 
   if (cleanTitle.includes('running board') || cleanTitle.includes('sill')) {
     if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'running_board_lhs');
     if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'running_board_rhs');
+    return VEHICLE_PANELS.find(p => p.id === 'running_board_lhs');
   }
 
   if (cleanTitle.includes('quarter')) {
     if (isLHS) return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_lhs');
     if (isRHS) return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_rhs');
+    return VEHICLE_PANELS.find(p => p.id === 'quarter_panel_lhs') || VEHICLE_PANELS.find(p => p.id === 'quarter_panel_rhs');
   }
 
   if (cleanTitle.includes('door')) {

@@ -48,15 +48,32 @@ export function deriveInspectionsFromTasks(tasks: JobTask[]): {
   const selectedPanelIdsSet = new Set<string>();
 
   (tasks || []).forEach(task => {
-    if (task.category !== 'PAINT') return;
+    const isPanelTask = task.category === 'PAINT' || task.category === 'DENTING' || Boolean(task.panelKey) || Boolean(task.paintScope);
+    if (!isPanelTask) return;
+
     const matchedDef = matchTaskToPanelDef(task);
-    const panelId = matchedDef?.id || task.panelKey;
+    const panelId = task.panelKey || matchedDef?.id;
     if (!panelId) return;
 
     selectedPanelIdsSet.add(panelId);
 
     const existing = inspections[panelId];
-    const currScope = task.paintScope || 'FULL_OUTER';
+
+    // Derive scope: from task.paintScope, or from title keywords
+    let currScope = task.paintScope;
+    if (!currScope && task.title) {
+      const lower = task.title.toLowerCase();
+      if (lower.includes('partial') || lower.includes('touchup') || lower.includes('आधा') || lower.includes('पैच')) {
+        currScope = 'PARTIAL_TOUCHUP';
+      } else if (lower.includes('inside') || lower.includes('jamb') || lower.includes('pillar') || lower.includes('अंदर')) {
+        currScope = 'INSIDE_JAMB';
+      } else if (lower.includes('outer + inside') || lower.includes('both') || lower.includes('दोनों')) {
+        currScope = 'FULL_OUTER_AND_INSIDE';
+      }
+    }
+    if (!currScope) {
+      currScope = (panelId.startsWith('pillar_') || panelId === 'boot_floor') ? 'INSIDE_JAMB' : 'FULL_OUTER';
+    }
 
     // If a panel already has an inspection from another task, determine if it has both outer and inside paint!
     let effectiveScope: PaintScope = currScope;
@@ -67,6 +84,8 @@ export function deriveInspectionsFromTasks(tasks: JobTask[]): {
 
       if (prevCat === 'BOTH' || currCat === 'BOTH' || (prevCat === 'OUTER' && currCat === 'INSIDE') || (prevCat === 'INSIDE' && currCat === 'OUTER')) {
         effectiveScope = 'FULL_OUTER_AND_INSIDE';
+      } else if (currScope === 'PARTIAL_TOUCHUP' || prevScope === 'PARTIAL_TOUCHUP') {
+        effectiveScope = 'PARTIAL_TOUCHUP';
       } else {
         effectiveScope = currScope;
       }
