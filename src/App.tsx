@@ -510,7 +510,7 @@ export default function App() {
         if (!document.hidden) {
           syncFromSupabase().catch(() => {});
         }
-      }, 45000);
+      }, 60000);
     };
 
     // Re-sync on tab focus or screen visibility change, and pause background timer when hidden to conserve mobile battery

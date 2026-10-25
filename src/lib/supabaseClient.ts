@@ -203,6 +203,63 @@ export function clearSupabaseConfig() {
 }
 
 /**
+ * Utility to convert base64 data URL to Blob and upload to Supabase Storage bucket ('job-attachments').
+ * Replaces large base64 strings with lightweight public CDN URLs to drastically lower database egress & payload size!
+ */
+export async function uploadBase64ToSupabaseStorage(
+  base64DataUrl: string,
+  folderName: string = 'checkin-photos',
+  fileNamePrefix: string = 'photo'
+): Promise<string | null> {
+  if (!base64DataUrl || !base64DataUrl.startsWith('data:image')) {
+    return null;
+  }
+
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const parts = base64DataUrl.split(',');
+    if (parts.length < 2) return null;
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const blob = new Blob([u8arr], { type: mimeType });
+
+    const ext = mimeType.split('/')[1] || 'jpg';
+    const filePath = `${folderName}/${fileNamePrefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+
+    const { data, error } = await client.storage
+      .from('job-attachments')
+      .upload(filePath, blob, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: mimeType
+      });
+
+    if (error) {
+      console.warn('[STORAGE_UPLOAD] Supabase storage upload warning:', error.message);
+      return null;
+    }
+
+    const { data: publicUrlData } = client.storage.from('job-attachments').getPublicUrl(filePath);
+    if (publicUrlData && publicUrlData.publicUrl) {
+      console.log('[STORAGE_UPLOAD] Uploaded base64 photo to Supabase Storage CDN URL:', publicUrlData.publicUrl);
+      return publicUrlData.publicUrl;
+    }
+  } catch (err) {
+    console.warn('[STORAGE_UPLOAD] Exception uploading base64 to Supabase Storage:', err);
+  }
+
+  return null;
+}
+
+/**
  * Sync employee profile and login credentials directly to Supabase Auth & Database
  */
 export async function triggerPostSignUpHook(

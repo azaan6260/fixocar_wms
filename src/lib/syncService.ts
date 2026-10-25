@@ -780,12 +780,14 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveCities(mergedCities, true);
       citiesSynced = mergedCities.length;
 
-      for (const c of mergedCities) {
-        client.from('cities').upsert({
-          id: c.id,
-          name: c.name,
-          state: c.state || ''
-        }).then(() => {}, () => {});
+      if (mergedCities.length > 0) {
+        client.from('cities').upsert(
+          mergedCities.map(c => ({
+            id: c.id,
+            name: c.name,
+            state: c.state || ''
+          }))
+        ).then(() => {}, () => {});
       }
     }
 
@@ -818,19 +820,20 @@ export async function syncFromSupabase(): Promise<SyncResult> {
       saveWorkshops(mergedWorkshops, true);
       workshopsSynced = mergedWorkshops.length;
 
-      for (const w of mergedWorkshops) {
-        const fullPayload = {
-          id: w.id,
-          name: w.name,
-          city_id: w.cityId,
-          city_name: w.cityName,
-          code: w.code || 'WS',
-          address: w.address || '',
-          phone: w.phone || '',
-          is_cars24_partner: w.isCars24Partner ?? false,
-          manager_name: w.managerName || '',
-        };
-        client.from('workshops').upsert(fullPayload).then(() => {}, () => {});
+      if (mergedWorkshops.length > 0) {
+        client.from('workshops').upsert(
+          mergedWorkshops.map(w => ({
+            id: w.id,
+            name: w.name,
+            city_id: w.cityId,
+            city_name: w.cityName,
+            code: w.code || 'WS',
+            address: w.address || '',
+            phone: w.phone || '',
+            is_cars24_partner: w.isCars24Partner ?? false,
+            manager_name: w.managerName || '',
+          }))
+        ).then(() => {}, () => {});
       }
     }
 
