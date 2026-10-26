@@ -938,9 +938,9 @@ export const INITIAL_DELIVERIES: DeliveryRecord[] = [];
 
 export const INITIAL_PURCHASE_ORDERS: PurchaseOrder[] = [];
 
-export const INITIAL_JOB_CARDS: JobCard[] = (centralSeedSnapshot.jobCards as unknown as JobCard[]) || [];
+export const INITIAL_JOB_CARDS: JobCard[] = [];
 
-export const INITIAL_VEHICLE_CHECKINS: VehicleCheckIn[] = (centralSeedSnapshot.vehicleCheckIns as unknown as VehicleCheckIn[]) || [];
+export const INITIAL_VEHICLE_CHECKINS: VehicleCheckIn[] = [];
 
 export const STANDARD_PACKAGES: StandardServicePackage[] = [];
 

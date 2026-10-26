@@ -38,6 +38,37 @@ export interface SyncResult {
   errors: string[];
 }
 
+export interface SyncHealth {
+  lastSyncTime: number;
+  isOnline: boolean;
+  centralStoreConnected: boolean;
+  supabaseConnected: boolean;
+  isQuotaRestricted: boolean;
+  errorMessage?: string;
+}
+
+let currentSyncHealth: SyncHealth = {
+  lastSyncTime: Date.now(),
+  isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+  centralStoreConnected: true,
+  supabaseConnected: true,
+  isQuotaRestricted: false
+};
+
+export function getSyncHealth(): SyncHealth {
+  return {
+    ...currentSyncHealth,
+    isQuotaRestricted: isSupabaseQuotaRestricted()
+  };
+}
+
+export function updateSyncHealth(partial: Partial<SyncHealth>) {
+  currentSyncHealth = { ...currentSyncHealth, ...partial, lastSyncTime: Date.now() };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fixocar_sync_health_changed', { detail: currentSyncHealth }));
+  }
+}
+
 let lastProcessedServerStoreSignature = '';
 let lastPushedLocalStoreSignature = '';
 
