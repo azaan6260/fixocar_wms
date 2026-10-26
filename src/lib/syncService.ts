@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseClient, getStoredSupabaseConfig, fetchServerSupabaseConfig } from './supabaseClient';
+import { getSupabaseClient, getStoredSupabaseConfig, fetchServerSupabaseConfig, isSupabaseQuotaRestricted } from './supabaseClient';
+import { fetchCentralApi } from './mobileBridge';
 import { 
   getAllEmployees, getEmployees, saveEmployees,
   getVendors, saveVendors,
@@ -346,9 +347,9 @@ export async function syncFromSupabase(): Promise<SyncResult> {
   // 0. Always initialize/sync server Supabase credentials first so mobile & server share context
   await fetchServerSupabaseConfig().catch(() => null);
 
-  // 1. Always pull from central server store first (syncs laptop & mobile)
+  // 1. Always pull from central server store first (syncs laptop, web & mobile APK)
   try {
-    const res = await fetch(`/api/central/store?_t=${Date.now()}`, {
+    const res = await fetchCentralApi(`/api/central/store?_t=${Date.now()}`, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -666,12 +667,12 @@ export async function syncFromSupabase(): Promise<SyncResult> {
     console.warn('[SYNC_TRACE] Central server store sync warning:', centralErr);
   }
 
-  // 2. Direct Supabase table queries if client is configured
+  // 2. Direct Supabase table queries if client is configured and not quota-restricted
   const client = getSupabaseClient();
-  if (!client) {
+  if (!client || isSupabaseQuotaRestricted()) {
     return {
       success: true,
-      isConfigured: false,
+      isConfigured: true,
       missingTables: [],
       employeesSynced,
       citiesSynced,
@@ -686,6 +687,19 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
     // 1. EMPLOYEES (Chunked Fetch)
     const { data: employees, error: empErr } = await fetchTableInChunks<any>(client, 'employees', { chunkSize: 100 });
+    if (isSupabaseQuotaRestricted()) {
+      return {
+        success: true,
+        isConfigured: true,
+        missingTables: [],
+        employeesSynced,
+        citiesSynced,
+        workshopsSynced,
+        vendorsSynced,
+        jobCardsSynced,
+        errors: []
+      };
+    }
     const { data: supaWorkshops } = await fetchTableInChunks<any>(client, 'workshops', { chunkSize: 100 }).catch(() => ({ data: null }));
     const { data: supaCities } = await fetchTableInChunks<any>(client, 'cities', { chunkSize: 100 }).catch(() => ({ data: null }));
 

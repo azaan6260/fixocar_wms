@@ -2,6 +2,7 @@ import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCh
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
+import { fetchCentralApi } from './mobileBridge';
 import { ToastNotification, formatJobCardStatus } from '../types/toast';
 export { formatJobCardStatus };
 
@@ -136,7 +137,7 @@ function notifyStoreChange() {
 
 function notifyCentralServer(key: string, data: any) {
   if (typeof window === 'undefined') return;
-  fetch('/api/central/store', {
+  fetchCentralApi('/api/central/store', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ [key]: data })
@@ -801,121 +802,121 @@ export function saveJobCards(cards: JobCard[], skipPush = false) {
   }
 
   if (!skipPush && !isOffline) {
-    // Async sync to Supabase if connected
+    // Batch async sync to Supabase if connected (eliminates 400+ per-row HTTP loops)
     const client = getSupabaseClient();
-    if (client) {
-      healedCards.forEach(card => {
-        const corePayload = {
-          id: card.id,
-          registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
-          vehicle_make: card.vehicle?.make || 'Vehicle',
-          vehicle_model: card.vehicle?.model || '',
-          vehicle_year: card.vehicle?.year || 2022,
-          vehicle_color: card.vehicle?.color || 'Standard',
-          vehicle_vin: card.vehicle?.vin || '',
-          fuel_level: card.vehicle?.fuelLevel || 50,
-          mileage: card.vehicle?.mileage || 0,
-          customer_name: card.customer?.name || 'Customer',
-          customer_phone: card.customer?.phone || '',
-          customer_email: card.customer?.email || '',
-          customer_address: card.customer?.address || '',
-          status: card.status || 'CREATED',
-          service_type: card.serviceType || 'CUSTOM_REPAIR',
-          package_name: card.packageName || null,
-          floor_manager_id: card.floorManagerId || null,
-          floor_manager_name: card.floorManagerName || null,
-          city_id: card.cityId || null,
-          city_name: card.cityName || null,
-          workshop_id: card.workshopId || null,
-          workshop_name: card.workshopName || null,
-          is_cars24: card.isCars24 || false,
-          cars24_ref_no: card.cars24RefNo || null,
-          pickup_requested: card.pickupRequested || false,
-          delivery_requested: card.deliveryRequested || false,
-          discount: card.discount || 0,
-          tax_rate: card.taxRate || 18,
-          advance_paid: card.advancePaid || 0,
-          qc_passed: card.qcPassed || false,
-          qc_notes: card.qcNotes || null,
-          updated_at: new Date().toISOString()
-        };
+    if (client && healedCards.length > 0) {
+      const corePayloads = healedCards.map(card => ({
+        id: card.id,
+        registration_number: card.vehicle?.registrationNumber || 'UNKNOWN',
+        vehicle_make: card.vehicle?.make || 'Vehicle',
+        vehicle_model: card.vehicle?.model || '',
+        vehicle_year: card.vehicle?.year || 2022,
+        vehicle_color: card.vehicle?.color || 'Standard',
+        vehicle_vin: card.vehicle?.vin || '',
+        fuel_level: card.vehicle?.fuelLevel || 50,
+        mileage: card.vehicle?.mileage || 0,
+        customer_name: card.customer?.name || 'Customer',
+        customer_phone: card.customer?.phone || '',
+        customer_email: card.customer?.email || '',
+        customer_address: card.customer?.address || '',
+        status: card.status || 'CREATED',
+        service_type: card.serviceType || 'CUSTOM_REPAIR',
+        package_name: card.packageName || null,
+        floor_manager_id: card.floorManagerId || null,
+        floor_manager_name: card.floorManagerName || null,
+        city_id: card.cityId || null,
+        city_name: card.cityName || null,
+        workshop_id: card.workshopId || null,
+        workshop_name: card.workshopName || null,
+        is_cars24: card.isCars24 || false,
+        cars24_ref_no: card.cars24RefNo || null,
+        pickup_requested: card.pickupRequested || false,
+        delivery_requested: card.deliveryRequested || false,
+        discount: card.discount || 0,
+        tax_rate: card.taxRate || 18,
+        advance_paid: card.advancePaid || 0,
+        qc_passed: card.qcPassed || false,
+        qc_notes: card.qcNotes || null,
+        updated_at: new Date().toISOString()
+      }));
 
-        const extendedPayload = {
-          ...corePayload,
-          is_urgent: Boolean(card.isUrgent),
-          estimated_completion_date: card.estimatedCompletionDate || null,
-          notes: card.notes || card.huddleNotes || null,
-        };
+      const extendedPayloads = healedCards.map((card, i) => ({
+        ...corePayloads[i],
+        is_urgent: Boolean(card.isUrgent),
+        estimated_completion_date: card.estimatedCompletionDate || null,
+        notes: card.notes || card.huddleNotes || null,
+      }));
 
-        // Self-executing async function to safely sync to Supabase in the background
-        (async () => {
-          try {
-            let { error } = await client.from('job_cards').upsert(extendedPayload);
-            if (error) {
-              // Retry with corePayload (in case is_urgent/notes/estimated_completion_date columns don't exist)
-              const retryCore = await client.from('job_cards').upsert(corePayload);
-              error = retryCore.error;
-            }
-            if (error) {
-              // Fallback retry without FK constraint fields if foreign key missing in target table, keeping names
-              const fallbackPayload = {
-                ...corePayload,
-                floor_manager_id: null,
-                city_id: null,
-                workshop_id: null
-              };
-              const { error: fbErr } = await client.from('job_cards').upsert(fallbackPayload);
-              if (fbErr) {
-                console.error('Supabase sync error (job_card fallback):', fbErr);
-              }
-            }
-          } catch (err) {
-            console.warn('[SUPABASE_CATCH] Job card upsert exception:', err);
+      (async () => {
+        try {
+          let { error } = await client.from('job_cards').upsert(extendedPayloads);
+          if (error) {
+            const retryCore = await client.from('job_cards').upsert(corePayloads);
+            error = retryCore.error;
           }
+          if (error) {
+            const fallbackPayloads = corePayloads.map(cp => ({
+              ...cp,
+              floor_manager_id: null,
+              city_id: null,
+              workshop_id: null
+            }));
+            await client.from('job_cards').upsert(fallbackPayloads);
+          }
+        } catch (err) {
+          console.warn('[SUPABASE_CATCH] Batch job card upsert exception:', err);
+        }
 
-          // Also upsert tasks with serialized metadata in notes so pairedDenterId & payouts persist across devices
+        const allTaskCorePayloads: any[] = [];
+        const allTaskExtendedPayloads: any[] = [];
+        for (const card of healedCards) {
           if (card.tasks && card.tasks.length > 0) {
             for (const t of card.tasks) {
-              try {
-                const encodedNotes = serializeTaskMetaToNotes(t);
-                const parsedCompleted = t.completedAt ? new Date(t.completedAt) : null;
-                const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
-                  ? parsedCompleted.toISOString()
-                  : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
-                const taskCorePayload = {
-                  id: t.id,
-                  job_card_id: card.id,
-                  title: t.title || 'Task',
-                  category: t.category || 'REPAIR',
-                  assigned_to_id: t.assignedToId || null,
-                  assigned_to_name: t.assignedToName || null,
-                  assigned_type: t.assignedType || 'EMPLOYEE',
-                  estimated_cost: t.estimatedCost || 0,
-                  customer_price: t.customerPrice || 0,
-                  status: t.status || 'PENDING',
-                  requires_customer_approval: t.requiresCustomerApproval || false,
-                  is_customer_approved: t.isCustomerApproved ?? null,
-                  rejection_reason: t.rejectionReason || null,
-                  notes: encodedNotes || null,
-                  completed_at: isoCompletedAt
-                };
-                const { error } = await client.from('job_tasks').upsert({
-                  ...taskCorePayload,
-                  is_additional_work: t.isAdditionalWork || false,
-                  additional_work_requested_by: t.additionalWorkRequestedBy || null,
-                  additional_work_requested_at: t.additionalWorkRequestedAt || null,
-                  approval_status: t.approvalStatus || 'PENDING'
-                });
-                if (error) {
-                  await client.from('job_tasks').upsert(taskCorePayload);
-                }
-              } catch (err) {
-                console.warn(`[SUPABASE_CATCH] Task upsert exception (${t.id}):`, err);
-              }
+              const encodedNotes = serializeTaskMetaToNotes(t);
+              const parsedCompleted = t.completedAt ? new Date(t.completedAt) : null;
+              const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
+                ? parsedCompleted.toISOString()
+                : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
+              const taskCorePayload = {
+                id: t.id,
+                job_card_id: card.id,
+                title: t.title || 'Task',
+                category: t.category || 'REPAIR',
+                assigned_to_id: t.assignedToId || null,
+                assigned_to_name: t.assignedToName || null,
+                assigned_type: t.assignedType || 'EMPLOYEE',
+                estimated_cost: t.estimatedCost || 0,
+                customer_price: t.customerPrice || 0,
+                status: t.status || 'PENDING',
+                requires_customer_approval: t.requiresCustomerApproval || false,
+                is_customer_approved: t.isCustomerApproved ?? null,
+                rejection_reason: t.rejectionReason || null,
+                notes: encodedNotes || null,
+                completed_at: isoCompletedAt
+              };
+              allTaskCorePayloads.push(taskCorePayload);
+              allTaskExtendedPayloads.push({
+                ...taskCorePayload,
+                is_additional_work: t.isAdditionalWork || false,
+                additional_work_requested_by: t.additionalWorkRequestedBy || null,
+                additional_work_requested_at: t.additionalWorkRequestedAt || null,
+                approval_status: t.approvalStatus || 'PENDING'
+              });
             }
           }
-        })();
-      });
+        }
+
+        if (allTaskExtendedPayloads.length > 0) {
+          try {
+            const { error } = await client.from('job_tasks').upsert(allTaskExtendedPayloads);
+            if (error) {
+              await client.from('job_tasks').upsert(allTaskCorePayloads);
+            }
+          } catch (err) {
+            console.warn('[SUPABASE_CATCH] Batch task upsert exception:', err);
+          }
+        }
+      })();
     }
   }
 }
@@ -4393,8 +4394,8 @@ export function getVehicleCheckIns(): VehicleCheckIn[] {
       const hasActiveCardForReg = regJobCards.some(jc => jc.status !== 'DELIVERED' && jc.status !== 'CLOSED');
       const hasDeliveredCardForReg = regJobCards.some(jc => jc.status === 'DELIVERED' || jc.status === 'CLOSED');
 
-      // If vehicle was delivered/closed and has no active job card, mark as CHECKED_OUT
-      if (!hasActiveCardForReg && hasDeliveredCardForReg) {
+      // If vehicle was delivered/closed and has no active job card, or if its status claims JOB_CARD_CREATED with no active job card, mark as CHECKED_OUT
+      if (!hasActiveCardForReg && (hasDeliveredCardForReg || item.status === 'JOB_CARD_CREATED')) {
         item.status = 'CHECKED_OUT';
         item.checkedOutAt = item.checkedOutAt || new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
         checkedOutList.push(item);
@@ -4554,8 +4555,8 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
   if (!skipPush) {
     notifyCentralServer('vehicleCheckIns', normalized);
     const client = getSupabaseClient();
-    if (client) {
-      normalized.forEach(ci => {
+    if (client && normalized.length > 0) {
+      const batchPayloads = normalized.map(ci => {
         const parsedOut = ci.checkedOutAt ? new Date(ci.checkedOutAt) : null;
         const isoOut = parsedOut && !isNaN(parsedOut.getTime())
           ? parsedOut.toISOString()
@@ -4565,7 +4566,15 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
           ? parsedIn.toISOString()
           : new Date().toISOString();
 
-        client.from('vehicle_check_ins').upsert({
+        // Never write raw base64 strings into Postgres columns (prevents multi-GB egress & log ingestion)
+        const safeDriverPhoto = ci.checkInPhotoWithDriverUrl && !ci.checkInPhotoWithDriverUrl.startsWith('data:')
+          ? ci.checkInPhotoWithDriverUrl
+          : null;
+        const safeOutPhoto = ci.checkOutPhotoWithDriverUrl && !ci.checkOutPhotoWithDriverUrl.startsWith('data:')
+          ? ci.checkOutPhotoWithDriverUrl
+          : null;
+
+        return {
           id: ci.id,
           registration_number: ci.registrationNumber,
           make: ci.make || 'Vehicle',
@@ -4583,16 +4592,17 @@ export function saveVehicleCheckIns(checkIns: VehicleCheckIn[], skipPush = false
           check_in_time: isoIn,
           check_in_driver_name: ci.checkInDriverName || 'Driver',
           check_in_driver_phone: ci.checkInDriverPhone || '',
-          driver_photo_url: ci.checkInPhotoWithDriverUrl || null,
+          driver_photo_url: safeDriverPhoto,
           check_in_notes: ci.checkInNotes || null,
           status: ci.status || 'CHECKED_IN',
           job_card_id: ci.jobCardId || null,
           check_out_time: isoOut,
           check_out_driver_name: ci.checkOutDriverName || null,
           check_out_driver_phone: ci.checkOutDriverPhone || null,
-          check_out_driver_photo_url: ci.checkOutPhotoWithDriverUrl || null
-        }).then(() => {}, () => {});
+          check_out_driver_photo_url: safeOutPhoto
+        };
       });
+      client.from('vehicle_check_ins').upsert(batchPayloads).then(() => {}, () => {});
     }
   }
 }

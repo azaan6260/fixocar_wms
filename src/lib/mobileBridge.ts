@@ -151,6 +151,11 @@ export async function initMobileEnvironment(): Promise<void> {
   }
 }
 
+const DEFAULT_CLOUD_SERVERS = [
+  'https://ais-pre-one4iisje7kudf7kqsouc4-278501159721.asia-southeast1.run.app',
+  'https://ais-dev-one4iisje7kudf7kqsouc4-278501159721.asia-southeast1.run.app'
+];
+
 /**
  * Resolves relative API paths to absolute URLs when running inside a native mobile container (Capacitor).
  * This ensures that fetch('/api/...') requests target the deployed backend server instead of failing on localhost.
@@ -163,7 +168,6 @@ export function getApiUrl(path: string): string {
 
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  // Try to read custom API server URL from localStorage
   if (typeof window !== 'undefined') {
     const customUrl = localStorage.getItem('autocraft_api_server_url');
     if (customUrl && customUrl.trim()) {
@@ -171,13 +175,54 @@ export function getApiUrl(path: string): string {
       return `${cleanBase}${cleanPath}`;
     }
 
-    // On web preview / production, use the current origin
     const origin = window.location.origin;
-    if (origin && !origin.includes('localhost:5173') && !origin.startsWith('capacitor://') && !origin.startsWith('https://localhost')) {
+    const isCapacitorOrLocalApk =
+      !origin ||
+      origin.startsWith('capacitor://') ||
+      origin === 'https://localhost' ||
+      origin === 'http://localhost' ||
+      origin.includes('localhost:5173');
+
+    if (!isCapacitorOrLocalApk) {
       return `${origin}${cleanPath}`;
+    }
+
+    // Native Android APK / Capacitor WebView: route to the live Cloud Run backend
+    return `${DEFAULT_CLOUD_SERVERS[0]}${cleanPath}`;
+  }
+
+  return cleanPath;
+}
+
+/**
+ * Fetches from the Central API with automatic fallback across primary and dev Cloud Run origins
+ * so native Android APKs and web sessions always reach .central_store.json.
+ */
+export async function fetchCentralApi(path: string, init?: RequestInit): Promise<Response> {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const primaryUrl = getApiUrl(cleanPath);
+
+  const candidates = [primaryUrl];
+  for (const base of DEFAULT_CLOUD_SERVERS) {
+    const candidate = `${base}${cleanPath}`;
+    if (!candidates.includes(candidate)) {
+      candidates.push(candidate);
     }
   }
 
-  // Fallback default
-  return cleanPath;
+  let lastError: unknown = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, init);
+      if (res.ok) {
+        return res;
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) throw lastError;
+  return fetch(primaryUrl, init);
 }
+

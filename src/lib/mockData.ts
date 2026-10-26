@@ -3,30 +3,35 @@ import {
   DeliveryRecord, CityServiceOffering, ServiceBookingRequest, InventoryItem, 
   StandardJob, VehicleCheckIn, Workshop, City 
 } from '../types';
+import centralSeedSnapshot from './centralSeedSnapshot.json';
 
 export const INITIAL_CITY_SERVICES: CityServiceOffering[] = [];
 
 export const INITIAL_SERVICE_BOOKINGS: ServiceBookingRequest[] = [];
 
-export const INITIAL_CITIES: City[] = [
-  { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2025-01-01' },
-  { id: 'city-delhi', name: 'Delhi NCR', state: 'Delhi', createdAt: '2025-01-01' },
-  { id: 'city-bengaluru', name: 'Bengaluru', state: 'Karnataka', createdAt: '2025-01-01' },
-  { id: 'city-hyderabad', name: 'Hyderabad', state: 'Telangana', createdAt: '2025-01-01' },
-  { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2025-01-01' },
-  { id: 'city-chennai', name: 'Chennai', state: 'Tamil Nadu', createdAt: '2025-01-01' },
-  { id: 'city-jaipur', name: 'Jaipur', state: 'Rajasthan', createdAt: '2025-01-01' },
-  { id: 'city-ahmedabad', name: 'Ahmedabad', state: 'Gujarat', createdAt: '2025-01-01' },
-  { id: 'city-chandigarh', name: 'Chandigarh', state: 'Punjab', createdAt: '2025-01-01' },
-  { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' },
-  { id: 'city-lucknow', name: 'Lucknow', state: 'Uttar Pradesh', createdAt: '2025-01-01' }
-];
+export const INITIAL_CITIES: City[] = (centralSeedSnapshot.cities as City[])?.length
+  ? (centralSeedSnapshot.cities as City[])
+  : [
+      { id: 'city-mumbai', name: 'Mumbai', state: 'Maharashtra', createdAt: '2025-01-01' },
+      { id: 'city-delhi', name: 'Delhi NCR', state: 'Delhi', createdAt: '2025-01-01' },
+      { id: 'city-bengaluru', name: 'Bengaluru', state: 'Karnataka', createdAt: '2025-01-01' },
+      { id: 'city-hyderabad', name: 'Hyderabad', state: 'Telangana', createdAt: '2025-01-01' },
+      { id: 'city-pune', name: 'Pune', state: 'Maharashtra', createdAt: '2025-01-01' },
+      { id: 'city-chennai', name: 'Chennai', state: 'Tamil Nadu', createdAt: '2025-01-01' },
+      { id: 'city-jaipur', name: 'Jaipur', state: 'Rajasthan', createdAt: '2025-01-01' },
+      { id: 'city-ahmedabad', name: 'Ahmedabad', state: 'Gujarat', createdAt: '2025-01-01' },
+      { id: 'city-chandigarh', name: 'Chandigarh', state: 'Punjab', createdAt: '2025-01-01' },
+      { id: 'city-kolkata', name: 'Kolkata', state: 'West Bengal', createdAt: '2025-01-01' },
+      { id: 'city-lucknow', name: 'Lucknow', state: 'Uttar Pradesh', createdAt: '2025-01-01' }
+    ];
 
-export const INITIAL_WORKSHOPS: Workshop[] = [
-  { id: 'ws-mumbai-central', cityId: 'city-mumbai', cityName: 'Mumbai', name: 'FixoCar Mumbai Central Workshop', code: 'WS-MUM-01', address: 'Andheri East, Mumbai, MH', phone: '022-88990011', isCars24Partner: true, managerName: 'Taifur', createdAt: '2025-01-01' },
-  { id: 'ws-delhi-hub', cityId: 'city-delhi', cityName: 'Delhi NCR', name: 'FixoCar Delhi NCR Hub', code: 'WS-DEL-01', address: 'Okhla Industrial Area, New Delhi', phone: '011-88990022', isCars24Partner: true, managerName: 'Rajesh Kumar', createdAt: '2025-01-01' },
-  { id: 'ws-bengaluru-main', cityId: 'city-bengaluru', cityName: 'Bengaluru', name: 'FixoCar Bengaluru Tech Park Hub', code: 'WS-BLR-01', address: 'Whitefield, Bengaluru, KA', phone: '080-88990033', isCars24Partner: true, managerName: 'Anand V', createdAt: '2025-01-01' }
-];
+export const INITIAL_WORKSHOPS: Workshop[] = (centralSeedSnapshot.workshops as Workshop[])?.length
+  ? (centralSeedSnapshot.workshops as Workshop[])
+  : [
+      { id: 'ws-mumbai-central', cityId: 'city-mumbai', cityName: 'Mumbai', name: 'FixoCar Mumbai Central Workshop', code: 'WS-MUM-01', address: 'Andheri East, Mumbai, MH', phone: '022-88990011', isCars24Partner: true, managerName: 'Taifur', createdAt: '2025-01-01' },
+      { id: 'ws-delhi-hub', cityId: 'city-delhi', cityName: 'Delhi NCR', name: 'FixoCar Delhi NCR Hub', code: 'WS-DEL-01', address: 'Okhla Industrial Area, New Delhi', phone: '011-88990022', isCars24Partner: true, managerName: 'Rajesh Kumar', createdAt: '2025-01-01' },
+      { id: 'ws-bengaluru-main', cityId: 'city-bengaluru', cityName: 'Bengaluru', name: 'FixoCar Bengaluru Tech Park Hub', code: 'WS-BLR-01', address: 'Whitefield, Bengaluru, KA', phone: '080-88990033', isCars24Partner: true, managerName: 'Anand V', createdAt: '2025-01-01' }
+    ];
 
 export const DEFAULT_SUPER_ADMIN: Employee = {
   id: 'emp-admin',
@@ -58,10 +63,12 @@ export const TAIFUR_EMPLOYEE: Employee = {
   employmentType: 'PAYROLL'
 };
 
-export const INITIAL_EMPLOYEES: Employee[] = [
-  DEFAULT_SUPER_ADMIN,
-  TAIFUR_EMPLOYEE
-];
+export const INITIAL_EMPLOYEES: Employee[] = (centralSeedSnapshot.employees as Employee[])?.length
+  ? (centralSeedSnapshot.employees as Employee[])
+  : [
+      DEFAULT_SUPER_ADMIN,
+      TAIFUR_EMPLOYEE
+    ];
 
 export const INITIAL_VENDORS: Vendor[] = [];
 
@@ -931,9 +938,9 @@ export const INITIAL_DELIVERIES: DeliveryRecord[] = [];
 
 export const INITIAL_PURCHASE_ORDERS: PurchaseOrder[] = [];
 
-export const INITIAL_JOB_CARDS: JobCard[] = [];
+export const INITIAL_JOB_CARDS: JobCard[] = (centralSeedSnapshot.jobCards as unknown as JobCard[]) || [];
 
-export const INITIAL_VEHICLE_CHECKINS: VehicleCheckIn[] = [];
+export const INITIAL_VEHICLE_CHECKINS: VehicleCheckIn[] = (centralSeedSnapshot.vehicleCheckIns as unknown as VehicleCheckIn[]) || [];
 
 export const STANDARD_PACKAGES: StandardServicePackage[] = [];
 

@@ -68,11 +68,35 @@ export function getStoredSupabaseConfig() {
 }
 
 let supabaseInstance: SupabaseClient | null = null;
+let supabaseQuotaRestrictedUntil = 0;
+
+export function isSupabaseQuotaRestricted(): boolean {
+  return Date.now() < supabaseQuotaRestrictedUntil;
+}
 
 const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  if (Date.now() < supabaseQuotaRestrictedUntil) {
+    return new Response(JSON.stringify({
+      message: 'Supabase quota circuit breaker active (using Central Server Store).'
+    }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   try {
     const f = typeof window !== 'undefined' ? window.fetch : fetch;
-    return await f(input, init);
+    const response = await f(input, init);
+    if (!response.ok && (response.status === 402 || response.status === 403 || response.status === 429 || response.status === 400 || response.status === 503)) {
+      const cloned = response.clone();
+      const text = await cloned.text().catch(() => '');
+      if (text.includes('exceed_egress_quota') || text.includes('Service for this project is restricted')) {
+        // Pause direct Supabase requests for 15 minutes so the app runs smoothly on the Central Server Store without generating log noise
+        supabaseQuotaRestrictedUntil = Date.now() + 15 * 60 * 1000;
+        console.warn('[SUPABASE_CIRCUIT_BREAKER] Supabase project is restricted due to exceed_egress_quota. Routing all data sync through Central Server Store.');
+      }
+    }
+    return response;
   } catch (err) {
     console.warn('[SUPABASE_FETCH_SILENT] Failed to fetch. Supabase instance may be offline or unconfigured.', err);
     return new Response(JSON.stringify({
@@ -90,6 +114,7 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 };
 
 export function getSupabaseClient(): SupabaseClient | null {
+  if (Date.now() < supabaseQuotaRestrictedUntil) return null;
   const config = getStoredSupabaseConfig();
   if (!config.isConfigured) return null;
 
