@@ -1,4 +1,4 @@
-import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment, PaymentMode, ContractorPaymentRecord, VendorPaymentRecord, ContractorAccountSummary, VendorAccountSummary, ContractorPayoutRecord, TaskCategory } from '../types';
+import { JobCard, Employee, Vendor, DeliveryRecord, PurchaseOrder, JobTask, QCCheckitem, CityServiceOffering, ServiceBookingRequest, City, Workshop, TaskPartItem, TaskRequisition, ProposedAdditionalTask, TaskConcern, InventoryItem, InventoryConsumptionRecord, StandardJob, CustomerUser, CustomerVehicleRecord, JobCardComment, JobCardHistoryRecord, VehicleCheckIn, OutsourceStatus, RequisitionStatus, WorkshopExpense, CarModelRecord, FuelType, AuthUser, ProofMediaItem, JobAttachment, PaymentMode, ContractorPaymentRecord, VendorPaymentRecord, ContractorAccountSummary, VendorAccountSummary, ContractorPayoutRecord, TaskCategory } from '../types';
 import { INITIAL_JOB_CARDS, INITIAL_EMPLOYEES, INITIAL_VENDORS, INITIAL_DELIVERIES, INITIAL_PURCHASE_ORDERS, INITIAL_CITY_SERVICES, INITIAL_SERVICE_BOOKINGS, INITIAL_INVENTORY_ITEMS, INITIAL_STANDARD_JOBS, INITIAL_VEHICLE_CHECKINS, DEFAULT_SUPER_ADMIN, TAIFUR_EMPLOYEE, INITIAL_CITIES, INITIAL_WORKSHOPS } from './mockData';
 import { INITIAL_CAR_MODELS } from './carModelsData';
 import { getSupabaseClient, syncEmployeeToSupabaseAuth, authenticateViaSupabase } from './supabaseClient';
@@ -45,7 +45,21 @@ const localStorageSafe = {
 const localStorage = localStorageSafe;
 
 
-export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>) {
+const NOTIFICATIONS_STORAGE_KEY = 'fixocar_notifications_history_v1';
+const seenNotificationIds = new Set<string>();
+
+export function getStoredNotifications(): ToastNotification[] {
+  try {
+    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>, skipRemotePush = false) {
   if (typeof window === 'undefined') return;
   const fullNotification: ToastNotification = {
     ...notification,
@@ -53,7 +67,67 @@ export function dispatchToastNotification(notification: Omit<ToastNotification, 
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     read: false,
   };
+  seenNotificationIds.add(fullNotification.id);
+  try {
+    const existing = getStoredNotifications();
+    const updated = [fullNotification, ...existing.filter(n => n.id !== fullNotification.id)].slice(0, 40);
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+    if (!skipRemotePush) {
+      notifyCentralServer('notifications', updated);
+    }
+  } catch {
+    // ignore
+  }
   window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: fullNotification }));
+}
+
+export function syncIncomingNotifications(remoteNotifications: ToastNotification[]) {
+  if (typeof window === 'undefined' || !Array.isArray(remoteNotifications) || remoteNotifications.length === 0) return;
+  const existing = getStoredNotifications();
+  const existingIds = new Set(existing.map(n => n.id));
+  for (const n of existing) seenNotificationIds.add(n.id);
+
+  const authUser = getAuthUser();
+  const myId = authUser?.employeeId || authUser?.id || '';
+  const myName = (authUser?.name || '').toLowerCase().trim();
+  const isManagerOrAdmin = !authUser || authUser.role === 'SUPER_ADMIN' || authUser.role === 'ADMIN' || authUser.role === 'FLOOR_MANAGER';
+
+  const newArrivals: ToastNotification[] = [];
+  for (const rn of remoteNotifications) {
+    if (!rn || !rn.id) continue;
+    if (!existingIds.has(rn.id) && !seenNotificationIds.has(rn.id)) {
+      seenNotificationIds.add(rn.id);
+      newArrivals.push(rn);
+    }
+  }
+
+  if (newArrivals.length > 0) {
+    const merged = [...newArrivals, ...existing].slice(0, 40);
+    try {
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(merged));
+    } catch {}
+
+    // Fire toast & chime for recent arrivals relevant to this user (within last 2 minutes)
+    const now = Date.now();
+    for (const item of newArrivals) {
+      const tsParts = String(item.id).split('-');
+      const createdMs = tsParts.length >= 2 ? parseInt(tsParts[1], 10) : now;
+      if (!isNaN(createdMs) && now - createdMs > 120000) continue;
+
+      const isTargetedToMe =
+        !item.targetEmployeeId && !item.targetEmployeeName
+          ? true
+          : Boolean(
+              (myId && item.targetEmployeeId === myId) ||
+                (myName && item.targetEmployeeName && item.targetEmployeeName.toLowerCase().includes(myName)) ||
+                isManagerOrAdmin
+            );
+
+      if (isTargetedToMe) {
+        window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: item }));
+      }
+    }
+  }
 }
 
 const STORAGE_KEYS = {
@@ -1870,6 +1944,9 @@ export function addRequisitionToTask(
     assignedToId?: string;
     assignedToName?: string;
     isTaxInclusive?: boolean;
+    photoUrl?: string;
+    videoUrl?: string;
+    proposedTasks?: ProposedAdditionalTask[];
   }
 ) {
   const newReq: TaskRequisition = {
@@ -1881,21 +1958,316 @@ export function addRequisitionToTask(
     createdAt: new Date().toLocaleString(),
   };
 
-  updateJobCard(jobCardId, (card) => ({
-    ...card,
-    tasks: card.tasks.map(t => {
+  updateJobCard(jobCardId, (card) => {
+    const newProofItems: ProofMediaItem[] = [];
+    if (reqData.photoUrl) {
+      newProofItems.push({
+        id: `proof-req-img-${Date.now()}`,
+        jobCardId,
+        taskId,
+        taskTitle: reqData.title,
+        vehicleNumber: card.vehicle.registrationNumber,
+        customerName: card.customer.name,
+        customerPhone: card.customer.phone,
+        mediaType: 'image',
+        url: reqData.photoUrl,
+        title: `Additional Work Photo: ${reqData.title}`,
+        category: 'CUSTOMER_APPROVAL_NEEDED',
+        notes: reqData.reason || 'Found after opening assembly',
+        capturedByEmployeeId: reqData.requestedByEmployeeId,
+        capturedByEmployeeName: reqData.requestedByEmployeeName,
+        capturedAt: new Date().toISOString()
+      });
+    }
+    if (reqData.videoUrl) {
+      newProofItems.push({
+        id: `proof-req-vid-${Date.now() + 1}`,
+        jobCardId,
+        taskId,
+        taskTitle: reqData.title,
+        vehicleNumber: card.vehicle.registrationNumber,
+        customerName: card.customer.name,
+        customerPhone: card.customer.phone,
+        mediaType: 'video',
+        url: reqData.videoUrl,
+        title: `Additional Work Video: ${reqData.title}`,
+        category: 'CUSTOMER_APPROVAL_NEEDED',
+        notes: reqData.reason || 'Video inspection of additional work needed',
+        capturedByEmployeeId: reqData.requestedByEmployeeId,
+        capturedByEmployeeName: reqData.requestedByEmployeeName,
+        capturedAt: new Date().toISOString()
+      });
+    }
+
+    return {
+      ...card,
+      proofMedia: newProofItems.length > 0 ? [...newProofItems, ...(card.proofMedia || [])] : card.proofMedia,
+      tasks: card.tasks.map(t => {
+        if (t.id === taskId) {
+          const existingReqs = t.requisitions || [];
+          return {
+            ...t,
+            requisitions: [newReq, ...existingReqs],
+            proofMedia: newProofItems.length > 0 ? [...newProofItems, ...(t.proofMedia || [])] : t.proofMedia
+          };
+        }
+        return t;
+      })
+    };
+  });
+
+  return newReq;
+}
+
+/**
+ * Manager Step 1: Manager reviews Employee's Additional Work Discovery (photo/video + notes)
+ * and adds the required tasks to resolve the issue, marking them as AWAITING_CUSTOMER_APPROVAL.
+ */
+export function reviewAdditionalWorkAndAddTasks(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  proposedTasks: ProposedAdditionalTask[],
+  managerNotes?: string
+) {
+  let vehicleReg = '';
+  let employeeName = '';
+  let employeeId = '';
+
+  updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
+    let targetReq: TaskRequisition | undefined;
+
+    const totalProposedPrice = proposedTasks.reduce((sum, pt) => sum + (Number(pt.customerPrice) || 0), 0);
+    const createdTasksToAdd: JobTask[] = [];
+
+    // Remove any previously drafted unapproved tasks for this requisition so we don't duplicate
+    const baseTasks = card.tasks.filter(t => !(t.linkedRequisitionId === requisitionId && t.approvalStatus === 'PENDING'));
+
+    const updatedTasksWithReq = baseTasks.map(t => {
       if (t.id === taskId) {
-        const existingReqs = t.requisitions || [];
+        const updatedReqs = (t.requisitions || []).map(r => {
+          if (r.id === requisitionId) {
+            targetReq = r;
+            employeeName = r.requestedByEmployeeName;
+            employeeId = r.requestedByEmployeeId;
+
+            const enrichedProposed = proposedTasks.map((pt, idx) => {
+              const newTaskId = pt.createdTaskId || `TSK-ADD-${Date.now().toString().slice(-5)}-${idx + 1}`;
+              const assigneeId = pt.assignedToId || r.assignedToId || r.requestedByEmployeeId;
+              const assigneeName = pt.assignedToName || r.assignedToName || r.requestedByEmployeeName;
+
+              createdTasksToAdd.push({
+                id: newTaskId,
+                jobCardId,
+                title: pt.title.startsWith('[Add-on]') || pt.title.startsWith('[ADDITIONAL]') ? pt.title : `[Add-on] ${pt.title}`,
+                category: pt.category || 'MECHANICAL',
+                assignedToId: assigneeId,
+                assignedToName: assigneeName,
+                assignedType: 'EMPLOYEE',
+                estimatedCost: pt.isContractBasis ? (pt.contractorPayout || 0) : Math.round((pt.customerPrice || 0) * 0.5),
+                customerPrice: Number(pt.customerPrice) || 0,
+                partPrice: Number(pt.partPrice) || 0,
+                labourPrice: Number(pt.labourPrice) || 0,
+                retailPrice: Number(pt.customerPrice) || 0,
+                cars24Price: Number(pt.customerPrice) || 0,
+                isTaxInclusive: true,
+                isContractBasis: Boolean(pt.isContractBasis),
+                contractorPayout: pt.isContractBasis ? (pt.contractorPayout || 0) : 0,
+                status: 'ON_HOLD',
+                requiresCustomerApproval: true,
+                isCustomerApproved: null,
+                isAdditionalWork: true,
+                additionalWorkRequestedBy: r.requestedByEmployeeName,
+                additionalWorkRequestedAt: r.createdAt,
+                approvalStatus: 'PENDING',
+                linkedRequisitionId: requisitionId,
+                additionalWorkPhotoUrl: r.photoUrl,
+                additionalWorkVideoUrl: r.videoUrl,
+                notes: managerNotes || r.reason || `Reviewed by Manager — Awaiting Approval`
+              });
+
+              return {
+                ...pt,
+                assignedToId: assigneeId,
+                assignedToName: assigneeName,
+                createdTaskId: newTaskId
+              };
+            });
+
+            return {
+              ...r,
+              status: 'AWAITING_CUSTOMER_APPROVAL' as const,
+              suggestedPrice: totalProposedPrice,
+              customerPrice: totalProposedPrice,
+              managerNotes: managerNotes || r.managerNotes,
+              proposedTasks: enrichedProposed
+            };
+          }
+          return r;
+        });
+
         return {
           ...t,
-          requisitions: [newReq, ...existingReqs]
+          requisitions: updatedReqs
         };
       }
       return t;
-    })
-  }));
+    });
 
-  return newReq;
+    return {
+      ...card,
+      tasks: [...updatedTasksWithReq, ...createdTasksToAdd]
+    };
+  });
+
+  if (vehicleReg) {
+    dispatchToastNotification({
+      type: 'STATUS_CHANGE',
+      title: `⏳ Additional Work Reviewed — Awaiting Approval`,
+      message: `Manager added ${proposedTasks.length} task(s) for ${vehicleReg}. Waiting for approval before ${employeeName || 'mechanic'} proceeds.`,
+      vehicleReg,
+      jobCardId,
+      targetEmployeeId: employeeId || undefined,
+      targetEmployeeName: employeeName || undefined
+    });
+  }
+}
+
+/**
+ * Manager Step 2: Manager receives approval, marks Additional Work APPROVED,
+ * allots the task(s) to the Mechanic/Employee, and notifies them with sound to PROCEED!
+ */
+export function approveAdditionalWorkAndAllot(
+  jobCardId: string,
+  taskId: string,
+  requisitionId: string,
+  finalTasks?: ProposedAdditionalTask[],
+  managerNotes?: string
+) {
+  let vehicleReg = '';
+  let notifiedEmployeeId = '';
+  let notifiedEmployeeName = '';
+  let approvedTaskTitles: string[] = [];
+  let totalApprovedAmount = 0;
+
+  updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
+    let reqRecord: TaskRequisition | null = null;
+
+    // 1. Update the requisition to APPROVED
+    const tasksAfterReqUpdate = card.tasks.map(t => {
+      if (t.id === taskId) {
+        const updatedReqs = (t.requisitions || []).map(r => {
+          if (r.id === requisitionId) {
+            const tasksList = finalTasks && finalTasks.length > 0 ? finalTasks : (r.proposedTasks || []);
+            const calcTotal = tasksList.length > 0
+              ? tasksList.reduce((s, item) => s + (Number(item.customerPrice) || 0), 0)
+              : (r.approvedPrice || r.customerPrice || r.suggestedPrice || 0);
+
+            totalApprovedAmount = calcTotal;
+            reqRecord = {
+              ...r,
+              status: 'APPROVED' as const,
+              approvedPrice: calcTotal,
+              customerPrice: calcTotal,
+              managerNotes: managerNotes || r.managerNotes || 'Approved — Proceed with work',
+              approvedAt: new Date().toLocaleString(),
+              proposedTasks: tasksList.length > 0 ? tasksList : r.proposedTasks
+            };
+            return reqRecord;
+          }
+          return r;
+        });
+        return { ...t, requisitions: updatedReqs };
+      }
+      return t;
+    });
+
+    if (!reqRecord) return card;
+    const req = reqRecord as TaskRequisition;
+    const tasksToApply: ProposedAdditionalTask[] =
+      finalTasks && finalTasks.length > 0
+        ? finalTasks
+        : req.proposedTasks && req.proposedTasks.length > 0
+        ? req.proposedTasks
+        : [
+            {
+              id: `pt-${Date.now()}`,
+              title: req.title.replace(/^\[.*?\]\s*/, ''),
+              category: req.category || 'MECHANICAL',
+              partPrice: req.partPrice || 0,
+              labourPrice: req.labourPrice ?? (req.approvedPrice || req.suggestedPrice || 0),
+              customerPrice: req.approvedPrice || req.customerPrice || req.suggestedPrice || 0,
+              isContractBasis: req.isContractBasis,
+              contractorPayout: req.contractorPayout,
+              assignedToId: req.assignedToId || req.requestedByEmployeeId,
+              assignedToName: req.assignedToName || req.requestedByEmployeeName
+            }
+          ];
+
+    // Remove any previously drafted ON_HOLD tasks for this requisition and replace with active APPROVED tasks
+    const remainingTasks = tasksAfterReqUpdate.filter(t => t.linkedRequisitionId !== requisitionId);
+
+    const newlyActivatedTasks: JobTask[] = tasksToApply.map((pt, idx) => {
+      const assigneeId = pt.assignedToId || req.assignedToId || req.requestedByEmployeeId;
+      const assigneeName = pt.assignedToName || req.assignedToName || req.requestedByEmployeeName;
+      if (assigneeId) notifiedEmployeeId = assigneeId;
+      if (assigneeName) notifiedEmployeeName = assigneeName;
+
+      const cleanTitle = pt.title.replace(/^\[.*?\]\s*/, '');
+      approvedTaskTitles.push(cleanTitle);
+
+      return {
+        id: pt.createdTaskId || `TSK-ADD-${Date.now().toString().slice(-5)}-${idx + 1}`,
+        jobCardId,
+        title: `[Add-on] ${cleanTitle}`,
+        category: pt.category || req.category || 'MECHANICAL',
+        assignedToId: assigneeId,
+        assignedToName: assigneeName,
+        assignedType: 'EMPLOYEE',
+        estimatedCost: pt.isContractBasis ? (pt.contractorPayout || 0) : Math.round((pt.customerPrice || 0) * 0.5),
+        customerPrice: Number(pt.customerPrice) || 0,
+        partPrice: Number(pt.partPrice) || 0,
+        labourPrice: Number(pt.labourPrice) || 0,
+        retailPrice: Number(pt.customerPrice) || 0,
+        cars24Price: Number(pt.customerPrice) || 0,
+        isTaxInclusive: true,
+        isContractBasis: Boolean(pt.isContractBasis),
+        contractorPayout: pt.isContractBasis ? (pt.contractorPayout || 0) : 0,
+        status: 'PENDING',
+        requiresCustomerApproval: false,
+        isCustomerApproved: true,
+        isAdditionalWork: true,
+        additionalWorkRequestedBy: req.requestedByEmployeeName,
+        additionalWorkRequestedAt: req.createdAt,
+        approvalStatus: 'APPROVED',
+        linkedRequisitionId: requisitionId,
+        additionalWorkPhotoUrl: req.photoUrl,
+        additionalWorkVideoUrl: req.videoUrl,
+        notes: managerNotes || req.managerNotes || `Approved by Manager — Allotted to ${assigneeName} to proceed`
+      };
+    });
+
+    return {
+      ...card,
+      tasks: [...remainingTasks, ...newlyActivatedTasks]
+    };
+  });
+
+  if (vehicleReg) {
+    const titlesJoined = approvedTaskTitles.join(', ') || 'Additional Work';
+    dispatchToastNotification({
+      type: 'ADDITIONAL_WORK_APPROVED',
+      title: `✅ Additional Work Approved — Proceed Now!`,
+      message: `"${titlesJoined}" on ${vehicleReg} is APPROVED and allotted to ${notifiedEmployeeName || 'Mechanic'}. Please proceed with the repair!`,
+      vehicleReg,
+      jobCardId,
+      amount: totalApprovedAmount,
+      targetEmployeeId: notifiedEmployeeId || undefined,
+      targetEmployeeName: notifiedEmployeeName || undefined
+    });
+  }
 }
 
 // Approve or reject a requisition by Manager/Admin
@@ -1907,7 +2279,11 @@ export function respondToRequisition(
   approvedPrice: number = 0,
   managerNotes?: string
 ) {
+  let targetReqObj: TaskRequisition | null = null;
+  let vehicleReg = '';
+
   updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
     let reqItemToConvert: TaskRequisition | null = null;
 
     const updatedTasks = card.tasks.map(t => {
@@ -1921,6 +2297,7 @@ export function respondToRequisition(
               managerNotes,
               approvedAt: new Date().toLocaleString()
             };
+            targetReqObj = reqItemToConvert;
             return reqItemToConvert;
           }
           return r;
@@ -1934,9 +2311,37 @@ export function respondToRequisition(
       return t;
     });
 
-    // If approved and is ADDITIONAL_WORK, also create a sub-task with full tax-inclusive rate breakdown
+    // If rejected, also mark any linked pending tasks as REJECTED / removed
+    if (!approved) {
+      return {
+        ...card,
+        tasks: updatedTasks.filter(t => t.linkedRequisitionId !== requisitionId)
+      };
+    }
+
+    // If approved and is ADDITIONAL_WORK, activate any linked tasks or create a sub-task
     if (approved && reqItemToConvert && (reqItemToConvert as TaskRequisition).itemType === 'ADDITIONAL_WORK') {
       const req = reqItemToConvert as TaskRequisition;
+      const hasLinkedTasks = updatedTasks.some(t => t.linkedRequisitionId === requisitionId);
+      if (hasLinkedTasks) {
+        return {
+          ...card,
+          tasks: updatedTasks.map(t => {
+            if (t.linkedRequisitionId === requisitionId) {
+              return {
+                ...t,
+                status: 'PENDING' as const,
+                requiresCustomerApproval: false,
+                isCustomerApproved: true,
+                approvalStatus: 'APPROVED' as const,
+                notes: managerNotes || t.notes
+              };
+            }
+            return t;
+          })
+        };
+      }
+
       const finalPrice = approvedPrice > 0 ? approvedPrice : (req.customerPrice ?? req.suggestedPrice ?? 0);
       const partVal = req.partPrice ?? 0;
       const labourVal = req.labourPrice !== undefined ? req.labourPrice : Math.max(0, finalPrice - partVal);
@@ -1959,11 +2364,16 @@ export function respondToRequisition(
         isTaxInclusive: true,
         isContractBasis: Boolean(req.isContractBasis),
         contractorPayout: req.isContractBasis ? contractPay : 0,
-        status: 'IN_PROGRESS',
+        status: 'PENDING',
         requiresCustomerApproval: false,
         isCustomerApproved: true,
         isAdditionalWork: true,
-        approvalStatus: 'APPROVED'
+        additionalWorkRequestedBy: req.requestedByEmployeeName,
+        additionalWorkRequestedAt: req.createdAt,
+        approvalStatus: 'APPROVED',
+        linkedRequisitionId: requisitionId,
+        additionalWorkPhotoUrl: req.photoUrl,
+        additionalWorkVideoUrl: req.videoUrl
       };
       return {
         ...card,
@@ -1976,6 +2386,22 @@ export function respondToRequisition(
       tasks: updatedTasks
     };
   });
+
+  if (approved && targetReqObj && (targetReqObj as TaskRequisition).itemType === 'ADDITIONAL_WORK') {
+    const req = targetReqObj as TaskRequisition;
+    const assigneeName = req.assignedToName || req.requestedByEmployeeName || 'Mechanic';
+    const assigneeId = req.assignedToId || req.requestedByEmployeeId;
+    dispatchToastNotification({
+      type: 'ADDITIONAL_WORK_APPROVED',
+      title: `✅ Additional Work Approved — Proceed Now!`,
+      message: `"${req.title.replace(/^\[.*?\]\s*/, '')}" on ${vehicleReg} is APPROVED and allotted to ${assigneeName}. Please proceed with the repair!`,
+      vehicleReg,
+      jobCardId,
+      amount: approvedPrice || req.suggestedPrice || 0,
+      targetEmployeeId: assigneeId,
+      targetEmployeeName: assigneeName
+    });
+  }
 }
 
 // Update requisition lifecycle stage (Mark as Ordered or Received)
@@ -4649,9 +5075,21 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
   checkIns.unshift(fullRecord);
   saveVehicleCheckIns(checkIns);
 
-  // Sync to Supabase vehicle_check_ins in background if connected
+  // Dispatch live Gate Check-In notification & arrival chime
+  dispatchToastNotification({
+    type: 'VEHICLE_CHECK_IN',
+    title: `🚘 New Vehicle Checked In: ${fullRecord.registrationNumber}`,
+    message: `${fullRecord.make} ${fullRecord.model} arrived at gate (Driver: ${fullRecord.checkInDriverName || 'Driver'}). Ready for inspection.`,
+    vehicleReg: fullRecord.registrationNumber,
+    customerName: fullRecord.customerName,
+  });
+
+  // Sync to Supabase vehicle_check_ins in background if connected (without raw base64 photo strings)
   const client = getSupabaseClient();
   if (client) {
+    const safeDriverPhoto = fullRecord.checkInPhotoWithDriverUrl && !fullRecord.checkInPhotoWithDriverUrl.startsWith('data:')
+      ? fullRecord.checkInPhotoWithDriverUrl
+      : null;
     client.from('vehicle_check_ins').upsert({
       id: fullRecord.id,
       registration_number: fullRecord.registrationNumber,
@@ -4670,7 +5108,7 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
       check_in_time: new Date().toISOString(),
       check_in_driver_name: fullRecord.checkInDriverName || 'Driver',
       check_in_driver_phone: fullRecord.checkInDriverPhone || '',
-      driver_photo_url: fullRecord.checkInPhotoWithDriverUrl || null,
+      driver_photo_url: safeDriverPhoto,
       check_in_notes: fullRecord.checkInNotes || null,
       status: fullRecord.status,
       job_card_id: fullRecord.jobCardId || null

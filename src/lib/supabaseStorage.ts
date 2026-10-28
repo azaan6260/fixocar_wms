@@ -1,6 +1,7 @@
 import { ProofMediaItem, ProofMediaCategory, JobCard, JobAttachment } from '../types';
 import { addProofMediaToJobCard, addAttachmentToJobCard } from './storage';
 import { getSupabaseClient } from './supabaseClient';
+import { fetchCentralApi } from './mobileBridge';
 import { compressImage, compressVideo } from './storageService';
 
 export interface UploadProofMediaParams {
@@ -187,7 +188,7 @@ export async function uploadProofMedia(params: UploadProofMediaParams): Promise<
     const base64Data = await fileToBase64(uploadBlob);
     if (onProgress) onProgress(75);
 
-    const res = await fetch('/api/supabase/storage/upload', {
+    const res = await fetchCentralApi('/api/supabase/storage/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -18,6 +18,7 @@ import {
   getAttendances, saveAttendances,
   getSalaries, saveSalaries,
   dispatchToastNotification,
+  syncIncomingNotifications,
   getAuthUser, saveAuthUser,
   getActiveWorkshopId, setActiveWorkshopId,
   serializeTaskMetaToNotes, extractTaskMetaFromNotes,
@@ -113,20 +114,60 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
           // If local or remote task is COMPLETED, keep COMPLETED!
           const isLocalCompleted = lt.status === 'COMPLETED';
           const isRemoteCompleted = rt.status === 'COMPLETED';
+          const isApprovedAddWork = lt.approvalStatus === 'APPROVED' || rt.approvalStatus === 'APPROVED';
 
-          const finalStatus: JobTask['status'] = (isLocalCompleted || isRemoteCompleted)
+          let finalStatus: JobTask['status'] = (isLocalCompleted || isRemoteCompleted)
             ? 'COMPLETED'
-            : (lt.status === 'IN_PROGRESS' || rt.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : (lt.status || rt.status || 'PENDING'));
+            : (lt.status === 'IN_PROGRESS' || rt.status === 'IN_PROGRESS'
+                ? 'IN_PROGRESS'
+                : (isApprovedAddWork && (lt.status === 'ON_HOLD' || rt.status === 'ON_HOLD')
+                    ? 'PENDING'
+                    : (lt.status || rt.status || 'PENDING')));
 
           const finalCompletedAt = rt.completedAt || lt.completedAt || (finalStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
+
+          // Merge requisitions so manager approvals & mechanic discoveries sync across devices
+          const reqPriority: Record<string, number> = {
+            'CONSUMED': 70,
+            'RECEIVED': 60,
+            'ORDERED': 50,
+            'APPROVED': 40,
+            'REJECTED': 35,
+            'AWAITING_CUSTOMER_APPROVAL': 20,
+            'PENDING_APPROVAL': 10
+          };
+          const reqMap = new Map<string, any>();
+          for (const r of (rt.requisitions || [])) {
+            if (r && r.id) reqMap.set(r.id, r);
+          }
+          for (const lReq of (lt.requisitions || [])) {
+            if (!lReq || !lReq.id) continue;
+            const rReq = reqMap.get(lReq.id);
+            if (!rReq) {
+              reqMap.set(lReq.id, lReq);
+            } else {
+              const rRank = reqPriority[rReq.status] || 0;
+              const lRank = reqPriority[lReq.status] || 0;
+              const bestReq = rRank >= lRank ? { ...lReq, ...rReq } : { ...rReq, ...lReq };
+              bestReq.photoUrl = rReq.photoUrl || lReq.photoUrl;
+              bestReq.videoUrl = rReq.videoUrl || lReq.videoUrl;
+              bestReq.proposedTasks = (rReq.proposedTasks && rReq.proposedTasks.length > 0)
+                ? rReq.proposedTasks
+                : lReq.proposedTasks;
+              reqMap.set(lReq.id, bestReq);
+            }
+          }
 
           mergedTasks.push({
             ...rt,
             ...lt,
             status: finalStatus,
             completedAt: finalCompletedAt,
-            assignedToId: lt.assignedToId || rt.assignedToId,
-            assignedToName: lt.assignedToName || rt.assignedToName,
+            approvalStatus: isApprovedAddWork ? 'APPROVED' : (rt.approvalStatus || lt.approvalStatus),
+            requiresCustomerApproval: isApprovedAddWork ? false : (rt.requiresCustomerApproval ?? lt.requiresCustomerApproval),
+            isCustomerApproved: isApprovedAddWork ? true : (rt.isCustomerApproved ?? lt.isCustomerApproved),
+            assignedToId: rt.assignedToId || lt.assignedToId,
+            assignedToName: rt.assignedToName || lt.assignedToName,
             assignedType: lt.assignedType || rt.assignedType || 'EMPLOYEE',
             estimatedCost: lt.estimatedCost ?? rt.estimatedCost ?? 0,
             customerPrice: lt.customerPrice ?? rt.customerPrice ?? 0,
@@ -140,6 +181,10 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             pairedDenterId: lt.pairedDenterId || rt.pairedDenterId,
             pairedDenterName: lt.pairedDenterName || rt.pairedDenterName,
             standardJobId: lt.standardJobId || rt.standardJobId,
+            additionalWorkPhotoUrl: rt.additionalWorkPhotoUrl || lt.additionalWorkPhotoUrl,
+            additionalWorkVideoUrl: rt.additionalWorkVideoUrl || lt.additionalWorkVideoUrl,
+            linkedRequisitionId: rt.linkedRequisitionId || lt.linkedRequisitionId,
+            requisitions: Array.from(reqMap.values()),
           });
           localTasksMap.delete(rtId);
         }
@@ -690,6 +735,10 @@ export async function syncFromSupabase(): Promise<SyncResult> {
         if (mergedCheckIns.length > 0) {
           saveVehicleCheckIns(mergedCheckIns, true);
           saveJobCards(getAllJobCards(), true);
+        }
+
+        if (Array.isArray(store.notifications) && store.notifications.length > 0) {
+          syncIncomingNotifications(store.notifications);
         }
       }
     }

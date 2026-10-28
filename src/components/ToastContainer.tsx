@@ -84,10 +84,10 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
     >
       {toasts.map((toast) => {
         const isStatusChange = toast.type === 'STATUS_CHANGE';
-        const isApproval = toast.type === 'ESTIMATE_APPROVED';
+        const isApproval = toast.type === 'ESTIMATE_APPROVED' || toast.type === 'ADDITIONAL_WORK_APPROVED';
         const isDeclined = toast.type === 'ESTIMATE_DECLINED';
-        const isCreated = toast.type === 'JOB_CARD_CREATED';
-        const isAllotted = toast.type === 'TASK_ALLOTTED';
+        const isCreated = toast.type === 'JOB_CARD_CREATED' || toast.type === 'VEHICLE_CHECK_IN';
+        const isAllotted = toast.type === 'TASK_ALLOTTED' || toast.type === 'ADDITIONAL_WORK_REQUESTED';
 
         return (
           <div
@@ -137,6 +137,7 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
                 {isStatusChange && <Car className="w-5 h-5 stroke-[2.5]" />}
                 {isCreated && <Sparkles className="w-5 h-5 stroke-[2.5]" />}
                 {isAllotted && <UserCheck className="w-5 h-5 stroke-[2.5]" />}
+                {!isApproval && !isDeclined && !isStatusChange && !isCreated && !isAllotted && <Bell className="w-5 h-5 stroke-[2.5]" />}
               </div>
 
               {/* Toast Content */}

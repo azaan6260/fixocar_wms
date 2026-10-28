@@ -7,7 +7,10 @@ export type ToastType =
   | 'SUCCESS'
   | 'INFO'
   | 'WARNING'
-  | 'TASK_ALLOTTED';
+  | 'TASK_ALLOTTED'
+  | 'VEHICLE_CHECK_IN'
+  | 'ADDITIONAL_WORK_REQUESTED'
+  | 'ADDITIONAL_WORK_APPROVED';
 
 export interface ToastNotification {
   id: string;
@@ -22,6 +25,9 @@ export interface ToastNotification {
   read?: boolean;
   oldStatus?: string;
   newStatus?: string;
+  targetEmployeeId?: string;
+  targetEmployeeName?: string;
+  targetRole?: string;
 }
 
 export const STATUS_LABELS: Record<string, string> = {

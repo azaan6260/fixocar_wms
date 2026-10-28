@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { JobCard, UserRole, VehicleCheckIn } from '../types';
 import { LicensePlateScannerModal } from './LicensePlateScannerModal';
+import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { 
   Car, 
   Wrench, 
@@ -285,7 +286,7 @@ export function DashboardOverview({
   const pendingRequisitions = jobCards.flatMap(card =>
     card.tasks.flatMap(task =>
       (task.requisitions || [])
-        .filter(r => r.status === 'PENDING_APPROVAL')
+        .filter(r => r.status === 'PENDING_APPROVAL' || r.status === 'AWAITING_CUSTOMER_APPROVAL')
         .map(r => ({ requisition: r, card, task }))
     )
   );
@@ -676,81 +677,13 @@ export function DashboardOverview({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* PENDING REQUISITIONS LIST */}
-            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 space-y-3">
-              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-orange-500" />
-                Pending Part & Consumable Requisitions ({pendingRequisitions.length})
-              </h3>
-
-              {pendingRequisitions.length === 0 ? (
-                <p className="text-xs text-slate-400 italic">No pending part requisitions from mechanics.</p>
-              ) : (
-                <div className="space-y-3 text-xs max-h-72 overflow-y-auto pr-1">
-                  {pendingRequisitions.map(({ requisition: req, card, task }) => (
-                    <div key={req.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-slate-900 dark:text-slate-100">{req.title}</span>
-                            <span className="px-2 py-0.2 rounded font-mono font-bold text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
-                              Qty: {req.quantity}
-                            </span>
-                            <span className="px-1.5 py-0.2 rounded font-bold text-[9px] bg-orange-500/10 text-orange-600 uppercase">
-                              {req.itemType}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            Job: <strong className="text-slate-800 dark:text-slate-200">{card.vehicle.registrationNumber} ({card.id})</strong> • Task: {task.title}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Requested by: {req.requestedByEmployeeName || 'Mechanic Staff'} {req.reason ? `• "${req.reason}"` : ''}
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => onSelectJobCard(card.id)}
-                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                        >
-                          View Job Card
-                        </button>
-                      </div>
-
-                      {/* Approval Controls */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-700/60">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold text-slate-500">Approve Price (₹):</span>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Price ₹"
-                            value={approvalPrices[req.id] || ''}
-                            onChange={(e) => handlePriceChange(req.id, Number(e.target.value))}
-                            className="w-24 px-2 py-1 text-xs font-mono font-bold rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleDashboardApproveReq(card.id, task.id, req.id)}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs"
-                          >
-                            <Check className="w-3 h-3" /> Approve & Add
-                          </button>
-                          <button
-                            onClick={() => handleDashboardRejectReq(card.id, task.id, req.id)}
-                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="space-y-4">
+            {/* FULL ADDITIONAL WORK & PART REQUISITIONS REVIEW QUEUE (WITH PHOTO, VIDEO & TASK ALLOTMENT) */}
+            <ManagerRequisitionApprovalView
+              jobCards={jobCards}
+              onOpenJobCard={onSelectJobCard}
+              currentRole={currentRole}
+            />
 
             {/* OPEN TECHNICAL CONCERNS LIST */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3">

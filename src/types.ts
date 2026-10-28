@@ -303,11 +303,27 @@ export interface TaskPartItem {
 
 export type RequisitionStatus = 
   | 'PENDING_APPROVAL' 
+  | 'AWAITING_CUSTOMER_APPROVAL'
   | 'APPROVED' 
   | 'ORDERED' 
   | 'RECEIVED' 
   | 'CONSUMED' 
   | 'REJECTED';
+
+export interface ProposedAdditionalTask {
+  id: string;
+  title: string;
+  category: TaskCategory;
+  partPrice: number;
+  labourPrice: number;
+  customerPrice: number;
+  isContractBasis?: boolean;
+  contractorPayout?: number;
+  assignedToId?: string;
+  assignedToName?: string;
+  createdTaskId?: string;
+  notes?: string;
+}
 
 export interface TaskRequisition {
   id: string;
@@ -346,6 +362,9 @@ export interface TaskRequisition {
   assignedToId?: string;
   assignedToName?: string;
   isTaxInclusive?: boolean;
+  photoUrl?: string;
+  videoUrl?: string;
+  proposedTasks?: ProposedAdditionalTask[];
 }
 
 export interface TaskConcern {
@@ -391,6 +410,9 @@ export interface JobTask {
   additionalWorkRequestedBy?: string;
   additionalWorkRequestedAt?: string;
   approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  linkedRequisitionId?: string;
+  additionalWorkPhotoUrl?: string;
+  additionalWorkVideoUrl?: string;
   partsList?: TaskPartItem[];
   requisitions?: TaskRequisition[];
   concerns?: TaskConcern[];

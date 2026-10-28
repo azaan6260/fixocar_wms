@@ -114,7 +114,9 @@ export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
   // Status computation
   const isCompleted = task.status === 'COMPLETED';
   const isInProgress = task.status === 'IN_PROGRESS';
-  const isPending = task.status === 'PENDING';
+  const isOnHoldForApproval = task.status === 'ON_HOLD' || Boolean(task.isAdditionalWork && task.approvalStatus === 'PENDING');
+  const isApprovedAdditionalWork = Boolean(task.isAdditionalWork && task.approvalStatus === 'APPROVED');
+  const isPending = task.status === 'PENDING' && !isOnHoldForApproval;
 
   // Handle Voice Audio Playback
   const handleToggleSpeech = () => {
@@ -299,11 +301,70 @@ export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
               "{task.notes}"
             </p>
           )}
+
+          {/* Additional Work Status Banner: Awaiting Approval vs Approved to Proceed */}
+          {isOnHoldForApproval && (
+            <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
+              <span className="text-base">⏳</span>
+              <div>
+                <span className="block font-black">Awaiting Approval (स्वीकृति की प्रतीक्षा है)</span>
+                <span className="text-[11px] opacity-90">
+                  Manager reviewed & added this task. You will receive a sound notification once approved to proceed.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isApprovedAdditionalWork && !isCompleted && (
+            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
+              <span className="text-base">✅</span>
+              <div>
+                <span className="block font-black uppercase tracking-wide">
+                  Additional Work Approved — Proceed with Repair! (काम शुरू करें)
+                </span>
+                <span className="text-[11px] opacity-90">
+                  Approved & allotted by Manager. Click Start Work below to proceed.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Attached Discovery Photo / Video on Additional Work Task */}
+          {(task.additionalWorkPhotoUrl || task.additionalWorkVideoUrl) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              {task.additionalWorkPhotoUrl && (
+                <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 h-28">
+                  <img
+                    src={task.additionalWorkPhotoUrl}
+                    alt="Discovery photo"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              {task.additionalWorkVideoUrl && (
+                <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 h-28">
+                  <video
+                    src={task.additionalWorkVideoUrl}
+                    controls
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* ROW 2: START WORKING / COMPLETE / REOPEN BUTTON + MORE ACTIONS BUTTON */}
-        <div className="pt-0.5 flex items-center gap-2">
+        {/* ROW 2: START WORKING / COMPLETE / REOPEN BUTTON + EXTRA WORK + MORE ACTIONS BUTTON */}
+        <div className="pt-0.5 flex items-center gap-2 flex-wrap sm:flex-nowrap">
           
+          {/* ON HOLD FOR APPROVAL DISPLAY */}
+          {isOnHoldForApproval && (
+            <div className="grow py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-black text-xs flex items-center justify-center gap-2">
+              <span>🔒 Waiting for Approval to Proceed (स्वीकृति के बाद शुरू करें)</span>
+            </div>
+          )}
+
           {/* PRIMARY BUTTON 1: START (When Pending) */}
           {isPending && (
             <button
@@ -344,6 +405,17 @@ export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
               </button>
             </div>
           )}
+
+          {/* 1-TAP RAISE ADDITIONAL WORK (PHOTO + VIDEO) BUTTON */}
+          <button
+            type="button"
+            onClick={() => setShowAddWorkModal(true)}
+            className="py-3 px-3 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-300 border border-orange-500/40 text-xs font-black flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
+            title="Found extra issue after opening up? Upload Photo & Video for Manager Review"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Extra Work</span>
+          </button>
 
           {/* SINGLE "MORE ACTIONS" BUTTON */}
           <div className="relative shrink-0" ref={actionsMenuRef}>

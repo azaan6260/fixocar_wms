@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ToastNotification } from '../types/toast';
+import { isSoundMuted, setSoundMuted, playNotificationChime } from '../lib/sound';
 import { 
   Bell, 
   Car, 
@@ -10,9 +11,9 @@ import {
   CheckCheck, 
   Trash2, 
   ChevronRight, 
-  Filter,
-  History,
-  Layers
+  Volume2,
+  VolumeX,
+  UserCheck
 } from 'lucide-react';
 
 interface NotificationDrawerProps {
@@ -32,7 +33,23 @@ export function NotificationDrawer({ onSelectJobCard }: NotificationDrawerProps)
     }
   });
   const [filter, setFilter] = useState<'ALL' | 'STATUS' | 'APPROVAL'>('ALL');
+  const [soundMutedState, setSoundMutedState] = useState<boolean>(() => isSoundMuted());
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onMuteChange = () => setSoundMutedState(isSoundMuted());
+    window.addEventListener('fixocar_sound_mute_changed', onMuteChange);
+    return () => window.removeEventListener('fixocar_sound_mute_changed', onMuteChange);
+  }, []);
+
+  const handleToggleSound = () => {
+    const nextMuted = !soundMutedState;
+    setSoundMuted(nextMuted);
+    setSoundMutedState(nextMuted);
+    if (!nextMuted) {
+      playNotificationChime('TASK_ALLOTTED');
+    }
+  };
 
   // Save to localStorage when updated
   useEffect(() => {
@@ -97,8 +114,8 @@ export function NotificationDrawer({ onSelectJobCard }: NotificationDrawerProps)
   };
 
   const filteredList = notifications.filter(n => {
-    if (filter === 'STATUS') return n.type === 'STATUS_CHANGE' || n.type === 'JOB_CARD_CREATED';
-    if (filter === 'APPROVAL') return n.type === 'ESTIMATE_APPROVED' || n.type === 'ESTIMATE_DECLINED';
+    if (filter === 'STATUS') return n.type === 'STATUS_CHANGE' || n.type === 'JOB_CARD_CREATED' || n.type === 'VEHICLE_CHECK_IN' || n.type === 'TASK_ALLOTTED';
+    if (filter === 'APPROVAL') return n.type === 'ESTIMATE_APPROVED' || n.type === 'ESTIMATE_DECLINED' || n.type === 'ADDITIONAL_WORK_REQUESTED' || n.type === 'ADDITIONAL_WORK_APPROVED';
     return true;
   });
 
@@ -152,17 +169,35 @@ export function NotificationDrawer({ onSelectJobCard }: NotificationDrawerProps)
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-slate-400">Pipeline Status & Estimate Approvals</p>
+                <p className="text-[10px] text-slate-400">
+                  {soundMutedState ? '🔇 Silent Mode Active (Sounds Off)' : '🔔 Sound Alerts On (Auto-Mutes on Phone Silent)'}
+                </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleToggleSound}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 border transition-colors cursor-pointer ${
+                  soundMutedState
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                }`}
+                title="Toggle Notification Chime Sound (Automatically respects phone silent switch)"
+              >
+                {soundMutedState ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                <span>{soundMutedState ? 'Silent' : 'Sound On'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Sub-Header Actions & Filter Tabs */}
@@ -241,9 +276,10 @@ export function NotificationDrawer({ onSelectJobCard }: NotificationDrawerProps)
               </div>
             ) : (
               filteredList.map((item) => {
-                const isApproval = item.type === 'ESTIMATE_APPROVED';
+                const isApproval = item.type === 'ESTIMATE_APPROVED' || item.type === 'ADDITIONAL_WORK_APPROVED';
                 const isDeclined = item.type === 'ESTIMATE_DECLINED';
-                const isStatus = item.type === 'STATUS_CHANGE';
+                const isStatus = item.type === 'STATUS_CHANGE' || item.type === 'VEHICLE_CHECK_IN';
+                const isAllotted = item.type === 'TASK_ALLOTTED' || item.type === 'ADDITIONAL_WORK_REQUESTED';
 
                 return (
                   <div
@@ -264,14 +300,17 @@ export function NotificationDrawer({ onSelectJobCard }: NotificationDrawerProps)
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                         : isDeclined
                         ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                        : isAllotted
+                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
                         : isStatus
                         ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                     }`}>
                       {isApproval && <CheckCircle2 className="w-4 h-4" />}
                       {isDeclined && <XCircle className="w-4 h-4" />}
+                      {isAllotted && <UserCheck className="w-4 h-4" />}
                       {isStatus && <Car className="w-4 h-4" />}
-                      {!isApproval && !isDeclined && !isStatus && <Sparkles className="w-4 h-4" />}
+                      {!isApproval && !isDeclined && !isAllotted && !isStatus && <Sparkles className="w-4 h-4" />}
                     </div>
 
                     <div className="min-w-0 flex-1">
