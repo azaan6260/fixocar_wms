@@ -618,16 +618,39 @@ export function jobCardPanelReducer(
 
     case 'RESPOND_APPROVAL': {
       const { taskId, approved, declineReason } = action.payload;
+      const targetTask = currentTasks.find(t => t.id === taskId);
+      const linkedReqId = targetTask?.linkedRequisitionId;
+
       const updatedTasks = currentTasks.map(t => {
+        let nextRequisitions = t.requisitions;
+        if (linkedReqId && Array.isArray(t.requisitions) && t.requisitions.some(r => r.id === linkedReqId)) {
+          nextRequisitions = t.requisitions.map(r => {
+            if (r.id === linkedReqId) {
+              return {
+                ...r,
+                status: approved ? ('APPROVED' as const) : ('REJECTED' as const),
+                approvedAt: new Date().toLocaleString(),
+                managerNotes: declineReason || (approved ? 'Approved — Proceed with repair' : 'Declined')
+              };
+            }
+            return r;
+          });
+        }
+
         if (t.id === taskId) {
           return {
             ...t,
+            requisitions: nextRequisitions,
+            requiresCustomerApproval: false,
             isCustomerApproved: approved,
             approvalStatus: approved ? ('APPROVED' as const) : ('REJECTED' as const),
-            approvalNotes: declineReason || (approved ? 'Approved by Customer' : 'Declined by Customer')
+            status: approved
+              ? (t.status === 'COMPLETED' ? ('COMPLETED' as const) : ('PENDING' as const))
+              : ('ON_HOLD' as const),
+            approvalNotes: declineReason || (approved ? 'Approved by Manager / Customer' : 'Declined')
           };
         }
-        return t;
+        return nextRequisitions !== t.requisitions ? { ...t, requisitions: nextRequisitions } : t;
       });
 
       respondToCustomerApproval(currentCard.id, taskId, approved, declineReason);

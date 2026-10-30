@@ -353,6 +353,62 @@ export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
               )}
             </div>
           )}
+
+          {/* Live Status of Additional Work Requests Raised on This Task */}
+          {task.requisitions && task.requisitions.some(r => r.itemType === 'ADDITIONAL_WORK') && (
+            <div className="space-y-1.5 pt-1">
+              {task.requisitions
+                .filter(r => r.itemType === 'ADDITIONAL_WORK')
+                .map((req) => (
+                  <div
+                    key={req.id}
+                    className={`p-2.5 rounded-xl border text-xs flex flex-col gap-1.5 ${
+                      req.status === 'APPROVED'
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                        : req.status === 'REJECTED'
+                        ? 'bg-rose-500/15 border-rose-500/40 text-rose-800 dark:text-rose-300'
+                        : req.status === 'AWAITING_CUSTOMER_APPROVAL'
+                        ? 'bg-purple-500/15 border-purple-500/40 text-purple-800 dark:text-purple-300'
+                        : 'bg-amber-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-black flex items-center gap-1.5">
+                        <span>🔧 Extra Work Request: {req.title}</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-black/15">
+                        {req.status === 'APPROVED'
+                          ? '✅ Approved — Proceed Now!'
+                          : req.status === 'REJECTED'
+                          ? '❌ Declined'
+                          : req.status === 'AWAITING_CUSTOMER_APPROVAL'
+                          ? '📋 Manager Added Tasks — Awaiting Approval'
+                          : '⏳ Sent to Manager for Review'}
+                      </span>
+                    </div>
+                    {(req.photoUrl || req.videoUrl) && (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        {req.photoUrl && (
+                          <img
+                            src={req.photoUrl}
+                            alt={req.title}
+                            className="w-16 h-12 object-cover rounded-lg border border-black/20"
+                          />
+                        )}
+                        {req.videoUrl && (
+                          <video
+                            src={req.videoUrl}
+                            controls
+                            playsInline
+                            className="w-24 h-12 object-cover rounded-lg border border-black/20 bg-black"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         {/* ROW 2: START WORKING / COMPLETE / REOPEN BUTTON + EXTRA WORK + MORE ACTIONS BUTTON */}
@@ -821,6 +877,9 @@ export const TechnicianTaskCard = React.memo(function TechnicianTaskCard({
           card={card}
           isOpen={showAddWorkModal}
           onClose={() => setShowAddWorkModal(false)}
+          currentRole={currentRole}
+          currentEmployeeId={task.assignedToId}
+          currentEmployeeName={task.assignedToName}
           initialCategory={task.category}
           initialTaskId={task.id}
         />

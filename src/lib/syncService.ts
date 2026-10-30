@@ -114,15 +114,26 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
           // If local or remote task is COMPLETED, keep COMPLETED!
           const isLocalCompleted = lt.status === 'COMPLETED';
           const isRemoteCompleted = rt.status === 'COMPLETED';
-          const isApprovedAddWork = lt.approvalStatus === 'APPROVED' || rt.approvalStatus === 'APPROVED';
+          const isApprovedAddWork =
+            lt.approvalStatus === 'APPROVED' ||
+            rt.approvalStatus === 'APPROVED' ||
+            lt.isCustomerApproved === true ||
+            rt.isCustomerApproved === true;
+          const isRejectedAddWork =
+            !isApprovedAddWork &&
+            (lt.approvalStatus === 'REJECTED' || rt.approvalStatus === 'REJECTED' || lt.isCustomerApproved === false || rt.isCustomerApproved === false);
 
           let finalStatus: JobTask['status'] = (isLocalCompleted || isRemoteCompleted)
             ? 'COMPLETED'
             : (lt.status === 'IN_PROGRESS' || rt.status === 'IN_PROGRESS'
                 ? 'IN_PROGRESS'
-                : (isApprovedAddWork && (lt.status === 'ON_HOLD' || rt.status === 'ON_HOLD')
+                : (isApprovedAddWork
                     ? 'PENDING'
-                    : (lt.status || rt.status || 'PENDING')));
+                    : (isRejectedAddWork
+                        ? 'ON_HOLD'
+                        : ((lt.status === 'ON_HOLD' || rt.status === 'ON_HOLD')
+                            ? 'ON_HOLD'
+                            : (lt.status || rt.status || 'PENDING')))));
 
           const finalCompletedAt = rt.completedAt || lt.completedAt || (finalStatus === 'COMPLETED' ? new Date().toLocaleTimeString() : undefined);
 
@@ -148,12 +159,12 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             } else {
               const rRank = reqPriority[rReq.status] || 0;
               const lRank = reqPriority[lReq.status] || 0;
-              const bestReq = rRank >= lRank ? { ...lReq, ...rReq } : { ...rReq, ...lReq };
-              bestReq.photoUrl = rReq.photoUrl || lReq.photoUrl;
-              bestReq.videoUrl = rReq.videoUrl || lReq.videoUrl;
-              bestReq.proposedTasks = (rReq.proposedTasks && rReq.proposedTasks.length > 0)
-                ? rReq.proposedTasks
-                : lReq.proposedTasks;
+              const bestReq = rRank > lRank ? { ...lReq, ...rReq } : { ...rReq, ...lReq };
+              bestReq.photoUrl = lReq.photoUrl || rReq.photoUrl;
+              bestReq.videoUrl = lReq.videoUrl || rReq.videoUrl;
+              bestReq.proposedTasks = (lReq.proposedTasks && lReq.proposedTasks.length > 0)
+                ? lReq.proposedTasks
+                : rReq.proposedTasks;
               reqMap.set(lReq.id, bestReq);
             }
           }
@@ -163,11 +174,17 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             ...lt,
             status: finalStatus,
             completedAt: finalCompletedAt,
-            approvalStatus: isApprovedAddWork ? 'APPROVED' : (rt.approvalStatus || lt.approvalStatus),
-            requiresCustomerApproval: isApprovedAddWork ? false : (rt.requiresCustomerApproval ?? lt.requiresCustomerApproval),
-            isCustomerApproved: isApprovedAddWork ? true : (rt.isCustomerApproved ?? lt.isCustomerApproved),
-            assignedToId: rt.assignedToId || lt.assignedToId,
-            assignedToName: rt.assignedToName || lt.assignedToName,
+            approvalStatus: isApprovedAddWork
+              ? 'APPROVED'
+              : (isRejectedAddWork ? 'REJECTED' : (lt.approvalStatus || rt.approvalStatus)),
+            requiresCustomerApproval: isApprovedAddWork || isRejectedAddWork
+              ? false
+              : (lt.requiresCustomerApproval ?? rt.requiresCustomerApproval),
+            isCustomerApproved: isApprovedAddWork
+              ? true
+              : (isRejectedAddWork ? false : (lt.isCustomerApproved ?? rt.isCustomerApproved)),
+            assignedToId: lt.assignedToId || rt.assignedToId,
+            assignedToName: lt.assignedToName || rt.assignedToName,
             assignedType: lt.assignedType || rt.assignedType || 'EMPLOYEE',
             estimatedCost: lt.estimatedCost ?? rt.estimatedCost ?? 0,
             customerPrice: lt.customerPrice ?? rt.customerPrice ?? 0,
@@ -181,9 +198,12 @@ export function mergeJobCardsWithLocal(remoteCards: JobCard[], localCards: JobCa
             pairedDenterId: lt.pairedDenterId || rt.pairedDenterId,
             pairedDenterName: lt.pairedDenterName || rt.pairedDenterName,
             standardJobId: lt.standardJobId || rt.standardJobId,
-            additionalWorkPhotoUrl: rt.additionalWorkPhotoUrl || lt.additionalWorkPhotoUrl,
-            additionalWorkVideoUrl: rt.additionalWorkVideoUrl || lt.additionalWorkVideoUrl,
-            linkedRequisitionId: rt.linkedRequisitionId || lt.linkedRequisitionId,
+            isAdditionalWork: lt.isAdditionalWork ?? rt.isAdditionalWork,
+            additionalWorkRequestedBy: lt.additionalWorkRequestedBy || rt.additionalWorkRequestedBy,
+            additionalWorkRequestedAt: lt.additionalWorkRequestedAt || rt.additionalWorkRequestedAt,
+            additionalWorkPhotoUrl: lt.additionalWorkPhotoUrl || rt.additionalWorkPhotoUrl,
+            additionalWorkVideoUrl: lt.additionalWorkVideoUrl || rt.additionalWorkVideoUrl,
+            linkedRequisitionId: lt.linkedRequisitionId || rt.linkedRequisitionId,
             requisitions: Array.from(reqMap.values()),
           });
           localTasksMap.delete(rtId);
@@ -1057,6 +1077,25 @@ export async function syncFromSupabase(): Promise<SyncResult> {
 
         const tasks: JobTask[] = rawTasks.map((t: any, idx: number) => {
           const { cleanNotes, meta } = extractTaskMetaFromNotes(t.notes || t.description);
+          let parsedReqs: any[] | undefined = undefined;
+          if (Array.isArray(t.requisitions) && t.requisitions.length > 0) {
+            parsedReqs = t.requisitions;
+          } else if (typeof t.requisitions === 'string' && t.requisitions.trim().startsWith('[')) {
+            try { parsedReqs = JSON.parse(t.requisitions); } catch {}
+          }
+          if ((!parsedReqs || parsedReqs.length === 0) && Array.isArray(meta.reqs)) {
+            parsedReqs = meta.reqs;
+          }
+
+          const rawAppStat =
+            (t.approvalStatus === 'APPROVED' || t.approval_status === 'APPROVED' || meta.appStat === 'APPROVED')
+              ? 'APPROVED'
+              : (t.approvalStatus === 'REJECTED' || t.approval_status === 'REJECTED' || meta.appStat === 'REJECTED')
+              ? 'REJECTED'
+              : (t.approvalStatus || t.approval_status || meta.appStat);
+
+          const isApproved = rawAppStat === 'APPROVED' || t.isCustomerApproved === true || t.is_customer_approved === true || meta.custApp === true;
+
           return {
             ...t,
             id: String(t.id || `task-${cardIdStr}-${idx}`),
@@ -1078,16 +1117,20 @@ export async function syncFromSupabase(): Promise<SyncResult> {
             panelNameEn: t.panelNameEn || t.panel_name_en || meta.pName || undefined,
             paintScope: t.paintScope || t.paint_scope || meta.pScope || undefined,
             standardJobId: t.standardJobId || t.standard_job_id || meta.sjId || undefined,
-            status: t.status || 'PENDING',
-            requiresCustomerApproval: Boolean(t.requires_customer_approval ?? t.requiresCustomerApproval),
-            isCustomerApproved: t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : t.isCustomerApproved,
-            rejectionReason: t.rejection_reason || t.rejectionReason,
+            status: (isApproved && t.status === 'ON_HOLD') ? 'PENDING' : (t.status || 'PENDING'),
+            requiresCustomerApproval: isApproved ? false : Boolean(t.requiresCustomerApproval ?? t.requires_customer_approval ?? meta.reqCustApp ?? false),
+            isCustomerApproved: isApproved ? true : (t.isCustomerApproved !== undefined ? t.isCustomerApproved : (t.is_customer_approved !== null && t.is_customer_approved !== undefined ? Boolean(t.is_customer_approved) : meta.custApp)),
+            rejectionReason: t.rejectionReason || t.rejection_reason,
             notes: cleanNotes || undefined,
             completedAt: t.completed_at || t.completedAt,
-            isAdditionalWork: Boolean(t.is_additional_work || t.isAdditionalWork),
-            additionalWorkRequestedBy: t.additional_work_requested_by || t.additionalWorkRequestedBy,
-            additionalWorkRequestedAt: t.additional_work_requested_at || t.additionalWorkRequestedAt,
-            approvalStatus: t.approval_status || t.approvalStatus
+            isAdditionalWork: Boolean(t.isAdditionalWork ?? t.is_additional_work ?? meta.addWork),
+            additionalWorkRequestedBy: t.additionalWorkRequestedBy || t.additional_work_requested_by || meta.reqBy,
+            additionalWorkRequestedAt: t.additionalWorkRequestedAt || t.additional_work_requested_at || meta.reqAt,
+            additionalWorkPhotoUrl: t.additionalWorkPhotoUrl || t.additional_work_photo_url || meta.addPhoto,
+            additionalWorkVideoUrl: t.additionalWorkVideoUrl || t.additional_work_video_url || meta.addVideo,
+            linkedRequisitionId: t.linkedRequisitionId || t.linked_requisition_id || meta.linkReq,
+            approvalStatus: isApproved ? 'APPROVED' : rawAppStat,
+            requisitions: parsedReqs || []
           };
         });
 
@@ -1766,7 +1809,7 @@ export async function pushLocalDataToSupabase(): Promise<{
         const isoCompletedAt = parsedCompleted && !isNaN(parsedCompleted.getTime())
           ? parsedCompleted.toISOString()
           : (t.status === 'COMPLETED' ? new Date().toISOString() : null);
-        await client.from('job_tasks').upsert({
+        const baseTaskPayload = {
           id: t.id,
           job_card_id: card.id,
           title: t.title || t.notes || 'Task',
@@ -1782,7 +1825,30 @@ export async function pushLocalDataToSupabase(): Promise<{
           rejection_reason: t.rejectionReason || null,
           notes: encodedNotes || null,
           completed_at: isoCompletedAt
+        };
+        const cleanAddPhoto = (t.additionalWorkPhotoUrl && !t.additionalWorkPhotoUrl.startsWith('data:')) ? t.additionalWorkPhotoUrl : null;
+        const cleanAddVideo = (t.additionalWorkVideoUrl && !t.additionalWorkVideoUrl.startsWith('data:')) ? t.additionalWorkVideoUrl : null;
+        const cleanReqs = Array.isArray(t.requisitions)
+          ? t.requisitions.map(r => ({
+              ...r,
+              photoUrl: r.photoUrl && r.photoUrl.startsWith('data:') ? undefined : r.photoUrl,
+              videoUrl: r.videoUrl && r.videoUrl.startsWith('data:') ? undefined : r.videoUrl
+            }))
+          : null;
+        const { error: taskUpsertErr } = await client.from('job_tasks').upsert({
+          ...baseTaskPayload,
+          is_additional_work: Boolean(t.isAdditionalWork),
+          approval_status: t.approvalStatus || null,
+          additional_work_requested_by: t.additionalWorkRequestedBy || null,
+          additional_work_requested_at: t.additionalWorkRequestedAt || null,
+          additional_work_photo_url: cleanAddPhoto,
+          additional_work_video_url: cleanAddVideo,
+          linked_requisition_id: t.linkedRequisitionId || null,
+          requisitions: cleanReqs
         });
+        if (taskUpsertErr) {
+          await client.from('job_tasks').upsert(baseTaskPayload);
+        }
       }
     }
 

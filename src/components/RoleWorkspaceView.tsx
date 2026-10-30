@@ -565,7 +565,7 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
                             {(['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'] as const).map(f => {
                               const active = (taskStatusFilter[card.id] || 'ALL') === f;
                               const label = f === 'ALL' ? `सभी (${assignedTasks.length})` :
-                                            f === 'PENDING' ? `⏳ बाकी (${assignedTasks.filter(t => t.status === 'PENDING').length})` :
+                                            f === 'PENDING' ? `⏳ बाकी (${assignedTasks.filter(t => t.status === 'PENDING' || t.status === 'ON_HOLD').length})` :
                                             f === 'IN_PROGRESS' ? `⚡ चालू (${assignedTasks.filter(t => t.status === 'IN_PROGRESS').length})` :
                                             `✅ पूरा (${assignedTasks.filter(t => t.status === 'COMPLETED').length})`;
                               return (
@@ -591,6 +591,7 @@ export const RoleWorkspaceView = React.memo(function RoleWorkspaceView({
                           const currentFilter = taskStatusFilter[card.id] || 'ALL';
                           const filteredTasks = assignedTasks.filter(t => {
                             if (currentFilter === 'ALL') return true;
+                            if (currentFilter === 'PENDING') return t.status === 'PENDING' || t.status === 'ON_HOLD';
                             return t.status === currentFilter;
                           });
 

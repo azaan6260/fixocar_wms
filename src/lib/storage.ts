@@ -425,6 +425,26 @@ export function serializeTaskMetaToNotes(task: JobTask): string {
   if (task.retailPrice !== undefined) meta.rtP = task.retailPrice;
   if (task.cars24Price !== undefined) meta.c24P = task.cars24Price;
   if (task.isTaxInclusive !== undefined) meta.txInc = task.isTaxInclusive;
+  if (task.isAdditionalWork !== undefined) meta.addWork = task.isAdditionalWork;
+  if (task.approvalStatus) meta.appStat = task.approvalStatus;
+  if (task.additionalWorkRequestedBy) meta.reqBy = task.additionalWorkRequestedBy;
+  if (task.additionalWorkRequestedAt) meta.reqAt = task.additionalWorkRequestedAt;
+  if (task.additionalWorkPhotoUrl && !task.additionalWorkPhotoUrl.startsWith('data:')) {
+    meta.addPhoto = task.additionalWorkPhotoUrl;
+  }
+  if (task.additionalWorkVideoUrl && !task.additionalWorkVideoUrl.startsWith('data:')) {
+    meta.addVideo = task.additionalWorkVideoUrl;
+  }
+  if (task.linkedRequisitionId) meta.linkReq = task.linkedRequisitionId;
+  if (task.requiresCustomerApproval !== undefined) meta.reqCustApp = task.requiresCustomerApproval;
+  if (task.isCustomerApproved !== undefined) meta.custApp = task.isCustomerApproved;
+  if (Array.isArray(task.requisitions) && task.requisitions.length > 0) {
+    meta.reqs = task.requisitions.map(r => ({
+      ...r,
+      photoUrl: r.photoUrl && r.photoUrl.startsWith('data:') ? undefined : r.photoUrl,
+      videoUrl: r.videoUrl && r.videoUrl.startsWith('data:') ? undefined : r.videoUrl,
+    }));
+  }
   if (Object.keys(meta).length === 0) return baseNotes;
   return `${baseNotes} <!--META:${JSON.stringify(meta)}-->`.trim();
 }
@@ -580,6 +600,16 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       undefined
     );
 
+    const resolvedRequisitions = (Array.isArray(t.requisitions) && t.requisitions.length > 0)
+      ? t.requisitions
+      : (Array.isArray(meta.reqs) ? meta.reqs : t.requisitions);
+
+    const resolvedApprovalStatus = (t.approvalStatus === 'APPROVED' || meta.appStat === 'APPROVED')
+      ? 'APPROVED'
+      : (t.approvalStatus === 'REJECTED' || meta.appStat === 'REJECTED')
+      ? 'REJECTED'
+      : (t.approvalStatus || meta.appStat);
+
     const healedTask: JobTask = {
       ...t,
       notes: cleanNotes || undefined,
@@ -600,6 +630,16 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       retailPrice: t.retailPrice ?? meta.rtP,
       cars24Price: t.cars24Price ?? meta.c24P,
       isTaxInclusive: t.isTaxInclusive ?? meta.txInc ?? true,
+      isAdditionalWork: t.isAdditionalWork ?? meta.addWork,
+      approvalStatus: resolvedApprovalStatus,
+      additionalWorkRequestedBy: t.additionalWorkRequestedBy || meta.reqBy,
+      additionalWorkRequestedAt: t.additionalWorkRequestedAt || meta.reqAt,
+      additionalWorkPhotoUrl: t.additionalWorkPhotoUrl || meta.addPhoto,
+      additionalWorkVideoUrl: t.additionalWorkVideoUrl || meta.addVideo,
+      linkedRequisitionId: t.linkedRequisitionId || meta.linkReq,
+      requiresCustomerApproval: resolvedApprovalStatus === 'APPROVED' ? false : (t.requiresCustomerApproval ?? meta.reqCustApp ?? false),
+      isCustomerApproved: resolvedApprovalStatus === 'APPROVED' ? true : (t.isCustomerApproved ?? meta.custApp),
+      requisitions: resolvedRequisitions,
     };
     healedTask.notes = serializeTaskMetaToNotes(healedTask);
     return healedTask;
@@ -1688,21 +1728,59 @@ export function updateTaskStatus(jobCardId: string, taskId: string, newStatus: J
 }
 
 export function respondToCustomerApproval(jobCardId: string, taskId: string, approved: boolean, reason?: string) {
+  let vehicleReg = '';
+  let notifiedEmployeeId = '';
+  let notifiedEmployeeName = '';
+  let approvedTaskTitle = '';
+  let approvedAmount = 0;
+
   updateJobCard(jobCardId, (card) => {
+    vehicleReg = card.vehicle.registrationNumber;
+    const targetTask = card.tasks.find(t => t.id === taskId);
+    const linkedReqId = targetTask?.linkedRequisitionId;
+
     const updatedTasks = card.tasks.map(t => {
+      let nextRequisitions = t.requisitions;
+      if (linkedReqId && Array.isArray(t.requisitions) && t.requisitions.some(r => r.id === linkedReqId)) {
+        nextRequisitions = t.requisitions.map(r => {
+          if (r.id === linkedReqId) {
+            return {
+              ...r,
+              status: approved ? ('APPROVED' as const) : ('REJECTED' as const),
+              approvedAt: new Date().toLocaleString(),
+              managerNotes: reason || (approved ? 'Approved — Proceed with repair' : 'Declined')
+            };
+          }
+          return r;
+        });
+      }
+
       if (t.id === taskId) {
+        notifiedEmployeeId = t.assignedToId || '';
+        notifiedEmployeeName = t.assignedToName || '';
+        approvedTaskTitle = t.title.replace(/^\[.*?\]\s*/, '');
+        approvedAmount = Number(t.customerPrice) || 0;
+
         return {
           ...t,
+          requisitions: nextRequisitions,
+          requiresCustomerApproval: false,
           isCustomerApproved: approved,
-          rejectionReason: reason,
-          status: approved ? ('IN_PROGRESS' as const) : ('ON_HOLD' as const)
+          approvalStatus: approved ? ('APPROVED' as const) : ('REJECTED' as const),
+          rejectionReason: approved ? undefined : (reason || 'Declined'),
+          status: approved
+            ? (t.status === 'COMPLETED' ? ('COMPLETED' as const) : ('PENDING' as const))
+            : ('ON_HOLD' as const)
         };
       }
-      return t;
+
+      return nextRequisitions !== t.requisitions ? { ...t, requisitions: nextRequisitions } : t;
     });
 
     // Check if any estimate approvals are still pending
-    const remainingPendingApprovals = updatedTasks.some(t => t.requiresCustomerApproval && t.isCustomerApproved === null);
+    const remainingPendingApprovals = updatedTasks.some(
+      t => (t.requiresCustomerApproval && !t.isCustomerApproved) || (t.isAdditionalWork && t.approvalStatus === 'PENDING')
+    );
     const nextStatus = remainingPendingApprovals ? 'ESTIMATE_PENDING' : 'IN_PROGRESS';
 
     return {
@@ -1711,6 +1789,19 @@ export function respondToCustomerApproval(jobCardId: string, taskId: string, app
       status: card.status === 'ESTIMATE_PENDING' ? nextStatus : card.status
     };
   });
+
+  if (approved && vehicleReg) {
+    dispatchToastNotification({
+      type: 'ADDITIONAL_WORK_APPROVED',
+      title: `✅ Additional Work Approved — Proceed Now!`,
+      message: `"${approvedTaskTitle || 'Additional Task'}" on ${vehicleReg} is APPROVED and allotted to ${notifiedEmployeeName || 'Mechanic'}. Please proceed with the repair!`,
+      vehicleReg,
+      jobCardId,
+      amount: approvedAmount,
+      targetEmployeeId: notifiedEmployeeId || undefined,
+      targetEmployeeName: notifiedEmployeeName || undefined
+    });
+  }
 }
 
 export function updateQCChecklist(jobCardId: string, checklist: QCCheckitem[], notes: string) {
@@ -2045,23 +2136,27 @@ export function reviewAdditionalWorkAndAddTasks(
     const baseTasks = card.tasks.filter(t => !(t.linkedRequisitionId === requisitionId && t.approvalStatus === 'PENDING'));
 
     const updatedTasksWithReq = baseTasks.map(t => {
-      if (t.id === taskId) {
+      const hasTargetReq = t.id === taskId || (t.requisitions || []).some(r => r.id === requisitionId);
+      if (hasTargetReq) {
         const updatedReqs = (t.requisitions || []).map(r => {
           if (r.id === requisitionId) {
             targetReq = r;
-            employeeName = r.requestedByEmployeeName;
-            employeeId = r.requestedByEmployeeId;
+            employeeName = r.requestedByEmployeeName || t.assignedToName || 'Mechanic';
+            employeeId = r.requestedByEmployeeId || t.assignedToId || '';
 
             const enrichedProposed = proposedTasks.map((pt, idx) => {
               const newTaskId = pt.createdTaskId || `TSK-ADD-${Date.now().toString().slice(-5)}-${idx + 1}`;
-              const assigneeId = pt.assignedToId || r.assignedToId || r.requestedByEmployeeId;
-              const assigneeName = pt.assignedToName || r.assignedToName || r.requestedByEmployeeName;
+              const rawAssigneeId = pt.assignedToId || r.assignedToId || t.assignedToId || r.requestedByEmployeeId;
+              const assigneeId = (rawAssigneeId && rawAssigneeId !== 'MECHANIC' && rawAssigneeId !== 'DENTER' && rawAssigneeId !== 'PAINTER')
+                ? rawAssigneeId
+                : (t.assignedToId || rawAssigneeId);
+              const assigneeName = pt.assignedToName || r.assignedToName || t.assignedToName || r.requestedByEmployeeName;
 
               createdTasksToAdd.push({
                 id: newTaskId,
                 jobCardId,
                 title: pt.title.startsWith('[Add-on]') || pt.title.startsWith('[ADDITIONAL]') ? pt.title : `[Add-on] ${pt.title}`,
-                category: pt.category || 'MECHANICAL',
+                category: pt.category || t.category || 'MECHANICAL',
                 assignedToId: assigneeId,
                 assignedToName: assigneeName,
                 assignedType: 'EMPLOYEE',
@@ -2078,7 +2173,7 @@ export function reviewAdditionalWorkAndAddTasks(
                 requiresCustomerApproval: true,
                 isCustomerApproved: null,
                 isAdditionalWork: true,
-                additionalWorkRequestedBy: r.requestedByEmployeeName,
+                additionalWorkRequestedBy: r.requestedByEmployeeName || t.assignedToName,
                 additionalWorkRequestedAt: r.createdAt,
                 approvalStatus: 'PENDING',
                 linkedRequisitionId: requisitionId,
@@ -2154,10 +2249,18 @@ export function approveAdditionalWorkAndAllot(
   updateJobCard(jobCardId, (card) => {
     vehicleReg = card.vehicle.registrationNumber;
     let reqRecord: TaskRequisition | null = null;
+    let parentTaskFallbackAssigneeId: string | undefined;
+    let parentTaskFallbackAssigneeName: string | undefined;
+    let parentTaskCategory: TaskCategory | undefined;
 
     // 1. Update the requisition to APPROVED
     const tasksAfterReqUpdate = card.tasks.map(t => {
-      if (t.id === taskId) {
+      const hasTargetReq = t.id === taskId || (t.requisitions || []).some(r => r.id === requisitionId);
+      if (hasTargetReq) {
+        parentTaskFallbackAssigneeId = t.assignedToId;
+        parentTaskFallbackAssigneeName = t.assignedToName;
+        parentTaskCategory = t.category;
+
         const updatedReqs = (t.requisitions || []).map(r => {
           if (r.id === requisitionId) {
             const tasksList = finalTasks && finalTasks.length > 0 ? finalTasks : (r.proposedTasks || []);
@@ -2195,14 +2298,14 @@ export function approveAdditionalWorkAndAllot(
             {
               id: `pt-${Date.now()}`,
               title: req.title.replace(/^\[.*?\]\s*/, ''),
-              category: req.category || 'MECHANICAL',
+              category: req.category || parentTaskCategory || 'MECHANICAL',
               partPrice: req.partPrice || 0,
               labourPrice: req.labourPrice ?? (req.approvedPrice || req.suggestedPrice || 0),
               customerPrice: req.approvedPrice || req.customerPrice || req.suggestedPrice || 0,
               isContractBasis: req.isContractBasis,
               contractorPayout: req.contractorPayout,
-              assignedToId: req.assignedToId || req.requestedByEmployeeId,
-              assignedToName: req.assignedToName || req.requestedByEmployeeName
+              assignedToId: req.assignedToId || parentTaskFallbackAssigneeId || req.requestedByEmployeeId,
+              assignedToName: req.assignedToName || parentTaskFallbackAssigneeName || req.requestedByEmployeeName
             }
           ];
 
@@ -2210,8 +2313,11 @@ export function approveAdditionalWorkAndAllot(
     const remainingTasks = tasksAfterReqUpdate.filter(t => t.linkedRequisitionId !== requisitionId);
 
     const newlyActivatedTasks: JobTask[] = tasksToApply.map((pt, idx) => {
-      const assigneeId = pt.assignedToId || req.assignedToId || req.requestedByEmployeeId;
-      const assigneeName = pt.assignedToName || req.assignedToName || req.requestedByEmployeeName;
+      const rawAssigneeId = pt.assignedToId || req.assignedToId || parentTaskFallbackAssigneeId || req.requestedByEmployeeId;
+      const assigneeId = (rawAssigneeId && rawAssigneeId !== 'MECHANIC' && rawAssigneeId !== 'DENTER' && rawAssigneeId !== 'PAINTER')
+        ? rawAssigneeId
+        : (parentTaskFallbackAssigneeId || rawAssigneeId);
+      const assigneeName = pt.assignedToName || req.assignedToName || parentTaskFallbackAssigneeName || req.requestedByEmployeeName;
       if (assigneeId) notifiedEmployeeId = assigneeId;
       if (assigneeName) notifiedEmployeeName = assigneeName;
 
@@ -2222,7 +2328,7 @@ export function approveAdditionalWorkAndAllot(
         id: pt.createdTaskId || `TSK-ADD-${Date.now().toString().slice(-5)}-${idx + 1}`,
         jobCardId,
         title: `[Add-on] ${cleanTitle}`,
-        category: pt.category || req.category || 'MECHANICAL',
+        category: pt.category || req.category || parentTaskCategory || 'MECHANICAL',
         assignedToId: assigneeId,
         assignedToName: assigneeName,
         assignedType: 'EMPLOYEE',
@@ -2239,7 +2345,7 @@ export function approveAdditionalWorkAndAllot(
         requiresCustomerApproval: false,
         isCustomerApproved: true,
         isAdditionalWork: true,
-        additionalWorkRequestedBy: req.requestedByEmployeeName,
+        additionalWorkRequestedBy: req.requestedByEmployeeName || parentTaskFallbackAssigneeName,
         additionalWorkRequestedAt: req.createdAt,
         approvalStatus: 'APPROVED',
         linkedRequisitionId: requisitionId,

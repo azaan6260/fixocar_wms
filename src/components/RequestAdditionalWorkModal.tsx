@@ -122,16 +122,26 @@ export function RequestAdditionalWorkModal({
   const effectiveRole = currentRole || authUser?.role || 'MECHANIC';
   const isManagerOrAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'FLOOR_MANAGER' || effectiveRole === 'ADMIN';
 
-  const empId = currentEmployeeId || authUser?.employeeId || authUser?.id || 'emp-101';
-  const empName = currentEmployeeName || authUser?.name || 'Workshop Mechanic';
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(
+    initialTaskId || card.tasks[0]?.id || ''
+  );
+
+  const selectedTaskObj = card.tasks.find(t => t.id === selectedTaskId) || card.tasks[0];
+  const empId =
+    currentEmployeeId ||
+    selectedTaskObj?.assignedToId ||
+    authUser?.employeeId ||
+    authUser?.id ||
+    'emp-101';
+  const empName =
+    currentEmployeeName ||
+    selectedTaskObj?.assignedToName ||
+    authUser?.name ||
+    'Workshop Mechanic';
 
   const allStandardJobs = getStandardJobs();
   const coreStandardJobs = allStandardJobs.filter(j => CORE_13_JOB_IDS.includes(j.id));
   const employees = getAllEmployees();
-
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(
-    initialTaskId || card.tasks[0]?.id || ''
-  );
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [workTitle, setWorkTitle] = useState('');
   const [category, setCategory] = useState<TaskCategory>(initialCategory);
@@ -365,20 +375,28 @@ export function RequestAdditionalWorkModal({
       targetTaskId = fallbackTaskId;
     }
 
+    const assignedEmp = employees.find(e => e.id === assignedEmployeeId);
+    const finalReqEmpId = assignedEmployeeId || empId;
+    const finalReqEmpName = assignedEmp?.name || empName;
+
     addRequisitionToTask(card.id, targetTaskId, {
-      requestedByEmployeeId: empId,
-      requestedByEmployeeName: empName,
+      requestedByEmployeeId: finalReqEmpId,
+      requestedByEmployeeName: finalReqEmpName,
+      assignedToId: finalReqEmpId,
+      assignedToName: finalReqEmpName,
+      category,
       title: `[${category}] ${workTitle.trim()}`,
       itemType: 'ADDITIONAL_WORK',
       quantity: 1,
       urgency,
-      reason: reason.trim() || `Additional ${category} work discovered after opening up by ${empName}`,
+      reason: reason.trim() || `Additional ${category} work discovered after opening up by ${finalReqEmpName}`,
       suggestedPrice: totalRate,
       partPrice: Number(partPrice) || 0,
       labourPrice: Number(labourPrice) || 0,
       customerPrice: totalRate,
       cars24Price: isCars24 ? totalRate : undefined,
       isTaxInclusive: true,
+      isContractBasis,
       contractorPayout: isContractBasis ? contractorPayout : undefined,
       photoUrl: photoUrl || undefined,
       videoUrl: videoUrl || undefined,

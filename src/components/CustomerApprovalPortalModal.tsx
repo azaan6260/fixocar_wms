@@ -24,15 +24,29 @@ export function CustomerApprovalPortalModal({
 }: CustomerApprovalPortalModalProps) {
   const [tasks, setTasks] = useState(card.tasks);
 
-  const pendingApprovals = tasks.filter(t => t.requiresCustomerApproval);
+  const pendingApprovals = tasks.filter(
+    t => t.requiresCustomerApproval || t.isAdditionalWork || t.status === 'ON_HOLD'
+  );
 
   const handleToggle = (taskId: string, approved: boolean) => {
     respondToCustomerApproval(card.id, taskId, approved);
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCustomerApproved: approved } : t));
+    setTasks(prev =>
+      prev.map(t =>
+        t.id === taskId
+          ? {
+              ...t,
+              requiresCustomerApproval: false,
+              isCustomerApproved: approved,
+              approvalStatus: approved ? 'APPROVED' : 'REJECTED',
+              status: approved ? (t.status === 'COMPLETED' ? 'COMPLETED' : 'PENDING') : 'ON_HOLD'
+            }
+          : t
+      )
+    );
   };
 
   const totalApprovedPrice = tasks
-    .filter(t => t.isCustomerApproved !== false)
+    .filter(t => t.isCustomerApproved !== false && t.approvalStatus !== 'REJECTED')
     .reduce((sum, t) => sum + (t.customerPrice || 0), 0);
 
   return (
@@ -91,63 +105,99 @@ export function CustomerApprovalPortalModal({
               Additional Work Approval Requested
             </div>
             <p className="text-slate-300">
-              During disassembly inspection, our master mechanics identified additional maintenance recommendations. Please review and approve or decline each item below.
+              During disassembly inspection, our master mechanics identified additional maintenance recommendations. Approving an item automatically allots the task to the mechanic and notifies them with sound to proceed.
             </p>
           </div>
 
           {/* Pending Approval Items */}
           <div className="space-y-3">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Discovered Items Awaiting Your Decision</h3>
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Discovered Items Awaiting Decision</h3>
 
             {pendingApprovals.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-6">All items have been reviewed!</p>
+              <p className="text-xs text-slate-500 text-center py-6">No additional work items awaiting approval on this vehicle.</p>
             ) : (
-              pendingApprovals.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{item.title}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">{item.notes || 'Inspection finding by master mechanic'}</p>
+              pendingApprovals.map((item) => {
+                const isItemApproved = item.approvalStatus === 'APPROVED' || item.isCustomerApproved === true;
+                const isItemDeclined = item.approvalStatus === 'REJECTED' || item.isCustomerApproved === false;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{item.title}</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">{item.notes || 'Inspection finding by master mechanic'}</p>
+                        {item.assignedToName && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1">
+                            👷 Assigned Mechanic: {item.assignedToName}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-base font-extrabold text-blue-600 dark:text-blue-400 font-mono">
+                        +₹{(item.customerPrice || 0).toLocaleString('en-IN')}
+                      </span>
                     </div>
-                    <span className="text-base font-extrabold text-blue-600 dark:text-blue-400 font-mono">
-                      +₹{item.customerPrice.toLocaleString('en-IN')}
-                    </span>
-                  </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-500">Status: {item.isCustomerApproved === true ? 'Approved' : item.isCustomerApproved === false ? 'Declined' : 'Pending'}</span>
+                    {(item.additionalWorkPhotoUrl || item.additionalWorkVideoUrl) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {item.additionalWorkPhotoUrl && (
+                          <img
+                            src={item.additionalWorkPhotoUrl}
+                            alt={item.title}
+                            className="w-full h-36 object-cover rounded-lg border border-slate-300 dark:border-slate-700"
+                          />
+                        )}
+                        {item.additionalWorkVideoUrl && (
+                          <video
+                            src={item.additionalWorkVideoUrl}
+                            controls
+                            playsInline
+                            className="w-full h-36 object-cover rounded-lg border border-slate-300 dark:border-slate-700 bg-black"
+                          />
+                        )}
+                      </div>
+                    )}
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(item.id, false)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          item.isCustomerApproved === false
-                            ? 'bg-rose-600 text-white shadow-sm'
-                            : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-rose-500 hover:text-white'
-                        }`}
-                      >
-                        Decline
-                      </button>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                        Status:{' '}
+                        {isItemApproved
+                          ? '✅ Approved — Mechanic Notified to Proceed'
+                          : isItemDeclined
+                          ? '❌ Declined'
+                          : '⏳ Pending Approval'}
+                      </span>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(item.id, true)}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          item.isCustomerApproved === true
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20'
-                        }`}
-                      >
-                        Approve Item
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggle(item.id, false)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isItemDeclined
+                              ? 'bg-rose-600 text-white shadow-sm'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-rose-500 hover:text-white'
+                          }`}
+                        >
+                          Decline
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggle(item.id, true)}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isItemApproved
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20'
+                          }`}
+                        >
+                          {isItemApproved ? '✅ Approved' : 'Approve & Notify Mechanic'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

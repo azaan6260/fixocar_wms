@@ -5,7 +5,9 @@ import {
   respondToRequisition, 
   markRequisitionStatus, 
   consumeRequisitionPart, 
-  getInventoryItems 
+  getInventoryItems,
+  reviewAdditionalWorkAndAddTasks,
+  approveAdditionalWorkAndAllot
 } from '../lib/storage';
 import { 
   Package, 
@@ -44,7 +46,7 @@ export function PartRequisitionTracker({
   currentEmployeeName,
   onUpdate
 }: PartRequisitionTrackerProps) {
-  const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'FLOOR_MANAGER';
+  const isManager = currentRole === 'SUPER_ADMIN' || currentRole === 'ADMIN' || currentRole === 'SERVICE_ADVISOR' || currentRole === 'FLOOR_MANAGER';
   const inventoryItems = getInventoryItems();
 
   // New Requisition Form state
@@ -388,11 +390,13 @@ export function PartRequisitionTracker({
         <div className="space-y-3">
           {requisitions.map((req) => {
             const isPending = req.status === 'PENDING_APPROVAL';
+            const isAwaitingApproval = req.status === 'AWAITING_CUSTOMER_APPROVAL';
             const isApproved = req.status === 'APPROVED';
             const isOrdered = req.status === 'ORDERED';
             const isReceived = req.status === 'RECEIVED';
             const isConsumed = req.status === 'CONSUMED';
             const isRejected = req.status === 'REJECTED';
+            const isAddWork = req.itemType === 'ADDITIONAL_WORK';
 
             return (
               <div
@@ -406,13 +410,18 @@ export function PartRequisitionTracker({
                     ? 'bg-blue-500/10 border-blue-500/30'
                     : isRejected
                     ? 'bg-rose-500/10 border-rose-500/30'
-                    : 'bg-white dark:bg-slate-900 border-amber-500/30 shadow-xs'
+                    : 'bg-white dark:bg-slate-900 border-amber-500/40 shadow-xs'
                 }`}
               >
                 {/* Requisition Card Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {isAddWork && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-500 text-slate-950">
+                          🔧 Additional Work
+                        </span>
+                      )}
                       <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
                         {req.title}
                       </span>
@@ -421,9 +430,11 @@ export function PartRequisitionTracker({
                           OEM: {req.partNumber}
                         </span>
                       )}
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                        Qty: {req.quantity}
-                      </span>
+                      {!isAddWork && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                          Qty: {req.quantity}
+                        </span>
+                      )}
                       {req.urgency && (
                         <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
                           req.urgency === 'CRITICAL' ? 'bg-rose-600 text-white' :
@@ -447,18 +458,20 @@ export function PartRequisitionTracker({
                       isConsumed ? 'bg-slate-700 text-white' :
                       isReceived ? 'bg-emerald-500 text-slate-950 font-black animate-bounce shadow-sm' :
                       isOrdered ? 'bg-indigo-600 text-white' :
-                      isApproved ? 'bg-blue-600 text-white' :
+                      isApproved ? 'bg-emerald-600 text-white' :
                       isRejected ? 'bg-rose-600 text-white' :
+                      isAwaitingApproval ? 'bg-purple-600 text-white' :
                       'bg-amber-500 text-slate-950'
                     }`}>
                       {isConsumed && <CheckCircle2 className="w-3.5 h-3.5" />}
                       {isReceived && <Bell className="w-3.5 h-3.5" />}
                       {isOrdered && <Truck className="w-3.5 h-3.5" />}
                       {isApproved && <ShieldCheck className="w-3.5 h-3.5" />}
-                      {isPending && <Clock className="w-3.5 h-3.5" />}
+                      {(isPending || isAwaitingApproval) && <Clock className="w-3.5 h-3.5" />}
                       <span>
-                        {isPending ? 'Pending Approval' :
-                         isApproved ? 'Approved by Manager' :
+                        {isPending ? 'Pending Manager Review' :
+                         isAwaitingApproval ? 'Tasks Added — Needs Approval' :
+                         isApproved ? (isAddWork ? 'Approved — Proceed with Work' : 'Approved by Manager') :
                          isOrdered ? 'Ordered from Supplier' :
                          isReceived ? 'Received at Store' :
                          isConsumed ? 'Consumed' : 'Rejected'}
@@ -472,6 +485,31 @@ export function PartRequisitionTracker({
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
                     <strong className="text-slate-700 dark:text-slate-200">Mechanic Note:</strong> {req.reason}
                   </p>
+                )}
+
+                {/* Photo & Video Discovery Attachments */}
+                {(req.photoUrl || req.videoUrl) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {req.photoUrl && (
+                      <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 h-36">
+                        <img
+                          src={req.photoUrl}
+                          alt={req.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    {req.videoUrl && (
+                      <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 h-36">
+                        <video
+                          src={req.videoUrl}
+                          controls
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Approved Price & Timestamps */}
@@ -494,10 +532,10 @@ export function PartRequisitionTracker({
                 </div>
 
                 {/* 1. MANAGER APPROVAL CONTROLS */}
-                {isManager && isPending && (
+                {isManager && (isPending || isAwaitingApproval) && (
                   <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-3 flex-wrap">
                     {approvingReqId === req.id ? (
-                      <div className="w-full flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-300 dark:border-slate-700">
+                      <div className="w-full flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-300 dark:border-slate-700">
                         <input
                           type="number"
                           placeholder="Approved Price ₹"
@@ -505,17 +543,74 @@ export function PartRequisitionTracker({
                           onChange={(e) => setApprovedPrice(Number(e.target.value))}
                           className="w-36 px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
                         />
-                        <button
-                          type="button"
-                          onClick={() => handleApproveRequisition(req.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black shadow-xs"
-                        >
-                          Confirm Approval
-                        </button>
+                        {isAddWork ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const priceVal = Number(approvedPrice) || req.suggestedPrice || 850;
+                                const cleanTitle = req.title.replace(/^\[.*?\]\s*/, '');
+                                reviewAdditionalWorkAndAddTasks(jobCardId, taskId, req.id, [
+                                  {
+                                    id: `pt-${req.id}`,
+                                    title: cleanTitle,
+                                    category: req.category || 'MECHANICAL',
+                                    partPrice: req.partPrice || 0,
+                                    labourPrice: priceVal,
+                                    customerPrice: priceVal,
+                                    assignedToId: req.requestedByEmployeeId,
+                                    assignedToName: req.requestedByEmployeeName,
+                                    notes: req.reason
+                                  }
+                                ]);
+                                showToast('success', 'Task added to Job Card (Awaiting Approval).');
+                                setApprovingReqId(null);
+                                if (onUpdate) onUpdate();
+                              }}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-black shadow-xs cursor-pointer"
+                            >
+                              1. Add Task (Needs Approval)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const priceVal = Number(approvedPrice) || req.suggestedPrice || 850;
+                                const cleanTitle = req.title.replace(/^\[.*?\]\s*/, '');
+                                approveAdditionalWorkAndAllot(jobCardId, taskId, req.id, [
+                                  {
+                                    id: `pt-${req.id}`,
+                                    title: cleanTitle,
+                                    category: req.category || 'MECHANICAL',
+                                    partPrice: req.partPrice || 0,
+                                    labourPrice: priceVal,
+                                    customerPrice: priceVal,
+                                    assignedToId: req.requestedByEmployeeId,
+                                    assignedToName: req.requestedByEmployeeName,
+                                    notes: req.reason
+                                  }
+                                ]);
+                                showToast('success', '✅ Approved & Allotted! Mechanic notified with sound to proceed.');
+                                setApprovingReqId(null);
+                                if (onUpdate) onUpdate();
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black shadow-xs cursor-pointer"
+                            >
+                              2. ✅ Mark Approved & Allot (Notify to Proceed)
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleApproveRequisition(req.id)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black shadow-xs cursor-pointer"
+                          >
+                            Confirm Approval
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setApprovingReqId(null)}
-                          className="px-2.5 py-1.5 bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold"
+                          className="px-2.5 py-1.5 bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -525,22 +620,72 @@ export function PartRequisitionTracker({
                         <span className="text-amber-700 dark:text-amber-300 font-bold text-[11px]">
                           Manager Action Required:
                         </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setApprovingReqId(req.id);
-                              setApprovedPrice(req.suggestedPrice || 0);
-                            }}
-                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm flex items-center gap-1"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Approve Requisition</span>
-                          </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isAddWork ? (
+                            <>
+                              {isPending && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setApprovingReqId(req.id);
+                                    setApprovedPrice(req.suggestedPrice || 850);
+                                  }}
+                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-sm flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>1. Review & Add Tasks</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const priceVal = req.suggestedPrice || 850;
+                                  const cleanTitle = req.title.replace(/^\[.*?\]\s*/, '');
+                                  approveAdditionalWorkAndAllot(
+                                    jobCardId,
+                                    taskId,
+                                    req.id,
+                                    req.proposedTasks && req.proposedTasks.length > 0
+                                      ? req.proposedTasks
+                                      : [
+                                          {
+                                            id: `pt-${req.id}`,
+                                            title: cleanTitle,
+                                            category: req.category || 'MECHANICAL',
+                                            partPrice: req.partPrice || 0,
+                                            labourPrice: priceVal,
+                                            customerPrice: priceVal,
+                                            assignedToId: req.requestedByEmployeeId,
+                                            assignedToName: req.requestedByEmployeeName,
+                                            notes: req.reason
+                                          }
+                                        ]
+                                  );
+                                  showToast('success', '✅ Approved & Allotted! Mechanic notified with sound to proceed.');
+                                  if (onUpdate) onUpdate();
+                                }}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm flex items-center gap-1 cursor-pointer"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>✅ Mark Approved & Allot (Notify to Proceed)</span>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setApprovingReqId(req.id);
+                                setApprovedPrice(req.suggestedPrice || 0);
+                              }}
+                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm flex items-center gap-1 cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Approve Requisition</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleRejectRequisition(req.id)}
-                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold"
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold cursor-pointer"
                           >
                             Reject
                           </button>
@@ -550,8 +695,8 @@ export function PartRequisitionTracker({
                   </div>
                 )}
 
-                {/* 2. MANAGER / STORE ORDER & RECEIPT ACTIONS */}
-                {isManager && (isApproved || isOrdered) && (
+                {/* 2. MANAGER / STORE ORDER & RECEIPT ACTIONS (Only for Parts/Consumables, not Additional Work) */}
+                {isManager && !isAddWork && (isApproved || isOrdered) && (
                   <div className="pt-2 border-t border-blue-500/20 flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-blue-700 dark:text-blue-300 font-bold text-[11px]">
                       Workshop Inventory Logistics:

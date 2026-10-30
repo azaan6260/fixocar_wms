@@ -28,8 +28,11 @@ import {
   getAuthUser,
   getVehicleCheckIns,
   saveVehicleCheckIns,
-  getVehiclePhotoForRegNo
+  getVehiclePhotoForRegNo,
+  subscribeToStore,
+  getJobCardById
 } from '../lib/storage';
+import { ManagerRequisitionApprovalView } from './ManagerRequisitionApprovalView';
 import { PaintBatchAllotmentControl } from './PaintBatchAllotmentControl';
 import { InteractiveVehicleInspectionChart, VEHICLE_PANELS } from './InteractiveVehicleInspectionChart';
 import { AddCustomJobModal } from './AddCustomJobModal';
@@ -141,6 +144,18 @@ export function JobCardDetailView({
   useEffect(() => {
     dispatch({ type: 'SYNC_CARD', payload: propCard });
   }, [propCard]);
+
+  // Also subscribe to global store updates so Additional Work requests, task additions, and approvals reflect immediately
+  useEffect(() => {
+    const unsubscribe = subscribeToStore(() => {
+      const freshCard = getJobCardById(propCard.id);
+      if (freshCard) {
+        dispatch({ type: 'SYNC_CARD', payload: freshCard });
+      }
+    });
+    return unsubscribe;
+  }, [propCard.id]);
+
   const currentUser = getAuthUser();
   const isManagerOrHigher = ['SUPER_ADMIN', 'ADMIN', 'SERVICE_ADVISOR', 'FLOOR_MANAGER'].includes(currentRole);
   const isCars24 = isCars24JobCard(card);
@@ -148,6 +163,28 @@ export function JobCardDetailView({
   const totalRequisitionsCount = React.useMemo(() => {
     return card.tasks.reduce((sum, t) => sum + (t.requisitions?.length || 0), 0);
   }, [card.tasks]);
+
+  const pendingRequisitionsCount = React.useMemo(() => {
+    return card.tasks.reduce(
+      (sum, t) =>
+        sum +
+        (t.requisitions || []).filter(
+          r => r.status === 'PENDING_APPROVAL' || r.status === 'AWAITING_CUSTOMER_APPROVAL'
+        ).length,
+      0
+    );
+  }, [card.tasks]);
+
+  const pendingTaskApprovalsCount = React.useMemo(() => {
+    return card.tasks.filter(
+      t =>
+        (t.requiresCustomerApproval && !t.isCustomerApproved) ||
+        (t.isAdditionalWork && t.approvalStatus === 'PENDING') ||
+        t.status === 'ON_HOLD'
+    ).length;
+  }, [card.tasks]);
+
+  const totalPendingApprovalsBadge = pendingRequisitionsCount + pendingTaskApprovalsCount;
   const [isPlayingHeaderAudio, setIsPlayingHeaderAudio] = useState(false);
 
   // Modals
@@ -1087,7 +1124,7 @@ export function JobCardDetailView({
                   { id: 'tasks', label: `Task Allotments (${card.tasks.length})`, icon: Wrench, managerOnly: false },
                   { id: 'proof', label: `📸 Proof & Attachments (${totalMediaCount})`, icon: Camera, managerOnly: false },
                   { id: 'consumption', label: `Part Consumption (${consumedItemsList.length})`, icon: PackageCheck, managerOnly: false },
-                  { id: 'approvals', label: `Customer Approvals (${card.tasks.filter(t => t.requiresCustomerApproval).length})`, icon: AlertCircle, managerOnly: true },
+                  { id: 'approvals', label: `⚡ Additional Work & Approvals (${totalPendingApprovalsBadge})`, icon: AlertCircle, managerOnly: false },
                   { id: 'qc', label: `QC Inspection (${card.qcPassed ? 'PASSED' : 'PENDING'})`, icon: ShieldCheck, managerOnly: false },
                   { id: 'delivery', label: 'Pick & Delivery', icon: Truck, managerOnly: true },
                   { id: 'invoice', label: 'GST Bill & Invoice', icon: FileText, managerOnly: true },
@@ -1448,37 +1485,67 @@ export function JobCardDetailView({
                     />
                   )}
 
-                  <div className="flex items-center justify-between">
+                  {/* High-Visibility Alert Banner when Additional Work or Task Approvals are Pending */}
+                  {totalPendingApprovalsBadge > 0 && (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/20 border-2 border-amber-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-amber-500 text-slate-950 font-black shrink-0">
+                          <AlertCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-sm text-amber-300 flex items-center gap-2 flex-wrap">
+                            <span>⚡ Additional Work / Approval Action Required ({totalPendingApprovalsBadge} Pending)</span>
+                          </h4>
+                          <p className="text-xs text-slate-200 mt-0.5">
+                            {pendingRequisitionsCount > 0
+                              ? `${pendingRequisitionsCount} Additional Work / Part Request(s) raised with photo/video awaiting Manager Review & Approval.`
+                              : `${pendingTaskApprovalsCount} Additional Task(s) currently ON HOLD awaiting Manager Approval to notify mechanic to proceed.`}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveManagerTab('approvals')}
+                        className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shrink-0 shadow-md cursor-pointer"
+                      >
+                        <span>Review & Approve Now</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="font-extrabold text-sm text-white">Department Task Allotments</h4>
-                      <p className="text-xs text-slate-400">Manage labor contractor payouts and assigned mechanics</p>
+                      <p className="text-xs text-slate-400">Manage labor contractor payouts, assigned mechanics, and additional discovered work</p>
                     </div>
-                    {isManagerOrHigher ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setIsStandardCatalogOpen(true)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs"
-                        >
-                          ⚡ 1-Click Standard Jobs
-                        </button>
-                        <button
-                          onClick={() => setShowAddTask(true)}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs"
-                        >
-                          + Custom Task
-                        </button>
-                      </div>
-                    ) : (
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setIsRequestAddWorkOpen(true)}
-                        className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95 transition-all"
-                        title="Submit request for additional job for manager approval"
+                        className="px-3.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 transition-all cursor-pointer"
+                        title="Raise Additional Work discovered after opening up (with Photo & Video)"
                       >
-                        <Plus className="w-4 h-4" />
-                        <span>Request Additional Work</span>
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>+ Raise Additional Work (Photo/Video)</span>
                       </button>
-                    )}
+                      {isManagerOrHigher && (
+                        <>
+                          <button
+                            onClick={() => setIsStandardCatalogOpen(true)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs cursor-pointer"
+                          >
+                            ⚡ 1-Click Standard Jobs
+                          </button>
+                          <button
+                            onClick={() => setShowAddTask(true)}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs cursor-pointer"
+                          >
+                            + Custom Task
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Single Unified AR Vehicle Body Inspection Chart at the top of Paint / Denting Jobs */}
@@ -1542,56 +1609,161 @@ export function JobCardDetailView({
               )}
 
               {activeManagerTab === 'approvals' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-amber-500/10 p-4 rounded-2xl border border-amber-500/30">
+                <div className="space-y-6">
+                  {/* Top Bar: Raise Additional Work + Open Customer Portal */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/10 p-4 rounded-2xl border border-amber-500/30">
                     <div>
-                      <h4 className="font-bold text-amber-400 text-sm">Customer Approval Portal</h4>
-                      <p className="text-xs text-slate-300">Share instant live approval link with customer.</p>
+                      <h4 className="font-black text-amber-400 text-sm flex items-center gap-2">
+                        <span>🔧 Additional Work Discovery & Customer Approval Center</span>
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Review employee photo/video discoveries, add required repair tasks, and mark approved to allot & notify the mechanic with sound to proceed.
+                      </p>
                     </div>
-                    <button
-                      onClick={() => onOpenCustomerApprovalPortal(card.id)}
-                      className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5"
-                    >
-                      Open Approval Portal <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsRequestAddWorkOpen(true)}
+                        className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>+ Raise Additional Work</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenCustomerApprovalPortal(card.id)}
+                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Customer Approval Portal</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
-                    {card.tasks.filter(t => t.requiresCustomerApproval).map((task) => (
-                      <div key={task.id} className="p-4 rounded-2xl border border-slate-800 bg-slate-900 flex items-center justify-between">
+                  {/* Embedded Manager Requisition & Additional Work Discovery Review Queue for this Job Card */}
+                  <ManagerRequisitionApprovalView
+                    jobCards={[card]}
+                    onOpenJobCard={() => {}}
+                    currentRole={currentRole}
+                  />
+
+                  {/* Tasks on this Job Card Awaiting Approval or Marked as Additional Work */}
+                  {card.tasks.some(t => t.requiresCustomerApproval || t.isAdditionalWork || t.status === 'ON_HOLD') && (
+                    <div className="space-y-3 bg-slate-900/90 p-4 sm:p-5 rounded-3xl border border-slate-800">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-sm text-white">{task.title}</p>
-                          {isManagerOrHigher && (
-                            <p className="text-xs text-slate-400">Price: ₹{task.customerPrice.toLocaleString('en-IN')}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: true } })}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: false, declineReason: 'Declined' } })}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-colors"
-                          >
-                            Decline
-                          </button>
-                          <button
-                            onClick={() => {
-                              dispatch({ type: 'DELETE_TASK', payload: { taskId: task.id } });
-                            }}
-                            className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                            title="Remove task from job card"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Remove
-                          </button>
+                          <h5 className="font-black text-sm text-white flex items-center gap-2">
+                            <span>📋 Additional Work Tasks on Job Card ({card.tasks.filter(t => t.requiresCustomerApproval || t.isAdditionalWork || t.status === 'ON_HOLD').length})</span>
+                          </h5>
+                          <p className="text-xs text-slate-400">
+                            Approve any pending/on-hold task below to immediately allot it to the mechanic and send a sound alert to proceed.
+                          </p>
                         </div>
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="space-y-3">
+                        {card.tasks
+                          .filter(t => t.requiresCustomerApproval || t.isAdditionalWork || t.status === 'ON_HOLD')
+                          .map((task) => {
+                            const isTaskApproved = task.approvalStatus === 'APPROVED' || (task.isCustomerApproved === true && task.status !== 'ON_HOLD');
+                            const isTaskRejected = task.approvalStatus === 'REJECTED' || task.isCustomerApproved === false;
+                            return (
+                              <div
+                                key={task.id}
+                                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                                  isTaskApproved
+                                    ? 'border-emerald-500/40 bg-emerald-950/20'
+                                    : isTaskRejected
+                                    ? 'border-rose-500/40 bg-rose-950/20'
+                                    : 'border-amber-500/50 bg-slate-900'
+                                }`}
+                              >
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-black text-sm text-white">{task.title}</p>
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                                      isTaskApproved
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                        : isTaskRejected
+                                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                        : 'bg-amber-500 text-slate-950'
+                                    }`}>
+                                      {isTaskApproved
+                                        ? '✅ Approved & Allotted to Proceed'
+                                        : isTaskRejected
+                                        ? '❌ Declined'
+                                        : '⏳ Awaiting Approval (On Hold)'}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                                    <span>👷 Allotted To: <strong className="text-amber-300">{task.assignedToName || 'Unassigned Mechanic'}</strong></span>
+                                    <span>💰 Estimate: <strong className="text-emerald-400 font-mono">₹{(task.customerPrice || 0).toLocaleString('en-IN')}</strong></span>
+                                    {task.additionalWorkRequestedBy && (
+                                      <span>🔍 Discovered By: <strong>{task.additionalWorkRequestedBy}</strong></span>
+                                    )}
+                                  </div>
+                                  {task.notes && (
+                                    <p className="text-xs text-slate-400 italic">"{task.notes}"</p>
+                                  )}
+                                  {(task.additionalWorkPhotoUrl || task.additionalWorkVideoUrl) && (
+                                    <div className="flex items-center gap-2 pt-1">
+                                      {task.additionalWorkPhotoUrl && (
+                                        <img
+                                          src={task.additionalWorkPhotoUrl}
+                                          alt="Discovery"
+                                          className="w-24 h-16 object-cover rounded-lg border border-slate-700"
+                                        />
+                                      )}
+                                      {task.additionalWorkVideoUrl && (
+                                        <video
+                                          src={task.additionalWorkVideoUrl}
+                                          controls
+                                          playsInline
+                                          className="w-32 h-16 object-cover rounded-lg border border-slate-700"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                  {!isTaskApproved && (
+                                    <button
+                                      type="button"
+                                      onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: true } })}
+                                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-colors cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      <span>✅ Mark Approved & Notify Mechanic to Proceed</span>
+                                    </button>
+                                  )}
+                                  {!isTaskRejected && (
+                                    <button
+                                      type="button"
+                                      onClick={() => dispatch({ type: 'RESPOND_APPROVAL', payload: { taskId: task.id, approved: false, declineReason: 'Declined by Manager/Customer' } })}
+                                      className="px-3 py-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                      Decline
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      dispatch({ type: 'DELETE_TASK', payload: { taskId: task.id } });
+                                    }}
+                                    className="px-3 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Remove task from job card"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Remove</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

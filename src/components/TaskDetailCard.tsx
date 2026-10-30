@@ -13,6 +13,7 @@ import {
   updateJobCardTask,
   deleteJobCardTask,
   reassignAllPaintTasksForJobCard,
+  respondToCustomerApproval,
   getAuthUser,
   getStandardJobs
 } from '../lib/storage';
@@ -78,13 +79,23 @@ export function TaskDetailCard({
   const [selectedAssignee, setSelectedAssignee] = useState(task.assignedToId || '');
 
   // Requisition form state
+  const hasPendingReqs = Boolean(
+    task.requisitions &&
+    task.requisitions.some(r => r.status === 'PENDING_APPROVAL' || r.status === 'AWAITING_CUSTOMER_APPROVAL')
+  );
   const [showReqForm, setShowReqForm] = useState(false);
-  const [showRequisitionTracker, setShowRequisitionTracker] = useState(false);
+  const [showRequisitionTracker, setShowRequisitionTracker] = useState(hasPendingReqs);
   const [reqTitle, setReqTitle] = useState('');
   const [reqType, setReqType] = useState<'PART' | 'CONSUMABLE' | 'ADDITIONAL_WORK'>('PART');
   const [reqQty, setReqQty] = useState(1);
   const [reqUrgency, setReqUrgency] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
   const [reqReason, setReqReason] = useState('');
+
+  React.useEffect(() => {
+    if (hasPendingReqs) {
+      setShowRequisitionTracker(true);
+    }
+  }, [hasPendingReqs]);
 
   // Stock Inventory Consume state
   const [showInventoryConsumeForm, setShowInventoryConsumeForm] = useState(false);
@@ -474,6 +485,84 @@ export function TaskDetailCard({
           )}
         </div>
       </div>
+
+      {/* ADDITIONAL WORK / CUSTOMER APPROVAL INLINE ACTION BANNER */}
+      {(task.isAdditionalWork || task.requiresCustomerApproval || task.status === 'ON_HOLD') && (
+        <div
+          className={`p-3.5 rounded-xl border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            task.approvalStatus === 'APPROVED' || (task.isCustomerApproved === true && task.status !== 'ON_HOLD')
+              ? 'bg-emerald-500/10 border-emerald-500/40'
+              : task.approvalStatus === 'REJECTED' || task.isCustomerApproved === false
+              ? 'bg-rose-500/10 border-rose-500/40'
+              : 'bg-amber-500/15 border-amber-500/50'
+          }`}
+        >
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-slate-950">
+                ⚡ Additional Work
+              </span>
+              {task.approvalStatus === 'APPROVED' || (task.isCustomerApproved === true && task.status !== 'ON_HOLD') ? (
+                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                  ✅ Approved & Allotted to {task.assignedToName || 'Mechanic'} — Employee Notified to Proceed
+                </span>
+              ) : task.approvalStatus === 'REJECTED' || task.isCustomerApproved === false ? (
+                <span className="text-xs font-black text-rose-600 dark:text-rose-400">
+                  ❌ Additional Work Declined
+                </span>
+              ) : (
+                <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                  ⏳ Awaiting Approval (On Hold) — Approve below to allot & notify {task.assignedToName || 'Mechanic'} with sound to proceed!
+                </span>
+              )}
+            </div>
+
+            {(task.additionalWorkPhotoUrl || task.additionalWorkVideoUrl) && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {task.additionalWorkPhotoUrl && (
+                  <img
+                    src={task.additionalWorkPhotoUrl}
+                    alt="Additional Work Discovery"
+                    className="w-28 h-20 object-cover rounded-lg border border-slate-300 dark:border-slate-700"
+                  />
+                )}
+                {task.additionalWorkVideoUrl && (
+                  <video
+                    src={task.additionalWorkVideoUrl}
+                    controls
+                    playsInline
+                    className="w-36 h-20 object-cover rounded-lg border border-slate-300 dark:border-slate-700 bg-black"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {isManager && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {!(task.approvalStatus === 'APPROVED' || (task.isCustomerApproved === true && task.status !== 'ON_HOLD')) && (
+                <button
+                  type="button"
+                  onClick={() => respondToCustomerApproval(card.id, task.id, true, 'Approved by Manager — Proceed with repair')}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>✅ Mark Approved & Allot (Notify to Proceed)</span>
+                </button>
+              )}
+              {!(task.approvalStatus === 'REJECTED' || task.isCustomerApproved === false) && (
+                <button
+                  type="button"
+                  onClick={() => respondToCustomerApproval(card.id, task.id, false, 'Declined by Manager')}
+                  className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white border border-rose-500/30 font-bold text-xs cursor-pointer"
+                >
+                  Decline
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* INLINE QUICK ALLOTMENT & RATE EDITOR BAR FOR MANAGERS */}
       {isManager && !isEditingTask && (
