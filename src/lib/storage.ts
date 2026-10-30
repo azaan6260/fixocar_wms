@@ -61,16 +61,37 @@ export function getStoredNotifications(): ToastNotification[] {
 
 export function dispatchToastNotification(notification: Omit<ToastNotification, 'id' | 'timestamp'>, skipRemotePush = false) {
   if (typeof window === 'undefined') return;
-  const fullNotification: ToastNotification = {
+  const authUser = getAuthUser();
+  const triggeredByUserId = notification.triggeredByUserId || authUser?.employeeId || authUser?.id || undefined;
+  const triggeredByUserName = notification.triggeredByUserName || authUser?.name || undefined;
+  const triggeredByRole = notification.triggeredByRole || authUser?.role || undefined;
+
+  // The person allotting/approving tasks (or raising their own request) should NEVER hear the allotment notification sound
+  const isAllotmentActionByCurrentUser =
+    notification.type === 'TASK_ALLOTTED' ||
+    notification.type === 'ADDITIONAL_WORK_APPROVED' ||
+    notification.type === 'ADDITIONAL_WORK_REQUESTED';
+
+  const remoteNotification: ToastNotification = {
     ...notification,
     id: `toast-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     read: false,
+    triggeredByUserId,
+    triggeredByUserName,
+    triggeredByRole,
+    playSound: true,
   };
-  seenNotificationIds.add(fullNotification.id);
+
+  const localToastNotification: ToastNotification = {
+    ...remoteNotification,
+    playSound: isAllotmentActionByCurrentUser ? false : (notification.playSound ?? true),
+  };
+
+  seenNotificationIds.add(remoteNotification.id);
   try {
     const existing = getStoredNotifications();
-    const updated = [fullNotification, ...existing.filter(n => n.id !== fullNotification.id)].slice(0, 40);
+    const updated = [remoteNotification, ...existing.filter(n => n.id !== remoteNotification.id)].slice(0, 40);
     localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
     if (!skipRemotePush) {
       notifyCentralServer('notifications', updated);
@@ -78,7 +99,7 @@ export function dispatchToastNotification(notification: Omit<ToastNotification, 
   } catch {
     // ignore
   }
-  window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: fullNotification }));
+  window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: localToastNotification }));
 }
 
 export function syncIncomingNotifications(remoteNotifications: ToastNotification[]) {
@@ -90,7 +111,7 @@ export function syncIncomingNotifications(remoteNotifications: ToastNotification
   const authUser = getAuthUser();
   const myId = authUser?.employeeId || authUser?.id || '';
   const myName = (authUser?.name || '').toLowerCase().trim();
-  const isManagerOrAdmin = !authUser || authUser.role === 'SUPER_ADMIN' || authUser.role === 'ADMIN' || authUser.role === 'FLOOR_MANAGER';
+  const isManagerOrAdmin = Boolean(authUser && (authUser.role === 'SUPER_ADMIN' || authUser.role === 'ADMIN' || authUser.role === 'FLOOR_MANAGER'));
 
   const newArrivals: ToastNotification[] = [];
   for (const rn of remoteNotifications) {
@@ -114,17 +135,35 @@ export function syncIncomingNotifications(remoteNotifications: ToastNotification
       const createdMs = tsParts.length >= 2 ? parseInt(tsParts[1], 10) : now;
       if (!isNaN(createdMs) && now - createdMs > 120000) continue;
 
-      const isTargetedToMe =
-        !item.targetEmployeeId && !item.targetEmployeeName
-          ? true
-          : Boolean(
-              (myId && item.targetEmployeeId === myId) ||
-                (myName && item.targetEmployeeName && item.targetEmployeeName.toLowerCase().includes(myName)) ||
-                isManagerOrAdmin
-            );
+      // Never play notification sound or re-toast for the person who triggered/allotted the task
+      const triggeredByMe = Boolean(
+        (myId && item.triggeredByUserId && item.triggeredByUserId === myId) ||
+        (myName && item.triggeredByUserName && item.triggeredByUserName.toLowerCase().trim() === myName)
+      );
+      if (triggeredByMe) continue;
+
+      let isTargetedToMe = false;
+      if (item.type === 'TASK_ALLOTTED' || item.type === 'ADDITIONAL_WORK_APPROVED') {
+        // Strictly target only the employee/mechanic to whom the task was allotted (NOT the person/manager allotting)
+        isTargetedToMe = Boolean(
+          (myId && item.targetEmployeeId && item.targetEmployeeId === myId) ||
+          (myName && item.targetEmployeeName && item.targetEmployeeName.toLowerCase().includes(myName))
+        );
+      } else if (item.type === 'ADDITIONAL_WORK_REQUESTED') {
+        // Additional work raised by mechanic targets Floor Managers / Admins
+        isTargetedToMe = isManagerOrAdmin;
+      } else if (!item.targetEmployeeId && !item.targetEmployeeName) {
+        isTargetedToMe = true;
+      } else {
+        isTargetedToMe = Boolean(
+          (myId && item.targetEmployeeId === myId) ||
+          (myName && item.targetEmployeeName && item.targetEmployeeName.toLowerCase().includes(myName)) ||
+          isManagerOrAdmin
+        );
+      }
 
       if (isTargetedToMe) {
-        window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: item }));
+        window.dispatchEvent(new CustomEvent('APP_TOAST_EVENT', { detail: { ...item, playSound: true } }));
       }
     }
   }
@@ -183,6 +222,8 @@ export function getActiveWorkshopId(): string {
 export function setActiveWorkshopId(workshopId: string) {
   if (typeof window === 'undefined') return;
   try {
+    const prev = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORKSHOP);
+    if (prev === workshopId) return;
     localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKSHOP, workshopId);
   } catch {}
   notifyStoreChange();
@@ -191,6 +232,7 @@ export function setActiveWorkshopId(workshopId: string) {
 // Event listener mechanism for real-time UI updates across views
 type StorageListener = () => void;
 const listeners: Set<StorageListener> = new Set();
+let isNotifyingStoreChange = false;
 
 export function subscribeToStore(listener: StorageListener) {
   listeners.add(listener);
@@ -200,12 +242,15 @@ export function subscribeToStore(listener: StorageListener) {
 }
 
 function notifyStoreChange() {
-  listeners.forEach(fn => fn());
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('fixocar-store-updated'));
-    try {
-      window.dispatchEvent(new Event('storage'));
-    } catch {}
+  if (isNotifyingStoreChange) return;
+  isNotifyingStoreChange = true;
+  try {
+    listeners.forEach(fn => fn());
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fixocar-store-updated'));
+    }
+  } finally {
+    isNotifyingStoreChange = false;
   }
 }
 
@@ -405,10 +450,10 @@ export function getUnifiedVehicleStatusInfo(
   }
 }
 
-const TASK_META_REGEX = /\s*<!--META:(\{.*?\})-->\s*$/;
+const TASK_META_GLOBAL_REGEX = /\s*<!--META:([\s\S]*?)-->/g;
 
 export function serializeTaskMetaToNotes(task: JobTask): string {
-  const baseNotes = (task.notes || '').replace(TASK_META_REGEX, '').trim();
+  const baseNotes = (task.notes || '').replace(TASK_META_GLOBAL_REGEX, '').trim();
   const meta: Record<string, any> = {};
   if (task.pairedDenterId) meta.pdId = task.pairedDenterId;
   if (task.pairedDenterName) meta.pdName = task.pairedDenterName;
@@ -454,14 +499,22 @@ export function extractTaskMetaFromNotes(rawNotes?: string | null): {
   meta: Record<string, any>;
 } {
   if (!rawNotes) return { cleanNotes: '', meta: {} };
-  const match = String(rawNotes).match(TASK_META_REGEX);
+  const str = String(rawNotes);
   let meta: Record<string, any> = {};
-  if (match && match[1]) {
-    try {
-      meta = JSON.parse(match[1]);
-    } catch {}
+  if (str.includes('<!--META:')) {
+    const matches = str.matchAll(TASK_META_GLOBAL_REGEX);
+    for (const match of matches) {
+      if (match[1]) {
+        try {
+          const parsed = JSON.parse(match[1]);
+          if (parsed && typeof parsed === 'object') {
+            meta = { ...meta, ...parsed };
+          }
+        } catch {}
+      }
+    }
   }
-  const cleanNotes = String(rawNotes).replace(TASK_META_REGEX, '').trim();
+  const cleanNotes = str.replace(TASK_META_GLOBAL_REGEX, '').trim();
   return { cleanNotes, meta };
 }
 
@@ -641,7 +694,6 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
       isCustomerApproved: resolvedApprovalStatus === 'APPROVED' ? true : (t.isCustomerApproved ?? meta.custApp),
       requisitions: resolvedRequisitions,
     };
-    healedTask.notes = serializeTaskMetaToNotes(healedTask);
     return healedTask;
   });
 
@@ -753,23 +805,22 @@ export function healJobCardRecord(card: JobCard, allEmps?: Employee[], allWorksh
 }
 
 export function getAllJobCards(): JobCard[] {
-  let list: JobCard[] = [];
   if (memoryJobCardsCache && memoryJobCardsCache.length > 0) {
-    list = memoryJobCardsCache;
-  } else {
-    const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
-    if (local !== null) {
-      try {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed)) list = parsed;
-      } catch {}
-    }
-    if (list.length === 0 && INITIAL_JOB_CARDS.length > 0) {
-      list = [...INITIAL_JOB_CARDS];
-      try {
-        localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
-      } catch {}
-    }
+    return memoryJobCardsCache;
+  }
+  let list: JobCard[] = [];
+  const local = localStorage.getItem(STORAGE_KEYS.JOB_CARDS);
+  if (local !== null) {
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {}
+  }
+  if (list.length === 0 && INITIAL_JOB_CARDS.length > 0) {
+    list = [...INITIAL_JOB_CARDS];
+    try {
+      localStorage.setItem(STORAGE_KEYS.JOB_CARDS, JSON.stringify(list));
+    } catch {}
   }
   const allEmps = getAllEmployees();
   const allWorkshops = getWorkshops();
@@ -1222,26 +1273,37 @@ export function createJobCard(newCard: Omit<JobCard, 'id' | 'createdAt'>): JobCa
     customerName: fullCard.customer.name,
   });
 
-  // Trigger immediate allotment notifications for pre-assigned tasks upon initial card creation
+  // Trigger consolidated allotment notifications (at most 1 per assigned technician) upon initial card creation
+  const initialAssigneeTasks = new Map<string, { id: string; name: string; titles: string[]; isDenter?: boolean }>();
   fullCard.tasks.forEach(newTask => {
     if (newTask.assignedToId && newTask.assignedToName) {
-      dispatchToastNotification({
-        type: 'TASK_ALLOTTED',
-        title: `📋 New Task Allotted!`,
-        message: `"${newTask.title}" on Job Card #${fullCard.id} has been allotted to ${newTask.assignedToName}. It is now live on their 'My Tasks' dashboard.`,
-        jobCardId: fullCard.id,
-        vehicleReg: fullCard.vehicle.registrationNumber,
-      });
+      const key = `emp:${newTask.assignedToId}`;
+      const existing = initialAssigneeTasks.get(key) || { id: newTask.assignedToId, name: newTask.assignedToName, titles: [] };
+      existing.titles.push(newTask.title);
+      initialAssigneeTasks.set(key, existing);
     }
     if (newTask.pairedDenterId && newTask.pairedDenterName) {
-      dispatchToastNotification({
-        type: 'TASK_ALLOTTED',
-        title: `🔨 New Denter Task Allotted!`,
-        message: `Denting task "${newTask.title}" on Job Card #${fullCard.id} has been allotted to ${newTask.pairedDenterName}. It is now live on their 'My Tasks' dashboard.`,
-        jobCardId: fullCard.id,
-        vehicleReg: fullCard.vehicle.registrationNumber,
-      });
+      const key = `denter:${newTask.pairedDenterId}`;
+      const existing = initialAssigneeTasks.get(key) || { id: newTask.pairedDenterId, name: newTask.pairedDenterName, titles: [], isDenter: true };
+      existing.titles.push(newTask.title);
+      initialAssigneeTasks.set(key, existing);
     }
+  });
+
+  initialAssigneeTasks.forEach(entry => {
+    const taskSummary = entry.titles.length === 1
+      ? `"${entry.titles[0]}"`
+      : `${entry.titles.length} tasks (${entry.titles.slice(0, 2).join(', ')}${entry.titles.length > 2 ? '...' : ''})`;
+    dispatchToastNotification({
+      type: 'TASK_ALLOTTED',
+      title: entry.isDenter ? `🔨 Denter Task Allotted!` : `📋 New Task Allotted!`,
+      message: `${taskSummary} on Job Card #${fullCard.id} (${fullCard.vehicle.registrationNumber}) allotted to ${entry.name}.`,
+      jobCardId: fullCard.id,
+      vehicleReg: fullCard.vehicle.registrationNumber,
+      targetEmployeeId: entry.id,
+      targetEmployeeName: entry.name,
+      playSound: false,
+    });
   });
 
   return fullCard;
@@ -1301,32 +1363,45 @@ export function updateJobCard(id: string, updater: (prev: JobCard) => JobCard) {
       }
     });
 
-    // 3. Detect task assignment changes (new task allotments)
+    // 3. Detect task assignment changes (consolidated per assignee so batch panel allotments never spam notifications)
+    const newlyAllottedByEmployee = new Map<string, { id: string; name: string; titles: string[]; isDenter?: boolean }>();
     newCard.tasks.forEach(newTask => {
+      // Skip ON_HOLD unapproved additional work drafts (they notify on approval)
+      if (newTask.status === 'ON_HOLD' && newTask.approvalStatus === 'PENDING') return;
+
       const oldTask = oldCard.tasks.find(t => t.id === newTask.id);
-      
       const isNewAllotment = (!oldTask && newTask.assignedToId) || (oldTask && oldTask.assignedToId !== newTask.assignedToId && newTask.assignedToId);
       const isNewDenterAllotment = (!oldTask && newTask.pairedDenterId) || (oldTask && oldTask.pairedDenterId !== newTask.pairedDenterId && newTask.pairedDenterId);
 
-      if (isNewAllotment && newTask.assignedToName) {
-        dispatchToastNotification({
-          type: 'TASK_ALLOTTED',
-          title: `📋 Task Allotted: My Tasks`,
-          message: `"${newTask.title}" on Job Card #${newCard.id} has been allotted to ${newTask.assignedToName}. It is now live in their 'My Tasks' dashboard.`,
-          jobCardId: newCard.id,
-          vehicleReg: newCard.vehicle.registrationNumber,
-        });
+      if (isNewAllotment && newTask.assignedToId && newTask.assignedToName) {
+        const key = `emp:${newTask.assignedToId}`;
+        const existing = newlyAllottedByEmployee.get(key) || { id: newTask.assignedToId, name: newTask.assignedToName, titles: [] };
+        existing.titles.push(newTask.title);
+        newlyAllottedByEmployee.set(key, existing);
       }
-      
-      if (isNewDenterAllotment && newTask.pairedDenterName) {
-        dispatchToastNotification({
-          type: 'TASK_ALLOTTED',
-          title: `🔨 Denter Task Allotted!`,
-          message: `Denting task "${newTask.title}" on Job Card #${newCard.id} has been allotted to ${newTask.pairedDenterName}. It is now live in their 'My Tasks' dashboard.`,
-          jobCardId: newCard.id,
-          vehicleReg: newCard.vehicle.registrationNumber,
-        });
+
+      if (isNewDenterAllotment && newTask.pairedDenterId && newTask.pairedDenterName) {
+        const key = `denter:${newTask.pairedDenterId}`;
+        const existing = newlyAllottedByEmployee.get(key) || { id: newTask.pairedDenterId, name: newTask.pairedDenterName, titles: [], isDenter: true };
+        existing.titles.push(newTask.title);
+        newlyAllottedByEmployee.set(key, existing);
       }
+    });
+
+    newlyAllottedByEmployee.forEach(entry => {
+      const taskSummary = entry.titles.length === 1
+        ? `"${entry.titles[0]}"`
+        : `${entry.titles.length} tasks (${entry.titles.slice(0, 2).join(', ')}${entry.titles.length > 2 ? '...' : ''})`;
+      dispatchToastNotification({
+        type: 'TASK_ALLOTTED',
+        title: entry.isDenter ? `🔨 Denter Task Allotted!` : `📋 Task Allotted: My Tasks`,
+        message: `${taskSummary} on Job Card #${newCard.id} (${newCard.vehicle.registrationNumber}) has been allotted to ${entry.name}.`,
+        jobCardId: newCard.id,
+        vehicleReg: newCard.vehicle.registrationNumber,
+        targetEmployeeId: entry.id,
+        targetEmployeeName: entry.name,
+        playSound: false,
+      });
     });
 
     saveJobCards(cards);
@@ -1826,32 +1901,23 @@ export function reallotTask(
   newAssigneeName: string, 
   newAssigneeType: 'EMPLOYEE' | 'VENDOR'
 ) {
-  let vehicleReg = 'Vehicle';
   updateJobCard(jobCardId, (card) => {
-    vehicleReg = card.vehicle.registrationNumber;
     return {
       ...card,
       tasks: card.tasks.map(t => {
         if (t.id === taskId) {
+          const { cleanNotes } = extractTaskMetaFromNotes(t.notes);
           return {
             ...t,
             assignedToId: newAssigneeId,
             assignedToName: newAssigneeName,
             assignedType: newAssigneeType,
-            notes: (t.notes ? `${t.notes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
+            notes: (cleanNotes ? `${cleanNotes} | ` : '') + `Re-allotted to ${newAssigneeName} on ${new Date().toLocaleTimeString()}`
           };
         }
         return t;
       })
     };
-  });
-
-  dispatchToastNotification({
-    title: 'New Job Allotted! 📋',
-    message: `Task has been assigned to ${newAssigneeName} for vehicle ${vehicleReg}. A new job card is now available in their 'My Tasks' dashboard.`,
-    type: 'TASK_ALLOTTED',
-    vehicleReg: vehicleReg,
-    jobCardId: jobCardId
   });
 }
 
@@ -1864,13 +1930,12 @@ export function reassignAllPaintTasksForJobCard(
   denterName?: string
 ) {
   const timestampStr = new Date().toLocaleTimeString();
-  let vehicleReg = 'Vehicle';
   updateJobCard(jobCardId, (card) => {
-    vehicleReg = card.vehicle.registrationNumber;
     return {
       ...card,
       tasks: card.tasks.map(t => {
         if (t.category === 'PAINT') {
+          const { cleanNotes } = extractTaskMetaFromNotes(t.notes);
           const updated: JobTask = { ...t };
           let noteMsg = '';
           if (painterId !== undefined) {
@@ -1885,7 +1950,7 @@ export function reassignAllPaintTasksForJobCard(
             if (denterName) noteMsg += (noteMsg ? ' & ' : '') + `Denter set to ${denterName}`;
           }
           if (noteMsg) {
-            updated.notes = (t.notes ? `${t.notes} | ` : '') + `Batch re-allotted: ${noteMsg} on ${timestampStr}`;
+            updated.notes = (cleanNotes ? `${cleanNotes} | ` : '') + `Batch re-allotted: ${noteMsg} on ${timestampStr}`;
           }
           return updated;
         }
@@ -1893,17 +1958,6 @@ export function reassignAllPaintTasksForJobCard(
       })
     };
   });
-
-  const names = [painterName, denterName].filter(Boolean).join(' & ');
-  if (names) {
-    dispatchToastNotification({
-      title: 'Paint Job Allotted! 🎨',
-      message: `Paint panels on vehicle ${vehicleReg} have been allotted to ${names}. The job cards are now active in their workspace dashboards.`,
-      type: 'TASK_ALLOTTED',
-      vehicleReg: vehicleReg,
-      jobCardId: jobCardId
-    });
-  }
 }
 
 // Outsource a task to an external vendor
@@ -5242,14 +5296,6 @@ export function createVehicleCheckIn(newCheckIn: Omit<VehicleCheckIn, 'id' | 'ch
   } catch (e) {
     console.error('Error syncing customer vehicle record:', e);
   }
-
-  dispatchToastNotification({
-    type: 'JOB_CARD_CREATED',
-    title: `🚗 Vehicle Checked In`,
-    message: `Vehicle ${fullRecord.registrationNumber} (${fullRecord.make} ${fullRecord.model}) received and checked in at gate (${gateId}).`,
-    vehicleReg: fullRecord.registrationNumber,
-    customerName: fullRecord.customerName,
-  });
 
   return fullRecord;
 }

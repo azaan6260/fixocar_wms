@@ -32,8 +32,10 @@ export function ToastContainer({ onSelectJobCard }: ToastContainerProps) {
 
       const newToast = customEvent.detail;
 
-      // Play subtle chime sound
-      playNotificationChime(newToast.type);
+      // Play chime sound only when allowed (never play allotment sound for the person allotting tasks)
+      if (newToast.playSound !== false) {
+        playNotificationChime(newToast.type);
+      }
 
       // Add to toasts list (keep max 5 floating toasts on screen at once)
       setToasts(prev => [newToast, ...prev].slice(0, 5));

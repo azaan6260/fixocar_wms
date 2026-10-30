@@ -3,7 +3,8 @@ import { ToastType } from '../types/toast';
 const SOUND_MUTE_STORAGE_KEY = 'fixocar_sound_muted';
 
 let sharedAudioCtx: AudioContext | null = null;
-let audioUnlocked = false;
+let lastChimePlayedAt = 0;
+const CHIME_COOLDOWN_MS = 450;
 
 /**
  * Configure the browser's AudioSession to 'ambient' mode.
@@ -25,29 +26,33 @@ function getOrCreateAudioContext(): AudioContext | null {
   configureAmbientSilentModeRespect();
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) return null;
-  if (!sharedAudioCtx) {
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
     sharedAudioCtx = new AudioCtx();
   }
   return sharedAudioCtx;
 }
 
-// Unlock AudioContext on first user gesture so background sync notifications can play chimes
+// Unlock AudioContext on user gestures so background sync notifications can play chimes reliably
 if (typeof window !== 'undefined') {
   const unlock = () => {
-    if (audioUnlocked) return;
     try {
       const ctx = getOrCreateAudioContext();
-      if (ctx && ctx.state === 'suspended') {
+      if (!ctx) return;
+      if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
-      audioUnlocked = true;
+      if (ctx.state === 'running') {
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
     } catch {
       // ignore
     }
   };
-  window.addEventListener('touchstart', unlock, { passive: true, once: true });
-  window.addEventListener('click', unlock, { passive: true, once: true });
-  window.addEventListener('keydown', unlock, { passive: true, once: true });
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('click', unlock, { passive: true });
+  window.addEventListener('keydown', unlock, { passive: true });
 }
 
 export function isSoundMuted(): boolean {
@@ -64,6 +69,7 @@ export function setSoundMuted(muted: boolean): void {
   try {
     window.localStorage.setItem(SOUND_MUTE_STORAGE_KEY, muted ? 'true' : 'false');
     window.dispatchEvent(new CustomEvent('fixocar_sound_pref_changed', { detail: { muted } }));
+    window.dispatchEvent(new CustomEvent('fixocar_sound_mute_changed', { detail: { muted } }));
   } catch {
     // ignore
   }
@@ -89,11 +95,16 @@ export function isDeviceOrAppSilent(): boolean {
   return false;
 }
 
-function playToneSequence(
-  ctx: AudioContext,
-  notes: { freq: number; startOffset: number; duration: number; gain?: number; type?: OscillatorType }[]
-) {
-  const now = ctx.currentTime;
+type ToneNote = {
+  freq: number;
+  startOffset: number;
+  duration: number;
+  gain?: number;
+  type?: OscillatorType;
+};
+
+function scheduleNotesOnRunningContext(ctx: AudioContext, notes: ToneNote[]) {
+  const now = ctx.currentTime + 0.01;
   for (const n of notes) {
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
@@ -107,9 +118,32 @@ function playToneSequence(
 
     osc.connect(gainNode);
     gainNode.connect(ctx.destination);
+    osc.onended = () => {
+      try {
+        osc.disconnect();
+        gainNode.disconnect();
+      } catch {
+        // ignore
+      }
+    };
     osc.start(now + n.startOffset);
-    osc.stop(now + n.startOffset + n.duration + 0.01);
+    osc.stop(now + n.startOffset + n.duration + 0.02);
   }
+}
+
+function playToneSequence(ctx: AudioContext, notes: ToneNote[]) {
+  if (ctx.state === 'suspended') {
+    ctx
+      .resume()
+      .then(() => {
+        if (ctx.state === 'running' && !isDeviceOrAppSilent()) {
+          scheduleNotesOnRunningContext(ctx, notes);
+        }
+      })
+      .catch(() => {});
+    return;
+  }
+  scheduleNotesOnRunningContext(ctx, notes);
 }
 
 /**
@@ -117,19 +151,22 @@ function playToneSequence(
  * - VEHICLE_CHECK_IN: 3-note rising arrival chime (Gate Check-In)
  * - TASK_ALLOTTED / ADDITIONAL_WORK_APPROVED: 2-pulse mechanic task allotment & proceed alert
  * - ADDITIONAL_WORK_REQUESTED: Floor manager attention chime
- * Automatically respects phone Silent Mode (via ambient AudioSession & silent check).
+ * Automatically respects phone Silent Mode (via ambient AudioSession & silent check)
+ * and throttles rapid consecutive triggers so audio never freezes or overlaps.
  */
 export function playNotificationChime(type: ToastType = 'INFO') {
   try {
     if (isDeviceOrAppSilent()) return;
 
+    const nowMs = Date.now();
+    if (nowMs - lastChimePlayedAt < CHIME_COOLDOWN_MS) {
+      return;
+    }
+    lastChimePlayedAt = nowMs;
+
     configureAmbientSilentModeRespect();
     const ctx = getOrCreateAudioContext();
     if (!ctx) return;
-
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
 
     if (type === 'VEHICLE_CHECK_IN' || type === 'JOB_CARD_CREATED') {
       // Crisp 3-note rising arrival chime: C5 -> E5 -> G5 -> C6

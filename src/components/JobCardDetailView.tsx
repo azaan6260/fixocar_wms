@@ -1474,13 +1474,6 @@ export function JobCardDetailView({
                           type: 'BATCH_REASSIGN_PAINT',
                           payload: { painterId: pId, painterName: pName, denterId: dId, denterName: dName }
                         });
-                        dispatchToastNotification({
-                          type: 'STATUS_CHANGE',
-                          title: 'Paint Panels Reassigned',
-                          message: `Reassigned all paint panels on ${card.vehicle.registrationNumber} to ${pName || 'Unassigned Painter'} & ${dName || 'Unassigned Denter'}.`,
-                          vehicleReg: card.vehicle.registrationNumber,
-                          jobCardId: card.id
-                        });
                       }}
                     />
                   )}

@@ -28,6 +28,10 @@ export interface ToastNotification {
   targetEmployeeId?: string;
   targetEmployeeName?: string;
   targetRole?: string;
+  triggeredByUserId?: string;
+  triggeredByUserName?: string;
+  triggeredByRole?: string;
+  playSound?: boolean;
 }
 
 export const STATUS_LABELS: Record<string, string> = {

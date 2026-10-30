@@ -538,9 +538,7 @@ export default function App() {
       setAuthUser(getAuthUser());
     };
 
-    window.addEventListener('fixocar-store-updated', handleStoreUpdateEvent);
     window.addEventListener('storage', handleStoreUpdateEvent);
-
     const unsubscribe = subscribeToStore(handleStoreUpdateEvent);
     
     const handleOpenSupabaseModal = () => setIsSupabaseModalOpen(true);
@@ -550,7 +548,6 @@ export default function App() {
       clearInterval(syncInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('open-supabase-modal', handleOpenSupabaseModal);
-      window.removeEventListener('fixocar-store-updated', handleStoreUpdateEvent);
       window.removeEventListener('storage', handleStoreUpdateEvent);
       unsubscribe();
     };
